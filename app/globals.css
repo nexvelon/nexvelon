@@ -1,26 +1,244 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-playfair);
+  --font-heading: var(--font-playfair);
+
+  /* Brand tokens — point at the active-theme variables so swapping
+     [data-theme] on <html> retints every utility class instantly. */
+  --color-brand-navy: var(--brand-primary);
+  --color-brand-gold: var(--brand-accent);
+  --color-brand-ivory: var(--brand-bg);
+  --color-brand-charcoal: var(--brand-text);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ──────────────────────────────────────────────────────────────────
+   Theme presets — each theme defines the brand-* tokens AND the
+   shadcn/ui tokens derived from them. Switching [data-theme] on
+   <html> retints the entire app, including charts via JS hook.
+   ────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="royal-navy"] {
+  --brand-primary: #0B1B3B;
+  --brand-accent: #C9A24B;
+  --brand-bg: #F8F5EE;
+  --brand-text: #1F2937;
+  --brand-card: #FFFFFF;
+  --brand-border: #E5DFD2;
+  --brand-muted: #EFEAE0;
+  --brand-sidebar-accent: #122752;
+  --brand-sidebar-border: #1A2C57;
+  --brand-chart-tertiary: #475569;
+  --brand-chart-quaternary: #94A3B8;
+}
+
+:root[data-theme="onyx-brass"] {
+  --brand-primary: #1A1A1A;
+  --brand-accent: #B5895A;
+  --brand-bg: #F1ECE3;
+  --brand-text: #1F2937;
+  --brand-card: #FFFFFF;
+  --brand-border: #DCD4C5;
+  --brand-muted: #E8E2D6;
+  --brand-sidebar-accent: #2A2A2A;
+  --brand-sidebar-border: #333333;
+  --brand-chart-tertiary: #5C5C5C;
+  --brand-chart-quaternary: #A8A8A8;
+}
+
+:root[data-theme="oxford-green"] {
+  --brand-primary: #0F2A1D;
+  --brand-accent: #C9A24B;
+  --brand-bg: #F4F1EA;
+  --brand-text: #1F2937;
+  --brand-card: #FFFFFF;
+  --brand-border: #DDD7C8;
+  --brand-muted: #E8E1D2;
+  --brand-sidebar-accent: #163826;
+  --brand-sidebar-border: #1F4A33;
+  --brand-chart-tertiary: #4A6B5A;
+  --brand-chart-quaternary: #8FA89B;
+}
+
+:root[data-theme="burgundy-reserve"] {
+  --brand-primary: #3B0D1A;
+  --brand-accent: #C9A24B;
+  --brand-bg: #F8F5EE;
+  --brand-text: #1F2937;
+  --brand-card: #FFFFFF;
+  --brand-border: #E2D6D9;
+  --brand-muted: #EDE2E5;
+  --brand-sidebar-accent: #4A1322;
+  --brand-sidebar-border: #5A1828;
+  --brand-chart-tertiary: #7A4A55;
+  --brand-chart-quaternary: #B89094;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   shadcn / runtime tokens — derived from brand-* so all themes
+   compose consistently.
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  --background: var(--brand-bg);
+  --foreground: var(--brand-text);
+  --card: var(--brand-card);
+  --card-foreground: var(--brand-text);
+  --popover: var(--brand-card);
+  --popover-foreground: var(--brand-text);
+  --primary: var(--brand-primary);
+  --primary-foreground: var(--brand-bg);
+  --secondary: var(--brand-muted);
+  --secondary-foreground: var(--brand-primary);
+  --muted: var(--brand-muted);
+  --muted-foreground: #6B7280;
+  --accent: var(--brand-accent);
+  --accent-foreground: var(--brand-primary);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: var(--brand-border);
+  --input: var(--brand-border);
+  --ring: var(--brand-accent);
+  --chart-1: var(--brand-primary);
+  --chart-2: var(--brand-accent);
+  --chart-3: var(--brand-chart-tertiary);
+  --chart-4: var(--brand-chart-quaternary);
+  --chart-5: var(--brand-text);
+  --radius: 0.5rem;
+  --sidebar: var(--brand-primary);
+  --sidebar-foreground: var(--brand-border);
+  --sidebar-primary: var(--brand-accent);
+  --sidebar-primary-foreground: var(--brand-primary);
+  --sidebar-accent: var(--brand-sidebar-accent);
+  --sidebar-accent-foreground: var(--brand-bg);
+  --sidebar-border: var(--brand-sidebar-border);
+  --sidebar-ring: var(--brand-accent);
+}
+
+.dark {
+  --background: #0B1B3B;
+  --foreground: #F8F5EE;
+  --card: #122752;
+  --card-foreground: #F8F5EE;
+  --popover: #122752;
+  --popover-foreground: #F8F5EE;
+  --primary: #C9A24B;
+  --primary-foreground: #0B1B3B;
+  --secondary: #1A2C57;
+  --secondary-foreground: #F8F5EE;
+  --muted: #1A2C57;
+  --muted-foreground: #94A3B8;
+  --accent: #C9A24B;
+  --accent-foreground: #0B1B3B;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #C9A24B;
+  --chart-1: #C9A24B;
+  --chart-2: #F8F5EE;
+  --chart-3: #94A3B8;
+  --chart-4: #475569;
+  --chart-5: #1F2937;
+  --sidebar: #08152F;
+  --sidebar-foreground: #E5DFD2;
+  --sidebar-primary: #C9A24B;
+  --sidebar-primary-foreground: #0B1B3B;
+  --sidebar-accent: #122752;
+  --sidebar-accent-foreground: #F8F5EE;
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: #C9A24B;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    /* Smooth tint transitions on theme change. */
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3 {
+    @apply font-serif tracking-tight;
+  }
+  /* Skeleton shimmer */
+  @keyframes nx-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .nx-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--brand-muted) 0%,
+      color-mix(in oklab, var(--brand-muted) 70%, white) 50%,
+      var(--brand-muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: nx-shimmer 1.4s ease-in-out infinite;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Hide colored UI from print, keep typography clean. */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  [data-print-hide],
+  aside,
+  header.sticky,
+  nav.sticky {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
 }
