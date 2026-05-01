@@ -3,6 +3,7 @@ import { Inter, Playfair_Display, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RoleProvider } from "@/lib/role-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1B3B",
+  themeColor: "#0A1226",
   colorScheme: "light",
 };
 
@@ -72,7 +73,9 @@ export default function RootLayout({
         className={`${inter.variable} ${playfair.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <RoleProvider>{children}</RoleProvider>
+          <RoleProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </RoleProvider>
         </ThemeProvider>
       </body>
     </html>

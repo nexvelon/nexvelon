@@ -25,7 +25,7 @@ export const SEED_NOTIFICATIONS: AppNotification[] = [
   {
     id: "n-1",
     title: "Quote Q-2026-0118 approved",
-    body: "Meridian Tower Holdings approved the lobby access upgrade — $27,759.58.",
+    body: "Meridian Capital Plaza approved the lobby access upgrade — $27,759.58.",
     href: "/quotes/q-001",
     icon: FileSignature,
     tone: "success",
@@ -55,7 +55,7 @@ export const SEED_NOTIFICATIONS: AppNotification[] = [
   {
     id: "n-4",
     title: "Commissioning completed",
-    body: "Elena Vasquez signed off Royal Oak Estate access doors (12 of 12).",
+    body: "Naomi Khaled signed off Hartwell Estates access doors (12 of 12).",
     href: "/projects/pr-005",
     icon: ClipboardCheck,
     tone: "success",
@@ -85,7 +85,7 @@ export const SEED_NOTIFICATIONS: AppNotification[] = [
   {
     id: "n-7",
     title: "Invoice INV-2026-0301 paid",
-    body: "Meridian Tower Holdings paid $27,759.58 — funds cleared today.",
+    body: "Meridian Capital Plaza paid $27,759.58 — funds cleared today.",
     href: "/financials",
     icon: Receipt,
     tone: "success",
@@ -105,7 +105,7 @@ export const SEED_NOTIFICATIONS: AppNotification[] = [
   {
     id: "n-9",
     title: "Project Mercer Tower passed 50%",
-    body: "Sophie Tremblay marked the access reader phase complete (52%).",
+    body: "Aria Vance marked the access reader phase complete (52%).",
     href: "/projects/pr-001",
     icon: CheckCircle2,
     tone: "default",

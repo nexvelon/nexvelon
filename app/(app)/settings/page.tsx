@@ -35,6 +35,7 @@ import {
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/lib/utils";
 
 interface Section {
@@ -84,12 +85,11 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-brand-navy font-serif text-3xl">Settings</h1>
-        <p className="text-brand-charcoal/70 mt-1 text-sm">
-          Workspace, branding, integrations, and data — all configurable here.
-        </p>
-      </header>
+      <PageHeader
+        eyebrow={`13 sections · last edited ${new Date().toLocaleDateString()}`}
+        title="Settings"
+        description="Workspace, branding, integrations, and data — all configurable here."
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         <aside className="bg-card sticky top-32 self-start rounded-lg border border-[var(--border)] p-2 shadow-sm">

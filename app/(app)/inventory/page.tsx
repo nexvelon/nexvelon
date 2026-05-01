@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { AnimatedNumber } from "@/components/modules/dashboard/AnimatedNumber";
 import { StockTab } from "@/components/modules/inventory/StockTab";
 import { AllocationsTab } from "@/components/modules/inventory/AllocationsTab";
@@ -59,14 +60,36 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-brand-navy font-serif text-3xl">Inventory & Warehouse</h1>
-          <p className="text-brand-charcoal/70 mt-1 text-sm">
-            Stock levels, allocations, transfers, and purchasing across all locations.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={`4 locations · ${stats.skusTracked.toLocaleString()} active SKUs`}
+        title="Inventory & Warehouse"
+        description="Stock levels, allocations, transfers, and purchasing across all locations."
+        actions={
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+              style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+            >
+              Receive PO
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+              style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+            >
+              Stock count
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
+              style={{ background: "var(--brand-primary)" }}
+            >
+              Adjust
+            </button>
+          </>
+        }
+      />
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat

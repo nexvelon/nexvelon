@@ -8,6 +8,7 @@ import {
   Settings,
   UserRound,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,58 +17,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useRole } from "@/lib/role-context";
-import { ROLE_LABELS } from "@/lib/permissions";
-import { currentUser } from "@/lib/mock-data/users";
+import { useAuth } from "@/components/auth/AuthProvider";
 
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-export function AvatarMenu() {
+export function AvatarMenu({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { role } = useRole();
+  const { user, signOut } = useAuth();
 
-  const signOut = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("nexvelon:role");
-    }
-    router.push("/login");
+  const handleSignOut = () => {
+    signOut();
+    toast.success("Signed out successfully.");
   };
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hover:ring-brand-gold/40 inline-flex items-center gap-3 rounded-full transition hover:ring-2">
-        <div className="hidden text-right md:block">
-          <p className="text-brand-charcoal text-sm font-medium leading-tight">
-            {currentUser.name}
-          </p>
-          <p className="text-muted-foreground text-[10px] leading-tight">
-            {ROLE_LABELS[role]}
-          </p>
-        </div>
-        <Avatar className="ring-brand-gold/40 h-9 w-9 ring-2">
-          <AvatarFallback
-            style={{ backgroundColor: currentUser.avatarColor }}
-            className="text-xs font-semibold text-white"
-          >
-            {initials(currentUser.name)}
-          </AvatarFallback>
-        </Avatar>
+      <DropdownMenuTrigger className="hover:ring-brand-gold/40 inline-flex items-center rounded-full transition hover:ring-2">
+        {children}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           <p className="text-brand-charcoal text-xs font-semibold leading-tight">
-            {currentUser.name}
+            {user?.name ?? "Marcus Holloway"}
           </p>
           <p className="text-muted-foreground text-[10px] leading-tight">
-            {currentUser.email}
+            {user?.email ?? "admin@nexvelon.com"}
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -88,7 +60,7 @@ export function AvatarMenu() {
           Help & Documentation
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut} className="text-red-600">
+        <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
           <LogOut className="mr-2 h-3.5 w-3.5" />
           Sign out
         </DropdownMenuItem>

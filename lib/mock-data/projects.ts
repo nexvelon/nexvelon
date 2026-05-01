@@ -4,7 +4,7 @@ export const projects: Project[] = [
   {
     id: "pr-001",
     code: "NX-2026-001",
-    name: "Meridian Tower Lobby Access Upgrade",
+    name: "Meridian Capital Plaza · Tower B Access Refresh",
     clientId: "c-001",
     siteId: "s-c-001-1",
     status: "In Progress",
@@ -90,7 +90,7 @@ export const projects: Project[] = [
   {
     id: "pr-005",
     code: "NX-2026-005",
-    name: "Royal Oak Estate Perimeter",
+    name: "Hartwell Estates Perimeter",
     clientId: "c-005",
     siteId: "s-c-005-1",
     status: "In Progress",

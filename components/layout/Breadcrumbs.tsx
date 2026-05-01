@@ -3,22 +3,21 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 import { projects } from "@/lib/mock-data/projects";
 import { quotes } from "@/lib/mock-data/quotes";
 import { cn } from "@/lib/utils";
 
 const TOP_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Executive Dashboard",
   quotes: "Quotes",
   projects: "Projects",
-  clients: "Clients",
+  clients: "Clients & Sites",
   inventory: "Inventory",
   scheduling: "Scheduling",
-  financials: "Financials",
+  financials: "Financial Operations",
   users: "Users & Permissions",
   settings: "Settings",
-  new: "New",
+  new: "New Quote",
 };
 
 const PROJECT_TAB_LABELS: Record<string, string> = {
@@ -38,67 +37,73 @@ interface Crumb {
   href?: string;
 }
 
-export function Breadcrumbs({ className }: { className?: string }) {
-  const pathname = usePathname();
-  const search = useSearchParams();
+function buildCrumbs(pathname: string, tab: string | null): Crumb[] {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 0) return [{ label: "OPERATIONS" }, { label: "DASHBOARD" }];
 
-  const crumbs = useMemo<Crumb[]>(() => {
-    const segments = pathname.split("/").filter(Boolean);
-    if (segments.length === 0) return [{ label: "Dashboard" }];
+  const out: Crumb[] = [{ label: "OPERATIONS" }];
+  const top = segments[0];
+  out.push({
+    label: (TOP_LABELS[top] ?? top).toUpperCase(),
+    href: `/${top}`,
+  });
 
-    const out: Crumb[] = [];
-    const top = segments[0];
-    out.push({
-      label: TOP_LABELS[top] ?? top.charAt(0).toUpperCase() + top.slice(1),
-      href: `/${top}`,
-    });
-
-    if (top === "projects" && segments[1]) {
+  if (top === "projects" && segments[1]) {
+    if (segments[1] === "new") {
+      out.push({ label: "NEW PROJECT" });
+    } else {
       const project = projects.find((p) => p.id === segments[1]);
       out.push({
-        label: project?.name ?? segments[1],
-        href: `/projects/${segments[1]}`,
+        label: (project?.name ?? segments[1]).toUpperCase(),
       });
-      const tab = search.get("tab");
       if (tab && PROJECT_TAB_LABELS[tab]) {
-        out.push({ label: PROJECT_TAB_LABELS[tab] });
-      }
-    } else if (top === "quotes" && segments[1]) {
-      if (segments[1] === "new") {
-        out.push({ label: "New Quote" });
-      } else {
-        const quote = quotes.find((q) => q.id === segments[1]);
-        out.push({ label: quote?.number ?? segments[1] });
+        out.push({ label: PROJECT_TAB_LABELS[tab].toUpperCase() });
       }
     }
+  } else if (top === "quotes" && segments[1]) {
+    if (segments[1] === "new") {
+      out.push({ label: "NEW QUOTE" });
+    } else {
+      const quote = quotes.find((q) => q.id === segments[1]);
+      out.push({ label: (quote?.number ?? segments[1]).toUpperCase() });
+    }
+  }
 
-    return out;
-  }, [pathname, search]);
+  return out;
+}
 
-  if (crumbs.length === 1) return null;
+/** Gold uppercase tracked breadcrumbs in the top bar. */
+export function GoldBreadcrumbs({ className }: { className?: string }) {
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const tab = search.get("tab");
+  const crumbs = useMemo(() => buildCrumbs(pathname, tab), [pathname, tab]);
 
   return (
     <nav
       aria-label="Breadcrumb"
-      className={cn(
-        "text-muted-foreground flex items-center gap-1.5 text-xs",
-        className
-      )}
+      className={cn("flex items-center gap-2 text-[10px] tracking-[0.22em] uppercase font-semibold", className)}
+      style={{ color: "var(--brand-accent-soft)" }}
     >
       {crumbs.map((c, idx) => {
         const isLast = idx === crumbs.length - 1;
         return (
-          <span key={`${c.label}-${idx}`} className="inline-flex items-center gap-1.5">
-            {idx > 0 && <ChevronRight className="h-3 w-3 opacity-50" />}
+          <span key={`${c.label}-${idx}`} className="inline-flex items-center gap-2">
+            {idx > 0 && (
+              <span className="opacity-60" aria-hidden>
+                ›
+              </span>
+            )}
             {c.href && !isLast ? (
               <Link
                 href={c.href}
-                className="hover:text-brand-charcoal underline-offset-2 hover:underline"
+                className="hover:opacity-100 underline-offset-2 hover:underline"
+                style={{ opacity: 0.7 }}
               >
                 {c.label}
               </Link>
             ) : (
-              <span className={cn(isLast && "text-brand-charcoal font-medium")}>
+              <span style={{ color: isLast ? "var(--brand-accent)" : undefined }}>
                 {c.label}
               </span>
             )}
@@ -108,3 +113,6 @@ export function Breadcrumbs({ className }: { className?: string }) {
     </nav>
   );
 }
+
+/** Backwards-compat: previous default breadcrumb used elsewhere. */
+export const Breadcrumbs = GoldBreadcrumbs;

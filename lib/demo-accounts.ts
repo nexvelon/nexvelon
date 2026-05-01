@@ -4,49 +4,68 @@ export interface DemoAccount {
   email: string;
   password: string;
   role: Role;
+  name: string;
   label: string;
   blurb: string;
 }
 
-// Used by the login chips and the username/password autofill behaviour.
+// All five demo chips share P@ssw0rd so judges can either type creds
+// manually or one-click a chip.
+export const DEMO_PASSWORD = "P@ssw0rd";
+
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
     email: "admin@nexvelon.com",
-    password: "demo",
+    password: DEMO_PASSWORD,
     role: "Admin",
+    name: "Marcus Holloway",
     label: "Admin",
-    blurb: "Marcus Reyes — full access to every module.",
+    blurb: "Marcus Holloway — full access across every module.",
   },
   {
-    email: "sophie@nexvelon.com",
-    password: "demo",
+    email: "pm@nexvelon.com",
+    password: DEMO_PASSWORD,
     role: "ProjectManager",
+    name: "Aria Vance",
     label: "Project Manager",
-    blurb: "Sophie Tremblay — owns projects, scheduling, and quote conversion.",
+    blurb: "Aria Vance — owns projects, scheduling, and quote conversion.",
   },
   {
-    email: "priya@nexvelon.com",
-    password: "demo",
+    email: "sales@nexvelon.com",
+    password: DEMO_PASSWORD,
     role: "SalesRep",
+    name: "Camille Beaumont",
     label: "Sales Rep",
-    blurb: "Priya Shankar — drafts quotes; no margin or financials.",
+    blurb: "Camille Beaumont — drafts quotes; no margin or financials.",
   },
   {
-    email: "jin@nexvelon.com",
-    password: "demo",
+    email: "tech@nexvelon.com",
+    password: DEMO_PASSWORD,
     role: "Technician",
+    name: "Damola Okafor",
     label: "Technician",
-    blurb: "Jin Park — own schedule only, field-facing reads.",
+    blurb: "Damola Okafor — own schedule only, field-facing reads.",
   },
   {
-    email: "hannah@nexvelon.com",
-    password: "demo",
+    email: "accounting@nexvelon.com",
+    password: DEMO_PASSWORD,
     role: "Accountant",
+    name: "Eleanor Carstairs",
     label: "Accountant",
-    blurb: "Hannah Liu — full financials visibility, read-only on quotes.",
+    blurb: "Eleanor Carstairs — full financials visibility, read-only on quotes.",
   },
 ];
 
 export function findDemoAccountByEmail(email: string): DemoAccount | undefined {
   return DEMO_ACCOUNTS.find((d) => d.email.toLowerCase() === email.toLowerCase());
+}
+
+export function authenticate(
+  email: string,
+  password: string
+): DemoAccount | null {
+  const acct = findDemoAccountByEmail(email);
+  if (!acct) return null;
+  if (acct.password !== password) return null;
+  return acct;
 }

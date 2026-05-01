@@ -1,63 +1,137 @@
 "use client";
 
 import { Suspense } from "react";
-import { Beaker, Search } from "lucide-react";
+import { Mail, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { NotificationsBell } from "./NotificationsBell";
 import { AvatarMenu } from "./AvatarMenu";
-import { Breadcrumbs } from "./Breadcrumbs";
+import { GoldBreadcrumbs } from "./Breadcrumbs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useRole } from "@/lib/role-context";
 import { ROLE_LABELS } from "@/lib/permissions";
+import { useAuth } from "@/components/auth/AuthProvider";
+
+const ROLE_DISPLAY: Record<string, string> = {
+  Admin: "Operations Director",
+  ProjectManager: "Project Manager",
+  SalesRep: "Sales Lead",
+  Technician: "Senior Technician",
+  Subcontractor: "Subcontractor",
+  Accountant: "Controller",
+  ViewOnly: "Observer",
+};
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 export function TopBar() {
   const { role } = useRole();
+  const { user } = useAuth();
+
+  const displayName = user?.name ?? "Marcus Holloway";
+  const displayTitle = ROLE_DISPLAY[role] ?? ROLE_LABELS[role];
 
   return (
-    <>
-      <header className="bg-background/85 sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-[var(--border)] px-6 backdrop-blur">
-        <div className="relative max-w-xl flex-1">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input
-            readOnly
-            placeholder="Search projects, clients, quotes, SKUs…"
-            className="bg-card border-[var(--border)] cursor-pointer pl-9 pr-20"
-            onClick={() => {
-              window.dispatchEvent(
-                new KeyboardEvent("keydown", { key: "k", metaKey: true })
-              );
-            }}
-          />
-          <kbd className="text-muted-foreground/80 absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-card px-1.5 py-0.5 font-mono text-[10px]">
-            ⌘K
-          </kbd>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden flex-col items-end md:flex">
-            <span
-              title="Live demo mode — current role"
-              className="border-brand-gold/40 bg-brand-gold/10 text-brand-charcoal inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
-            >
-              <Beaker className="text-brand-gold h-3 w-3" />
-              {ROLE_LABELS[role]}
+    <header
+      className="sticky top-0 z-20 flex h-20 items-center gap-6 border-b px-8 backdrop-blur"
+      style={{
+        background: "color-mix(in oklab, var(--brand-bg) 85%, transparent)",
+        borderColor: "var(--brand-border)",
+      }}
+    >
+      {/* Left — gold uppercase breadcrumbs */}
+      <div className="min-w-0 flex-1">
+        <Suspense
+          fallback={
+            <span className="text-muted-foreground text-[10px] tracking-[0.2em] uppercase">
+              …
             </span>
-            <span className="text-muted-foreground/80 mt-0.5 text-[9px] uppercase tracking-[0.2em]">
-              Demo Mode
-            </span>
-          </div>
-
-          <RoleSwitcher />
-          <NotificationsBell />
-          <AvatarMenu />
-        </div>
-      </header>
-
-      <div className="bg-background/70 sticky top-16 z-[15] border-b border-[var(--border)] px-6 py-2 backdrop-blur">
-        <Suspense fallback={<span className="text-muted-foreground text-xs">…</span>}>
-          <Breadcrumbs />
+          }
+        >
+          <GoldBreadcrumbs />
         </Suspense>
       </div>
-    </>
+
+      {/* Center — search */}
+      <div className="relative w-[420px] max-w-[40vw]">
+        <Search
+          className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+          style={{ color: "var(--brand-accent-soft)" }}
+        />
+        <Input
+          readOnly
+          placeholder="Search clients, projects, SKUs…"
+          className="bg-card border-[var(--border)] cursor-pointer pl-9 pr-12 text-[13px]"
+          onClick={() => {
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "k", metaKey: true })
+            );
+          }}
+        />
+        <kbd
+          className="absolute top-1/2 right-3 -translate-y-1/2 rounded border px-1.5 py-0.5 font-mono text-[10px]"
+          style={{
+            color: "var(--brand-accent-soft)",
+            borderColor: "var(--brand-border)",
+            background: "var(--brand-bg)",
+          }}
+        >
+          ⌘K
+        </kbd>
+      </div>
+
+      {/* Right — actions + role + user */}
+      <div className="flex items-center gap-3">
+        <NotificationsBell />
+        <button
+          type="button"
+          className="hover:bg-muted flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors"
+          aria-label="Messages"
+        >
+          <Mail className="h-4 w-4" />
+        </button>
+
+        <RoleSwitcher />
+
+        <div className="flex items-center gap-2.5">
+          <div className="hidden text-right md:block">
+            <p
+              className="text-[13px] font-semibold leading-tight"
+              style={{ color: "var(--brand-text)" }}
+            >
+              {displayName}
+            </p>
+            <p
+              className="text-[10px] font-semibold tracking-[0.2em] uppercase leading-tight"
+              style={{ color: "var(--brand-accent-soft)" }}
+            >
+              {displayTitle}
+            </p>
+          </div>
+          <AvatarMenu>
+            <Avatar
+              className="h-9 w-9 ring-2"
+              style={{
+                ["--tw-ring-color" as string]: "var(--brand-accent)",
+              }}
+            >
+              <AvatarFallback
+                className="text-xs font-semibold text-white"
+                style={{ backgroundColor: "var(--brand-primary)" }}
+              >
+                {initials(displayName)}
+              </AvatarFallback>
+            </Avatar>
+          </AvatarMenu>
+        </div>
+      </div>
+    </header>
   );
 }

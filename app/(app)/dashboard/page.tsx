@@ -10,6 +10,7 @@ import {
   Percent,
   TrendingUp,
 } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { RangePicker } from "@/components/modules/dashboard/RangePicker";
 import { KpiCard } from "@/components/modules/dashboard/KpiCard";
 import { Restricted } from "@/components/modules/dashboard/Restricted";
@@ -56,21 +57,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-brand-navy font-serif text-3xl">
-            Executive Dashboard
-          </h1>
-          <p className="text-brand-charcoal/70 mt-1 text-sm">
-            {format(TODAY, "EEEE, MMMM d, yyyy")} ·{" "}
-            <span className="text-brand-charcoal">
-              {greeting}, {firstName}.
-            </span>
-          </p>
-        </div>
-        <RangePicker value={range} onChange={setRange} />
-      </header>
+      <PageHeader
+        eyebrow={`Fiscal Year ${TODAY.getFullYear()} · Q${Math.floor(TODAY.getMonth() / 3) + 1}`}
+        title="Executive Dashboard"
+        description={`${format(TODAY, "EEEE, MMMM d, yyyy")} — ${greeting}, ${firstName}.`}
+        actions={<RangePicker value={range} onChange={setRange} />}
+      />
 
       {/* KPI grid: 2 rows x 3 cols on desktop */}
       <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

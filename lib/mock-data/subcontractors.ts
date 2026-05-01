@@ -16,7 +16,7 @@ export const subcontractors: Subcontractor[] = [
   {
     id: "sub-1",
     company: "Brennan Electric",
-    primaryContact: "Cole Brennan",
+    primaryContact: "Vortex Cabling Ltd",
     email: "cole@brennan-electric.com",
     phone: "(289) 555-0399",
     trade: "Electrical",

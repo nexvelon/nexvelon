@@ -12,17 +12,47 @@ export function Sidebar() {
   const { role } = useRole();
 
   return (
-    <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r">
-      <div className="border-sidebar-border flex h-16 items-center border-b px-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="bg-brand-gold inline-block h-2 w-2 rounded-full" />
-          <span className="font-serif text-2xl tracking-wide text-white">
-            Nexvelon
+    <aside
+      className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r"
+      style={{
+        background: "var(--brand-primary)",
+        borderColor: "var(--brand-sidebar-border)",
+      }}
+    >
+      {/* Logo block — bracketed seal + serif wordmark */}
+      <div
+        className="flex h-20 items-center gap-3 border-b px-5"
+        style={{ borderColor: "var(--brand-sidebar-border)" }}
+      >
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <span
+            className="flex h-9 w-9 items-center justify-center font-serif text-base font-semibold"
+            style={{
+              border: "1px solid var(--brand-accent)",
+              color: "var(--brand-accent)",
+            }}
+            aria-hidden
+          >
+            N
+          </span>
+          <span
+            className="font-serif text-[15px] tracking-[0.32em] text-white"
+            style={{ fontWeight: 500 }}
+          >
+            NEXVELON
           </span>
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+      {/* Operations sub-nav header */}
+      <p
+        className="px-5 pt-5 pb-3 text-[10px] font-semibold tracking-[0.32em] uppercase"
+        style={{ color: "var(--brand-accent-soft)" }}
+      >
+        ── Operations
+      </p>
+
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
         {NAV_ITEMS.map((item) => {
           const allowed = canViewRoute(role, item.resource);
           const isActive =
@@ -33,7 +63,8 @@ export function Sidebar() {
             return (
               <div
                 key={item.href}
-                className="text-sidebar-foreground/40 flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2 text-sm"
+                className="flex cursor-not-allowed items-center gap-3 rounded-sm px-3 py-2 text-[13px]"
+                style={{ color: "rgba(245,241,232,0.25)" }}
                 title="Not available for this role"
               >
                 <Icon className="h-4 w-4" />
@@ -47,31 +78,84 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-white"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-white"
+                "group relative flex items-center gap-3 rounded-sm px-3 py-2 text-[13px] transition-colors"
               )}
+              style={{
+                color: isActive ? "#FFFFFF" : "rgba(245,241,232,0.7)",
+                background: isActive
+                  ? "var(--brand-sidebar-accent)"
+                  : "transparent",
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = "rgba(245,241,232,0.95)";
+                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = "rgba(245,241,232,0.7)";
+                  e.currentTarget.style.background = "transparent";
+                }
+              }}
             >
               {isActive && (
-                <span className="bg-brand-gold absolute inset-y-1 left-0 w-1 rounded-r-full" />
+                <span
+                  className="absolute inset-y-1 left-0 w-[3px]"
+                  style={{ background: "var(--brand-accent)" }}
+                />
               )}
               <Icon
-                className={cn(
-                  "h-4 w-4",
-                  isActive ? "text-brand-gold" : "text-sidebar-foreground/70"
-                )}
+                className="h-4 w-4 shrink-0"
+                style={{
+                  color: isActive
+                    ? "var(--brand-accent)"
+                    : "rgba(245,241,232,0.55)",
+                }}
               />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.count !== undefined && (
+                <span
+                  className="rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums"
+                  style={{
+                    background: isActive
+                      ? "rgba(184,146,75,0.2)"
+                      : "rgba(245,241,232,0.08)",
+                    color: isActive
+                      ? "var(--brand-accent)"
+                      : "rgba(245,241,232,0.7)",
+                  }}
+                >
+                  {item.count}
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-sidebar-border border-t p-4">
-        <p className="text-sidebar-foreground/60 font-serif text-xs">
-          v0.1 · Operations Suite
-        </p>
+      {/* EST stamp + version */}
+      <div
+        className="flex items-center gap-2.5 border-t px-5 py-4"
+        style={{ borderColor: "var(--brand-sidebar-border)" }}
+      >
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-full font-serif text-[8px] tracking-[0.2em] uppercase"
+          style={{
+            border: "1px solid rgba(184,146,75,0.4)",
+            color: "var(--brand-accent-soft)",
+          }}
+        >
+          EST
+        </span>
+        <span
+          className="font-serif text-[10px] tracking-[0.18em] uppercase"
+          style={{ color: "rgba(184,146,75,0.6)" }}
+        >
+          v 4 . 18 . 2
+          <br />
+          <span className="font-serif tracking-[0.2em]">est. mmxxiv</span>
+        </span>
       </div>
     </aside>
   );

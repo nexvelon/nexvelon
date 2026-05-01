@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { parseISO } from "date-fns";
 import type { SortingState } from "@tanstack/react-table";
 
+import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectStatsStrip } from "@/components/modules/projects/ProjectStatsStrip";
 import {
   ProjectFilters,
@@ -113,21 +114,21 @@ export default function ProjectsListPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-brand-navy font-serif text-3xl">Projects</h1>
-          <p className="text-brand-charcoal/70 mt-1 text-sm">
-            Active installations, service contracts, and commissioning.
-          </p>
-        </div>
-        <Link
-          href="/quotes/new"
-          className="bg-brand-navy hover:bg-brand-navy/90 border-brand-gold/60 inline-flex items-center gap-2 rounded-md border-2 px-4 py-2 text-sm text-white shadow-sm transition-shadow hover:shadow-md"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="font-serif tracking-wide">New Project</span>
-        </Link>
-      </header>
+      <PageHeader
+        eyebrow={`${ALL_PROJECTS.length} active engagements · ${stats.atRisk} at risk · ${stats.completedMTD} completed MTD`}
+        title="Projects"
+        description="Active installations, service contracts, and commissioning."
+        actions={
+          <Link
+            href="/quotes/new"
+            className="inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white shadow-sm transition-shadow hover:shadow-md"
+            style={{ background: "var(--brand-primary)" }}
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </Link>
+        }
+      />
 
       <ProjectStatsStrip {...stats} />
 

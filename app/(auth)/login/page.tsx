@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown,
-  ChevronUp,
+  AlertCircle,
   Eye,
   EyeOff,
   FileText,
@@ -16,55 +15,91 @@ import {
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { useRole } from "@/lib/role-context";
-import {
-  DEMO_ACCOUNTS,
-  findDemoAccountByEmail,
-  type DemoAccount,
-} from "@/lib/demo-accounts";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
 import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setRole } = useRole();
+  const { signIn, signInAs, status } = useAuth();
+
   const [email, setEmail] = useState("admin@nexvelon.com");
-  const [password, setPassword] = useState("demo");
+  const [password, setPassword] = useState(DEMO_PASSWORD);
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [demoOpen, setDemoOpen] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/dashboard");
+  }, [status, router]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    const acct = findDemoAccountByEmail(email) ?? DEMO_ACCOUNTS[0];
-    setRole(acct.role);
+    setError(null);
+    setSubmitting(true);
+    const result = signIn(email.trim(), password);
+    if (!result.ok) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
+    }
     router.push("/dashboard");
   };
 
-  const loginAs = (acct: DemoAccount) => {
-    setEmail(acct.email);
-    setPassword(acct.password);
-    setRole(acct.role);
+  const loginAs = (acctEmail: string) => {
+    setError(null);
+    setEmail(acctEmail);
+    setPassword(DEMO_PASSWORD);
+    signInAs(acctEmail);
     router.push("/dashboard");
   };
 
   return (
-    <div className="bg-brand-ivory grid min-h-screen grid-cols-1 lg:grid-cols-5">
-      {/* LEFT — navy with filigree, brand copy */}
-      <aside className="bg-brand-navy text-brand-ivory relative hidden flex-col justify-between overflow-hidden p-12 lg:col-span-3 lg:flex">
+    <div
+      className="grid min-h-screen grid-cols-1 lg:grid-cols-5"
+      style={{ background: "var(--brand-bg)" }}
+    >
+      <aside
+        className="relative hidden flex-col justify-between overflow-hidden p-12 lg:col-span-3 lg:flex"
+        style={{ background: "var(--brand-primary)", color: "var(--brand-bg)" }}
+      >
         <Filigree />
         <div className="relative z-10">
-          <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-brand-ivory/50">
+          <div
+            className="font-mono text-[10px] uppercase tracking-[0.4em]"
+            style={{ color: "rgba(245,241,232,0.55)" }}
+          >
             Nexvelon Global Inc.
           </div>
         </div>
 
         <div className="relative z-10 flex flex-col items-center justify-center text-center">
-          <h1 className="text-brand-ivory font-serif text-7xl tracking-[0.04em]">
+          <div className="mb-8 flex items-center gap-4">
+            <span
+              className="flex h-12 w-12 items-center justify-center font-serif text-xl"
+              style={{
+                border: "1px solid var(--brand-accent)",
+                color: "var(--brand-accent)",
+              }}
+            >
+              N
+            </span>
+          </div>
+          <h1
+            className="font-serif text-7xl"
+            style={{ color: "var(--brand-bg)", letterSpacing: "0.06em" }}
+          >
             Nexvelon
           </h1>
-          <span className="bg-brand-gold mt-3 block h-px w-32" />
-          <p className="text-brand-ivory/70 mt-5 font-serif text-lg italic">
+          <span
+            className="mt-3 block h-px w-32"
+            style={{ background: "var(--brand-accent)" }}
+          />
+          <p
+            className="nx-subtitle mt-5 text-lg"
+            style={{ color: "rgba(245,241,232,0.7)" }}
+          >
             Field operations, refined.
           </p>
 
@@ -75,23 +110,38 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <div className="relative z-10 text-brand-ivory/40 font-mono text-[10px] uppercase tracking-[0.25em]">
-          © 2026 Nexvelon Global Inc. · ULC Listed · ESA Licensed
+        <div
+          className="relative z-10 font-mono text-[10px] uppercase tracking-[0.25em]"
+          style={{ color: "rgba(245,241,232,0.4)" }}
+        >
+          © 2026 Nexvelon Global Inc. · Holloway Security Integration Group · ULC Listed · ESA Licensed
         </div>
       </aside>
 
-      {/* RIGHT — ivory login card */}
       <main className="flex items-center justify-center p-6 lg:col-span-2 lg:p-12">
         <div className="w-full max-w-md">
-          <Card className="border-t-2 border-t-[#C9A24B] p-8 shadow-sm">
-            <h2 className="text-brand-navy font-serif text-3xl">Welcome back</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
+          <Card
+            className="p-8 shadow-sm"
+            style={{
+              borderTop: "2px solid var(--brand-accent)",
+              background: "var(--brand-card)",
+            }}
+          >
+            <p className="nx-eyebrow mb-3">Workspace Sign-in</p>
+            <h2
+              className="font-serif text-3xl"
+              style={{ color: "var(--brand-primary)" }}
+            >
+              Welcome back
+            </h2>
+            <p className="nx-subtitle mt-1 text-sm">
               Sign in to your Nexvelon workspace.
             </p>
+            <div className="nx-rule mt-4 mb-5" />
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs">
+                <Label htmlFor="email" className="nx-eyebrow-soft text-[10px]">
                   Email
                 </Label>
                 <Input
@@ -100,17 +150,20 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  autoFocus
+                  required
                 />
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs">
+                  <Label htmlFor="password" className="nx-eyebrow-soft text-[10px]">
                     Password
                   </Label>
                   <button
                     type="button"
-                    className="text-brand-navy hover:text-brand-gold text-[11px] hover:underline"
+                    className="text-[11px] hover:underline"
+                    style={{ color: "var(--brand-primary)" }}
                   >
                     Forgot password?
                   </button>
@@ -122,6 +175,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
+                    required
                     className="pr-10"
                   />
                   <button
@@ -144,99 +198,149 @@ export default function LoginPage() {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="accent-brand-gold h-3.5 w-3.5"
+                  style={{ accentColor: "var(--brand-accent)" }}
+                  className="h-3.5 w-3.5"
                 />
                 Remember me on this device
               </label>
 
-              <Button
+              {error && (
+                <div
+                  className="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+                  style={{
+                    background: "color-mix(in oklab, var(--brand-status-red) 10%, transparent)",
+                    borderColor: "color-mix(in oklab, var(--brand-status-red) 35%, transparent)",
+                    color: "var(--brand-status-red)",
+                  }}
+                >
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button
                 type="submit"
-                className="bg-brand-gold text-brand-navy hover:bg-brand-gold/90 w-full font-semibold tracking-wide shadow-sm"
-                size="lg"
+                disabled={submitting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold tracking-[0.04em] shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+                style={{
+                  background: "var(--brand-accent)",
+                  color: "var(--brand-primary)",
+                  fontFamily: "var(--font-playfair), serif",
+                }}
               >
-                <Lock className="mr-2 h-4 w-4" />
+                <Lock className="h-4 w-4" />
                 Sign In
-              </Button>
+              </button>
             </form>
 
             <div className="my-6 flex items-center gap-3">
-              <span className="bg-border h-px flex-1" />
-              <span className="text-brand-gold font-mono text-[10px] uppercase tracking-widest">
+              <span
+                className="h-px flex-1"
+                style={{ background: "var(--brand-border)" }}
+              />
+              <span
+                className="font-mono text-[10px] uppercase tracking-widest"
+                style={{ color: "var(--brand-accent)" }}
+              >
                 or
               </span>
-              <span className="bg-border h-px flex-1" />
+              <span
+                className="h-px flex-1"
+                style={{ background: "var(--brand-border)" }}
+              />
             </div>
 
             <div className="space-y-2">
               {SSO_BUTTONS.map((b) => (
-                <Button
+                <button
                   key={b.label}
                   type="button"
-                  variant="outline"
-                  size="lg"
-                  className="border-brand-gold/40 text-brand-charcoal hover:bg-brand-gold/10 w-full justify-center font-medium"
                   onClick={() => handleSubmit()}
+                  className="w-full rounded-md border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted/40"
+                  style={{
+                    borderColor: "color-mix(in oklab, var(--brand-accent) 35%, transparent)",
+                    color: "var(--brand-text)",
+                  }}
                 >
                   {b.label}
-                </Button>
+                </button>
               ))}
             </div>
 
-            <p className="text-muted-foreground mt-6 text-center text-[11px]">
-              Need access? Contact your administrator.
-            </p>
+            <div className="mt-6 space-y-1 text-center">
+              <p className="text-muted-foreground text-[11px]">
+                Demo credentials:{" "}
+                <span className="font-mono text-brand-charcoal">admin@nexvelon.com</span>{" "}/
+                {" "}
+                <span className="font-mono text-brand-charcoal">P@ssw0rd</span>
+              </p>
+              <p className="text-muted-foreground text-[11px]">
+                Need access? Contact your administrator.
+              </p>
+            </div>
           </Card>
 
-          {/* Demo accounts panel */}
-          <Card className="mt-4 overflow-hidden border-t-2 border-t-[#C9A24B] shadow-sm">
-            <button
-              type="button"
-              onClick={() => setDemoOpen((o) => !o)}
-              className="hover:bg-muted/40 flex w-full items-center justify-between px-4 py-3 transition-colors"
+          <Card
+            className="mt-4 overflow-hidden shadow-sm"
+            style={{ borderTop: "2px solid var(--brand-accent)" }}
+          >
+            <div
+              className="flex items-center justify-between px-4 py-3"
+              style={{ borderBottom: "1px solid var(--brand-border)" }}
             >
               <span className="inline-flex items-center gap-2">
-                <ShieldCheck className="text-brand-gold h-3.5 w-3.5" />
-                <span className="text-brand-navy font-serif text-sm">
+                <ShieldCheck
+                  className="h-3.5 w-3.5"
+                  style={{ color: "var(--brand-accent)" }}
+                />
+                <span
+                  className="font-serif text-sm"
+                  style={{ color: "var(--brand-primary)" }}
+                >
                   Demo accounts
                 </span>
-                <span className="bg-brand-gold/15 text-amber-800 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                  style={{
+                    background: "color-mix(in oklab, var(--brand-accent) 20%, transparent)",
+                    color: "var(--brand-accent-soft)",
+                  }}
+                >
                   Live
                 </span>
               </span>
-              {demoOpen ? (
-                <ChevronUp className="text-muted-foreground h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
-              )}
-            </button>
-            {demoOpen && (
-              <div className="border-t border-[var(--border)] p-4">
-                <p className="text-muted-foreground mb-3 text-[11px]">
-                  One-click sign-in. Each chip switches your role and lands you
-                  on the dashboard with the same permissions wired live across
-                  every module.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_ACCOUNTS.map((d) => (
-                    <button
-                      key={d.email}
-                      type="button"
-                      onClick={() => loginAs(d)}
-                      className={cn(
-                        "border-brand-navy/15 hover:border-brand-gold hover:bg-brand-gold/5 group rounded-md border bg-white px-3 py-2 text-left transition-colors"
-                      )}
+            </div>
+            <div className="p-4">
+              <p className="text-muted-foreground mb-3 text-[11px]">
+                One-click sign-in. Each chip switches your role and lands you
+                on the dashboard with the same permissions wired live.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((d) => (
+                  <button
+                    key={d.email}
+                    type="button"
+                    onClick={() => loginAs(d.email)}
+                    className={cn(
+                      "group rounded-md border bg-white px-3 py-2 text-left transition-colors"
+                    )}
+                    style={{
+                      borderColor: "color-mix(in oklab, var(--brand-primary) 15%, transparent)",
+                    }}
+                  >
+                    <p
+                      className="font-serif text-sm font-semibold"
+                      style={{ color: "var(--brand-primary)" }}
                     >
-                      <p className="text-brand-navy font-serif text-sm font-semibold">
-                        {d.label}
-                      </p>
-                      <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[10px] leading-snug">
-                        {d.blurb}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+                      {d.label}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[10px] leading-snug">
+                      {d.blurb}
+                    </p>
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </Card>
         </div>
       </main>
@@ -259,10 +363,19 @@ function PillarItem({
 }) {
   return (
     <li className="flex flex-col items-center gap-1.5">
-      <span className="ring-brand-gold/40 flex h-9 w-9 items-center justify-center rounded-full ring-1">
-        <Icon className="text-brand-gold h-4 w-4" />
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-full"
+        style={{
+          border: "1px solid color-mix(in oklab, var(--brand-accent) 50%, transparent)",
+          color: "var(--brand-accent)",
+        }}
+      >
+        <Icon className="h-4 w-4" />
       </span>
-      <span className="text-brand-ivory/70 font-mono text-[10px] uppercase tracking-[0.25em]">
+      <span
+        className="font-mono text-[10px] uppercase tracking-[0.25em]"
+        style={{ color: "rgba(245,241,232,0.7)" }}
+      >
         {label}
       </span>
     </li>
@@ -284,16 +397,23 @@ function Filigree() {
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <line x1="0" y1="0" x2="0" y2="64" stroke="#C9A24B" strokeWidth="1" />
+          <line
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="64"
+            stroke="var(--brand-accent)"
+            strokeWidth="1"
+          />
           <line
             x1="32"
             y1="0"
             x2="32"
             y2="64"
-            stroke="#C9A24B"
+            stroke="var(--brand-accent)"
             strokeWidth="0.5"
           />
-          <circle cx="32" cy="32" r="1.2" fill="#C9A24B" />
+          <circle cx="32" cy="32" r="1.2" fill="var(--brand-accent)" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#filigree)" />

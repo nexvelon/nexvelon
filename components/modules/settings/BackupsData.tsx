@@ -464,7 +464,7 @@ function FolderTreeMock({ path }: { path: string }) {
     <div className="bg-muted/40 rounded-md border border-[var(--border)] p-2 font-mono text-[10px]">
       <p className="text-brand-charcoal/80">{path}</p>
       <p className="text-brand-charcoal/60 ml-2">└── Clients/</p>
-      <p className="text-brand-charcoal/60 ml-6">├── Meridian Tower Holdings/</p>
+      <p className="text-brand-charcoal/60 ml-6">├── Meridian Capital Plaza/</p>
       {folders.map((f, i) => (
         <p key={f.name} className="text-muted-foreground ml-10">
           {i === folders.length - 1 ? "└──" : "├──"} {f.name}/{" "}
@@ -472,7 +472,7 @@ function FolderTreeMock({ path }: { path: string }) {
         </p>
       ))}
       <p className="text-brand-charcoal/60 ml-6">├── Northbridge Logistics/</p>
-      <p className="text-brand-charcoal/60 ml-6">├── Royal Oak Estate/</p>
+      <p className="text-brand-charcoal/60 ml-6">├── Hartwell Estates/</p>
       <p className="text-brand-charcoal/60 ml-6">└── ... 17 more clients</p>
     </div>
   );

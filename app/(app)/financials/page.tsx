@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Select,
   SelectContent,
@@ -49,26 +50,48 @@ export default function FinancialsPage() {
   return (
     <Can resource="financials" action="view" fallback={<RestrictedCard />}>
       <div className="space-y-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-brand-navy font-serif text-3xl">Financials</h1>
-            <p className="text-brand-charcoal/70 mt-1 text-sm">
-              Profitability, cash flow, receivables, and tax reporting.
-            </p>
-          </div>
-          <Select value={range} onValueChange={(v) => setRange((v ?? "ytd") as FinRange)}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(FIN_RANGE_LABEL) as FinRange[]).map((r) => (
-                <SelectItem key={r} value={r}>
-                  {FIN_RANGE_LABEL[r]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </header>
+        <PageHeader
+          eyebrow={`Fiscal Q${Math.floor(new Date().getMonth() / 3) + 1} · ${new Date().toLocaleString("en", { month: "short" })} 2026`}
+          title="Financial Operations"
+          description="P&L · cash flow · receivables · indirect tax"
+          actions={
+            <>
+              <Select value={range} onValueChange={(v) => setRange((v ?? "ytd") as FinRange)}>
+                <SelectTrigger className="w-32 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(FIN_RANGE_LABEL) as FinRange[]).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {FIN_RANGE_LABEL[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+              >
+                QuickBooks
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+              >
+                Xero
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
+                style={{ background: "var(--brand-primary)" }}
+              >
+                Board pack
+              </button>
+            </>
+          }
+        />
 
         <nav className="bg-card rounded-lg border border-[var(--border)] p-1 shadow-sm">
           <ul className="flex flex-wrap gap-1">

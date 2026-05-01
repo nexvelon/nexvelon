@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 export function BrandingThemes() {
   const { theme, setTheme } = useTheme();
-  const [signature, setSignature] = useState(`Marcus Reyes
+  const [signature, setSignature] = useState(`Marcus Holloway
 Managing Director · Nexvelon Global Inc.
 240 Front Street West · Toronto, ON
 (416) 555-0100 · marcus.reyes@nexvelon.com`);
@@ -52,7 +52,7 @@ Managing Director · Nexvelon Global Inc.
           <div className="flex-1">
             <p className="text-brand-charcoal text-sm font-semibold">Current logo</p>
             <p className="text-muted-foreground text-[11px]">
-              SVG · 1024×1024 · uploaded Apr 8, 2026 by Marcus Reyes
+              SVG · 1024×1024 · uploaded Apr 8, 2026 by Marcus Holloway
             </p>
           </div>
           <Button

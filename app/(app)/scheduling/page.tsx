@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { AnimatedNumber } from "@/components/modules/dashboard/AnimatedNumber";
 import { UnassignedQueue } from "@/components/modules/scheduling/UnassignedQueue";
 import { CalendarView } from "@/components/modules/scheduling/CalendarView";
@@ -53,14 +54,29 @@ export default function SchedulingPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-brand-navy font-serif text-3xl">Scheduling & Dispatch</h1>
-          <p className="text-brand-charcoal/70 mt-1 text-sm">
-            Technician assignments, service calls, and installation crews.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={`${jobs.length} jobs scheduled · ${unassigned.length} unassigned · ${stats.utilizationPct}% utilization`}
+        title="Dispatch Board"
+        description="Technician assignments, service calls, and installation crews."
+        actions={
+          <>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+              style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+            >
+              Route sheets
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
+              style={{ background: "var(--brand-primary)" }}
+            >
+              + Schedule job
+            </button>
+          </>
+        }
+      />
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Jobs Today" value={stats.jobsToday} format={formatNumber} icon={CalendarRange} />

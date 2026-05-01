@@ -16,6 +16,7 @@
      [data-theme] on <html> retints every utility class instantly. */
   --color-brand-navy: var(--brand-primary);
   --color-brand-gold: var(--brand-accent);
+  --color-brand-gold-soft: var(--brand-accent-soft);
   --color-brand-ivory: var(--brand-bg);
   --color-brand-charcoal: var(--brand-text);
 
@@ -65,17 +66,20 @@
 
 :root,
 :root[data-theme="royal-navy"] {
-  --brand-primary: #0B1B3B;
-  --brand-accent: #C9A24B;
-  --brand-bg: #F8F5EE;
-  --brand-text: #1F2937;
-  --brand-card: #FFFFFF;
-  --brand-border: #E5DFD2;
-  --brand-muted: #EFEAE0;
-  --brand-sidebar-accent: #122752;
-  --brand-sidebar-border: #1A2C57;
-  --brand-chart-tertiary: #475569;
-  --brand-chart-quaternary: #94A3B8;
+  --brand-primary: #0A1226;
+  --brand-accent: #B8924B;
+  --brand-accent-soft: #9A7B3A;
+  --brand-bg: #F5F1E8;
+  --brand-text: #1A1F2E;
+  --brand-card: #FAF7F0;
+  --brand-border: #E0D9C8;
+  --brand-muted: #EBE5D6;
+  --brand-sidebar-accent: #131C36;
+  --brand-sidebar-border: #1B2542;
+  --brand-chart-tertiary: #5C6A8A;
+  --brand-chart-quaternary: #A8B0C4;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
 }
 
 :root[data-theme="onyx-brass"] {
@@ -223,6 +227,52 @@
     );
     background-size: 200% 100%;
     animation: nx-shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@layer components {
+  /* Tiny gold uppercase eyebrow label — used everywhere as section meta. */
+  .nx-eyebrow {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brand-accent);
+  }
+  /* Sub-shade of the eyebrow for nested labels. */
+  .nx-eyebrow-soft {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brand-accent-soft);
+  }
+  /* Italic serif subtitle under page titles. */
+  .nx-subtitle {
+    font-family: var(--font-playfair), serif;
+    font-style: italic;
+    color: color-mix(in oklab, var(--brand-text) 65%, transparent);
+  }
+  /* Thin gold horizontal rule under every page header. */
+  .nx-rule {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      var(--brand-accent) 0%,
+      var(--brand-accent) 30%,
+      transparent 100%
+    );
+    opacity: 0.4;
+  }
+  /* Gold diamond divider used in the PDF preview header etc. */
+  .nx-diamond::before {
+    content: "◆";
+    color: var(--brand-accent);
+    font-size: 0.5em;
+    margin: 0 0.5em;
+    vertical-align: middle;
   }
 }
 

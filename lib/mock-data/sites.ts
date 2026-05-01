@@ -5,8 +5,8 @@ import { clients } from "./clients";
 // commercial / industrial accounts have a couple.
 const EXTRA_SITES: Record<string, { name: string; address: string; city: string; state: string }[]> = {
   "c-001": [
-    { name: "Meridian Tower — Lobby & Cores", address: "120 Adelaide St W", city: "Toronto", state: "ON" },
-    { name: "Meridian Tower — Tenant Floors 14-22", address: "120 Adelaide St W, Floors 14-22", city: "Toronto", state: "ON" },
+    { name: "Meridian Capital Plaza — Lobby & Cores", address: "120 Adelaide St W", city: "Toronto", state: "ON" },
+    { name: "Meridian Capital Plaza — Tenant Floors 14-22", address: "120 Adelaide St W, Floors 14-22", city: "Toronto", state: "ON" },
     { name: "Meridian — Parking P1-P3", address: "120 Adelaide St W, Garage Levels", city: "Toronto", state: "ON" },
   ],
   "c-002": [

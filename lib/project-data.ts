@@ -586,7 +586,7 @@ function pickTimeTaskLabel(idx: number, p: Project): string {
     "ULC signal verification",
     "As-built updates",
   ];
-  return labels[idx % labels.length] + (p.id === "pr-001" ? " — Meridian Tower" : "");
+  return labels[idx % labels.length] + (p.id === "pr-001" ? " — Meridian Capital Plaza" : "");
 }
 
 // ────────────────────────────────────────────────────────────────────────────

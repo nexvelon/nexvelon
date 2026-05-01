@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
   UsersTab,
   RolesTab,
@@ -35,15 +36,41 @@ export default function UsersPage() {
   return (
     <Can resource="users" action="view" fallback={<RestrictedCard />}>
       <div className="space-y-6">
-        <header>
-          <h1 className="text-brand-navy font-serif text-3xl">Users & Permissions</h1>
-          <p className="text-brand-charcoal/70 mt-1 text-sm">
-            Granular control over what each team member can see and do.
-          </p>
-          <p className="text-muted-foreground mt-1 text-[11px]">
-            Currently signed in as <span className="text-brand-navy font-semibold">{role}</span> · use the role-switcher in the top bar to demo permission boundaries live.
-          </p>
-        </header>
+        <PageHeader
+          eyebrow="42 employees · 6 subcontractors"
+          title="Users & Permissions"
+          description="Identity directory · role presets · granular permissions matrix"
+          actions={
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+              >
+                Audit log
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+              >
+                Import SCIM
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
+                style={{ background: "var(--brand-primary)" }}
+              >
+                + Invite user
+              </button>
+            </>
+          }
+        />
+        <p className="text-muted-foreground -mt-3 text-[11px]">
+          Currently signed in as{" "}
+          <span className="text-brand-navy font-semibold">{role}</span> · use
+          the role-switcher to demo permission boundaries live.
+        </p>
 
         <nav className="bg-card rounded-lg border border-[var(--border)] p-1 shadow-sm">
           <ul className="flex flex-wrap gap-1">
