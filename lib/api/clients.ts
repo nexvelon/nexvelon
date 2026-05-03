@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   ClientListFilters,
   DbClient,
@@ -18,21 +18,19 @@ import type {
 // ============================================================================
 // Server-only client API.
 //
-// Why the admin client?
-// ---------------------
-// The current in-app login is a localStorage-only AuthProvider — there's no
-// real Supabase Auth session yet. With RLS enabled and policies scoped to
-// `authenticated`, the regular server client has nobody to authenticate as
-// and every query would be denied.
+// Auth posture (Session A onwards)
+// --------------------------------
+// Backed by the cookie-aware server client from lib/supabase/server.ts. Every
+// call carries the caller's Supabase Auth session, so RLS on the clients /
+// sites / contacts tables is enforced (currently any authenticated user has
+// SELECT / INSERT / UPDATE; per-role row scoping lands in Session C).
 //
-// Until Supabase Auth lands, we use the service-role client. RLS is bypassed
-// at the DB layer; authorisation is the server's responsibility (and we'll
-// re-add it once we have a real `auth.uid()` to bind to). For a private
-// internal tool with admin-only signup this is acceptable.
+// Anonymous callers will get RLS-denied errors — guard pages with the auth
+// middleware (middleware.ts) and the <RequireAuth> wrapper.
 // ============================================================================
 
-function db() {
-  return createAdminClient();
+async function db() {
+  return createSupabaseServerClient();
 }
 
 // ----------------------------------------------------------------------------
@@ -42,7 +40,7 @@ function db() {
 export async function getClients(
   filters: ClientListFilters = {}
 ): Promise<DbClientWithCounts[]> {
-  const supabase = db();
+  const supabase = await db();
 
   let query = supabase
     .from("clients")
@@ -111,7 +109,7 @@ export interface ClientWithRelations {
 export async function getClientById(
   id: string
 ): Promise<ClientWithRelations | null> {
-  const supabase = db();
+  const supabase = await db();
   const { data: client, error } = await supabase
     .from("clients")
     .select("*")
@@ -131,7 +129,7 @@ export async function getClientById(
 }
 
 export async function createClient(payload: DbClientInsert): Promise<DbClient> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("clients")
     .insert(payload)
@@ -145,7 +143,7 @@ export async function updateClient(
   id: string,
   payload: DbClientUpdate
 ): Promise<DbClient> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("clients")
     .update(payload)
@@ -157,7 +155,7 @@ export async function updateClient(
 }
 
 export async function softDeleteClient(id: string): Promise<void> {
-  const supabase = db();
+  const supabase = await db();
   const { error } = await supabase
     .from("clients")
     .update({ deleted_at: new Date().toISOString() })
@@ -170,7 +168,7 @@ export async function softDeleteClient(id: string): Promise<void> {
 // ----------------------------------------------------------------------------
 
 export async function getSitesByClient(clientId: string): Promise<DbSite[]> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("sites")
     .select("*")
@@ -182,7 +180,7 @@ export async function getSitesByClient(clientId: string): Promise<DbSite[]> {
 }
 
 export async function createSite(payload: DbSiteInsert): Promise<DbSite> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("sites")
     .insert(payload)
@@ -196,7 +194,7 @@ export async function updateSite(
   id: string,
   payload: DbSiteUpdate
 ): Promise<DbSite> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("sites")
     .update(payload)
@@ -208,7 +206,7 @@ export async function updateSite(
 }
 
 export async function softDeleteSite(id: string): Promise<void> {
-  const supabase = db();
+  const supabase = await db();
   const { error } = await supabase
     .from("sites")
     .update({ deleted_at: new Date().toISOString() })
@@ -223,7 +221,7 @@ export async function softDeleteSite(id: string): Promise<void> {
 export async function getContactsByClient(
   clientId: string
 ): Promise<DbContact[]> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("contacts")
     .select("*")
@@ -238,7 +236,7 @@ export async function getContactsByClient(
 export async function createContact(
   payload: DbContactInsert
 ): Promise<DbContact> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("contacts")
     .insert(payload)
@@ -252,7 +250,7 @@ export async function updateContact(
   id: string,
   payload: DbContactUpdate
 ): Promise<DbContact> {
-  const supabase = db();
+  const supabase = await db();
   const { data, error } = await supabase
     .from("contacts")
     .update(payload)
@@ -264,7 +262,7 @@ export async function updateContact(
 }
 
 export async function softDeleteContact(id: string): Promise<void> {
-  const supabase = db();
+  const supabase = await db();
   const { error } = await supabase
     .from("contacts")
     .update({ deleted_at: new Date().toISOString() })

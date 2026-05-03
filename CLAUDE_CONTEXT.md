@@ -874,6 +874,33 @@ don't "fix" them by accident.
     `Missing NEXT_PUBLIC_SUPABASE_URL` at the import site in
     `lib/supabase/{client,server,admin}.ts`. The error reads like a
     code bug; it's a Vercel config issue.
+14. **MFA gate is middleware-enforced, not RLS-enforced.** During the
+    ~10-minute window between password verification and OTP
+    verification, the user holds a valid Supabase JWT. Any direct REST
+    call from that JWT to Supabase succeeds (RLS still scopes data to
+    the role, but the OTP gate isn't part of the gate). The Next.js
+    middleware blocks every protected app route by checking
+    `public.has_pending_otp()` per request; we don't expose any
+    public REST endpoints, so this is the only practical bypass surface
+    and there are no callers for it today. **Upgrade path** when this
+    matters: enable Supabase Auth Hooks, mint a `mfa_verified` custom
+    JWT claim that flips on `mfa_challenge_verified`, and add an RLS
+    policy line on every sensitive table requiring it. Defer to
+    Session B or C.
+15. **Manual cross-device test pass needed after Session A.** The new
+    auth surfaces (`/login`, `/auth/verify-otp`, `/auth/set-password`)
+    were built mobile-first with explicit min-44px touch targets, but
+    haven't been tested on real devices yet. Run a manual sweep before
+    we open invites:
+    - **Breakpoints:** 320px (iPhone SE), 768px (iPad portrait),
+      1024px (iPad landscape / small laptop), 1440px (desktop default).
+    - **Browsers:** Safari (macOS), Chrome (macOS + Windows), Firefox,
+      Edge, **iOS Safari**, **Android Chrome**.
+    - **What to verify on each:** login submit, autofill of email +
+      saved password, OTP `inputMode="numeric"` shows numeric keyboard,
+      password manager picks up `autocomplete="one-time-code"` for the
+      OTP field on iOS, eye/show-password toggle is reachable, no
+      horizontal scroll at 320px, all buttons at least 44×44 CSS px.
 
 ---
 

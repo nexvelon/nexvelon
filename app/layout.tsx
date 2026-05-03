@@ -73,9 +73,12 @@ export default function RootLayout({
         className={`${inter.variable} ${playfair.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <RoleProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </RoleProvider>
+          {/* AuthProvider wraps RoleProvider since Session A — RoleProvider
+              now sources the live role from useAuth() rather than from
+              localStorage. */}
+          <AuthProvider>
+            <RoleProvider>{children}</RoleProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

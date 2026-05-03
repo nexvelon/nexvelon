@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
-import { RedirectIfAuthed } from "@/components/auth/RequireAuth";
 
 export const metadata: Metadata = {
-  title: "Sign in",
-  description: "Sign in to your Nexvelon workspace.",
+  title: "Set your password",
+  description:
+    "Welcome to Nexvelon — pick a password to finish setting up your account.",
 };
 
-// useSearchParams in the login page — always render per request.
 export const dynamic = "force-dynamic";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default function SetPasswordLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <RedirectIfAuthed>
+    <>
       {children}
       <Toaster
         position="bottom-right"
@@ -23,6 +26,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           },
         }}
       />
-    </RedirectIfAuthed>
+    </>
   );
 }

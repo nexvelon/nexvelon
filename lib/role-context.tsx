@@ -1,51 +1,57 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Role } from "./types";
 import { hasPermission, type Action, type Resource } from "./permissions";
+import { useAuth } from "@/components/auth/AuthProvider";
+
+// ============================================================================
+// RoleProvider — Session A onwards.
+//
+// Pre-Session-A this was a localStorage-backed UI demo store that the
+// top-bar role-switcher mutated freely. Now that Supabase Auth is real, the
+// role is sourced exclusively from the authenticated user's profile row —
+// `setRole` is preserved as a no-op so the legacy RoleSwitcher dropdown
+// still compiles, but it no longer changes anything (intentional: Phase 6
+// will remove the switcher entirely).
+//
+// `<Can resource action />` always reads the live auth role, regardless of
+// any setRole call. This keeps permission gates correct even if a future
+// surface tries to "demo override" the role.
+// ============================================================================
 
 interface RoleContextValue {
   role: Role;
+  /** No-op since Session A. Kept for legacy callers (RoleSwitcher). */
   setRole: (role: Role) => void;
 }
 
 const RoleContext = createContext<RoleContextValue | null>(null);
-const STORAGE_KEY = "nexvelon:role";
 
-const VALID_ROLES: Role[] = [
-  "Admin",
-  "SalesRep",
-  "ProjectManager",
-  "Technician",
-  "Subcontractor",
-  "Accountant",
-  "ViewOnly",
-];
-
-function isRole(s: string | null): s is Role {
-  return s !== null && (VALID_ROLES as string[]).includes(s);
-}
+const DEFAULT_ROLE: Role = "ViewOnly";
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  // Default to Admin server-side so SSR + client hydration match; sync from
-  // localStorage after mount so demo-account chips persist across reloads.
-  const [role, setRoleState] = useState<Role>("Admin");
+  const { user } = useAuth();
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (isRole(saved)) setRoleState(saved);
-  }, []);
-
-  const setRole = (next: Role) => {
-    setRoleState(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    }
-  };
+  const value = useMemo<RoleContextValue>(
+    () => ({
+      role: user?.role ?? DEFAULT_ROLE,
+      setRole: () => {
+        if (process.env.NODE_ENV !== "production") {
+          // Surface stale demo wiring during dev; silent in prod.
+          console.warn(
+            "[role-context] setRole() is a no-op since Session A. The role is " +
+              "read from the authenticated profile. Remove the legacy " +
+              "RoleSwitcher in Phase 6."
+          );
+        }
+      },
+    }),
+    [user?.role]
+  );
 
   return (
-    <RoleContext.Provider value={{ role, setRole }}>{children}</RoleContext.Provider>
+    <RoleContext.Provider value={value}>{children}</RoleContext.Provider>
   );
 }
 
@@ -62,7 +68,12 @@ interface CanProps {
   children: ReactNode;
 }
 
+/**
+ * Permission gate. Reads the role straight from `useAuth()` rather than
+ * the (now-no-op) RoleProvider state, so it can never be desynced.
+ */
 export function Can({ resource, action, fallback = null, children }: CanProps) {
-  const { role } = useRole();
+  const { user } = useAuth();
+  const role = user?.role ?? DEFAULT_ROLE;
   return hasPermission(role, resource, action) ? <>{children}</> : <>{fallback}</>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Eye,
@@ -10,54 +10,72 @@ import {
   FolderKanban,
   Lock,
   Receipt,
-  ShieldCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/components/auth/AuthProvider";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-accounts";
-import { cn } from "@/lib/utils";
+import { signInAction } from "./actions";
+
+// ============================================================================
+// Real two-step sign-in (Session A onwards).
+//
+// STEP 1 (this page):  email + password → server action → on success the
+//                      user has a Supabase session AND a fresh OTP row;
+//                      we redirect to /auth/verify-otp where step 2 lives.
+//
+// STEP 2 (/auth/verify-otp): six-digit code entry. Until it's verified the
+//                      middleware redirects every protected route here.
+//
+// The visual design is the v4.18 navy + gold split-screen, with:
+//   - Demo chips and SSO buttons removed (real auth doesn't expose them).
+//   - Min mobile width 320px; touch targets 44px+ on every interactive.
+// ============================================================================
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signInAs, status } = useAuth();
+  const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState("admin@nexvelon.com");
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [pending, startTransition] = useTransition();
 
+  // Surface a one-shot error from /auth/callback redirects (expired link, etc.)
   useEffect(() => {
-    if (status === "authenticated") router.replace("/dashboard");
-  }, [status, router]);
+    const e = searchParams.get("error");
+    if (e) setError(e);
+  }, [searchParams]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
-    setSubmitting(true);
-    const result = signIn(email.trim(), password);
-    if (!result.ok) {
-      setError(result.error);
-      setSubmitting(false);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError("Email and password are required.");
       return;
     }
-    router.push("/dashboard");
-  };
 
-  const loginAs = (acctEmail: string) => {
-    setError(null);
-    setEmail(acctEmail);
-    setPassword(DEMO_PASSWORD);
-    signInAs(acctEmail);
-    router.push("/dashboard");
+    startTransition(async () => {
+      const result = await signInAction(trimmedEmail, password);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      // Preserve a "next" param so post-OTP we can land on the originally
+      // requested page (verify-otp will pass it forward).
+      const next = searchParams.get("next");
+      const dest = next
+        ? `${result.redirectTo}?next=${encodeURIComponent(next)}`
+        : result.redirectTo;
+      router.replace(dest);
+    });
   };
 
   return (
     <div
-      className="grid min-h-screen grid-cols-1 lg:grid-cols-5"
+      className="grid min-h-[100dvh] grid-cols-1 lg:grid-cols-5"
       style={{ background: "var(--brand-bg)" }}
     >
       <aside
@@ -82,6 +100,7 @@ export default function LoginPage() {
                 border: "1px solid var(--brand-accent)",
                 color: "var(--brand-accent)",
               }}
+              aria-hidden
             >
               N
             </span>
@@ -118,10 +137,10 @@ export default function LoginPage() {
         </div>
       </aside>
 
-      <main className="flex items-center justify-center p-6 lg:col-span-2 lg:p-12">
+      <main className="flex items-center justify-center p-4 sm:p-6 lg:col-span-2 lg:p-12">
         <div className="w-full max-w-md">
           <Card
-            className="p-8 shadow-sm"
+            className="p-6 shadow-sm sm:p-8"
             style={{
               borderTop: "2px solid var(--brand-accent)",
               background: "var(--brand-card)",
@@ -139,7 +158,7 @@ export default function LoginPage() {
             </p>
             <div className="nx-rule mt-4 mb-5" />
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="nx-eyebrow-soft text-[10px]">
                   Email
@@ -147,27 +166,27 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   autoFocus
                   required
+                  disabled={pending}
+                  className="h-11"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="nx-eyebrow-soft text-[10px]">
-                    Password
-                  </Label>
-                  <button
-                    type="button"
-                    className="text-[11px] hover:underline"
-                    style={{ color: "var(--brand-primary)" }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                <Label
+                  htmlFor="password"
+                  className="nx-eyebrow-soft text-[10px]"
+                >
+                  Password
+                </Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -176,13 +195,15 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     required
-                    className="pr-10"
+                    disabled={pending}
+                    className="h-11 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
-                    className="text-muted-foreground hover:text-brand-charcoal absolute top-1/2 right-3 -translate-y-1/2"
+                    className="text-muted-foreground hover:text-brand-charcoal absolute top-1/2 right-1 flex h-11 w-11 -translate-y-1/2 items-center justify-center"
                     aria-label={showPwd ? "Hide password" : "Show password"}
+                    tabIndex={-1}
                   >
                     {showPwd ? (
                       <EyeOff className="h-4 w-4" />
@@ -193,23 +214,15 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <label className="text-brand-charcoal flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  style={{ accentColor: "var(--brand-accent)" }}
-                  className="h-3.5 w-3.5"
-                />
-                Remember me on this device
-              </label>
-
               {error && (
                 <div
+                  role="alert"
                   className="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
                   style={{
-                    background: "color-mix(in oklab, var(--brand-status-red) 10%, transparent)",
-                    borderColor: "color-mix(in oklab, var(--brand-status-red) 35%, transparent)",
+                    background:
+                      "color-mix(in oklab, var(--brand-status-red) 10%, transparent)",
+                    borderColor:
+                      "color-mix(in oklab, var(--brand-status-red) 35%, transparent)",
                     color: "var(--brand-status-red)",
                   }}
                 >
@@ -220,8 +233,8 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold tracking-[0.04em] shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+                disabled={pending}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold tracking-[0.04em] shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
                 style={{
                   background: "var(--brand-accent)",
                   color: "var(--brand-primary)",
@@ -229,130 +242,22 @@ export default function LoginPage() {
                 }}
               >
                 <Lock className="h-4 w-4" />
-                Sign In
+                {pending ? "Sending verification code…" : "Sign In"}
               </button>
             </form>
 
-            <div className="my-6 flex items-center gap-3">
-              <span
-                className="h-px flex-1"
-                style={{ background: "var(--brand-border)" }}
-              />
-              <span
-                className="font-mono text-[10px] uppercase tracking-widest"
-                style={{ color: "var(--brand-accent)" }}
-              >
-                or
-              </span>
-              <span
-                className="h-px flex-1"
-                style={{ background: "var(--brand-border)" }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              {SSO_BUTTONS.map((b) => (
-                <button
-                  key={b.label}
-                  type="button"
-                  onClick={() => handleSubmit()}
-                  className="w-full rounded-md border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted/40"
-                  style={{
-                    borderColor: "color-mix(in oklab, var(--brand-accent) 35%, transparent)",
-                    color: "var(--brand-text)",
-                  }}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 space-y-1 text-center">
-              <p className="text-muted-foreground text-[11px]">
-                Demo credentials:{" "}
-                <span className="font-mono text-brand-charcoal">admin@nexvelon.com</span>{" "}/
-                {" "}
-                <span className="font-mono text-brand-charcoal">P@ssw0rd</span>
-              </p>
-              <p className="text-muted-foreground text-[11px]">
-                Need access? Contact your administrator.
-              </p>
-            </div>
-          </Card>
-
-          <Card
-            className="mt-4 overflow-hidden shadow-sm"
-            style={{ borderTop: "2px solid var(--brand-accent)" }}
-          >
-            <div
-              className="flex items-center justify-between px-4 py-3"
-              style={{ borderBottom: "1px solid var(--brand-border)" }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <ShieldCheck
-                  className="h-3.5 w-3.5"
-                  style={{ color: "var(--brand-accent)" }}
-                />
-                <span
-                  className="font-serif text-sm"
-                  style={{ color: "var(--brand-primary)" }}
-                >
-                  Demo accounts
-                </span>
-                <span
-                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
-                  style={{
-                    background: "color-mix(in oklab, var(--brand-accent) 20%, transparent)",
-                    color: "var(--brand-accent-soft)",
-                  }}
-                >
-                  Live
-                </span>
-              </span>
-            </div>
-            <div className="p-4">
-              <p className="text-muted-foreground mb-3 text-[11px]">
-                One-click sign-in. Each chip switches your role and lands you
-                on the dashboard with the same permissions wired live.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {DEMO_ACCOUNTS.map((d) => (
-                  <button
-                    key={d.email}
-                    type="button"
-                    onClick={() => loginAs(d.email)}
-                    className={cn(
-                      "group rounded-md border bg-white px-3 py-2 text-left transition-colors"
-                    )}
-                    style={{
-                      borderColor: "color-mix(in oklab, var(--brand-primary) 15%, transparent)",
-                    }}
-                  >
-                    <p
-                      className="font-serif text-sm font-semibold"
-                      style={{ color: "var(--brand-primary)" }}
-                    >
-                      {d.label}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[10px] leading-snug">
-                      {d.blurb}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className="text-muted-foreground mt-6 text-center text-[11px]">
+              Forgot password? Contact your administrator.
+            </p>
+            <p className="text-muted-foreground mt-1 text-center text-[11px]">
+              For your security every sign-in requires a code we email you.
+            </p>
           </Card>
         </div>
       </main>
     </div>
   );
 }
-
-const SSO_BUTTONS = [
-  { label: "Continue with Microsoft" },
-  { label: "Continue with Google" },
-  { label: "Continue with SSO (SAML)" },
-];
 
 function PillarItem({
   icon: Icon,
@@ -366,7 +271,8 @@ function PillarItem({
       <span
         className="flex h-9 w-9 items-center justify-center rounded-full"
         style={{
-          border: "1px solid color-mix(in oklab, var(--brand-accent) 50%, transparent)",
+          border:
+            "1px solid color-mix(in oklab, var(--brand-accent) 50%, transparent)",
           color: "var(--brand-accent)",
         }}
       >

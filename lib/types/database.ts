@@ -1,6 +1,6 @@
 // ============================================================================
-// Database row types — mirror supabase/migrations/0001_clients_schema.sql 1:1.
-// Update this file if the migration changes.
+// Database row types — mirror supabase/migrations/0001_*, 0002_*, 0003_* 1:1.
+// Update this file when migrations change.
 // ============================================================================
 
 export type DbClientType =
@@ -185,4 +185,132 @@ export interface ClientListFilters {
   tier?: DbClientTier;
   status?: DbClientStatus;
   type?: DbClientType;
+}
+
+// ============================================================================
+// Auth schema (migration 0002_auth_and_users_schema.sql)
+// ============================================================================
+
+/** Application role — mirrors profiles.role check constraint. 11 values. */
+export type DbRole =
+  | "Admin"
+  | "ProjectManager"
+  | "SalesRep"
+  | "LeadTechnician"
+  | "Technician"
+  | "Dispatcher"
+  | "Warehouse"
+  | "Accountant"
+  | "Subcontractor"
+  | "ViewOnly"
+  | "ClientPortal";
+
+export type DbEmployeeType = "Employee" | "Subcontractor" | "Contractor";
+
+export type DbProfileStatus =
+  | "Active"
+  | "Invited"
+  | "Suspended"
+  | "Terminated";
+
+// ----------------------------------------------------------------------------
+// public.profiles
+// ----------------------------------------------------------------------------
+export interface DbProfile {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  phone: string | null;
+  mobile: string | null;
+  title: string | null;
+  department: string | null;
+  employee_type: DbEmployeeType;
+  role: DbRole;
+  status: DbProfileStatus;
+  last_login_at: string | null;
+  last_login_ip: string | null;
+  mfa_enrolled: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  terminated_at: string | null;
+  notes: string | null;
+}
+
+/** Payload for non-Admin self-edits (only the fields the trigger allows). */
+export type DbProfileSelfUpdate = {
+  first_name?: string | null;
+  last_name?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  title?: string | null;
+  department?: string | null;
+  notes?: string | null;
+};
+
+/** Payload an Admin (or service role) may apply. */
+export type DbProfileAdminUpdate = DbProfileSelfUpdate & {
+  email?: string;
+  role?: DbRole;
+  status?: DbProfileStatus;
+  employee_type?: DbEmployeeType;
+  mfa_enrolled?: boolean;
+  last_login_at?: string | null;
+  last_login_ip?: string | null;
+  terminated_at?: string | null;
+};
+
+// ----------------------------------------------------------------------------
+// public.auth_audit_log
+// ----------------------------------------------------------------------------
+export type AuthAuditEvent =
+  | "login_success"
+  | "login_failed"
+  | "mfa_challenge_sent"
+  | "mfa_challenge_verified"
+  | "mfa_challenge_failed"
+  | "password_changed"
+  | "user_invited"
+  | "user_suspended"
+  | "user_reactivated"
+  | "user_terminated"
+  | "session_revoked"
+  | "email_changed";
+
+export interface DbAuthAuditLog {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  event: AuthAuditEvent;
+  ip: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export type DbAuthAuditLogInsert = {
+  user_id?: string | null;
+  email?: string | null;
+  event: AuthAuditEvent;
+  ip?: string | null;
+  user_agent?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+// ----------------------------------------------------------------------------
+// public.auth_otp
+// ----------------------------------------------------------------------------
+export interface DbAuthOtp {
+  id: string;
+  user_id: string;
+  code_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  attempts: number;
+  created_at: string;
 }
