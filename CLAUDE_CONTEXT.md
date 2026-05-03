@@ -47,7 +47,27 @@ can switch roles instantly.
 | **Supabase region** | ca-central-1 (data-residency requirement) |
 | **DNS provider** | Namecheap (`nexvelonglobal.com`) — `app.` CNAME → `cname.vercel-dns.com` |
 | **SSL** | Let's Encrypt via Vercel (auto-issued, auto-renewed) |
-| **Last deployed commit** | `dfc79be` — "Design v4.18 polish + login auth gate" |
+| **Last deployed commit** | `f1d5542` — "Wire Clients module to Supabase" |
+
+### Vercel environment variables
+
+Three Supabase env vars are configured at the **project level** (Vercel
+dashboard → `nexvelon` → Settings → Environment Variables → Project tab):
+
+| Var | Scope |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Production + Preview + Development |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Production + Preview + Development |
+| `SUPABASE_SERVICE_ROLE_KEY` | Production + Preview + Development (Sensitive) |
+
+> **⚠ Important for future deploys:** Vercel offers two scoping options
+> for env vars — **Shared** (organisation-wide, must be explicitly
+> linked to each project) and **Project** (lives on the project
+> directly). This project uses **Project-level**. If you instead add a
+> variable under Shared without linking it, the Vercel build will fail
+> with `Missing NEXT_PUBLIC_SUPABASE_URL` (or similar) at the runtime
+> import site in `lib/supabase/{client,server,admin}.ts`. The error
+> message looks like a code bug but is actually a Vercel config issue.
 
 ### Deployment status
 
@@ -56,37 +76,27 @@ can switch roles instantly.
 | Static UI shell, sidebar, theme system, all 9 module routes | **LIVE on Vercel** |
 | Login + demo-account chips | LIVE |
 | Clients module schema (clients, sites, contacts) | **LIVE in Supabase** (migration `0001` applied) |
-| Clients module wired to Supabase | **LOCAL ONLY** — committed to repo but **not yet pushed** to GitHub, so production still serves the mock data version |
+| Clients module wired to Supabase | **LIVE on Vercel** at https://app.nexvelonglobal.com/clients — verified end-to-end (create / read / update / soft-delete persists across reloads). Pushed in commit `f1d5542`. |
 | All other modules (Dashboard, Quotes, Projects, Inventory, Scheduling, Financials, Users, Settings) | LIVE but still backed by **mock data** in `/lib/mock-data` |
 | Real auth (Supabase Auth) | **Not built.** Login uses localStorage AuthProvider. |
 | File storage (uploads) | **Not built.** Drop-zones exist in UI but accept files only into local state. |
 
 ### Working tree at handoff time
 
-The working tree has **uncommitted changes** for the Clients module wiring:
+Working tree is **clean**. `main` is in sync with `origin/main`. Recent
+commits, newest first:
 
 ```
-M  .env.example             — Supabase section refreshed (commit when ready)
-M  app/(app)/clients/page.tsx     — converted to server component
-M  package.json + lock      — added @supabase/* deps
-?? app/(app)/clients/ClientFormDrawer.tsx
-?? app/(app)/clients/ClientsView.tsx
-?? app/(app)/clients/ContactFormDrawer.tsx
-?? app/(app)/clients/SiteFormDrawer.tsx
-?? app/(app)/clients/actions.ts
-?? lib/api/clients.ts
-?? lib/types/database.ts
-?? lib/supabase/{client,server,admin}.ts
-?? supabase/migrations/0001_clients_schema.sql
-?? .env.local               (gitignored — contains real Supabase keys)
-?? CLAUDE_CONTEXT.md        (this file)
+f1d5542  Wire Clients module to Supabase
+01f5541  Add CLAUDE_CONTEXT.md handoff document
+dfc79be  Design v4.18 polish + login auth gate
+b6f5d77  Initial Nexvelon build — Claude Code, Design, and Chat
+d47a18d  Initial commit from Create Next App
 ```
 
-These should be reviewed and committed in two waves:
-1. **Supabase scaffolding + Clients DB wiring** as one commit.
-2. **CLAUDE_CONTEXT.md** as a separate commit.
-
-(The user explicitly asked to commit but **not push** until they say so.)
+`.env.local` is the only unversioned file you should expect on disk —
+it's gitignored and holds the real Supabase keys (URL, publishable key,
+service-role key).
 
 ---
 
@@ -686,38 +696,54 @@ time here until §11 priorities 1–4 are done.
 
 Priority order. Each item is a deliverable with rough scope estimate.
 
-### P0 — Push the Clients DB wiring to production
+### P0 — Push the Clients DB wiring to production ✅ DONE
 
-- Commit the working tree (Clients module + Supabase scaffolding + this file).
-- Push to `main` so Vercel redeploys.
-- Smoke test on `https://app.nexvelonglobal.com/clients` after deploy.
-- **Scope:** ~10 minutes.
+Shipped on commit `f1d5542`. Live at
+https://app.nexvelonglobal.com/clients. Verified end-to-end:
+create / read / update / soft-delete all persist across reloads against
+the real Supabase project in ca-central-1.
 
-### P1 — Wire the next module to Supabase
+### P0 (next) — Wire the Quotes module to Supabase
 
-Pick one. Recommended order:
+Quotes is the next priority because it depends on Clients (which is now
+live) and unblocks the demo's quote-to-cash story end-to-end.
+
+- Migration: `0002_quotes_schema.sql` — `quotes`, `quote_sections`,
+  `quote_line_items`. FKs: `quotes.client_id → clients.id`,
+  `quotes.site_id → sites.id` (nullable), `quote_sections.quote_id`
+  cascade, `quote_line_items.section_id` cascade. Status enum: Draft,
+  Sent, Approved, Rejected, Expired, Converted.
+- Files to add:
+  - `lib/types/database.ts` — extend with `DbQuote`, `DbQuoteSection`,
+    `DbQuoteLineItem` plus Insert/Update variants.
+  - `lib/api/quotes.ts` — mirror `lib/api/clients.ts` pattern.
+    Functions: `getQuotes`, `getQuoteById`, `createQuote`, `updateQuote`,
+    `softDeleteQuote`, plus section + line-item CRUD.
+  - `app/(app)/quotes/actions.ts` — server actions.
+  - Convert `app/(app)/quotes/page.tsx` to a server component (currently
+    client + localStorage).
+  - Retire `lib/quote-store.ts` and the localStorage drafts pattern.
+- **Scope:** ~4-6 hours.
+
+### P1 — Subsequent modules in priority order
 
 1. **Users** — small, self-contained, unblocks real auth.
-   - Migration: `0002_users_schema.sql` — `users`, `user_roles`,
+   - Migration: `0003_users_schema.sql` — `users`, `user_roles`,
      `subcontractors`, `audit_log`, `invitations`.
-   - Mirror `lib/types/database.ts` extensions, `lib/api/users.ts`,
-     `app/(app)/users/actions.ts`.
    - **Scope:** ~2-3 hours.
 2. **Projects** — biggest payoff because of the 9-tab detail page.
+   Depends on Quotes (for `quote_id` FK linking converted quotes) and
+   Users (for `manager_id`, `lead_tech_id`, `sales_rep_id` FKs).
    - Migration: `projects`, `project_tasks`, `project_materials`,
      `purchase_orders`, `commissioning_items`, `intrusion_zones`,
      `project_documents`, `time_entries`.
    - Will need carefully designed FKs and RLS scoping.
    - **Scope:** ~6-8 hours.
-3. **Quotes** — depends on Clients (for client_id FK) and optionally
-   Users (for owner_id). Has the most complex existing in-memory model
-   (sectioned line items, totals).
-   - **Scope:** ~4-6 hours.
-4. **Inventory** — depends on Vendors. ~80 SKUs of seed data.
+3. **Inventory** — depends on Vendors. ~80 SKUs of seed data.
    - **Scope:** ~3-4 hours.
-5. **Financials** — invoices, bills. Read-only initially is fine.
+4. **Financials** — invoices, bills. Read-only initially is fine.
    - **Scope:** ~2-3 hours.
-6. **Scheduling** — depends on Projects and Users. Job records + crew
+5. **Scheduling** — depends on Projects and Users. Job records + crew
    assignments.
    - **Scope:** ~3-4 hours.
 
@@ -831,9 +857,23 @@ don't "fix" them by accident.
     that need to be kept in sync, and Tailwind utility classes
     can't easily express `color-mix(...)` constructs. Don't refactor
     to Tailwind classes without preserving the exact colour math.
-12. **`/clients` is the only DB-wired page in the working tree but
-    isn't pushed yet.** Production still serves the mock-data version.
-    See §2.
+12. **`/clients` is the only DB-wired module today.** Live on Vercel
+    via commit `f1d5542`. The other 8 modules still read from
+    `/lib/mock-data`. See §11 P0 for the next module to migrate.
+13. **Vercel env vars are project-level, not Shared+Link.** The three
+    Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`,
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are
+    attached directly to the `nexvelon` Vercel project rather than
+    declared once at the org level and linked. This is fine for a
+    one-project tenancy. **If the team scales to multiple Vercel
+    projects** (staging, internal admin, etc.) sharing the same
+    Supabase backend, migrate to the Shared + Link pattern: declare the
+    vars once under Vercel → Settings → Environment Variables → Shared,
+    then link each project. Watch out: a Shared var that is *not*
+    explicitly linked to a project produces builds that fail with
+    `Missing NEXT_PUBLIC_SUPABASE_URL` at the import site in
+    `lib/supabase/{client,server,admin}.ts`. The error reads like a
+    code bug; it's a Vercel config issue.
 
 ---
 
