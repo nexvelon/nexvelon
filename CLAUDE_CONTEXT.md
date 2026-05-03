@@ -403,70 +403,151 @@ create policy "authenticated_all_<table>"
 
 ## 6. Authentication State
 
-### Today
+### Today (Session A · live)
 
-**Implementation:** `components/auth/AuthProvider.tsx`. Pure client-side
-React Context, persists session to `localStorage` under key
-`nexvelon_session`. No server-side check. No cookie. No JWT.
+**Implementation:** real Supabase Auth (email + password) with an
+email-OTP second factor we built on top. Invite-only — no public signup.
+Cookie-backed sessions, JWT validated server-side, RLS enforced on every
+data table.
 
-**Flow:**
-1. User lands on `/`.
-2. `app/page.tsx` reads `useAuth().status`. If `authenticated`, redirects
-   to `/dashboard`; otherwise to `/login`.
-3. `(app)/layout.tsx` wraps everything in `<RequireAuth>` which
-   client-side redirects anonymous users to `/login`.
-4. `(auth)/login/layout.tsx` wraps in `<RedirectIfAuthed>` so signed-in
-   users hitting `/login` bounce to `/dashboard`.
-5. Sign-in via the form calls `signIn(email, password)`. Server-side this
-   is `authenticate()` in `lib/demo-accounts.ts` — a hard-coded array
-   lookup. Returns `{ ok: true } | { ok: false, error }`.
-6. The 5 demo chips call `signInAs(email)` which **skips the password
-   check** but still verifies the email is in the demo list.
-7. On success we `setRole(acct.role)` so `<Can>` and `useRole()` work
-   immediately.
-8. Sign-out clears `localStorage` + redirects to `/login` + sonner toast.
+**Pieces:**
+- `components/auth/AuthProvider.tsx` — client provider that hydrates from
+  `supabase.auth.getUser()` and the `profiles` row, subscribes to
+  `onAuthStateChange`, and exposes `{ user, profile, status, signOut,
+  refreshProfile }`.
+- `lib/supabase/{client,server,middleware,admin}.ts` — the four flavours
+  of Supabase client: browser (anon key), cookie-aware server (anon key
+  + cookies), edge-middleware (anon key + cookie shuttle), service-role
+  (admin operations only).
+- `middleware.ts` — refreshes the session on every request, redirects
+  anonymous users to `/login`, redirects MFA-pending users to
+  `/auth/verify-otp`. Source of truth for routing decisions.
+- `lib/auth/*` — server-only utilities: `otp` (generate/hash/verify with
+  bcrypt), `email` (Resend OTP send), `audit` (writes to
+  `auth_audit_log`), `profile` (cookie-aware reads, service-role
+  mutations), `password-policy` (12+/upper/lower/digit/symbol),
+  `request-info` (IP + UA from headers), `normalize-role` (DB 11-role →
+  app 7-role mapping).
 
-### Demo accounts
+**Flow (sign-in):**
+1. User lands on `/login`. Submits email + password.
+2. Server action `signInAction` (`app/(auth)/login/actions.ts`):
+   - Calls `supabase.auth.signInWithPassword`.
+   - If error → audit `login_failed`, return error.
+   - Loads the `profiles` row. If `status !== 'Active'` → signOut + audit
+     + return a friendly error. (Suspended / Terminated / Invited each
+     get their own message.)
+   - Generates a 6-digit OTP, bcrypt-hashes it, inserts into `auth_otp`.
+   - Sends the plaintext code via Resend (`lib/auth/email.ts`).
+   - Audits `mfa_challenge_sent`, returns `{ ok: true,
+     redirectTo: '/auth/verify-otp' }`.
+3. Client navigates to `/auth/verify-otp`. The Supabase session cookie
+   IS set, but middleware's `has_pending_otp()` RPC returns true so
+   every protected route bounces back to `/auth/verify-otp` until the
+   second factor is consumed.
+4. User enters the 6-digit code. `verifyOtpAction` looks up the row,
+   bcrypt-compares, checks expiry + attempts < 5, marks `used_at`,
+   stamps `profiles.last_login_at` + `last_login_ip`, audits
+   `mfa_challenge_verified` + `login_success`. Redirects to
+   `/dashboard` (or `?next=` if it was preserved).
+5. Sign-out (`AuthProvider.signOut` or `signOutAction`) calls
+   `supabase.auth.signOut()` + redirects to `/login`.
 
-Defined in `lib/demo-accounts.ts`. Shared password `P@ssw0rd`.
+**Flow (invite → first sign-in):**
+1. Admin opens **Users** module → **+ Invite user** → fills the drawer
+   (email, name, role, optional title/department/phone).
+2. `inviteUserAction` (`app/(app)/users/actions.ts`):
+   - Verifies caller is `Admin` + `Active`.
+   - Calls `supabase.auth.admin.inviteUserByEmail(email, { data:
+     { first_name, last_name, role, created_by }, redirectTo:
+     '/auth/callback?next=/auth/set-password' })`.
+   - The `on_auth_user_created` trigger creates the matching
+     `profiles` row with `status='Invited'` and the right role.
+   - Audits `user_invited`. Resend delivers the branded invite email.
+3. Invitee clicks the email link → `/auth/callback?code=…` exchanges
+   the PKCE code for a session → forwards to `/auth/set-password`.
+4. `/auth/set-password` shows password + confirm with live strength
+   meter. Submit → `setPasswordAction`:
+   - Validates the password policy.
+   - Calls `supabase.auth.updateUser({ password })`.
+   - Flips `profiles.status='Active'` and `mfa_enrolled=true` via the
+     service-role helper (bypasses the
+     `guard_profile_updates` trigger).
+   - Audits `password_changed`, returns `{ ok: true,
+     redirectTo: '/dashboard' }`.
+5. Subsequent sign-ins go through the OTP flow above.
 
-| Email | Role | Name |
-| --- | --- | --- |
-| `admin@nexvelon.com` | `Admin` | Marcus Holloway |
-| `pm@nexvelon.com` | `ProjectManager` | Aria Vance |
-| `sales@nexvelon.com` | `SalesRep` | Camille Beaumont |
-| `tech@nexvelon.com` | `Technician` | Damola Okafor |
-| `accounting@nexvelon.com` | `Accountant` | Eleanor Carstairs |
+### Status gate
 
-### Current Supabase posture
+Sign-in checks `profiles.status` after password verification. Only
+`Active` proceeds to OTP. The other states yield:
 
-**RLS is bypassed.** `lib/api/clients.ts` calls `createAdminClient()` from
-`lib/supabase/admin.ts` for **every read and every write**. The DB
-permissive policies (`to authenticated`) are in place but unreachable
-because no JWT is being attached.
+| Status      | UI message                                                          |
+| ---         | ---                                                                 |
+| Active      | (continues to OTP)                                                  |
+| Invited     | "Your account setup is incomplete. Use the invitation email link." |
+| Suspended   | "Your account is suspended. Contact your administrator."            |
+| Terminated  | "Your account is no longer active."                                 |
 
-This is a deliberate Phase-1 trade-off: the demo works without a real
-auth pipeline, and the schema's RLS is ready for Phase 2.
+### Admin lifecycle controls
 
-### To swap to real auth (Phase 2)
+Per-row dropdown on `/users` (Admin only):
+- **Suspend**: revokes all sessions
+  (`DELETE /auth/v1/admin/users/<id>/sessions`), flips status →
+  `Suspended`. Logs `user_suspended` + `session_revoked`.
+- **Reactivate**: status → `Active`. Logs `user_reactivated`.
+- **Terminate**: revokes sessions, status → `Terminated`, stamps
+  `terminated_at = now()`. Logs `user_terminated` + `session_revoked`.
 
-When you wire Supabase Auth:
+Admins can't act on themselves from this UI — the menu is disabled on
+your own row.
 
-1. Replace the localStorage `AuthProvider` with one that calls
-   `supabase.auth.signInWithPassword(...)` from `lib/supabase/client.ts`.
-2. Wire `lib/supabase/server.ts` cookie helpers into Next.js middleware
-   so requests carry the session cookie to server components.
-3. **In `lib/api/clients.ts`**, change the single line
-   `function db() { return createAdminClient(); }`
-   to
-   `async function db() { return createClient(); }` (importing from
-   `lib/supabase/server.ts`).
-4. The existing RLS policies (`for all to authenticated using (true)`)
-   will start being enforced. They remain permissive within authenticated
-   users — tighten them when introducing per-role row scoping.
-5. Once you have an `auth.uid()` to bind to, replace the permissive
-   policies with role-aware ones (e.g. SalesRep can only see clients
-   where `account_manager_id = auth.uid()`).
+### MFA implementation note
+
+Supabase Auth's native MFA supports TOTP / WebAuthn / SMS but **not**
+email-OTP-as-second-factor. We rolled our own (`auth_otp` table,
+`has_pending_otp()` RPC, the `lib/auth/otp.ts` helpers) on top of
+`signInWithPassword`. Future upgrade path: enable Supabase Auth Hooks +
+mint a `mfa_verified` JWT claim so RLS can enforce the gate too (today
+it's middleware-enforced — see §12 #14).
+
+### Bootstrap admin
+
+`scripts/bootstrap-admin.ts`:
+
+```bash
+npx tsx scripts/bootstrap-admin.ts
+# or override defaults:
+npx tsx scripts/bootstrap-admin.ts --email someone@example.com --first Jane --last Doe
+```
+
+Reads `.env.local`, calls `auth.admin.inviteUserByEmail()` with
+`role='Admin'`, the trigger creates the profile with status='Invited',
+the user clicks the email link → `/auth/set-password` → status flips to
+`Active`. If the user already exists, the script falls back to
+`generateLink({ type: 'magiclink' })` to re-issue the link.
+
+### Supabase posture
+
+- **Anonymous and pre-OTP requests are denied at RLS** — any anonymous
+  query against `clients`/`sites`/`contacts`/`profiles` returns nothing.
+- **Authenticated reads/writes** to those four tables are allowed for
+  any signed-in user (per-action policies — no DELETE; soft-delete via
+  `deleted_at`).
+- **Service-role bypass** is reserved for admin operations: invite,
+  status changes, audit-log inserts, OTP creation/verification.
+- **`has_pending_otp()`** is a `SECURITY DEFINER` RPC granted to
+  `authenticated`, so middleware can ask the question without holding
+  the service-role key in Edge runtime.
+
+### To tighten further (Session B / C)
+
+- Per-role row scoping on `clients`/`sites`/`contacts` (e.g. SalesRep
+  sees only `where account_manager_id = auth.uid()`).
+- Custom JWT claim `mfa_verified` to push the OTP gate into RLS.
+- Proper per-user permission overrides driven from the existing
+  `permissions-matrix.ts` catalogue (UI exists in `UserDrawer.tsx`,
+  doesn't persist yet).
 
 ---
 
@@ -474,15 +555,15 @@ When you wire Supabase Auth:
 
 | Module | Status | DB-wired | Files |
 | --- | --- | --- | --- |
-| **Login** | LIVE · polished design v4.18 | n/a (localStorage) | `app/(auth)/login/page.tsx`, `app/(auth)/login/layout.tsx`, `components/auth/AuthProvider.tsx`, `components/auth/RequireAuth.tsx`, `lib/demo-accounts.ts` |
+| **Auth (login + OTP + invite)** | **LIVE · real Supabase Auth + email OTP** | ✓ `auth.users` + `profiles` + `auth_otp` + `auth_audit_log` | `app/(auth)/login/{page,layout,actions}.tsx`, `app/auth/{verify-otp,set-password,callback}/**`, `middleware.ts`, `components/auth/{AuthProvider,RequireAuth}.tsx`, `lib/supabase/{client,server,middleware,admin}.ts`, `lib/auth/{otp,email,audit,profile,password-policy,request-info,normalize-role}.ts`, `scripts/bootstrap-admin.ts` |
 | **Dashboard** | LIVE · 6 KPI cards + 4 charts | ✗ Mock | `app/(app)/dashboard/page.tsx`, `components/modules/dashboard/*` (11 files), `lib/dashboard-data.ts` |
 | **Quotes** | LIVE · list + builder + live PDF preview | ✗ Mock + localStorage drafts | `app/(app)/quotes/{page,new/page,[id]/page}.tsx`, `components/modules/quotes/**` (18 files), `lib/quote-store.ts`, `lib/quote-helpers.ts`, `lib/mock-data/quotes.ts` |
 | **Projects** | LIVE · list + 9-tab detail | ✗ Mock | `app/(app)/projects/{page,[id]/page}.tsx`, `components/modules/projects/**` (17 files including 9 tab files), `lib/project-data.ts`, `lib/mock-data/projects.ts` |
-| **Clients** | **WIRED to Supabase** (working tree, unpushed) | ✓ `clients` + `sites` + `contacts` | `app/(app)/clients/{page.tsx,ClientsView.tsx,actions.ts,ClientFormDrawer.tsx,SiteFormDrawer.tsx,ContactFormDrawer.tsx}`, `lib/api/clients.ts`, `lib/types/database.ts`, `lib/supabase/{client,server,admin}.ts` |
+| **Clients** | **LIVE · WIRED to Supabase, RLS-enforced** | ✓ `clients` + `sites` + `contacts` | `app/(app)/clients/{page.tsx,ClientsView.tsx,actions.ts,ClientFormDrawer.tsx,SiteFormDrawer.tsx,ContactFormDrawer.tsx}`, `lib/api/clients.ts`, `lib/types/database.ts`, `lib/supabase/{client,server,admin}.ts` |
 | **Inventory** | LIVE · 6 tabs | ✗ Mock | `app/(app)/inventory/page.tsx`, `components/modules/inventory/*` (6 files), `lib/inventory-data.ts`, `lib/mock-data/products.ts` |
 | **Scheduling** | LIVE · drag-drop dispatch board | ✗ Mock | `app/(app)/scheduling/page.tsx`, `components/modules/scheduling/*` (3 files), `lib/scheduling-data.ts` |
 | **Financials** | LIVE · 10 tabs (P&L, BS, Cash Flow, etc.) | ✗ Mock | `app/(app)/financials/page.tsx`, `components/modules/financials/Tabs.tsx`, `lib/financials-data.ts`, `lib/mock-data/invoices.ts` |
-| **Users & Permissions** | LIVE · 6 tabs + permission override drawer | ✗ Mock | `app/(app)/users/page.tsx`, `components/modules/users/{Tabs,UserDrawer}.tsx`, `lib/permissions-matrix.ts`, `lib/mock-data/users.ts`, `lib/mock-data/audit-log.ts` |
+| **Users & Permissions** | **LIVE · users tab + invite drawer + status actions wired to Supabase**; other 5 tabs (Roles / Permissions Matrix / Activity Log / Subcontractors / Invitations) still mock-driven for everything except invite list | ✓ `profiles` + `auth_audit_log` (Users tab), ✗ Mock (other tabs) | `app/(app)/users/{page,UsersView,actions}.tsx`, `components/modules/users/{Tabs,UserDrawer,InviteUserDrawer}.tsx`, `lib/api/users.ts`, `lib/permissions-matrix.ts`, `lib/mock-data/{users,audit-log}.ts` |
 | **Settings** | LIVE · 13 panes incl. live theme switcher | ✗ Mock | `app/(app)/settings/page.tsx`, `components/modules/settings/{BrandingThemes,BackupsData,SettingsPanes}.tsx` |
 
 ### Demo data canonical names
@@ -696,73 +777,84 @@ time here until §11 priorities 1–4 are done.
 
 Priority order. Each item is a deliverable with rough scope estimate.
 
-### P0 — Push the Clients DB wiring to production ✅ DONE
+### Session A — Real auth ✅ DONE
 
-Shipped on commit `f1d5542`. Live at
-https://app.nexvelonglobal.com/clients. Verified end-to-end:
-create / read / update / soft-delete all persist across reloads against
-the real Supabase project in ca-central-1.
+Shipped via migrations 0002 + 0003 plus the auth code on `main`. Live at
+https://app.nexvelonglobal.com/login. Includes:
+- Real Supabase Auth (email + password, invite-only).
+- Email-OTP 2FA (single-use, 10-min, 5-attempt).
+- Branded invite + OTP emails via Resend (Supabase SMTP integration).
+- `profiles`, `auth_otp`, `auth_audit_log` schema with `is_admin()` /
+  `has_pending_otp()` / `guard_profile_updates` helpers.
+- `clients` / `sites` / `contacts` RLS tightened to per-action policies;
+  `lib/api/clients.ts` swapped to the cookie-aware server client.
+- Users module: server-component fetch from `profiles`, invite drawer,
+  per-row Suspend / Reactivate / Terminate with session revocation +
+  audit logging.
+- `scripts/bootstrap-admin.ts` for the first-admin invite.
+- Demo-era code retired: localStorage `AuthProvider`, demo-account
+  chips, `lib/demo-accounts.ts`, `RoleSwitcher`,
+  `NEXT_PUBLIC_ENABLE_DEMO_ACCOUNTS` / `_ROLE_SWITCHER` env flags.
 
-### P0 (next) — Wire the Quotes module to Supabase
+### P0 — Wire the Quotes module to Supabase
 
-Quotes is the next priority because it depends on Clients (which is now
-live) and unblocks the demo's quote-to-cash story end-to-end.
+Next biggest payoff. Depends on Clients (live) and (eventually) Users
+profiles for `owner_id` (already in the DB).
 
-- Migration: `0002_quotes_schema.sql` — `quotes`, `quote_sections`,
+- Migration: `0004_quotes_schema.sql` — `quotes`, `quote_sections`,
   `quote_line_items`. FKs: `quotes.client_id → clients.id`,
   `quotes.site_id → sites.id` (nullable), `quote_sections.quote_id`
   cascade, `quote_line_items.section_id` cascade. Status enum: Draft,
   Sent, Approved, Rejected, Expired, Converted.
-- Files to add:
-  - `lib/types/database.ts` — extend with `DbQuote`, `DbQuoteSection`,
-    `DbQuoteLineItem` plus Insert/Update variants.
-  - `lib/api/quotes.ts` — mirror `lib/api/clients.ts` pattern.
-    Functions: `getQuotes`, `getQuoteById`, `createQuote`, `updateQuote`,
-    `softDeleteQuote`, plus section + line-item CRUD.
-  - `app/(app)/quotes/actions.ts` — server actions.
-  - Convert `app/(app)/quotes/page.tsx` to a server component (currently
-    client + localStorage).
-  - Retire `lib/quote-store.ts` and the localStorage drafts pattern.
+- `lib/types/database.ts` — extend with `DbQuote`, `DbQuoteSection`,
+  `DbQuoteLineItem` (+ Insert/Update variants).
+- `lib/api/quotes.ts` — mirror `lib/api/clients.ts` pattern (cookie-aware
+  client; RLS-enforced).
+- `app/(app)/quotes/actions.ts` — server actions.
+- Convert `app/(app)/quotes/page.tsx` to a server component.
+- Retire `lib/quote-store.ts` and the localStorage drafts pattern.
 - **Scope:** ~4-6 hours.
+
+### Session B — Per-user permission overrides + role refinement
+
+- Expand `lib/permissions.ts` `Role` type to the full 11-value DB enum
+  and retire `lib/auth/normalize-role.ts`.
+- Build `public.user_permissions (user_id uuid, permission_id text,
+  granted boolean)` overrides table.
+- Wire the existing `UserDrawer.tsx` permission-override UI to actually
+  persist (it's the showpiece — UI exists, doesn't write today).
+- Add `mfa_verified` JWT custom claim (Supabase Auth Hooks) so RLS can
+  enforce the OTP gate too (today it's middleware-only — see §12 #14).
+- Adopt shadcn AlertDialog for the destructive
+  Suspend / Reactivate / Terminate confirmations (currently
+  `window.confirm()` — see §12 #4).
+- **Scope:** ~6-8 hours.
+
+### Session C — Data scope/RLS + audit log surfacing
+
+- Replace permissive RLS on `clients`/`sites`/`contacts` with role-aware
+  policies (e.g. SalesRep sees only own clients).
+- Surface `auth_audit_log` rows in the Users module's Activity Log tab
+  (currently mock-driven).
+- **Scope:** ~3-4 hours.
 
 ### P1 — Subsequent modules in priority order
 
-1. **Users** — small, self-contained, unblocks real auth.
-   - Migration: `0003_users_schema.sql` — `users`, `user_roles`,
-     `subcontractors`, `audit_log`, `invitations`.
-   - **Scope:** ~2-3 hours.
-2. **Projects** — biggest payoff because of the 9-tab detail page.
+1. **Projects** — biggest payoff because of the 9-tab detail page.
    Depends on Quotes (for `quote_id` FK linking converted quotes) and
-   Users (for `manager_id`, `lead_tech_id`, `sales_rep_id` FKs).
+   `profiles` (for `manager_id`, `lead_tech_id`, `sales_rep_id` FKs).
    - Migration: `projects`, `project_tasks`, `project_materials`,
      `purchase_orders`, `commissioning_items`, `intrusion_zones`,
      `project_documents`, `time_entries`.
    - Will need carefully designed FKs and RLS scoping.
    - **Scope:** ~6-8 hours.
-3. **Inventory** — depends on Vendors. ~80 SKUs of seed data.
+2. **Inventory** — depends on Vendors. ~80 SKUs of seed data.
    - **Scope:** ~3-4 hours.
-4. **Financials** — invoices, bills. Read-only initially is fine.
+3. **Financials** — invoices, bills. Read-only initially is fine.
    - **Scope:** ~2-3 hours.
-5. **Scheduling** — depends on Projects and Users. Job records + crew
-   assignments.
+4. **Scheduling** — depends on Projects and `profiles`. Job records +
+   crew assignments.
    - **Scope:** ~3-4 hours.
-
-### P2 — Real auth (Supabase Auth + 2FA)
-
-- Replace `AuthProvider` (`components/auth/AuthProvider.tsx`) with one
-  backed by `supabase.auth.signInWithPassword()`.
-- Add Next.js middleware (`middleware.ts`) using `lib/supabase/server.ts`
-  to refresh session cookies.
-- Update `lib/api/clients.ts` (and any new API files) to use the
-  cookie-aware server client instead of the admin client. RLS becomes
-  enforced.
-- Add **TOTP 2FA** via Supabase MFA. UI lives in the user-drawer
-  Section 5 ("Session & Security") which already has the toggle but
-  doesn't wire to anything.
-- Keep the demo-account chips on `/login` — they should call
-  `supabase.auth.signInWithPassword()` with real seeded users in the
-  `auth.users` table (created via the admin SQL editor).
-- **Scope:** ~4-6 hours.
 
 ### P3 — File storage (shop drawings, photos)
 
@@ -782,13 +874,11 @@ See §10. Build the Mac sync agent or pivot to PITR + S3 mirror.
 
 ### P5 — Security hardening
 
-- Replace permissive RLS policies with role-aware ones (depends on P2).
+- Replace permissive RLS policies with role-aware ones (covered by
+  Session C above — listed here for cross-reference).
 - Add API rate limiting (Vercel Edge Middleware or Supabase rate-limits).
 - Audit headers (`Strict-Transport-Security`, `Content-Security-Policy`,
   `X-Frame-Options`, etc.) — add a `next.config.ts` `headers()` block.
-- Hide demo chips and role-switcher in production by default
-  (`NEXT_PUBLIC_ENABLE_DEMO_ACCOUNTS=false`,
-  `NEXT_PUBLIC_ENABLE_ROLE_SWITCHER=false`).
 - **Scope:** ~2-3 hours.
 
 ### P6 — Misc polish
@@ -808,11 +898,19 @@ See §10. Build the Mac sync agent or pivot to PITR + S3 mirror.
 These are deliberate Phase-1 trade-offs documented so future sessions
 don't "fix" them by accident.
 
-1. **Admin client used for every read/write.** See §6. Swap when real
-   auth lands.
-2. **`lib/api/clients.ts` does not enforce row scoping.** The service
-   role bypasses RLS; if you call `getClients()` you get every row in
-   the table regardless of caller.
+1. **Admin (service-role) client is reserved for privileged actions
+   only.** As of Session A, `lib/api/clients.ts` uses the cookie-aware
+   server client and RLS is enforced. Service role lives in
+   `lib/api/users.ts` (invite + status changes), `lib/auth/otp.ts`
+   (creates / consumes OTP rows that no client may touch),
+   `lib/auth/audit.ts` (audit log inserts), `lib/auth/profile.ts`
+   `updateProfileAdmin` (bypasses `guard_profile_updates`), and
+   `scripts/bootstrap-admin.ts`. **Never reach for the admin client
+   from a route's render path** — keep it inside server actions that
+   have already authorised the caller.
+2. **No per-user/per-role row scoping yet.** RLS on
+   `clients`/`sites`/`contacts` is "any authenticated user, no DELETE".
+   Any signed-in user sees every client. Session C tightens this.
 3. **Two parallel "client" type systems coexist.**
    - `lib/types.ts` defines the *legacy* `Client` for mock data
      (`lib/mock-data/clients.ts`) and is consumed by Quotes / Projects /
@@ -857,9 +955,25 @@ don't "fix" them by accident.
     that need to be kept in sync, and Tailwind utility classes
     can't easily express `color-mix(...)` constructs. Don't refactor
     to Tailwind classes without preserving the exact colour math.
-12. **`/clients` is the only DB-wired module today.** Live on Vercel
-    via commit `f1d5542`. The other 8 modules still read from
+12. **DB-wired surfaces today:** the `/clients` module end-to-end (read
+    + write through `clients`/`sites`/`contacts`); the **/users** Users
+    tab + invite drawer + Suspend/Reactivate/Terminate row actions
+    (read from `profiles`, write to `profiles`/`auth.users`/
+    `auth_audit_log`); and every auth surface (login → OTP → set-
+    password → invite). The other 7 module surfaces still read from
     `/lib/mock-data`. See §11 P0 for the next module to migrate.
+
+    **Orphaned showpiece:** `components/modules/users/UserDrawer.tsx`
+    (the 75-permission override drawer) is no longer mounted from
+    `/users` since Session A — clicking a row opens the action menu
+    instead. The file is kept on disk because Session B will wire it
+    to the `user_permissions` overrides table. Don't delete it.
+
+    **Two parallel role enums coexist.** `lib/types.ts` `Role` is the
+    7-value app enum used by the permissions matrix; `lib/types/
+    database.ts` `DbRole` is the 11-value DB enum.
+    `lib/auth/normalize-role.ts` collapses DB → app on read. Session B
+    will expand the matrix to 11 and retire the helper.
 13. **Vercel env vars are project-level, not Shared+Link.** The three
     Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`,
     `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are

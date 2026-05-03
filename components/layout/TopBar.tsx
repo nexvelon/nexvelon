@@ -1,14 +1,12 @@
 "use client";
 
 import { Suspense } from "react";
-import { Mail, Search } from "lucide-react";
+import { Mail, Search, Shield } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { RoleSwitcher } from "./RoleSwitcher";
 import { NotificationsBell } from "./NotificationsBell";
 import { AvatarMenu } from "./AvatarMenu";
 import { GoldBreadcrumbs } from "./Breadcrumbs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useRole } from "@/lib/role-context";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { useAuth } from "@/components/auth/AuthProvider";
 
@@ -32,10 +30,10 @@ function initials(name: string): string {
 }
 
 export function TopBar() {
-  const { role } = useRole();
   const { user } = useAuth();
 
-  const displayName = user?.name ?? "Marcus Holloway";
+  const role = user?.role ?? "ViewOnly";
+  const displayName = user?.name ?? "—";
   const displayTitle = ROLE_DISPLAY[role] ?? ROLE_LABELS[role];
 
   return (
@@ -98,7 +96,23 @@ export function TopBar() {
           <Mail className="h-4 w-4" />
         </button>
 
-        <RoleSwitcher />
+        {/* Real role indicator (read-only) — replaced the demo-era role-switcher
+            in Phase 6. Roles are now driven by profiles.role for the signed-in
+            user and cannot be flipped client-side. */}
+        <div
+          className="hidden items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-[11px] md:inline-flex"
+          style={{
+            borderColor: "color-mix(in oklab, var(--brand-accent) 35%, transparent)",
+            color: "var(--brand-text)",
+          }}
+          title={`Signed in as ${displayName}`}
+        >
+          <Shield className="h-3.5 w-3.5" style={{ color: "var(--brand-accent)" }} />
+          <span className="text-muted-foreground tracking-[0.08em] uppercase font-mono text-[10px]">
+            Role
+          </span>
+          <span className="font-medium">{ROLE_LABELS[role]}</span>
+        </div>
 
         <div className="flex items-center gap-2.5">
           <div className="hidden text-right md:block">

@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { format, parseISO } from "date-fns";
 import {
   Building2,
   Check,
   Copy,
-  Mail,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   Search,
@@ -33,6 +33,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { users } from "@/lib/mock-data/users";
 import { auditLog } from "@/lib/mock-data/audit-log";
 import { subcontractors } from "@/lib/mock-data/subcontractors";
@@ -44,7 +52,15 @@ import {
 import { ROLE_LABELS } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Role, User } from "@/lib/types";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { normalizeDbRole } from "@/lib/auth/normalize-role";
+import {
+  reactivateUserAction,
+  suspendUserAction,
+  terminateUserAction,
+} from "@/app/(app)/users/actions";
+import type { Role } from "@/lib/types";
+import type { DbProfile, DbProfileStatus } from "@/lib/types/database";
 
 const ROLES: Role[] = [
   "Admin",
@@ -69,22 +85,48 @@ function initials(name: string): string {
 // USERS
 // ────────────────────────────────────────────────────────────────────────────
 
-interface UsersTabProps {
-  onPick: (u: User) => void;
+type StatusFilter = "all" | "Active" | "Invited" | "Suspended";
+
+const STATUS_PILL: Record<DbProfileStatus, { label: string; cls: string }> = {
+  Active: { label: "Active", cls: "bg-emerald-50 text-emerald-700" },
+  Invited: { label: "Invited", cls: "bg-amber-50 text-amber-800" },
+  Suspended: { label: "Suspended", cls: "bg-red-50 text-red-700" },
+  Terminated: { label: "Terminated", cls: "bg-zinc-100 text-zinc-700" },
+};
+
+function profileDisplayName(p: DbProfile): string {
+  const first = (p.first_name ?? "").trim();
+  const last = (p.last_name ?? "").trim();
+  const display = (p.display_name ?? "").trim();
+  const composed = [first, last].filter(Boolean).join(" ");
+  const localPart = p.email.split("@")[0] ?? p.email;
+  return display || composed || localPart;
 }
 
-export function UsersTab({ onPick }: UsersTabProps) {
+interface UsersTabProps {
+  realUsers: DbProfile[];
+  onInvite: () => void;
+}
+
+export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const filtered = users.filter((u) => {
-    if (roleFilter !== "all" && u.role !== roleFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return realUsers.filter((u) => {
+      const appRole = normalizeDbRole(u.role);
+      if (roleFilter !== "all" && appRole !== roleFilter) return false;
+      if (statusFilter !== "all" && u.status !== statusFilter) return false;
+      if (q) {
+        const name = profileDisplayName(u).toLowerCase();
+        if (!name.includes(q) && !u.email.toLowerCase().includes(q))
+          return false;
+      }
+      return true;
+    });
+  }, [realUsers, roleFilter, statusFilter, search]);
 
   return (
     <div className="space-y-4">
@@ -98,7 +140,12 @@ export function UsersTab({ onPick }: UsersTabProps) {
             className="pl-9"
           />
         </div>
-        <Select value={roleFilter} onValueChange={(v) => setRoleFilter((v ?? "all") as typeof roleFilter)}>
+        <Select
+          value={roleFilter}
+          onValueChange={(v) =>
+            setRoleFilter((v ?? "all") as typeof roleFilter)
+          }
+        >
           <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
@@ -111,9 +158,22 @@ export function UsersTab({ onPick }: UsersTabProps) {
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={() => toast.success("Invitation drafted", { description: "Demo: would send email." })}>
-          <Mail className="mr-1 h-3.5 w-3.5" />
-          Invite User
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="Active">Active</SelectItem>
+            <SelectItem value="Invited">Invited</SelectItem>
+            <SelectItem value="Suspended">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button onClick={onInvite} className="ml-auto">
+          + Invite User
         </Button>
       </div>
 
@@ -127,75 +187,171 @@ export function UsersTab({ onPick }: UsersTabProps) {
               <TableHead className="text-[11px] uppercase">Role</TableHead>
               <TableHead className="text-[11px] uppercase">Department</TableHead>
               <TableHead className="text-[11px] uppercase">Status</TableHead>
-              <TableHead className="text-[11px] uppercase">Last Active</TableHead>
+              <TableHead className="text-[11px] uppercase">Last Login</TableHead>
               <TableHead className="text-[11px] uppercase">MFA</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((u) => (
-              <TableRow key={u.id} className="cursor-pointer hover:bg-brand-gold/5" onClick={() => onPick(u)}>
-                <TableCell>
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback
-                      style={{ backgroundColor: u.avatarColor }}
-                      className="text-[9px] font-semibold text-white"
-                    >
-                      {initials(u.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                </TableCell>
-                <TableCell className="text-brand-charcoal text-xs font-medium">{u.name}</TableCell>
-                <TableCell className="text-muted-foreground text-xs">{u.email}</TableCell>
-                <TableCell className="text-xs">
-                  <span className="bg-brand-navy/10 text-brand-navy rounded px-1.5 py-0.5 text-[10px]">
-                    {ROLE_LABELS[u.role]}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {u.role === "ProjectManager"
-                    ? "Operations"
-                    : u.role === "SalesRep"
-                      ? "Sales"
-                      : u.role === "Accountant"
-                        ? "Finance"
-                        : u.role === "Subcontractor"
-                          ? "External"
-                          : "Field"}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {u.active ? (
-                    <span className="bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5 text-[10px] font-medium">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="bg-amber-50 text-amber-800 rounded-full px-2 py-0.5 text-[10px] font-medium">
-                      Suspended
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {u.id === "u-001" ? "Just now" : u.id === "u-018" ? "2h ago" : "Yesterday"}
-                </TableCell>
-                <TableCell>
-                  {u.id === "u-001" || u.id === "u-018" || u.id === "u-009" ? (
-                    <Check className="text-emerald-600 h-4 w-4" />
-                  ) : (
-                    <X className="text-muted-foreground/40 h-4 w-4" />
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button size="xs" variant="ghost">
-                    <Pencil className="mr-1 h-3 w-3" />
-                    Edit
-                  </Button>
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={9}
+                  className="text-muted-foreground py-12 text-center text-xs"
+                >
+                  No matching users.
                 </TableCell>
               </TableRow>
-            ))}
+            )}
+            {filtered.map((u) => {
+              const name = profileDisplayName(u);
+              const appRole = normalizeDbRole(u.role);
+              const pill = STATUS_PILL[u.status];
+              return (
+                <TableRow key={u.id} className="hover:bg-brand-gold/5">
+                  <TableCell>
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback
+                        className="text-[9px] font-semibold text-white"
+                        style={{ backgroundColor: "var(--brand-primary)" }}
+                      >
+                        {initials(name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </TableCell>
+                  <TableCell className="text-brand-charcoal text-xs font-medium">
+                    {name}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {u.email}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <span className="bg-brand-navy/10 text-brand-navy rounded px-1.5 py-0.5 text-[10px]">
+                      {ROLE_LABELS[appRole]}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {u.department ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                        pill.cls
+                      )}
+                    >
+                      {pill.label}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs tabular-nums">
+                    {u.last_login_at
+                      ? format(parseISO(u.last_login_at), "MMM d, HH:mm")
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {u.mfa_enrolled ? (
+                      <Check className="text-emerald-600 h-4 w-4" />
+                    ) : (
+                      <X className="text-muted-foreground/40 h-4 w-4" />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <UserRowActions profile={u} />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
     </div>
+  );
+}
+
+// Per-row action menu (Suspend / Reactivate / Terminate).
+// Calls server actions in app/(app)/users/actions.ts. Disabled when the
+// row is the signed-in user (you can't suspend yourself out of the UI).
+function UserRowActions({ profile }: { profile: DbProfile }) {
+  const { user: me } = useAuth();
+  const [pending, startTransition] = useTransition();
+  const isSelf = me?.id === profile.id;
+  const isTerminated = profile.status === "Terminated";
+
+  const run = (
+    fn: typeof suspendUserAction,
+    confirmMsg: string,
+    successMsg: string
+  ) => {
+    if (isSelf) return;
+    if (typeof window !== "undefined" && !window.confirm(confirmMsg)) return;
+    startTransition(async () => {
+      const result = await fn(profile.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(successMsg);
+    });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal inline-flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-50"
+        aria-label={`Actions for ${profile.email}`}
+        disabled={pending || isSelf || isTerminated}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">
+          {profile.email}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {(profile.status === "Active" || profile.status === "Invited") && (
+          <DropdownMenuItem
+            onClick={() =>
+              run(
+                suspendUserAction,
+                `Suspend ${profileDisplayName(profile)}? Active sessions will be revoked.`,
+                "User suspended."
+              )
+            }
+          >
+            <Pencil className="mr-2 h-3.5 w-3.5" />
+            Suspend
+          </DropdownMenuItem>
+        )}
+        {profile.status === "Suspended" && (
+          <DropdownMenuItem
+            onClick={() =>
+              run(
+                reactivateUserAction,
+                `Reactivate ${profileDisplayName(profile)}?`,
+                "User reactivated."
+              )
+            }
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Reactivate
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() =>
+            run(
+              terminateUserAction,
+              `Terminate ${profileDisplayName(profile)}? They will be signed out everywhere and unable to sign back in. This cannot be undone from the UI.`,
+              "User terminated."
+            )
+          }
+          className="text-red-600 focus:text-red-700"
+        >
+          <X className="mr-2 h-3.5 w-3.5" />
+          Terminate
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -517,55 +673,63 @@ export function SubcontractorsTab() {
 // INVITATIONS
 // ────────────────────────────────────────────────────────────────────────────
 
-const INVITATIONS = [
-  { id: "inv-1", email: "lina.brooks@nexvelon.com", role: "Technician" as Role, sentAt: "2026-04-18", status: "Pending" },
-  { id: "inv-2", email: "claire.dorothy@nexvelon.com", role: "Accountant" as Role, sentAt: "2026-04-22", status: "Pending" },
-  { id: "inv-3", email: "marcus.fielding@beacon-fire.com", role: "Subcontractor" as Role, sentAt: "2026-04-25", status: "Pending" },
-];
+interface InvitationsTabProps {
+  realUsers: DbProfile[];
+}
 
-export function InvitationsTab() {
+export function InvitationsTab({ realUsers }: InvitationsTabProps) {
+  const pending = useMemo(
+    () => realUsers.filter((u) => u.status === "Invited"),
+    [realUsers]
+  );
+
   return (
     <Card className="bg-card overflow-hidden p-0 shadow-sm">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead className="text-[11px] uppercase">Email</TableHead>
+            <TableHead className="text-[11px] uppercase">Name</TableHead>
             <TableHead className="text-[11px] uppercase">Role</TableHead>
             <TableHead className="text-[11px] uppercase">Sent</TableHead>
             <TableHead className="text-[11px] uppercase">Status</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {INVITATIONS.map((i) => (
-            <TableRow key={i.id}>
-              <TableCell className="text-xs">{i.email}</TableCell>
-              <TableCell className="text-xs">
-                <span className="bg-brand-navy/10 text-brand-navy rounded px-1.5 py-0.5 text-[10px]">
-                  {ROLE_LABELS[i.role]}
-                </span>
-              </TableCell>
-              <TableCell className="text-muted-foreground text-xs tabular-nums">
-                {format(parseISO(i.sentAt), "MMM d, yyyy")}
-              </TableCell>
-              <TableCell>
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                  {i.status}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="inline-flex gap-1">
-                  <Button size="xs" variant="outline" onClick={() => toast.success(`Resent to ${i.email}`)}>
-                    <RefreshCw className="mr-1 h-3 w-3" />
-                    Resend
-                  </Button>
-                  <Button size="xs" variant="ghost" onClick={() => toast(`Revoked invite for ${i.email}`)}>
-                    Revoke
-                  </Button>
-                </div>
+          {pending.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                className="text-muted-foreground py-12 text-center text-xs"
+              >
+                No pending invitations.
               </TableCell>
             </TableRow>
-          ))}
+          )}
+          {pending.map((i) => {
+            const appRole = normalizeDbRole(i.role);
+            return (
+              <TableRow key={i.id}>
+                <TableCell className="text-xs">{i.email}</TableCell>
+                <TableCell className="text-muted-foreground text-xs">
+                  {profileDisplayName(i)}
+                </TableCell>
+                <TableCell className="text-xs">
+                  <span className="bg-brand-navy/10 text-brand-navy rounded px-1.5 py-0.5 text-[10px]">
+                    {ROLE_LABELS[appRole]}
+                  </span>
+                </TableCell>
+                <TableCell className="text-muted-foreground text-xs tabular-nums">
+                  {format(parseISO(i.created_at), "MMM d, yyyy")}
+                </TableCell>
+                <TableCell>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                    Awaiting password setup
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </Card>
