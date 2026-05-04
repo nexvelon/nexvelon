@@ -102,8 +102,8 @@ function renderOtpHtml(args: {
               </td>
             </tr>
             <tr>
-              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                Nexvelon Global Inc. · ULC Listed · ESA Licensed
+              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
+                &copy; 2026 Nexvelon Global Inc.
               </td>
             </tr>
           </table>

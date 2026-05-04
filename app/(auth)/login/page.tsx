@@ -133,7 +133,7 @@ export default function LoginPage() {
           className="relative z-10 font-mono text-[10px] uppercase tracking-[0.25em]"
           style={{ color: "rgba(245,241,232,0.4)" }}
         >
-          © 2026 Nexvelon Global Inc. · Holloway Security Integration Group · ULC Listed · ESA Licensed
+          © 2026 Nexvelon Global Inc.
         </div>
       </aside>
 

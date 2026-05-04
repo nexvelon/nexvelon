@@ -210,16 +210,17 @@ async function sendInviteEmail(
 ): Promise<string> {
   const isResend = link.type === "magiclink";
   const subject = isResend
-    ? "Your Nexvelon sign-in link"
-    : "You've been invited to Nexvelon";
+    ? "Your sign-in link to Nexvelon"
+    : "Your seat at the Nexvelon Enterprise Suite is ready";
 
   const html = renderInviteHtml({
-    firstName: args.first,
+    email: args.email,
     confirmUrl,
     isResend,
+    subject,
   });
   const text = renderInviteText({
-    firstName: args.first,
+    email: args.email,
     confirmUrl,
     isResend,
   });
@@ -267,92 +268,189 @@ async function sendInviteEmail(
 }
 
 // ----------------------------------------------------------------------------
-// HTML template — same brand as the Phase 2 Supabase invite template, kept
-// inline here so the script is self-contained.
+// HTML template — Phase 2 "Welcome to the Nexvelon Enterprise Suite" design,
+// inlined here so the script is self-contained.
+//
+// MSO-safe table-based layout. Mobile-responsive via @media. Includes
+// preheader, Apple disable-message-reformatting, color-scheme light.
+//
+// Brand tokens:
+//   parchment #F5F1E8 · card #FFFFFF · card border #E5DFD0
+//   navy #0A1226 · gold #B8924B · body #2A2418
+//   taupe #5C5240 · muted #8C8273
+//   Georgia / Times for body, Arial for labels.
 
 function renderInviteHtml(opts: {
-  firstName: string;
+  email: string;
   confirmUrl: string;
   isResend: boolean;
+  subject: string;
 }): string {
-  const heading = opts.isResend
-    ? "Sign in to Nexvelon."
-    : "You&rsquo;ve been invited.";
-  const subtitle = opts.isResend
-    ? "Tap once to access your workspace."
-    : "A workspace for security-systems integrators.";
-  const body = opts.isResend
-    ? `${escape(opts.firstName) ? `Hi ${escape(opts.firstName)}, ` : ""}use the button below to sign in. The link is single-use and expires shortly.`
-    : "An administrator has invited you to join the Nexvelon workspace. Click the button below to set your password and complete enrollment.";
-  const cta = opts.isResend ? "Sign in" : "Accept invitation";
+  const isInvite = !opts.isResend;
+  const headline = isInvite
+    ? "Welcome to the<br/>Nexvelon Enterprise Suite."
+    : "Sign in to the<br/>Nexvelon Enterprise Suite.";
+  const subtitle = "Complete operating system in one place.";
+  const preheader = isInvite
+    ? "Your seat is ready. Tap once to set your password and join."
+    : "Tap once to sign in to your workspace. The link is single-use.";
+  const cta = isInvite ? "Accept your invitation" : "Sign in";
+  const bottomNote = isInvite
+    ? `This invitation was sent to ${escape(opts.email)}. If you weren&rsquo;t expecting it, you can safely ignore this email.`
+    : `This sign-in link was requested for ${escape(opts.email)}. If you didn&rsquo;t request it, you can safely ignore this email.`;
 
-  return `<!DOCTYPE html>
-<html>
-  <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;padding:48px 16px;">
-      <tr>
-        <td align="center">
-          <table width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #E5DFD0;">
-            <tr>
-              <td style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
-                <div style="font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;">Nexvelon · Holloway Security Integration Group</div>
-                <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">${heading}</div>
-                <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${subtitle}</div>
+  // Body paragraphs — invite vs sign-in.
+  const para1 = isInvite
+    ? "You&rsquo;ve been selected to join the Nexvelon Enterprise Suite &mdash; the operating system built with care and crafted with precision for the elite."
+    : "Use the button below to access your Nexvelon workspace. The link is single-use and expires within the hour.";
+  const para2 = isInvite
+    ? "Inside, you&rsquo;ll find the workspace your administrator built for you: leads, quotes, projects, schedules, inventory, reporting &mdash; whatever your role requires. A custom-designed elite tool to ensure nothing falls through the cracks."
+    : "If you didn&rsquo;t request a sign-in, you can ignore this email &mdash; your account remains secure.";
+
+  // The "Full access configuration ✓" line + the italic "Kindly set your
+  // password" only render on the first-time invite path.
+  const accessLine = isInvite
+    ? `<tr>
+              <td align="center" class="nx-pad" style="padding:8px 48px 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:0.04em;color:#5C5240;">
+                <span style="display:inline-block;color:#8C8273;">Full access configuration for your role is complete.</span>
+                <span style="display:inline-block;margin-left:6px;color:#8C8273;">&#10003;</span>
               </td>
-            </tr>
-            <tr>
-              <td style="padding:32px 48px 16px;font-size:15px;line-height:1.6;color:#2A2418;">
-                ${body}
+            </tr>`
+    : "";
+  const ctaSubline = isInvite
+    ? `<tr>
+              <td align="center" class="nx-pad" style="padding:0 48px 36px;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;line-height:1.5;color:#5C5240;">
+                Kindly set your password after accepting the invite.
               </td>
-            </tr>
-            <tr>
-              <td style="padding:8px 48px 32px;" align="left">
-                <a href="${escape(opts.confirmUrl)}" style="display:inline-block;background:#0A1226;color:#F5F1E8;padding:14px 28px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;border:1px solid #B8924B;">${cta}</a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 48px 32px;font-size:13px;color:#5C5240;line-height:1.6;">
-                If the button doesn&rsquo;t work, copy and paste this link into your browser:<br>
-                <span style="color:#0A1226;word-break:break-all;">${escape(opts.confirmUrl)}</span>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                Nexvelon Global Inc. · ULC Listed · ESA Licensed
-              </td>
-            </tr>
-          </table>
-          <div style="margin-top:24px;font-size:11px;color:#8C8273;font-family:Arial,Helvetica,sans-serif;">
-            If you weren&rsquo;t expecting this email, you can ignore it.
-          </div>
-        </td>
-      </tr>
-    </table>
-  </body>
+            </tr>`
+    : `<tr><td style="padding:0 48px 24px;"></td></tr>`;
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light only">
+  <title>${escape(opts.subject)}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <style type="text/css">
+    table, td, th { mso-line-height-rule: exactly; border-collapse: collapse; }
+    body, table, td, p, a { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+  </style>
+  <![endif]-->
+  <style>
+    body, table, td, p, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a { color: #0A1226; text-decoration: none; }
+    @media screen and (max-width: 620px) {
+      .nx-card { width: 100% !important; max-width: 100% !important; }
+      .nx-pad { padding-left: 24px !important; padding-right: 24px !important; }
+      .nx-headline { font-size: 26px !important; line-height: 1.18 !important; }
+      .nx-cta { display: block !important; width: auto !important; text-align: center !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#F5F1E8;color:#0A1226;font-family:Georgia,'Times New Roman',serif;">
+  <div style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;max-height:0;max-width:0;">${escape(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;">
+    <tr>
+      <td align="center" style="padding:48px 16px;">
+        <table role="presentation" class="nx-card" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E5DFD0;max-width:560px;">
+          <tr>
+            <td class="nx-pad" style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
+              <div style="font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;">Nexvelon Enterprise Suite</div>
+              <div class="nx-headline" style="margin-top:18px;font-size:30px;line-height:1.12;color:#0A1226;font-weight:normal;font-family:Georgia,'Times New Roman',serif;">${headline}</div>
+              <div style="margin-top:12px;font-style:italic;color:#5C5240;font-size:15px;font-family:Georgia,'Times New Roman',serif;">${escape(subtitle)}</div>
+            </td>
+          </tr>
+          <tr>
+            <td class="nx-pad" style="padding:32px 48px 16px;font-size:15px;line-height:1.6;color:#2A2418;font-family:Georgia,'Times New Roman',serif;">
+              ${para1}
+            </td>
+          </tr>
+          <tr>
+            <td class="nx-pad" style="padding:0 48px 28px;font-size:15px;line-height:1.6;color:#2A2418;font-family:Georgia,'Times New Roman',serif;">
+              ${para2}
+            </td>
+          </tr>
+          ${accessLine}
+          <tr>
+            <td align="center" class="nx-pad" style="padding:0 48px 16px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#0A1226" style="background:#0A1226;border:1px solid #B8924B;">
+                    <a href="${escape(opts.confirmUrl)}" class="nx-cta" target="_blank" style="display:inline-block;padding:14px 32px;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.06em;color:#F5F1E8;text-decoration:none;mso-padding-alt:0;">${cta}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          ${ctaSubline}
+          <tr>
+            <td class="nx-pad" style="padding:0 48px 32px;font-size:13px;color:#5C5240;line-height:1.6;font-family:Georgia,'Times New Roman',serif;">
+              If the button doesn&rsquo;t work, copy and paste this link into your browser:<br>
+              <span style="color:#0A1226;word-break:break-all;font-family:'Courier New',monospace;font-size:12px;">${escape(opts.confirmUrl)}</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="nx-pad" style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
+              &copy; 2026 Nexvelon Global Inc.
+            </td>
+          </tr>
+        </table>
+        <div style="margin-top:20px;max-width:560px;font-size:11px;color:#8C8273;line-height:1.6;font-family:Arial,Helvetica,sans-serif;padding:0 8px;">
+          ${bottomNote}
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
 </html>`;
 }
 
 function renderInviteText(opts: {
-  firstName: string;
+  email: string;
   confirmUrl: string;
   isResend: boolean;
 }): string {
-  const greeting = opts.firstName ? `Hi ${opts.firstName},` : "Hi there,";
-  return [
-    "Nexvelon · Holloway Security Integration Group",
-    "",
-    greeting,
-    "",
-    opts.isResend
-      ? "Use this link to sign in to your Nexvelon workspace:"
-      : "You've been invited to join Nexvelon. Open this link to set your password and complete enrollment:",
-    "",
-    opts.confirmUrl,
-    "",
-    "If you weren't expecting this email, you can ignore it.",
-    "",
-    "— Nexvelon Global Inc.",
-  ].join("\n");
+  const isInvite = !opts.isResend;
+  const lines = isInvite
+    ? [
+        "Welcome to the Nexvelon Enterprise Suite.",
+        "Complete operating system in one place.",
+        "",
+        "You've been selected to join the Nexvelon Enterprise Suite — the operating system built with care and crafted with precision for the elite.",
+        "",
+        "Inside, you'll find the workspace your administrator built for you: leads, quotes, projects, schedules, inventory, reporting — whatever your role requires.",
+        "",
+        "Full access configuration for your role is complete.",
+        "",
+        "Accept your invitation:",
+        opts.confirmUrl,
+        "",
+        "Kindly set your password after accepting the invite.",
+        "",
+        `This invitation was sent to ${opts.email}. If you weren't expecting it, you can safely ignore this email.`,
+        "",
+        "© 2026 Nexvelon Global Inc.",
+      ]
+    : [
+        "Sign in to the Nexvelon Enterprise Suite.",
+        "Complete operating system in one place.",
+        "",
+        "Use the link below to access your Nexvelon workspace. The link is single-use and expires within the hour.",
+        "",
+        opts.confirmUrl,
+        "",
+        `This sign-in link was requested for ${opts.email}. If you didn't request it, you can safely ignore this email.`,
+        "",
+        "© 2026 Nexvelon Global Inc.",
+      ];
+  return lines.join("\n");
 }
 
 function escape(s: string): string {

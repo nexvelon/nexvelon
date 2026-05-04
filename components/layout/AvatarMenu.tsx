@@ -36,10 +36,10 @@ export function AvatarMenu({ children }: { children: React.ReactNode }) {
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           <p className="text-brand-charcoal text-xs font-semibold leading-tight">
-            {user?.name ?? "Marcus Holloway"}
+            {user?.name ?? "Signed in"}
           </p>
           <p className="text-muted-foreground text-[10px] leading-tight">
-            {user?.email ?? "admin@nexvelon.com"}
+            {user?.email ?? ""}
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

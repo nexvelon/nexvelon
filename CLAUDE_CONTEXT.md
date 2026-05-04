@@ -14,8 +14,18 @@ Hanwha hardware, raise multi-section quotes against ADI / Anixter / Wesco /
 CDW catalogs, run their own commissioning checklists and ULC sign-off, and
 need to know — to the dollar — which jobs are actually making money.
 
-**Operating company:** Nexvelon Global Inc. · Holloway Security Integration
-Group · ULC Listed · ESA Licensed.
+**Operating company:** Nexvelon Global Inc.
+
+> Earlier drafts of this doc and several UI surfaces claimed
+> "Holloway Security Integration Group · ULC Listed · ESA Licensed".
+> Those were v0-era scaffolding artefacts — Nexvelon does **not** hold
+> ULC or ESA certifications and "Holloway Security Integration Group"
+> is not a real division. They were scrubbed from every user-facing
+> surface. Do not reintroduce them. Customer-side ULC/ESA references
+> in the app (e.g. the Settings → Company pane fields, the technician
+> certification list, mock project descriptions) are the *integrator's
+> own* certifications they're tracking — those are correct domain
+> language and stay.
 
 **Design tone:** private bank, not SaaS dashboard. Navy + gold + parchment,
 Playfair Display headings, italic serif subtitles, tiny gold uppercase
