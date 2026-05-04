@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -14,22 +14,48 @@ import { resendOtpAction, verifyOtpAction } from "./actions";
 // ============================================================================
 // Email-OTP entry — sign-in step 2.
 // Reachable only when the middleware says has_pending_otp() === true.
+//
+// Loading state is managed manually (instead of useTransition) so that a
+// 30-second timeout can flip pending=false and re-enable the Verify button
+// for retry. With useTransition there's no way to abort a server action
+// that's actually still in flight on the server; manual state lets us
+// gracefully fail forward.
 // ============================================================================
 
 const RESEND_COOLDOWN_SECONDS = 60;
+const VERIFY_TIMEOUT_MS = 30_000;
+
+/**
+ * Type-narrow: NEXT_REDIRECT errors thrown by the server action's
+ * redirect() must be re-thrown so Next's framework can perform the
+ * navigation. They're identified by a `digest` string starting with
+ * "NEXT_REDIRECT".
+ */
+function isNextRedirect(err: unknown): boolean {
+  return (
+    err !== null &&
+    typeof err === "object" &&
+    "digest" in err &&
+    typeof (err as { digest: unknown }).digest === "string" &&
+    (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
 
 export default function VerifyOtpPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, status } = useAuth();
 
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
+  const [signOutPending, setSignOutPending] = useState(false);
   const [resendIn, setResendIn] = useState<number>(RESEND_COOLDOWN_SECONDS);
 
-  // Cooldown countdown.
+  // Track the active timeout so we can clear it on success/failure.
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Resend cooldown countdown.
   useEffect(() => {
     if (resendIn <= 0) return;
     const t = setInterval(() => {
@@ -38,47 +64,98 @@ export default function VerifyOtpPage() {
     return () => clearInterval(t);
   }, [resendIn]);
 
-  const submit = (rawCode: string) => {
+  // Clear timeout on unmount so we don't leak.
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const submit = async (rawCode: string) => {
+    if (pending) return;
     setError(null);
     setInfo(null);
-    startTransition(async () => {
+    setPending(true);
+
+    // 30-second client-side timeout. Flips pending back so the user can
+    // retry, surfaces a clear error message.
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      setPending(false);
+      setError(
+        "Verification timed out. Tap Verify to try again, or request a new code."
+      );
+    }, VERIFY_TIMEOUT_MS);
+
+    try {
       const next = searchParams.get("next");
       const result = await verifyOtpAction(rawCode, next);
-      if (!result.ok) {
-        setError(result.error);
-        if (result.attemptsRemaining !== undefined) {
-          setInfo(
-            result.attemptsRemaining === 0
-              ? null
-              : `${result.attemptsRemaining} attempt${
-                  result.attemptsRemaining === 1 ? "" : "s"
-                } remaining.`
-          );
-        }
-        return;
+
+      // Reaching here means the action returned (failure path).
+      // The success path uses redirect() which throws NEXT_REDIRECT —
+      // we never see a returned value on success.
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-      router.replace(result.redirectTo);
-    });
+      setPending(false);
+
+      if (!result || result.ok !== false) return; // defensive
+      setError(result.error);
+      if (
+        "attemptsRemaining" in result &&
+        result.attemptsRemaining !== undefined
+      ) {
+        setInfo(
+          result.attemptsRemaining === 0
+            ? null
+            : `${result.attemptsRemaining} attempt${
+                result.attemptsRemaining === 1 ? "" : "s"
+              } remaining.`
+        );
+      }
+    } catch (e: unknown) {
+      // Re-throw NEXT_REDIRECT so Next can handle the navigation.
+      if (isNextRedirect(e)) {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        // Don't reset pending — the page is about to unmount as Next
+        // navigates to the destination.
+        throw e;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setPending(false);
+      console.error("[verifyOtp client] unexpected error:", e);
+      setError("Verification failed unexpectedly. Please try again.");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    submit(code);
+    void submit(code);
   };
 
   // Auto-submit when 6 digits typed.
   useEffect(() => {
     if (code.length === 6 && /^\d{6}$/.test(code) && !pending) {
-      submit(code);
+      void submit(code);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  const handleResend = () => {
+  const handleResend = async () => {
+    if (pending) return;
     setError(null);
     setInfo(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await resendOtpAction();
+      setPending(false);
       if (!result.ok) {
         setError(result.error);
         if (result.retryAfterSeconds) {
@@ -88,13 +165,24 @@ export default function VerifyOtpPage() {
       }
       setResendIn(RESEND_COOLDOWN_SECONDS);
       toast.success("New code sent. Check your email.");
-    });
+    } catch (e) {
+      setPending(false);
+      console.error("[verifyOtp resend] error:", e);
+      setError("Couldn't send a new code. Please try again.");
+    }
   };
 
-  const handleSignOut = () => {
-    startTransition(async () => {
+  const handleSignOut = async () => {
+    if (signOutPending) return;
+    setSignOutPending(true);
+    try {
       await signOutAction();
-    });
+    } catch (e: unknown) {
+      // signOutAction also uses redirect() — re-throw NEXT_REDIRECT.
+      if (isNextRedirect(e)) throw e;
+      setSignOutPending(false);
+      console.error("[verifyOtp signOut] error:", e);
+    }
   };
 
   const maskedEmail = maskEmail(user?.email ?? "");
@@ -201,7 +289,7 @@ export default function VerifyOtpPage() {
           <div className="mt-5 flex flex-col items-center gap-2">
             <button
               type="button"
-              onClick={handleResend}
+              onClick={() => void handleResend()}
               disabled={pending || resendIn > 0}
               className="text-muted-foreground hover:text-brand-charcoal flex min-h-11 items-center gap-2 px-2 text-xs disabled:opacity-50"
             >
@@ -213,11 +301,11 @@ export default function VerifyOtpPage() {
 
             <button
               type="button"
-              onClick={handleSignOut}
-              disabled={pending}
-              className="text-muted-foreground hover:text-brand-charcoal min-h-11 px-2 text-xs underline-offset-4 hover:underline"
+              onClick={() => void handleSignOut()}
+              disabled={signOutPending}
+              className="text-muted-foreground hover:text-brand-charcoal min-h-11 px-2 text-xs underline-offset-4 hover:underline disabled:opacity-50"
             >
-              Use a different account
+              {signOutPending ? "Signing out…" : "Use a different account"}
             </button>
           </div>
         </Card>

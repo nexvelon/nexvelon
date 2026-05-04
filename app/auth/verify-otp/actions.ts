@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, isActiveStatus, stampLogin } from "@/lib/auth/profile";
 import {
@@ -11,33 +12,51 @@ import { sendOtpEmail } from "@/lib/auth/email";
 import { writeAuditLog } from "@/lib/auth/audit";
 import { getRequestInfo } from "@/lib/auth/request-info";
 
-export type VerifyOtpResult =
-  | { ok: true; redirectTo: string }
-  | { ok: false; error: string; attemptsRemaining?: number };
-
 /**
- * Sign-in step 2 — verify the 6-digit code emailed during step 1.
- *
- * On success: marks the OTP row used, stamps profiles.last_login_at /
- * last_login_ip, writes 'mfa_challenge_verified' + 'login_success' audit
- * rows, and redirects to /dashboard (or to ?next= if it's a safe path).
- *
- * On failure: writes 'mfa_challenge_failed', returns a friendly error and
- * the remaining-attempts count when applicable.
+ * Failure-only return type. The success path uses `redirect()` from
+ * next/navigation, which throws an internal NEXT_REDIRECT error and never
+ * returns — Next's framework intercepts and sends the redirect response
+ * with all the action's cookie writes attached. That eliminates the race
+ * we were seeing where a client-side router.replace would race the
+ * Supabase session-cookie write and end up bouncing through middleware.
  */
+export type VerifyOtpFailure = {
+  ok: false;
+  error: string;
+  attemptsRemaining?: number;
+};
+
 export async function verifyOtpAction(
   rawCode: string,
   next?: string | null
-): Promise<VerifyOtpResult> {
-  // Strip spaces / dashes the user might have typed; the email shows the
-  // code as a flat 6-digit block.
+): Promise<VerifyOtpFailure | undefined> {
+  const t0 = Date.now();
+  const log = (event: string, extra?: Record<string, unknown>) => {
+    // Single-line tagged log — one entry per step so a server log stream
+    // is easy to follow when this hangs again.
+    console.error(
+      `[verifyOtp] ${event}`,
+      JSON.stringify({ ...(extra ?? {}), elapsedMs: Date.now() - t0 })
+    );
+  };
+
+  log("entry");
+
   const code = (rawCode ?? "").replace(/\D/g, "");
   if (code.length !== 6) {
+    log("invalid_input", { codeLength: code.length });
     return { ok: false, error: "Enter the 6-digit code from the email." };
   }
 
   const { ip, userAgent } = await getRequestInfo();
+  log("got_request_info");
+
   const profile = await getCurrentProfile();
+  log("profile_lookup", {
+    found: !!profile,
+    userId: profile?.id ?? null,
+    status: profile?.status ?? null,
+  });
 
   if (!profile) {
     return {
@@ -47,8 +66,7 @@ export async function verifyOtpAction(
   }
 
   if (!isActiveStatus(profile.status)) {
-    // Defensive — middleware would normally have caught this, but if a
-    // status flip happened mid-OTP-window we abort here.
+    log("profile_not_active", { status: profile.status });
     const supabase = await createClient();
     await supabase.auth.signOut();
     return {
@@ -57,7 +75,12 @@ export async function verifyOtpAction(
     };
   }
 
+  // verifyOtpForUser: looks up most recent unconsumed auth_otp row,
+  // bcrypt-compares the code, marks used_at on success or increments
+  // attempts on failure. Uses service-role client (auth_otp has no
+  // RLS policies — service role is the only writer).
   const result = await verifyOtpForUser(profile.id, code);
+  log("otp_verify_result", { ok: result.ok, ...(result.ok ? {} : { reason: result.reason }) });
 
   if (!result.ok) {
     await writeAuditLog("mfa_challenge_failed", {
@@ -94,19 +117,23 @@ export async function verifyOtpAction(
     };
   }
 
-  // ---- Success path -------------------------------------------------------
+  // ---- Success path ------------------------------------------------------
   await writeAuditLog("mfa_challenge_verified", {
     user_id: profile.id,
     email: profile.email,
     ip,
     user_agent: userAgent,
   });
+  log("audit_verified_written");
 
   try {
     await stampLogin(profile.id, ip);
+    log("stamp_login_ok");
   } catch (e) {
     // Non-fatal — log and continue.
-    console.error("[verifyOtp] stampLogin failed:", e);
+    log("stamp_login_failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 
   await writeAuditLog("login_success", {
@@ -115,9 +142,16 @@ export async function verifyOtpAction(
     ip,
     user_agent: userAgent,
   });
+  log("audit_login_success_written");
 
   const dest = isSafeNext(next) ? (next as string) : "/dashboard";
-  return { ok: true, redirectTo: dest };
+  log("redirecting", { dest });
+
+  // Server-side redirect. NEXT_REDIRECT throws are caught by the framework
+  // and sent to the client as a redirect response. Any cookies written
+  // during this request travel with that response, so the next page load
+  // sees the freshest auth state.
+  redirect(dest);
 }
 
 export type ResendOtpResult =
@@ -193,7 +227,6 @@ export async function resendOtpAction(): Promise<ResendOtpResult> {
 function isSafeNext(next: string | null | undefined): boolean {
   if (!next) return false;
   if (!next.startsWith("/")) return false;
-  // Block protocol-relative URLs and anything pointing back into auth.
   if (next.startsWith("//")) return false;
   if (next.startsWith("/login")) return false;
   if (next.startsWith("/auth/")) return false;

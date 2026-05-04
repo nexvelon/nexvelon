@@ -1,14 +1,19 @@
 "use client";
 
 import { Suspense } from "react";
-import { Mail, Search, Shield } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Mail, Shield } from "lucide-react";
 import { NotificationsBell } from "./NotificationsBell";
 import { AvatarMenu } from "./AvatarMenu";
 import { GoldBreadcrumbs } from "./Breadcrumbs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { useAuth } from "@/components/auth/AuthProvider";
+
+// The center search bar that triggered the global ⌘K command palette was
+// removed — it was crashing on focus/click because GlobalCommandPalette
+// references mock-data tables that haven't been wired to the DB yet, and
+// there's nothing real to search across modules until they migrate. Will
+// be reintroduced in a future session once the modules ship real data.
 
 const ROLE_DISPLAY: Record<string, string> = {
   Admin: "Operations Director",
@@ -55,34 +60,6 @@ export function TopBar() {
         >
           <GoldBreadcrumbs />
         </Suspense>
-      </div>
-
-      {/* Center — search */}
-      <div className="relative w-[420px] max-w-[40vw]">
-        <Search
-          className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-          style={{ color: "var(--brand-accent-soft)" }}
-        />
-        <Input
-          readOnly
-          placeholder="Search clients, projects, SKUs…"
-          className="bg-card border-[var(--border)] cursor-pointer pl-9 pr-12 text-[13px]"
-          onClick={() => {
-            window.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "k", metaKey: true })
-            );
-          }}
-        />
-        <kbd
-          className="absolute top-1/2 right-3 -translate-y-1/2 rounded border px-1.5 py-0.5 font-mono text-[10px]"
-          style={{
-            color: "var(--brand-accent-soft)",
-            borderColor: "var(--brand-border)",
-            background: "var(--brand-bg)",
-          }}
-        >
-          ⌘K
-        </kbd>
       </div>
 
       {/* Right — actions + role + user */}
