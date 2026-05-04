@@ -268,17 +268,21 @@ async function sendInviteEmail(
 }
 
 // ----------------------------------------------------------------------------
-// HTML template — Phase 2 "Welcome to the Nexvelon Enterprise Suite" design,
-// inlined here so the script is self-contained.
+// HTML template — v3 "private issue" design.
 //
-// MSO-safe table-based layout. Mobile-responsive via @media. Includes
-// preheader, Apple disable-message-reformatting, color-scheme light.
+// Dark-canvas (radial-gradient navy) + parchment card (#FBF8F1) with a
+// burnished-gold border + dropped glow. Cormorant Garamond for the
+// wordmark, headline, body and signature; Helvetica for caps and meta;
+// SF Mono / Courier for the fallback URL block.
 //
 // Brand tokens:
-//   parchment #F5F1E8 · card #FFFFFF · card border #E5DFD0
-//   navy #0A1226 · gold #B8924B · body #2A2418
-//   taupe #5C5240 · muted #8C8273
-//   Georgia / Times for body, Arial for labels.
+//   bg radial-gradient navy ramp · card #FBF8F1 · card border #8A6A2E
+//   parchment monospace bg #F2EDDF · navy ink #0A1226
+//   burnished gold #B8924B · body ink #2A2418
+//   taupe #5C5240 · muted #8C8273 · footer dim #6B7390
+//
+// Layout/structure is identical across the invite + magic-link branches;
+// only copy and a couple of conditional rows differ.
 
 function renderInviteHtml(opts: {
   email: string;
@@ -288,44 +292,46 @@ function renderInviteHtml(opts: {
 }): string {
   const isInvite = !opts.isResend;
 
-  // Copy varies by branch; layout/structure is identical.
-  const headline = isInvite
-    ? "Welcome to the<br/>Nexvelon Enterprise Suite."
-    : "Sign in to the<br/>Nexvelon Enterprise Suite.";
-  const subtitle = "Operating System For The Elite";
+  // Copy varies by branch.
+  const eyebrowCap = isInvite ? "By Invitation Only" : "Single-Use Entry";
+  // Headline keeps an inline italic <em> for the parallel emphasis word.
+  const headlineHtml = isInvite
+    ? `A workspace <em style="font-style:italic;color:#3A3220;">prepared</em> in your name.`
+    : `An entry, <em style="font-style:italic;color:#3A3220;">prepared</em> in your name.`;
   const preheader = isInvite
-    ? "You've been invited to the Nexvelon Enterprise Suite. Your workspace is ready."
-    : "Your sign-in link to the Nexvelon Enterprise Suite. Single-use and expires within the hour.";
-  const cta = isInvite ? "Accept your invitation" : "Sign in";
+    ? "A private workspace has been prepared in your name. Welcome to Nexvelon."
+    : "Your entry to the Nexvelon suite is ready. Single-use, expires within the hour.";
+  const cta = isInvite ? "Accept Your Invitation" : "Sign In";
+  const statusLine = isInvite
+    ? "Workspace Provisioned &amp; Ready"
+    : "Sign-In Link Active";
 
+  // Two-paragraph letter body.
   const para1 = isInvite
-    ? "You&rsquo;ve been selected to join the Nexvelon Enterprise Suite &mdash; An operating system built with precision and polished with care for the elite."
-    : "Use the button below to access your Nexvelon workspace.";
+    ? "You have been selected to join the Nexvelon Enterprise Suite &mdash; an operating system built for the elite."
+    : "Use the entry below to return to your Nexvelon workspace.";
   const para2 = isInvite
-    ? "Inside, you&rsquo;ll find the workspace your administrator built for you: leads, quotes, projects, schedules, inventory, reporting &mdash; whatever your role requires. A custom-designed  tool ready to ensure nothing falls through the cracks."
-    : "For your security the link is single-use and expires within the hour. If you didn&rsquo;t request a sign-in, you can safely ignore this email &mdash; your account remains secure.";
+    ? `Your administrator has shaped a workspace to your role: leads, quotes, projects, schedules, inventory, reporting &mdash; arranged so nothing of consequence falls through the cracks.<br/>We are honored to have you.`
+    : "For your security, the link is single-use and expires within the hour. If you didn&rsquo;t request this sign-in, you may safely ignore this email &mdash; your account remains secure.";
 
-  // Invite-only rows: "Full access configuration ✓" + italic CTA subline.
-  // Magic-link path skips both, replaced with a single neutral spacer so
-  // the navy footer doesn't crowd the button.
-  const accessLine = isInvite
-    ? `<tr>
-          <td class="px-pad" align="center" style="padding:8px 48px 28px;font-size:15px;line-height:1.5;color:#2A2418;font-family:Georgia,'Times New Roman',serif;">
-            Full access configuration for your role is complete. <span style="color:#8C8273;font-weight:700;font-family:Arial,Helvetica,sans-serif;">&#10003;</span>
-          </td>
-        </tr>`
-    : "";
+  // Below-CTA italic line — invite-specific. Magic-link uses its own line.
   const ctaSubline = isInvite
-    ? `<tr>
-          <td class="px-pad" align="center" style="padding:0 48px 32px;font-size:13px;color:#8C8273;line-height:1.6;font-style:italic;font-family:Georgia,'Times New Roman',serif;">
-            Kindly set your password after accepting the invite.
-          </td>
-        </tr>`
-    : `<tr><td style="padding:0 48px 24px;line-height:1px;font-size:1px;">&nbsp;</td></tr>`;
+    ? "You will be asked to set a password upon entry."
+    : "The link expires within the hour.";
 
-  const bottomNote = isInvite
-    ? `This invitation was sent to <span style="color:#0A1226;">${escape(opts.email)}</span>. If you weren&rsquo;t expecting it, you can safely ignore this email.`
-    : `This sign-in link was requested for <span style="color:#0A1226;">${escape(opts.email)}</span>. If you didn&rsquo;t request it, you can safely ignore this email.`;
+  // Outer note under the dark footer.
+  const bottomNoteVerb = isInvite ? "invitation" : "sign-in link";
+
+  // The confirmUrl will be substituted into three places (CTA href, inline
+  // "click below" link, monospace fallback block). escape() converts raw
+  // & into &amp; — both forms are valid in href, the encoded form is
+  // strictly correct.
+  const urlEsc = escape(opts.confirmUrl);
+  const emailEsc = escape(opts.email);
+  const subjectEsc = escape(opts.subject);
+  const preheaderEsc = escape(preheader);
+  const eyebrowCapEsc = escape(eyebrowCap);
+  const ctaSublineEsc = escape(ctaSubline);
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
@@ -335,7 +341,7 @@ function renderInviteHtml(opts: {
 <meta name="x-apple-disable-message-reformatting" />
 <meta name="color-scheme" content="light only" />
 <meta name="supported-color-schemes" content="light only" />
-<title>${escape(opts.subject)}</title>
+<title>${subjectEsc}</title>
 <!--[if mso]>
 <style type="text/css">
 table, td, div, p, a { font-family: Georgia, 'Times New Roman', serif !important; }
@@ -347,91 +353,200 @@ table, td, div, p, a { font-family: Georgia, 'Times New Roman', serif !important
 </xml>
 <![endif]-->
 <style type="text/css">
-  body { margin:0 !important; padding:0 !important; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  body { margin:0 !important; padding:0 !important; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; background-color:#070C1C; }
   table { border-collapse:collapse !important; mso-table-lspace:0pt; mso-table-rspace:0pt; }
-  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
+  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; display:block; }
   a { text-decoration:none; }
+
+  .serif { font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif; }
+  .sans  { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  .mono  { font-family: 'SF Mono', 'Courier New', Courier, monospace; }
 
   @media screen and (max-width: 620px) {
     .container { width:100% !important; max-width:100% !important; }
-    .px-pad { padding-left:24px !important; padding-right:24px !important; }
-    .px-pad-lg { padding-left:24px !important; padding-right:24px !important; }
-    .h1 { font-size:30px !important; line-height:1.15 !important; }
-    .sub { font-size:15px !important; }
+    .px-pad { padding-left:28px !important; padding-right:28px !important; }
+    .px-pad-lg { padding-left:28px !important; padding-right:28px !important; }
+    .h1 { font-size:24px !important; line-height:1.2 !important; letter-spacing:-0.3px !important; white-space:normal !important; }
+    .sub { font-size:14px !important; }
     .body-text { font-size:15px !important; }
-    .btn { padding:16px 32px !important; font-size:12px !important; }
-    .pad-top { padding-top:48px !important; }
-    .pad-bot { padding-bottom:28px !important; }
+    .btn { padding:18px 36px !important; font-size:11px !important; }
+    .pad-top { padding-top:56px !important; }
+    .pad-bot { padding-bottom:32px !important; }
+    .crest { font-size:32px !important; }
+    .stack { display:block !important; width:100% !important; }
+    .stack-pad { padding:14px 0 !important; }
+    .divider-v { display:none !important; }
   }
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
 </head>
-<body style="margin:0;padding:0;background-color:#F5F1E8;">
+<body style="margin:0;padding:0;background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%), radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);background-repeat:no-repeat;">
 
-<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#F5F1E8;">
-${escape(preheader)}
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#0A1226;">
+${preheaderEsc}
 </div>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F1E8;">
+<!-- Outer dark canvas -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%), radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);background-repeat:no-repeat;">
   <tr>
-    <td align="center" style="padding:48px 12px;">
+    <td align="center" style="padding:0;">
 
-      <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#FFFFFF;border:1px solid #E5DFD0;">
-
+      <!-- Top spacer -->
+      <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;">
         <tr>
-          <td class="px-pad-lg pad-top pad-bot" align="center" style="padding:64px 40px 36px;border-bottom:1px solid #E5DFD0;">
-            <div style="font-size:11px;letter-spacing:0.32em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:700;mso-line-height-rule:exactly;line-height:1.4;">&mdash; Nexvelon &mdash;</div>
-            <div class="h1" style="margin-top:32px;font-size:40px;line-height:1.1;color:#0A1226;font-weight:normal;letter-spacing:-0.5px;font-family:Georgia,'Times New Roman',serif;mso-line-height-rule:exactly;">${headline}</div>
-            <div class="sub" style="margin-top:20px;font-style:italic;color:#5C5240;font-size:17px;line-height:1.5;font-family:Georgia,'Times New Roman',serif;">${escape(subtitle)}</div>
-          </td>
+          <td class="px-pad-lg" style="padding:48px 56px 24px;">&nbsp;</td>
         </tr>
+      </table>
 
+      <!-- Main card -->
+      <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;background-color:#FBF8F1;border:1px solid #8A6A2E;box-shadow:0 0 0 1px rgba(138,106,46,0.5), 0 0 18px rgba(184,146,75,0.45), 0 30px 80px -20px rgba(20,30,80,0.65), 0 60px 140px -30px rgba(30,42,90,0.55);">
+
+        <!-- Hero -->
         <tr>
-          <td class="px-pad body-text" style="padding:40px 48px 8px;font-size:16px;line-height:1.7;color:#2A2418;font-family:Georgia,'Times New Roman',serif;">
-            ${para1}
-          </td>
-        </tr>
+          <td class="px-pad-lg pad-top pad-bot" align="center" style="padding:64px 64px 40px;background-color:#FBF8F1;">
 
-        <tr>
-          <td class="px-pad body-text" style="padding:8px 48px 24px;font-size:16px;line-height:1.7;color:#2A2418;font-family:Georgia,'Times New Roman',serif;">
-            ${para2}
-          </td>
-        </tr>
-
-        ${accessLine}
-
-        <tr>
-          <td class="px-pad" align="center" style="padding:0 48px 10px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <!-- Wordmark -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
               <tr>
-                <td align="center" style="background-color:#0A1226;border:1px solid #B8924B;">
-                  <a href="${escape(opts.confirmUrl)}" target="_blank" class="btn" style="display:inline-block;padding:18px 44px;color:#F5F1E8;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;font-weight:600;text-decoration:none;mso-padding-alt:0;">${cta}</a>
+                <td align="center" valign="middle" style="padding:0 18px 0 0;">
+                  <div style="width:48px;height:1px;background-color:#B8924B;font-size:0;line-height:0;">&nbsp;</div>
+                </td>
+                <td align="center" valign="middle" class="serif crest" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:42px;line-height:1.1;color:#B8924B;font-weight:500;letter-spacing:0.06em;white-space:nowrap;">
+                  Nexvelon Enterprise Suite
+                </td>
+                <td align="center" valign="middle" style="padding:0 0 0 18px;">
+                  <div style="width:48px;height:1px;background-color:#B8924B;font-size:0;line-height:0;">&nbsp;</div>
+                </td>
+              </tr>
+            </table>
+
+            <div class="sans" style="margin-top:28px;font-size:10px;letter-spacing:0.42em;color:#B8924B;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:600;">
+              ${eyebrowCapEsc}
+            </div>
+
+            <div class="h1 serif" style="margin-top:44px;font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;color:#0A1226;font-weight:400;letter-spacing:-0.4px;mso-line-height-rule:exactly;white-space:nowrap;">
+              ${headlineHtml}
+            </div>
+
+          </td>
+        </tr>
+
+        <!-- Letter body -->
+        <tr>
+          <td class="px-pad body-text serif" style="padding:8px 72px 8px;font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:17px;line-height:1.7;color:#2A2418;font-weight:400;">
+            <p style="margin:0 0 16px;">
+              ${para1}
+            </p>
+            <p style="margin:0 0 16px;">
+              ${para2}
+            </p>
+          </td>
+        </tr>
+
+        <!-- Status line -->
+        <tr>
+          <td class="px-pad" style="padding:48px 72px 0;background-color:#FBF8F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #E5DFD0;">
+              <tr>
+                <td align="center" class="sans" style="padding:14px 0 0;font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#5C5240;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:500;">
+                  <span style="display:inline-block;width:5px;height:5px;background-color:#B8924B;border-radius:50%;vertical-align:middle;margin-right:8px;">&nbsp;</span>
+                  ${statusLine}
                 </td>
               </tr>
             </table>
           </td>
         </tr>
 
-        ${ctaSubline}
-
+        <!-- CTA -->
         <tr>
-          <td class="px-pad" style="padding:24px 48px 32px;font-size:12px;color:#8C8273;line-height:1.6;border-top:1px solid #E5DFD0;font-family:Arial,Helvetica,sans-serif;">
-            <div style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#B8924B;font-weight:600;">If the button doesn&rsquo;t work</div>
-            <div style="margin-top:8px;color:#0A1226;word-break:break-all;font-family:'Courier New',Courier,monospace;font-size:12px;">${escape(opts.confirmUrl)}</div>
+          <td class="px-pad" align="center" style="padding:24px 72px 8px;background-color:#FBF8F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td align="center" style="background-color:#0A1226;mso-padding-alt:14px 40px;">
+                  <a href="${urlEsc}" target="_blank" class="btn sans" style="display:inline-block;padding:15px 40px;color:#FBF8F1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;font-weight:600;text-decoration:none;border:1px solid #B8924B;">
+                    ${cta}
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="padding-top:14px;">
+                  <div class="sans" style="font-size:10px;letter-spacing:0.28em;color:#8C8273;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:500;">
+                    Single-use link
+                  </div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
         <tr>
-          <td class="px-pad" align="center" style="padding:28px 48px;background-color:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-            Nexvelon Global Inc.
+          <td class="px-pad serif" align="center" style="padding:6px 72px 36px;font-size:13px;color:#5C5240;line-height:1.6;font-style:italic;font-family:'Cormorant Garamond',Georgia,serif;">
+            ${ctaSublineEsc}
+          </td>
+        </tr>
+
+        <!-- Fallback URL -->
+        <tr>
+          <td class="px-pad" style="padding:8px 64px 36px;background-color:#FBF8F1;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #E5DFD0;">
+              <tr>
+                <td style="padding:24px 0 0;">
+                  <div class="sans" align="center" style="font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:#B8924B;font-weight:600;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;text-align:center;">If the button does not respond, <a href="${urlEsc}" style="color:#B8924B;text-decoration:none;letter-spacing:0.3em;font-weight:600;">click below</a>.</div>
+                  <div class="mono" style="margin-top:10px;color:#0A1226;word-break:break-all;font-family:'SF Mono','Courier New',Courier,monospace;font-size:12px;line-height:1.6;background-color:#F2EDDF;padding:14px 16px;border:1px solid #E5DFD0;">${urlEsc}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Signature -->
+        <tr>
+          <td class="px-pad" style="padding:8px 72px 56px;background-color:#FBF8F1;">
+            <div class="serif" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:16px;color:#2A2418;line-height:1.5;font-style:italic;">With regards from,</div>
+            <div class="serif" style="margin-top:10px;font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;color:#0A1226;font-weight:500;letter-spacing:-0.2px;">The Nexvelon Global Group.</div>
+            <div class="sans" style="margin-top:6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:#B8924B;font-weight:600;">Enterprise Suite &middot; Private Issue</div>
+          </td>
+        </tr>
+
+        <!-- Dark footer -->
+        <tr>
+          <td style="background-color:#0A1226;background-image:linear-gradient(180deg, #16204A 0%, #0F1838 35%, #0A1226 100%);padding:0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="px-pad-lg" style="padding:40px 24px 32px 40px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="middle" align="left">
+                        <div class="serif" style="font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;white-space:nowrap;">Nexvelon</div>
+                      </td>
+                      <td valign="middle" align="right" class="sans" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#6B7390;font-weight:500;line-height:1.6;white-space:nowrap;">
+                        Nexvelon Global Inc.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 40px;">
+                  <div style="height:1px;background-color:#1A2340;font-size:0;line-height:0;">&nbsp;</div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-pad-lg sans" style="padding:16px 40px 32px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;letter-spacing:0.22em;text-transform:uppercase;color:#6B7390;font-weight:500;" align="center">
+                  <span style="white-space:nowrap;">Confidential &middot; Do not forward</span>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
       </table>
 
-      <table role="presentation" class="container" width="540" cellpadding="0" cellspacing="0" border="0" style="width:540px;max-width:540px;">
+      <!-- Outer note -->
+      <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;">
         <tr>
-          <td class="px-pad" align="center" style="padding:24px 24px 0;font-size:11px;color:#8C8273;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
-            ${bottomNote}
+          <td class="px-pad-lg" align="center" style="padding:28px 64px 56px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#6B7390;line-height:1.7;letter-spacing:0.04em;">
+            This ${bottomNoteVerb} was prepared for <span style="color:#FBF8F1;letter-spacing:0.08em;">${emailEsc}</span>.
           </td>
         </tr>
       </table>
@@ -452,39 +567,56 @@ function renderInviteText(opts: {
   const isInvite = !opts.isResend;
   const lines = isInvite
     ? [
-        "— Nexvelon —",
-        "Welcome to the Nexvelon Enterprise Suite.",
-        "Operating System For The Elite.",
+        "— Nexvelon Enterprise Suite —",
+        "By Invitation Only",
         "",
-        "You've been selected to join the Nexvelon Enterprise Suite — an operating system built with precision and polished with care for the elite.",
+        "A workspace prepared in your name.",
         "",
-        "Inside, you'll find the workspace your administrator built for you: leads, quotes, projects, schedules, inventory, reporting — whatever your role requires. A custom-designed tool ready to ensure nothing falls through the cracks.",
+        "You have been selected to join the Nexvelon Enterprise Suite — an operating system built for the elite.",
         "",
-        "Full access configuration for your role is complete.",
+        "Your administrator has shaped a workspace to your role: leads, quotes, projects, schedules, inventory, reporting — arranged so nothing of consequence falls through the cracks. We are honored to have you.",
         "",
-        "Accept your invitation:",
+        "  • Workspace provisioned & ready",
+        "",
+        "Accept your invitation (single-use link):",
         opts.confirmUrl,
         "",
-        "Kindly set your password after accepting the invite.",
+        "You will be asked to set a password upon entry.",
         "",
-        `This invitation was sent to ${opts.email}. If you weren't expecting it, you can safely ignore this email.`,
+        "With regards from,",
+        "The Nexvelon Global Group.",
+        "Enterprise Suite · Private Issue",
         "",
-        "Nexvelon Global Inc.",
+        `This invitation was prepared for ${opts.email}.`,
+        "Confidential · Do not forward",
+        "",
+        "— Nexvelon Global Inc.",
       ]
     : [
-        "— Nexvelon —",
-        "Sign in to the Nexvelon Enterprise Suite.",
-        "Operating System For The Elite.",
+        "— Nexvelon Enterprise Suite —",
+        "Single-Use Entry",
         "",
-        "Use the link below to access your Nexvelon workspace.",
+        "An entry, prepared in your name.",
         "",
+        "Use the entry below to return to your Nexvelon workspace.",
+        "",
+        "For your security, the link is single-use and expires within the hour. If you didn't request this sign-in, you may safely ignore this email — your account remains secure.",
+        "",
+        "  • Sign-in link active",
+        "",
+        "Sign in (single-use link):",
         opts.confirmUrl,
         "",
-        "For your security the link is single-use and expires within the hour. If you didn't request a sign-in, you can safely ignore this email — your account remains secure.",
+        "The link expires within the hour.",
         "",
-        `This sign-in link was requested for ${opts.email}. If you didn't request it, you can safely ignore this email.`,
+        "With regards from,",
+        "The Nexvelon Global Group.",
+        "Enterprise Suite · Private Issue",
         "",
-        "Nexvelon Global Inc.",
+        `This sign-in link was prepared for ${opts.email}.`,
+        "Confidential · Do not forward",
+        "",
+        "— Nexvelon Global Inc.",
       ];
   return lines.join("\n");
 }
