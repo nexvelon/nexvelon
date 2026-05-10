@@ -204,76 +204,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Hardened sign-out. Reasons each piece exists:
-    //   * 5-second Promise.race on supabase.auth.signOut: the SDK call
-    //     can hang if the cookie state is corrupted (one Session A symptom
-    //     reported was an indefinite "Logging out…" spinner).
-    //   * /auth/signout fetch (server-side cookie deletion): regardless of
-    //     whether the SDK call resolved or timed out, this guarantees the
-    //     auth cookies are gone before we reload.
-    //   * window.location.replace: forces a full browser reload, which
-    //     wipes any stuck React state. Beats router.replace, which can
-    //     itself hang on a bad client-side route transition.
+    // Fire-and-forget sign-out (since 2026-05-10).
     //
-    // Tagged logs at every step so the next time something hangs, the
-    // stuck spot is obvious in the browser console.
+    // The previous flow awaited supabase.auth.signOut() (up to a 5s
+    // Promise.race) AND the /auth/signout POST before navigating. That
+    // pinned the user on the dashboard for 5-10 seconds behind a
+    // "Signing out…" button, then the /login page started in its
+    // "Verifying session…" placeholder for another few seconds while
+    // AuthProvider's initial getUser() ran. Total perceived time:
+    // 6-12 seconds.
+    //
+    // New flow:
+    //   1. Clear local AuthProvider state synchronously — anyone watching
+    //      `status` flips to 'anonymous' immediately.
+    //   2. Queue window.location.replace('/login?signout=ok'). The
+    //      ?signout=ok hint tells RedirectIfAuthed on /login to skip the
+    //      loading placeholder and render the form straight away (we know
+    //      the user just signed out; no point making them wait for
+    //      getUser() to confirm).
+    //   3. THEN fire both supabase.auth.signOut() and the /auth/signout
+    //      POST as background tasks. Neither is awaited. The server POST
+    //      sets keepalive:true so the browser completes the request even
+    //      after the document navigates away — cookies still get cleared
+    //      server-side within seconds.
+    //
+    // Perceived sign-out time: <200ms. Server-side cleanup completes
+    // asynchronously while the user is already on /login.
     console.info("[signOut] entry");
 
-    const SIGNOUT_TIMEOUT_MS = 5000;
-    const timeoutSentinel = Symbol("timeout");
-    const supabaseSignOut = supabase.auth.signOut().then(
-      (r) => r,
-      (err: unknown) => ({ error: err })
-    );
-    const timeout = new Promise<typeof timeoutSentinel>((resolve) => {
-      setTimeout(() => resolve(timeoutSentinel), SIGNOUT_TIMEOUT_MS);
-    });
-
-    const settled = await Promise.race([supabaseSignOut, timeout]);
-    if (settled === timeoutSentinel) {
-      console.warn(
-        "[signOut] supabase_signout_timeout after",
-        SIGNOUT_TIMEOUT_MS,
-        "ms"
-      );
-    } else {
-      console.info("[signOut] supabase_signout_resolved", {
-        hadError: !!(settled as { error?: unknown })?.error,
-      });
-    }
-
-    // Clear local state regardless. Setting status='anonymous' here means
-    // RequireAuth's effects fire on whatever page is currently rendered,
-    // even before the hard reload below — minimises the chance of a
-    // brief flicker of authenticated UI.
     setProfile(null);
     setStatus("anonymous");
 
-    // Server-side fallback: clear cookies via the dedicated /auth/signout
-    // route handler. Best-effort — never throw out of signOut.
-    try {
-      await fetch("/auth/signout", {
-        method: "POST",
-        credentials: "include",
-        // Keepalive lets the request continue past the hard reload below
-        // in browsers that support it (Chrome, Firefox).
-        keepalive: true,
-      });
-      console.info("[signOut] server_signout_done");
-    } catch (e) {
-      console.error("[signOut] server_signout_failed", e);
-    }
-
-    console.info("[signOut] forcing_reload");
-    // Hard reload past any stuck React state. Falls back to assigning the
-    // location if `replace` is unavailable for some browser oddity.
+    console.info("[signOut] redirecting");
     if (typeof window !== "undefined") {
       try {
-        window.location.replace("/login");
+        window.location.replace("/login?signout=ok");
       } catch {
-        window.location.href = "/login";
+        window.location.href = "/login?signout=ok";
       }
     }
+
+    console.info("[signOut] background_signout_started");
+    void supabase.auth.signOut().then(
+      () => console.info("[signOut] background_signout_complete client_sdk"),
+      (err: unknown) =>
+        console.warn("[signOut] background_signout_failed client_sdk", err)
+    );
+    void fetch("/auth/signout", {
+      method: "POST",
+      credentials: "include",
+      keepalive: true,
+    }).then(
+      () =>
+        console.info("[signOut] background_signout_complete server_route"),
+      (err: unknown) =>
+        console.warn("[signOut] background_signout_failed server_route", err)
+    );
   }, []);
 
   const refreshProfile = useCallback(async () => {

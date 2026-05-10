@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
 // ============================================================================
@@ -92,13 +93,22 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
   const { status } = useAuth();
+  const searchParams = useSearchParams();
   const [timedOut, setTimedOut] = useState(false);
+
+  // ?signout=ok is appended by AuthProvider.signOut's window.location.replace.
+  // When present we know the user just signed out: render the login form
+  // immediately and skip the "Verifying session…" placeholder. Background
+  // cookie cleanup (keepalive POST to /auth/signout + supabase.auth.signOut)
+  // is still in flight, but it doesn't need to gate the UI.
+  const signOutHint = searchParams?.get("signout") === "ok";
 
   // Same 10s safety net as RequireAuth, but flipped — if status stays
   // 'loading' on a page like /login (which renders this wrapper), force
   // a hard reload back to /login itself so the AuthProvider remounts
-  // fresh.
+  // fresh. Skipped during a signout flow.
   useEffect(() => {
+    if (signOutHint) return;
     if (status !== "loading") {
       if (timedOut) setTimedOut(false);
       return;
@@ -113,9 +123,13 @@ export function RedirectIfAuthed({ children }: { children: ReactNode }) {
     }, SESSION_CHECK_TIMEOUT_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, signOutHint]);
 
   useEffect(() => {
+    // During a signout flow, never bounce to /dashboard even if the
+    // background cookie clear hasn't completed yet and getUser() briefly
+    // returns the stale user. The user explicitly asked to sign out.
+    if (signOutHint) return;
     if (timedOut) {
       hardReload("/login?error=session_check_timeout", "timed_out");
       return;
@@ -123,9 +137,9 @@ export function RedirectIfAuthed({ children }: { children: ReactNode }) {
     if (status === "authenticated") {
       hardReload("/dashboard", "authenticated");
     }
-  }, [status, timedOut]);
+  }, [status, timedOut, signOutHint]);
 
-  if (status === "anonymous") return <>{children}</>;
+  if (signOutHint || status === "anonymous") return <>{children}</>;
 
   return (
     <div className="bg-background flex min-h-[100dvh] items-center justify-center">
