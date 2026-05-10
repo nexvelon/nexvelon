@@ -46,6 +46,23 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
 
+  // Post-OTP fast-path hint. AuthProvider also reads this and flips status
+  // to 'authenticated' optimistically; reading it here too means we render
+  // children even on the one frame between hydration and AuthProvider's
+  // first state update — eliminating the "Verifying session…" flash. The
+  // 10s timeout below stays active as a safety net in case AuthProvider's
+  // background hydration hangs.
+  const [justSignedIn, setJustSignedIn] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("just_signed_in") === "ok") setJustSignedIn(true);
+    } catch {
+      // No window.location.search available — leave flag false.
+    }
+  }, []);
+
   // Hard timeout: while status === 'loading', start a 10s timer. If it
   // fires before status flips, fall through to the redirect effect below.
   useEffect(() => {
@@ -80,7 +97,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     }
   }, [status, timedOut]);
 
+  // Fast-path: render optimistically when we know we just signed in, even
+  // if AuthProvider's status is still 'loading' for this frame.
   if (status === "authenticated") return <>{children}</>;
+  if (justSignedIn && status === "loading") return <>{children}</>;
 
   return (
     <div className="bg-background flex min-h-[100dvh] items-center justify-center">

@@ -145,13 +145,21 @@ export async function verifyOtpAction(
   log("audit_login_success_written");
 
   const dest = isSafeNext(next) ? (next as string) : "/dashboard";
-  log("redirecting", { dest });
+  // Append the fast-path hint so AuthProvider + RequireAuth on the
+  // destination page skip the duplicate session-check round-trip. The
+  // server already proved the session at this redirect; making the
+  // browser re-prove it through getUser+fetchProfile before painting
+  // any UI was costing 1–6s of perceived hang.
+  const destWithHint = dest.includes("?")
+    ? `${dest}&just_signed_in=ok`
+    : `${dest}?just_signed_in=ok`;
+  log("redirecting", { dest: destWithHint });
 
   // Server-side redirect. NEXT_REDIRECT throws are caught by the framework
   // and sent to the client as a redirect response. Any cookies written
   // during this request travel with that response, so the next page load
   // sees the freshest auth state.
-  redirect(dest);
+  redirect(destWithHint);
 }
 
 export type ResendOtpResult =

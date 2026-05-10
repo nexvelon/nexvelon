@@ -120,10 +120,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   //     and explicitly forces 'anonymous' on SIGNED_OUT (in case the
   //     listener races the initial getUser and would otherwise leave
   //     state inconsistent).
+  //
+  // Post-OTP fast-path (since 2026-05-10):
+  //   * verifyOtpAction redirects to /dashboard?just_signed_in=ok after
+  //     successful OTP. The server-side redirect already proved the
+  //     session is valid (middleware re-checks per request too), so the
+  //     duplicate getUser+fetchProfile round-trip Auth Provider does on
+  //     mount was just adding 1–6s of perceived hang behind a "Verifying
+  //     session…" placeholder.
+  //   * When that hint is present we flip status='authenticated'
+  //     synchronously, then hydrate profile in the background. If the
+  //     background fetch comes back with no user (rare race), we flip
+  //     to 'anonymous' and RequireAuth's existing redirect handles it.
+  //   * The query param is stripped via history.replaceState once
+  //     hydration finishes — that swaps the URL without triggering a
+  //     re-render or a Next router round-trip.
   useEffect(() => {
     let cancelled = false;
 
-    console.info("[AuthProvider] mounting");
+    // Detect post-signin fast-path. Read straight from window so we don't
+    // pull useSearchParams() in here and accidentally bail every static
+    // route out of static rendering.
+    let fastPath = false;
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        fastPath = params.get("just_signed_in") === "ok";
+      } catch {
+        fastPath = false;
+      }
+    }
+
+    console.info("[AuthProvider] mounting", { fastPath });
+
+    if (fastPath) {
+      console.info("[AuthProvider] fast_path_post_signin");
+      console.info("[AuthProvider] background_hydration_starting");
+      // Optimistic flip — children render immediately while the network
+      // fetch below catches up.
+      setStatus("authenticated");
+    }
 
     (async () => {
       let nextStatus: AuthStatus = "anonymous";
@@ -159,6 +195,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(nextProfile);
         setStatus(nextStatus);
         console.info("[AuthProvider] status set", { status: nextStatus });
+
+        if (fastPath) {
+          if (nextStatus === "authenticated") {
+            console.info("[AuthProvider] background_hydration_complete", {
+              user_id: nextProfile?.id ?? null,
+            });
+          } else {
+            console.warn("[AuthProvider] background_hydration_failed", {
+              reason: nextStatus,
+            });
+            // RequireAuth's existing 'anonymous' effect will hardReload to
+            // /login from here — no extra redirect logic needed.
+          }
+          // Strip ?just_signed_in=ok so a refresh doesn't keep showing the
+          // optimistic state. history.replaceState is cheaper than
+          // router.replace — no Next re-render, no middleware re-run.
+          if (typeof window !== "undefined") {
+            try {
+              const url = new URL(window.location.href);
+              if (url.searchParams.has("just_signed_in")) {
+                url.searchParams.delete("just_signed_in");
+                const newPath =
+                  url.pathname + (url.search || "") + (url.hash || "");
+                console.info("[AuthProvider] stripping_signin_query_param");
+                window.history.replaceState(null, "", newPath);
+              }
+            } catch {
+              // History API not available — leave the URL alone.
+            }
+          }
+        }
       }
     })();
 
