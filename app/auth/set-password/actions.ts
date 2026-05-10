@@ -46,6 +46,16 @@ export async function setPasswordAction(
   password: string,
   confirm: string
 ): Promise<SetPasswordFailure | undefined> {
+  const t0 = Date.now();
+  const log = (event: string, extra?: Record<string, unknown>) => {
+    console.info(
+      `[setPassword] ${event}`,
+      JSON.stringify({ ...(extra ?? {}), elapsedMs: Date.now() - t0 })
+    );
+  };
+
+  log("entry");
+
   if (!password || !confirm) {
     return { ok: false, error: "Both password fields are required." };
   }
@@ -54,7 +64,12 @@ export async function setPasswordAction(
   }
   try {
     assertValidPassword(password);
+    log("policy_check_result", { valid: true });
   } catch (e) {
+    log("policy_check_result", {
+      valid: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Password is not strong enough.",
@@ -64,18 +79,44 @@ export async function setPasswordAction(
   const { ip, userAgent } = await getRequestInfo();
   const supabase = await createClient();
 
-  // Caller must already have a session (set by the /auth/confirm exchange).
+  // Direct getUser() read so we can log exactly what happened — wrapping
+  // through getCurrentProfile() loses the distinction between
+  // "no session at all" and "session ok but profile row missing".
+  const { data: getUserData, error: getUserErr } = await supabase.auth.getUser();
+  log("getUser_result", {
+    hasUser: !!getUserData?.user,
+    userId: getUserData?.user?.id ?? null,
+    error: getUserErr?.message ?? null,
+  });
+
+  if (!getUserData?.user) {
+    return {
+      ok: false,
+      error:
+        "Your sign-in session was lost. Please click the invite link from your email again.",
+    };
+  }
+
   const profile = await getCurrentProfile();
+  log("profile_lookup_result", {
+    hasProfile: !!profile,
+    status: profile?.status ?? null,
+    role: profile?.role ?? null,
+  });
+
   if (!profile) {
     return {
       ok: false,
       error:
-        "Your session expired. Please reopen the link from your invite email.",
+        "We can't find your profile. Please contact your administrator.",
     };
   }
 
   // ---- 1. Update Supabase Auth password ---------------------------------
   const { error: updateErr } = await supabase.auth.updateUser({ password });
+  log("update_user_result", {
+    error: updateErr?.message ?? null,
+  });
   if (updateErr) {
     await writeAuditLog("login_failed", {
       user_id: profile.id,
@@ -101,10 +142,15 @@ export async function setPasswordAction(
         status: "Active",
         mfa_enrolled: true,
       });
+      log("profile_admin_patch_result", { error: null });
     } catch (e) {
       // Non-fatal; password is set. An Admin can retry the flip later.
-      console.error("[setPassword] status flip failed:", e);
+      log("profile_admin_patch_result", {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
+  } else {
+    log("profile_admin_patch_result", { skipped: true });
   }
 
   await writeAuditLog("password_changed", {
@@ -120,8 +166,11 @@ export async function setPasswordAction(
   try {
     const created = await createOtpForUser(profile.id);
     otp = { id: created.id, code: created.code };
+    log("otp_created", { otpId: otp.id });
   } catch (e) {
-    console.error("[setPassword] createOtpForUser failed:", e);
+    log("otp_create_failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return {
       ok: false,
       error:
@@ -135,8 +184,11 @@ export async function setPasswordAction(
       code: otp.code,
       firstName: profile.first_name,
     });
+    log("otp_email_sent");
   } catch (e) {
-    console.error("[setPassword] sendOtpEmail failed:", e);
+    log("otp_email_failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return {
       ok: false,
       error:
@@ -157,5 +209,6 @@ export async function setPasswordAction(
   // redirect response with all cookie writes attached. Middleware on the
   // next request will see has_pending_otp()===true and route the user
   // through /auth/verify-otp normally.
+  log("redirecting", { dest: "/auth/verify-otp" });
   redirect("/auth/verify-otp");
 }

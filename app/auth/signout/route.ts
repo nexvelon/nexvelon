@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 // ============================================================================
@@ -36,14 +37,21 @@ async function clearSession(): Promise<void> {
 
 export async function POST(): Promise<NextResponse> {
   await clearSession();
+  // 204 with no body. Cookie deletions queued via cookieStore.set during
+  // clearSession() are merged into this response by the Next.js runtime.
+  // The client (AuthProvider.signOut) ignores the body and immediately
+  // hard-reloads to /login.
   return new NextResponse(null, { status: 204 });
 }
 
 // Also accept GET for direct-navigation fallback (e.g. "stuck" sessions
 // where the user types the URL into the address bar).
-export async function GET(request: NextRequest): Promise<NextResponse> {
+//
+// `redirect()` from next/navigation (not `NextResponse.redirect`) so the
+// cookieStore deletions queued during clearSession() reliably ride the
+// redirect response. Same fix pattern as /auth/confirm — see comments
+// there for the why.
+export async function GET(): Promise<never> {
   await clearSession();
-  // Hard-redirect to /login. Cookies just deleted travel with this
-  // response; subsequent middleware sees the user as anonymous.
-  return NextResponse.redirect(new URL("/login", request.url), 303);
+  redirect("/login");
 }
