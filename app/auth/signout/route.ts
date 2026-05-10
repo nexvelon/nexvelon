@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -5,24 +6,31 @@ import { createClient } from "@/lib/supabase/server";
 // ============================================================================
 // /auth/signout — server-side cookie cleanup endpoint.
 //
-// Belt-and-braces partner to the client-side `useAuth().signOut()` call.
-// AuthProvider's signOut wraps `supabase.auth.signOut()` in a 5s
-// Promise.race so a hung client-side call no longer locks the user on the
-// "Signing out…" spinner. After that race resolves (or times out), the
-// client POSTs here to GUARANTEE that any auth cookies still on the
-// browser get deleted server-side via the cookie-aware Supabase server
-// client's `setAll` callback.
+// TWO entry points with different speed/thoroughness tradeoffs:
 //
-// Always returns 204; never throws to the caller. Idempotent — repeated
-// calls have no extra effect beyond writing the same delete-cookie
-// instructions onto the response.
+// GET — the FAST PATH used as the navigation target from
+//       AuthProvider.signOut. Synchronously deletes the browser's
+//       `sb-*` auth cookies via Set-Cookie headers on the redirect
+//       response, then 307s to /login?signout=ok. Does NOT await the
+//       network call to Supabase Auth's /logout endpoint (that's
+//       1-3s on free-tier and would block the navigation behind it).
+//       Cookies are gone from the browser before middleware sees the
+//       follow-up /login request, so middleware can't bounce us back
+//       to /dashboard.
+//
+// POST — the THOROUGH PATH fired as a keepalive background request by
+//        AuthProvider.signOut after the GET-driven navigation is
+//        already underway. Awaits supabase.auth.signOut(), which
+//        revokes the refresh token on Supabase Auth AND writes
+//        delete-cookie instructions. Idempotent; safe to run after
+//        the cookies are already cleared.
 //
 // Allowlisted in middleware for both anonymous AND MFA-pending callers
-// so a user with corrupted/stale cookies can still reach this route to
-// clear them.
+// so a user with corrupted/stale cookies can always reach either entry
+// point to clear them.
 // ============================================================================
 
-async function clearSession(): Promise<void> {
+async function clearSessionThorough(): Promise<void> {
   try {
     const supabase = await createClient();
     // signOut writes Supabase's expire-cookie instructions onto the
@@ -36,22 +44,31 @@ async function clearSession(): Promise<void> {
 }
 
 export async function POST(): Promise<NextResponse> {
-  await clearSession();
+  await clearSessionThorough();
   // 204 with no body. Cookie deletions queued via cookieStore.set during
-  // clearSession() are merged into this response by the Next.js runtime.
-  // The client (AuthProvider.signOut) ignores the body and immediately
-  // hard-reloads to /login.
+  // clearSessionThorough() are merged into this response by the Next.js
+  // runtime. The client (AuthProvider.signOut) ignores the body and is
+  // already mid-navigation when this lands.
   return new NextResponse(null, { status: 204 });
 }
 
-// Also accept GET for direct-navigation fallback (e.g. "stuck" sessions
-// where the user types the URL into the address bar).
-//
-// `redirect()` from next/navigation (not `NextResponse.redirect`) so the
-// cookieStore deletions queued during clearSession() reliably ride the
-// redirect response. Same fix pattern as /auth/confirm — see comments
-// there for the why.
 export async function GET(): Promise<never> {
-  await clearSession();
-  redirect("/login");
+  // Fast path — synchronously clear every `sb-*` cookie via
+  // cookieStore.set with maxAge=0. The Set-Cookie headers ride the
+  // redirect() response, so the browser deletes them before sending the
+  // follow-up /login request. Middleware on /login then sees no auth
+  // cookies, no getUser() match, anonymous → allows /login through
+  // (instead of redirecting to /dashboard and stripping our
+  // ?signout=ok hint along the way, which is exactly the regression
+  // we're fixing).
+  const cookieStore = await cookies();
+  let cleared = 0;
+  for (const c of cookieStore.getAll()) {
+    if (c.name.startsWith("sb-")) {
+      cookieStore.set(c.name, "", { path: "/", maxAge: 0 });
+      cleared++;
+    }
+  }
+  console.info("[signout route] GET cookies_cleared", { cleared });
+  redirect("/login?signout=ok");
 }

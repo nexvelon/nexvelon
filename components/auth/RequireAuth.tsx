@@ -116,12 +116,19 @@ export function RedirectIfAuthed({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [timedOut, setTimedOut] = useState(false);
 
-  // ?signout=ok is appended by AuthProvider.signOut's window.location.replace.
-  // When present we know the user just signed out: render the login form
-  // immediately and skip the "Verifying session…" placeholder. Background
-  // cookie cleanup (keepalive POST to /auth/signout + supabase.auth.signOut)
-  // is still in flight, but it doesn't need to gate the UI.
+  // ?signout=ok is appended to /login by the /auth/signout GET handler,
+  // which is now the navigation target of AuthProvider.signOut. By the time
+  // we render here the cookies are already cleared server-side (Set-Cookie
+  // headers rode that redirect), so we can confidently render the form
+  // without waiting for AuthProvider's getUser() to confirm anonymous.
   const signOutHint = searchParams?.get("signout") === "ok";
+  console.info("[RedirectIfAuthed] entry", {
+    has_signout_param: signOutHint,
+    status,
+  });
+  if (signOutHint) {
+    console.info("[RedirectIfAuthed] signout_fast_path");
+  }
 
   // Same 10s safety net as RequireAuth, but flipped — if status stays
   // 'loading' on a page like /login (which renders this wrapper), force

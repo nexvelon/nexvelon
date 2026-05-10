@@ -138,22 +138,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    // Detect post-signin fast-path. Read straight from window so we don't
-    // pull useSearchParams() in here and accidentally bail every static
-    // route out of static rendering.
-    let fastPath = false;
+    // Detect URL hints. Read straight from window so we don't pull
+    // useSearchParams() in here and accidentally bail every static route
+    // out of static rendering.
+    let fastPathSignin = false;
+    let fastPathSignout = false;
     if (typeof window !== "undefined") {
       try {
         const params = new URLSearchParams(window.location.search);
-        fastPath = params.get("just_signed_in") === "ok";
+        fastPathSignin = params.get("just_signed_in") === "ok";
+        fastPathSignout = params.get("signout") === "ok";
       } catch {
-        fastPath = false;
+        // ignore URL parse failures — fall through to regular flow.
       }
     }
 
-    console.info("[AuthProvider] mounting", { fastPath });
+    console.info("[AuthProvider] mounting", {
+      fastPathSignin,
+      fastPathSignout,
+    });
 
-    if (fastPath) {
+    // Sign-out fast path: we arrived here via /auth/signout's redirect,
+    // which already cleared the auth cookies server-side. Running
+    // getUser() now would just confirm anonymous after a 1-6s Supabase
+    // round-trip — pure waste. Set anonymous immediately, skip the
+    // network fetch, strip the query param after a beat.
+    if (fastPathSignout) {
+      console.info("[AuthProvider] skip_initial_check_signout");
+      setProfile(null);
+      setStatus("anonymous");
+
+      // Strip ?signout=ok so a refresh doesn't keep showing the fast-path
+      // (which would re-skip the check and miss any future state change).
+      // 1s gives any other code reading the param a beat to do so.
+      const stripTimer = window.setTimeout(() => {
+        try {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("signout")) {
+            url.searchParams.delete("signout");
+            const newPath =
+              url.pathname + (url.search || "") + (url.hash || "");
+            console.info("[AuthProvider] stripping_signout_query_param");
+            window.history.replaceState(null, "", newPath);
+          }
+        } catch {
+          // History API unavailable — leave the URL alone.
+        }
+      }, 1000);
+
+      const { data: subscription } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!mountedRef.current) return;
+          console.info("[AuthProvider] auth_state_changed", {
+            event,
+            hasSession: !!session?.user,
+          });
+          // After the cookie clear, any future SIGNED_IN event means a
+          // fresh login on the same tab — re-hydrate the profile.
+          if (event === "SIGNED_OUT" || !session?.user) {
+            setProfile(null);
+            setStatus("anonymous");
+            return;
+          }
+          try {
+            const p = await fetchProfile(session.user.id);
+            if (!mountedRef.current) return;
+            setProfile(p);
+            setStatus(p ? "authenticated" : "anonymous");
+          } catch {
+            if (!mountedRef.current) return;
+            setProfile(null);
+            setStatus("anonymous");
+          }
+        }
+      );
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(stripTimer);
+        subscription.subscription.unsubscribe();
+      };
+    }
+
+    if (fastPathSignin) {
       console.info("[AuthProvider] fast_path_post_signin");
       console.info("[AuthProvider] background_hydration_starting");
       // Optimistic flip — children render immediately while the network
@@ -196,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus(nextStatus);
         console.info("[AuthProvider] status set", { status: nextStatus });
 
-        if (fastPath) {
+        if (fastPathSignin) {
           if (nextStatus === "authenticated") {
             console.info("[AuthProvider] background_hydration_complete", {
               user_id: nextProfile?.id ?? null,
@@ -271,52 +338,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Fire-and-forget sign-out (since 2026-05-10).
+    // Fire-and-forget sign-out via /auth/signout (GET) — fixed 2026-05-10.
     //
-    // The previous flow awaited supabase.auth.signOut() (up to a 5s
-    // Promise.race) AND the /auth/signout POST before navigating. That
-    // pinned the user on the dashboard for 5-10 seconds behind a
-    // "Signing out…" button, then the /login page started in its
-    // "Verifying session…" placeholder for another few seconds while
-    // AuthProvider's initial getUser() ran. Total perceived time:
-    // 6-12 seconds.
+    // Previous (broken) flow tried to navigate straight to
+    // /login?signout=ok. Two failures of that approach:
+    //   * The browser's auth cookies were still present on the navigation
+    //     (the fire-and-forget /auth/signout POST and the SDK's signOut
+    //     hadn't completed yet), so middleware on /login saw a valid
+    //     session, redirected to /dashboard, and **stripped all query
+    //     params along the way** — the ?signout=ok hint never reached
+    //     RedirectIfAuthed.
+    //   * The duplicate session-check round-trip on /dashboard then ran
+    //     "Verifying session…" for 5-10s before eventually noticing the
+    //     background cookie-clear had completed and hardReload-ing to
+    //     plain /login.
     //
     // New flow:
-    //   1. Clear local AuthProvider state synchronously — anyone watching
-    //      `status` flips to 'anonymous' immediately.
-    //   2. Queue window.location.replace('/login?signout=ok'). The
-    //      ?signout=ok hint tells RedirectIfAuthed on /login to skip the
-    //      loading placeholder and render the form straight away (we know
-    //      the user just signed out; no point making them wait for
-    //      getUser() to confirm).
-    //   3. THEN fire both supabase.auth.signOut() and the /auth/signout
-    //      POST as background tasks. Neither is awaited. The server POST
-    //      sets keepalive:true so the browser completes the request even
-    //      after the document navigates away — cookies still get cleared
-    //      server-side within seconds.
+    //   1. Clear local AuthProvider state synchronously.
+    //   2. Navigate to /auth/signout (GET). That route handler
+    //      synchronously deletes every sb-* cookie via Set-Cookie headers
+    //      on its redirect response, then 307s to /login?signout=ok. The
+    //      browser deletes the cookies before sending the follow-up
+    //      /login request, so middleware sees us as anonymous and lets
+    //      /login through with the ?signout=ok hint intact.
+    //   3. Fire the keepalive POST + SDK signOut as background tasks so
+    //      Supabase Auth's /logout endpoint still gets called to revoke
+    //      the refresh token (defence-in-depth; not gating navigation).
     //
-    // Perceived sign-out time: <200ms. Server-side cleanup completes
-    // asynchronously while the user is already on /login.
+    // Perceived sign-out time: one network hop to /auth/signout
+    // (~50-200ms — no Supabase round-trip on the critical path) + a
+    // /login render. Cookies are atomically gone; middleware can't
+    // bounce us anywhere.
     console.info("[signOut] entry");
 
     setProfile(null);
     setStatus("anonymous");
+    console.info("[signOut] state_cleared");
 
     console.info("[signOut] redirecting");
     if (typeof window !== "undefined") {
       try {
-        window.location.replace("/login?signout=ok");
+        window.location.replace("/auth/signout");
       } catch {
-        window.location.href = "/login?signout=ok";
+        window.location.href = "/auth/signout";
       }
     }
 
-    console.info("[signOut] background_signout_started");
-    void supabase.auth.signOut().then(
-      () => console.info("[signOut] background_signout_complete client_sdk"),
-      (err: unknown) =>
-        console.warn("[signOut] background_signout_failed client_sdk", err)
-    );
+    console.info("[signOut] background_signout_fired");
     void fetch("/auth/signout", {
       method: "POST",
       credentials: "include",
@@ -326,6 +394,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.info("[signOut] background_signout_complete server_route"),
       (err: unknown) =>
         console.warn("[signOut] background_signout_failed server_route", err)
+    );
+    void supabase.auth.signOut().then(
+      () => console.info("[signOut] background_signout_complete client_sdk"),
+      (err: unknown) =>
+        console.warn("[signOut] background_signout_failed client_sdk", err)
     );
   }, []);
 
