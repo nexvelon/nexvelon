@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { AlertCircle, Check, Eye, EyeOff, KeyRound, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,42 +10,71 @@ import { checkPassword } from "@/lib/auth/password-policy";
 import { setPasswordAction } from "./actions";
 
 // ============================================================================
-// Set-password page — completes the invite flow.
-// Reachable when Supabase invite magic-link redirects through /auth/callback
+// Set-password page — completes the invite flow + funnels into the OTP gate.
+// Reachable after Supabase invite magic-link redirects through /auth/confirm
 // and the resulting session lands here. Validates against the project
 // password policy with a live strength meter and per-rule checklist.
+//
+// On submit, the server action saves the password, flips status='Active' +
+// mfa_enrolled=true, then issues + emails an OTP and redirects (server-side)
+// to /auth/verify-otp. The user enters the 6-digit code there, lands on
+// /dashboard with a fully-validated session. No code path bypasses the OTP
+// gate now — every authenticated session goes through it on first sign-in.
 // ============================================================================
 
+/** NEXT_REDIRECT errors from the server action carry a digest starting
+ *  with "NEXT_REDIRECT" — re-throw them so Next can perform the
+ *  navigation. Anything else is a real failure to surface to the user. */
+function isNextRedirect(err: unknown): boolean {
+  return (
+    err !== null &&
+    typeof err === "object" &&
+    "digest" in err &&
+    typeof (err as { digest: unknown }).digest === "string" &&
+    (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
 export default function SetPasswordPage() {
-  const router = useRouter();
-  const { user, refreshProfile } = useAuth();
+  const { user } = useAuth();
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
   const check = useMemo(() => checkPassword(password), [password]);
   const matches = password.length > 0 && password === confirm;
   const canSubmit = check.ok && matches && !pending;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!canSubmit) return;
 
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await setPasswordAction(password, confirm);
-      if (!result.ok) {
+
+      // Reaching here means the action returned (failure path).
+      // Success path uses redirect() and throws NEXT_REDIRECT — we never
+      // see a returned value on success.
+      if (result && result.ok === false) {
+        setPending(false);
         setError(result.error);
-        return;
       }
-      // Pull the freshly-flipped status onto the client AuthProvider so any
-      // <Can> guards on /dashboard render with the right gate.
-      await refreshProfile();
-      router.replace(result.redirectTo);
-    });
+      // result === undefined would be unreachable — defensive no-op.
+    } catch (e: unknown) {
+      if (isNextRedirect(e)) {
+        // Don't reset pending — the page is about to unmount as Next
+        // navigates to /auth/verify-otp.
+        throw e;
+      }
+      setPending(false);
+      console.error("[setPassword client] unexpected error:", e);
+      setError("Something went wrong saving your password. Please try again.");
+    }
   };
 
   return (
@@ -216,7 +244,7 @@ export default function SetPasswordPage() {
                 fontFamily: "var(--font-playfair), serif",
               }}
             >
-              {pending ? "Saving…" : "Save password & continue"}
+              {pending ? "Sending verification code…" : "Save password & continue"}
             </button>
           </form>
         </Card>

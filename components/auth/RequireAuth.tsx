@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
 // ============================================================================
@@ -16,10 +15,11 @@ import { useAuth } from "./AuthProvider";
 //   2. Bounce to /login if the session fails revalidation client-side
 //      (Supabase says the cookie is no longer valid mid-render).
 //   3. **Hard 10-second timeout** on the loading state. If AuthProvider's
-//      status never resolves (most likely cause: a thrown await in its
-//      init that we now also catch via try/catch/finally — but defence in
-//      depth), bounce to /login?error=session_check_timeout so the user
-//      isn't stuck on the spinner.
+//      status never resolves (a thrown await we can't catch, a stuck
+//      cookie state, etc.), navigate via window.location.replace so a
+//      fresh document load wipes any frozen React state. router.replace
+//      is a soft client navigation that itself can hang on the same kind
+//      of bug — window.location.replace is the escape hatch.
 //
 // Routing decisions for first-time loads live in the middleware. Don't add
 // auth logic here — middleware is the source of truth.
@@ -27,22 +27,37 @@ import { useAuth } from "./AuthProvider";
 
 const SESSION_CHECK_TIMEOUT_MS = 10_000;
 
+/** Same hard-reload helper used by AuthProvider.signOut — bypasses the
+ *  client-side router entirely so a stuck React tree can't block the
+ *  navigation. Falls back to assigning location.href if `replace` is
+ *  somehow unavailable. */
+function hardReload(href: string, reason: string): void {
+  if (typeof window === "undefined") return;
+  console.info("[RequireAuth] hard_reload", { href, reason });
+  try {
+    window.location.replace(href);
+  } catch {
+    window.location.href = href;
+  }
+}
+
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
-  const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
 
-  // Hard timeout: while status === 'loading', start a 10s timer. If it fires
-  // before status flips, treat as anonymous and redirect with an error code.
+  // Hard timeout: while status === 'loading', start a 10s timer. If it
+  // fires before status flips, fall through to the redirect effect below.
   useEffect(() => {
     if (status !== "loading") {
-      // Status moved on (auth resolved one way or the other) — clear flag.
       if (timedOut) setTimedOut(false);
       return;
     }
+    console.info("[RequireAuth] mount_loading_start_timer");
     const t = setTimeout(() => {
       console.error(
-        "[RequireAuth] session check timed out after 10s; redirecting to /login"
+        "[RequireAuth] session_check_timeout after",
+        SESSION_CHECK_TIMEOUT_MS,
+        "ms"
       );
       setTimedOut(true);
     }, SESSION_CHECK_TIMEOUT_MS);
@@ -50,15 +65,19 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  // Drive the browser away from the protected page when we're not
+  // authenticated. Both paths use window.location.replace because soft
+  // navigation has been observed to hang in the same conditions that put
+  // us in the timeout / anonymous state.
   useEffect(() => {
     if (timedOut) {
-      router.replace("/login?error=session_check_timeout");
+      hardReload("/login?error=session_check_timeout", "timed_out");
       return;
     }
     if (status === "anonymous") {
-      router.replace("/login");
+      hardReload("/login", "anonymous");
     }
-  }, [status, timedOut, router]);
+  }, [status, timedOut]);
 
   if (status === "authenticated") return <>{children}</>;
 
@@ -73,14 +92,46 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
   const { status } = useAuth();
-  const router = useRouter();
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Same 10s safety net as RequireAuth, but flipped — if status stays
+  // 'loading' on a page like /login (which renders this wrapper), force
+  // a hard reload back to /login itself so the AuthProvider remounts
+  // fresh.
+  useEffect(() => {
+    if (status !== "loading") {
+      if (timedOut) setTimedOut(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      console.error(
+        "[RedirectIfAuthed] session_check_timeout after",
+        SESSION_CHECK_TIMEOUT_MS,
+        "ms"
+      );
+      setTimedOut(true);
+    }, SESSION_CHECK_TIMEOUT_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.replace("/dashboard");
+    if (timedOut) {
+      hardReload("/login?error=session_check_timeout", "timed_out");
+      return;
     }
-  }, [status, router]);
+    if (status === "authenticated") {
+      hardReload("/dashboard", "authenticated");
+    }
+  }, [status, timedOut]);
 
-  if (status !== "authenticated") return <>{children}</>;
-  return null;
+  if (status === "anonymous") return <>{children}</>;
+
+  return (
+    <div className="bg-background flex min-h-[100dvh] items-center justify-center">
+      <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
+        {timedOut ? "Redirecting…" : "Loading…"}
+      </p>
+    </div>
+  );
 }

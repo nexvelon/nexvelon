@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { normalizeDbRole } from "@/lib/auth/normalize-role";
 import type {
@@ -94,8 +93,6 @@ async function fetchProfile(userId: string): Promise<DbProfile | null> {
 // ----------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
-
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [profile, setProfile] = useState<DbProfile | null>(null);
 
@@ -207,11 +204,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    // Hardened sign-out. Reasons each piece exists:
+    //   * 5-second Promise.race on supabase.auth.signOut: the SDK call
+    //     can hang if the cookie state is corrupted (one Session A symptom
+    //     reported was an indefinite "Logging out…" spinner).
+    //   * /auth/signout fetch (server-side cookie deletion): regardless of
+    //     whether the SDK call resolved or timed out, this guarantees the
+    //     auth cookies are gone before we reload.
+    //   * window.location.replace: forces a full browser reload, which
+    //     wipes any stuck React state. Beats router.replace, which can
+    //     itself hang on a bad client-side route transition.
+    //
+    // Tagged logs at every step so the next time something hangs, the
+    // stuck spot is obvious in the browser console.
+    console.info("[signOut] entry");
+
+    const SIGNOUT_TIMEOUT_MS = 5000;
+    const timeoutSentinel = Symbol("timeout");
+    const supabaseSignOut = supabase.auth.signOut().then(
+      (r) => r,
+      (err: unknown) => ({ error: err })
+    );
+    const timeout = new Promise<typeof timeoutSentinel>((resolve) => {
+      setTimeout(() => resolve(timeoutSentinel), SIGNOUT_TIMEOUT_MS);
+    });
+
+    const settled = await Promise.race([supabaseSignOut, timeout]);
+    if (settled === timeoutSentinel) {
+      console.warn(
+        "[signOut] supabase_signout_timeout after",
+        SIGNOUT_TIMEOUT_MS,
+        "ms"
+      );
+    } else {
+      console.info("[signOut] supabase_signout_resolved", {
+        hadError: !!(settled as { error?: unknown })?.error,
+      });
+    }
+
+    // Clear local state regardless. Setting status='anonymous' here means
+    // RequireAuth's effects fire on whatever page is currently rendered,
+    // even before the hard reload below — minimises the chance of a
+    // brief flicker of authenticated UI.
     setProfile(null);
     setStatus("anonymous");
-    router.replace("/login");
-  }, [router]);
+
+    // Server-side fallback: clear cookies via the dedicated /auth/signout
+    // route handler. Best-effort — never throw out of signOut.
+    try {
+      await fetch("/auth/signout", {
+        method: "POST",
+        credentials: "include",
+        // Keepalive lets the request continue past the hard reload below
+        // in browsers that support it (Chrome, Firefox).
+        keepalive: true,
+      });
+      console.info("[signOut] server_signout_done");
+    } catch (e) {
+      console.error("[signOut] server_signout_failed", e);
+    }
+
+    console.info("[signOut] forcing_reload");
+    // Hard reload past any stuck React state. Falls back to assigning the
+    // location if `replace` is unavailable for some browser oddity.
+    if (typeof window !== "undefined") {
+      try {
+        window.location.replace("/login");
+      } catch {
+        window.location.href = "/login";
+      }
+    }
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     const {

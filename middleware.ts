@@ -15,9 +15,13 @@ import { updateSession } from "@/lib/supabase/middleware";
 // ============================================================================
 
 /**
- * Routes that an anonymous visitor may load directly. /auth/confirm is
- * listed because Supabase Auth lands on it with no session cookie set
- * yet — the route handler itself sets the cookie via verifyOtp.
+ * Routes that an anonymous visitor may load directly.
+ *   /auth/confirm  - Supabase Auth lands here with no cookie set yet;
+ *                    the route handler itself sets the cookie via verifyOtp.
+ *   /auth/signout  - belt-and-braces server-side cookie cleanup. Must be
+ *                    reachable even when the caller's cookies are stale
+ *                    (i.e. Supabase's getUser() returns null) so the route
+ *                    can still issue delete-cookie instructions.
  *
  * /auth/callback was retired (route file deleted). If OAuth is reintroduced
  * later, add a fresh callback handler and re-add it here.
@@ -25,16 +29,19 @@ import { updateSession } from "@/lib/supabase/middleware";
 const ANON_ALLOWED = new Set<string>([
   "/login",
   "/auth/confirm",
+  "/auth/signout",
 ]);
 
 /**
  * Routes an authenticated user may visit DURING the MFA-pending window
  * (i.e. has_pending_otp() === true). Anything else funnels through
- * /auth/verify-otp until the second factor is consumed.
+ * /auth/verify-otp until the second factor is consumed. /auth/signout is
+ * here too so a half-authenticated session can always escape via sign-out.
  */
 const MFA_PENDING_ALLOWED = new Set<string>([
   "/auth/verify-otp",
   "/auth/confirm",
+  "/auth/signout",
 ]);
 
 export async function middleware(request: NextRequest) {
