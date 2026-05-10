@@ -15,13 +15,15 @@ import { updateSession } from "@/lib/supabase/middleware";
 // ============================================================================
 
 /**
- * Routes that an anonymous visitor may load directly. /auth/callback +
- * /auth/confirm are listed because Supabase Auth lands on them with no
- * session cookie set yet — the route handlers themselves set the cookie.
+ * Routes that an anonymous visitor may load directly. /auth/confirm is
+ * listed because Supabase Auth lands on it with no session cookie set
+ * yet — the route handler itself sets the cookie via verifyOtp.
+ *
+ * /auth/callback was retired (route file deleted). If OAuth is reintroduced
+ * later, add a fresh callback handler and re-add it here.
  */
 const ANON_ALLOWED = new Set<string>([
   "/login",
-  "/auth/callback",
   "/auth/confirm",
 ]);
 
@@ -32,7 +34,6 @@ const ANON_ALLOWED = new Set<string>([
  */
 const MFA_PENDING_ALLOWED = new Set<string>([
   "/auth/verify-otp",
-  "/auth/callback",
   "/auth/confirm",
 ]);
 

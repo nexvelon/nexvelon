@@ -2,6 +2,7 @@ import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { listVisibleProfilesAdmin } from "@/lib/api/users";
+import { getRecentAuditLog, type AuditEventWithProfile } from "@/lib/api/audit";
 import UsersView from "./UsersView";
 
 // Page reads the live profiles directory; never serve a stale snapshot.
@@ -19,7 +20,17 @@ export default async function UsersPage() {
 
   const realUsers = await listVisibleProfilesAdmin();
 
-  return <UsersView realUsers={realUsers} />;
+  // Best-effort audit-log fetch — RLS allows SELECT for is_admin(), which
+  // we just verified. Failures here shouldn't block the rest of the page;
+  // ActivityLogTab renders an empty state if the array comes back empty.
+  let auditEvents: AuditEventWithProfile[] = [];
+  try {
+    auditEvents = await getRecentAuditLog(100);
+  } catch (e) {
+    console.error("[users page] getRecentAuditLog failed:", e);
+  }
+
+  return <UsersView realUsers={realUsers} auditEvents={auditEvents} />;
 }
 
 function RestrictedCard() {

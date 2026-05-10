@@ -11,37 +11,31 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Resource } from "@/lib/permissions";
-import { quotes } from "@/lib/mock-data/quotes";
-import { projects } from "@/lib/mock-data/projects";
-import { clients } from "@/lib/mock-data/clients";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   resource: Resource;
-  /** Optional small ivory chip on the right of the row, e.g. open-quote count. */
+  /**
+   * Optional small ivory chip on the right of the row, e.g. open-quote count.
+   *
+   * Removed for now — the previous implementation read array lengths from
+   * `lib/mock-data/{quotes,projects,clients}` which produced numbers that
+   * had no relationship to the real DB (e.g. "20 clients" while the
+   * `clients` table held 2 rows). Sidebar.tsx still renders the chip iff
+   * `count !== undefined`, so simply omitting the field hides it. We'll
+   * re-introduce real counts module-by-module as each one ships its DB
+   * wiring.
+   */
   count?: number;
 }
 
-const openQuoteCount = quotes.filter(
-  (q) => q.status === "Draft" || q.status === "Sent"
-).length;
-
-const activeProjectCount = projects.filter(
-  (p) =>
-    p.status === "In Progress" ||
-    p.status === "Planning" ||
-    p.status === "Scheduled" ||
-    p.status === "Commissioning" ||
-    p.status === "At Risk"
-).length;
-
 export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, resource: "dashboard" },
-  { href: "/quotes", label: "Quotes", icon: FileText, resource: "quotes", count: openQuoteCount },
-  { href: "/projects", label: "Projects", icon: FolderKanban, resource: "projects", count: activeProjectCount },
-  { href: "/clients", label: "Clients & Sites", icon: Users, resource: "clients", count: clients.length },
+  { href: "/quotes", label: "Quotes", icon: FileText, resource: "quotes" },
+  { href: "/projects", label: "Projects", icon: FolderKanban, resource: "projects" },
+  { href: "/clients", label: "Clients & Sites", icon: Users, resource: "clients" },
   { href: "/inventory", label: "Inventory", icon: Boxes, resource: "inventory" },
   { href: "/scheduling", label: "Scheduling", icon: Calendar, resource: "scheduling" },
   { href: "/financials", label: "Financials", icon: Receipt, resource: "financials" },

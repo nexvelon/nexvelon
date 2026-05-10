@@ -37,13 +37,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { users } from "@/lib/mock-data/users";
-import { auditLog } from "@/lib/mock-data/audit-log";
 import { subcontractors } from "@/lib/mock-data/subcontractors";
+import type { AuditEventWithProfile } from "@/lib/api/audit";
 import {
   MODULE_ORDER,
   PERMISSION_CATALOG,
@@ -303,10 +302,14 @@ function UserRowActions({ profile }: { profile: DbProfile }) {
       >
         <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">
+      <DropdownMenuContent align="end" className="w-56 p-0">
+        {/* Plain div instead of <DropdownMenuLabel>. The Base UI primitive
+            wraps Menu.GroupLabel which v1.4.x throws on outside a Menu.Group;
+            using a div sidesteps the constraint entirely (same fix as the
+            AvatarMenu rewrite in 0f51609). */}
+        <div className="text-muted-foreground truncate px-3 py-2 text-[11px] uppercase tracking-wider">
           {profile.email}
-        </DropdownMenuLabel>
+        </div>
         <DropdownMenuSeparator />
         {(profile.status === "Active" || profile.status === "Invited") && (
           <DropdownMenuItem
@@ -494,52 +497,108 @@ export function PermissionsMatrixTab() {
 // ACTIVITY LOG
 // ────────────────────────────────────────────────────────────────────────────
 
-export function ActivityLogTab() {
+// Wired to real `auth_audit_log` rows fetched server-side in users/page.tsx.
+// Each event is one of the AuthAuditEvent vocabulary values (login_success,
+// login_failed, mfa_challenge_*, password_changed, user_*, session_revoked,
+// email_changed). RLS already restricts SELECT to is_admin(); the page
+// itself also gates on Admin, so reaching this tab without permission is
+// not possible from inside the app.
+
+interface ActivityLogTabProps {
+  events: AuditEventWithProfile[];
+}
+
+const EVENT_TONE: Record<string, "success" | "warn" | "danger" | "neutral"> = {
+  login_success: "success",
+  mfa_challenge_verified: "success",
+  password_changed: "success",
+  user_invited: "neutral",
+  user_reactivated: "success",
+  email_changed: "neutral",
+  mfa_challenge_sent: "neutral",
+  session_revoked: "warn",
+  user_suspended: "warn",
+  user_terminated: "danger",
+  login_failed: "danger",
+  mfa_challenge_failed: "danger",
+};
+
+function eventLabel(event: string): string {
+  // "mfa_challenge_verified" → "Mfa Challenge Verified"
+  return event
+    .split("_")
+    .map((w) => w[0]?.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function auditEventDisplayName(
+  profile: AuditEventWithProfile["profile"],
+  fallbackEmail: string | null
+): string {
+  if (profile) {
+    const first = profile.first_name?.trim() ?? "";
+    const last = profile.last_name?.trim() ?? "";
+    const display = profile.display_name?.trim() ?? "";
+    const composed = [first, last].filter(Boolean).join(" ");
+    if (display) return display;
+    if (composed) return composed;
+    return profile.email;
+  }
+  return fallbackEmail ?? "—";
+}
+
+export function ActivityLogTab({ events }: ActivityLogTabProps) {
   const [search, setSearch] = useState("");
-  const [moduleFilter, setModuleFilter] = useState<string>("all");
-  const userById = new Map(users.map((u) => [u.id, u]));
+  const [eventFilter, setEventFilter] = useState<string>("all");
+
+  const distinctEvents = useMemo(
+    () => Array.from(new Set(events.map((e) => e.event))).sort(),
+    [events]
+  );
 
   const filtered = useMemo(() => {
-    return auditLog.filter((e) => {
-      if (moduleFilter !== "all" && e.module !== moduleFilter) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        const u = userById.get(e.userId);
-        if (
-          !e.action.toLowerCase().includes(q) &&
-          !e.target.toLowerCase().includes(q) &&
-          !(u?.name.toLowerCase().includes(q) ?? false)
-        )
-          return false;
-      }
-      return true;
+    const q = search.trim().toLowerCase();
+    return events.filter((e) => {
+      if (eventFilter !== "all" && e.event !== eventFilter) return false;
+      if (!q) return true;
+      const name = auditEventDisplayName(e.profile, e.email).toLowerCase();
+      return (
+        e.event.toLowerCase().includes(q) ||
+        name.includes(q) ||
+        (e.email?.toLowerCase().includes(q) ?? false) ||
+        (e.ip?.toLowerCase().includes(q) ?? false)
+      );
     });
-  }, [search, moduleFilter, userById]);
+  }, [events, search, eventFilter]);
 
   return (
     <div className="space-y-3">
       <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] p-3 shadow-sm">
         <Input
-          placeholder="Search action, target, or user…"
+          placeholder="Search event, name, email, IP…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={moduleFilter} onValueChange={(v) => setModuleFilter(v ?? "all")}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Module" />
+        <Select
+          value={eventFilter}
+          onValueChange={(v) => setEventFilter(v ?? "all")}
+        >
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="Event" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All modules</SelectItem>
-            {["Quotes", "Projects", "Inventory", "Scheduling", "Financials", "Users", "Settings", "Auth"].map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
+            <SelectItem value="all">All events</SelectItem>
+            {distinctEvents.map((ev) => (
+              <SelectItem key={ev} value={ev}>
+                {eventLabel(ev)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <span className="text-muted-foreground text-xs ml-auto">
-          {filtered.length} of {auditLog.length} entries
+          {filtered.length} of {events.length}{" "}
+          {events.length === 1 ? "entry" : "entries"}
         </span>
       </div>
 
@@ -549,40 +608,70 @@ export function ActivityLogTab() {
             <TableRow>
               <TableHead className="text-[11px] uppercase">Timestamp</TableHead>
               <TableHead className="text-[11px] uppercase">User</TableHead>
-              <TableHead className="text-[11px] uppercase">Module</TableHead>
-              <TableHead className="text-[11px] uppercase">Action</TableHead>
-              <TableHead className="text-[11px] uppercase">Target</TableHead>
+              <TableHead className="text-[11px] uppercase">Event</TableHead>
               <TableHead className="text-[11px] uppercase">IP</TableHead>
-              <TableHead className="text-[11px] uppercase">Result</TableHead>
+              <TableHead className="text-[11px] uppercase">Outcome</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.slice(0, 100).map((e) => {
-              const u = userById.get(e.userId);
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-muted-foreground py-12 text-center text-xs"
+                >
+                  {events.length === 0
+                    ? "No audit events recorded yet."
+                    : "No events match the current filters."}
+                </TableCell>
+              </TableRow>
+            )}
+            {filtered.map((e) => {
+              const tone = EVENT_TONE[e.event] ?? "neutral";
+              const outcomeCls =
+                tone === "success"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : tone === "warn"
+                  ? "bg-amber-50 text-amber-800"
+                  : tone === "danger"
+                  ? "bg-red-50 text-red-700"
+                  : "bg-zinc-100 text-zinc-700";
               return (
                 <TableRow key={e.id}>
-                  <TableCell className="text-muted-foreground text-[11px] tabular-nums">
-                    {format(parseISO(e.timestamp), "MMM d, HH:mm:ss")}
+                  <TableCell className="text-muted-foreground text-[11px] tabular-nums whitespace-nowrap">
+                    {format(parseISO(e.created_at), "MMM d, HH:mm:ss")}
                   </TableCell>
-                  <TableCell className="text-xs">{u?.name ?? "—"}</TableCell>
-                  <TableCell className="text-xs">{e.module}</TableCell>
-                  <TableCell className="text-brand-charcoal text-xs">{e.action}</TableCell>
-                  <TableCell className="text-muted-foreground max-w-[260px] truncate text-[11px]">
-                    {e.target}
+                  <TableCell className="text-xs">
+                    <div className="text-brand-charcoal font-medium">
+                      {auditEventDisplayName(e.profile, e.email)}
+                    </div>
+                    {e.email &&
+                      auditEventDisplayName(e.profile, null) !== e.email && (
+                        <div className="text-muted-foreground text-[10px]">
+                          {e.email}
+                        </div>
+                      )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-[11px]">{e.ipAddress}</TableCell>
+                  <TableCell className="text-brand-charcoal text-xs">
+                    {eventLabel(e.event)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-[11px]">
+                    {e.ip ?? "—"}
+                  </TableCell>
                   <TableCell>
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                        e.result === "Success"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : e.result === "Denied"
-                            ? "bg-red-50 text-red-700"
-                            : "bg-amber-50 text-amber-800"
+                        outcomeCls
                       )}
                     >
-                      {e.result}
+                      {tone === "success"
+                        ? "Success"
+                        : tone === "warn"
+                        ? "Warning"
+                        : tone === "danger"
+                        ? "Failed"
+                        : "Info"}
                     </span>
                   </TableCell>
                 </TableRow>

@@ -109,32 +109,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Initial hydration + auth state subscription.
+  //
+  // Hardened in this commit:
+  //   * Whole getUser → fetchProfile chain wrapped in try/catch/finally so
+  //     the finally block ALWAYS resolves status to 'authenticated' or
+  //     'anonymous'. Previously a thrown getUser (network blip, expired
+  //     refresh token edge case) could leave status pinned at 'loading'
+  //     forever, which RequireAuth then rendered as a permanent
+  //     "Verifying session…" spinner.
+  //   * Structured tagged logs at every state transition so a hang is
+  //     diagnosable from the browser console.
+  //   * onAuthStateChange handler also wraps profile fetch in try/catch
+  //     and explicitly forces 'anonymous' on SIGNED_OUT (in case the
+  //     listener races the initial getUser and would otherwise leave
+  //     state inconsistent).
   useEffect(() => {
     let cancelled = false;
 
+    console.info("[AuthProvider] mounting");
+
     (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (cancelled || !mountedRef.current) return;
+      let nextStatus: AuthStatus = "anonymous";
+      let nextProfile: DbProfile | null = null;
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (cancelled || !mountedRef.current) return;
+        const u = data?.user ?? null;
+        console.info("[AuthProvider] getUser resolved", {
+          hasUser: !!u,
+          error: error?.message ?? null,
+        });
 
-      if (!user) {
-        setProfile(null);
-        setStatus("anonymous");
-        return;
+        if (!u) {
+          nextStatus = "anonymous";
+          return;
+        }
+
+        const p = await fetchProfile(u.id);
+        if (cancelled || !mountedRef.current) return;
+        console.info("[AuthProvider] fetchProfile resolved", {
+          hasProfile: !!p,
+        });
+
+        nextProfile = p;
+        nextStatus = p ? "authenticated" : "anonymous";
+      } catch (e) {
+        console.error("[AuthProvider] init failed; defaulting to anonymous", e);
+        nextStatus = "anonymous";
+        nextProfile = null;
+      } finally {
+        if (cancelled || !mountedRef.current) return;
+        setProfile(nextProfile);
+        setStatus(nextStatus);
+        console.info("[AuthProvider] status set", { status: nextStatus });
       }
-
-      const p = await fetchProfile(user.id);
-      if (cancelled || !mountedRef.current) return;
-
-      setProfile(p);
-      setStatus(p ? "authenticated" : "anonymous");
     })();
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mountedRef.current) return;
+        console.info("[AuthProvider] auth_state_changed", {
+          event,
+          hasSession: !!session?.user,
+        });
 
+        // Belt-and-braces: any "you're signed out" signal forces a clean
+        // anonymous state, even if the initial getUser was racing this.
         if (event === "SIGNED_OUT" || !session?.user) {
           setProfile(null);
           setStatus("anonymous");
@@ -143,10 +183,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED — refetch profile so
         // role / status changes propagate immediately.
-        const p = await fetchProfile(session.user.id);
-        if (!mountedRef.current) return;
-        setProfile(p);
-        setStatus(p ? "authenticated" : "anonymous");
+        try {
+          const p = await fetchProfile(session.user.id);
+          if (!mountedRef.current) return;
+          setProfile(p);
+          setStatus(p ? "authenticated" : "anonymous");
+        } catch (e) {
+          console.error(
+            "[AuthProvider] fetchProfile during auth_state_changed failed",
+            e
+          );
+          if (!mountedRef.current) return;
+          setProfile(null);
+          setStatus("anonymous");
+        }
       }
     );
 

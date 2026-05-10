@@ -78,7 +78,13 @@ export async function inviteUserAdmin(payload: InviteUserPayload): Promise<{
   const admin = createAdminClient();
   const siteUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexvelonglobal.com";
-  const redirectTo = `${siteUrl}/auth/callback?next=/auth/set-password`;
+  // /auth/callback was retired alongside the regular OAuth-style flow —
+  // invite emails now go through /auth/confirm via the token_hash
+  // parameter Supabase fills in from the email template. The redirectTo
+  // here is what gets validated against the project's allowlisted
+  // redirect URLs and exposed to the email template; using /auth/confirm
+  // keeps the allowlist tight.
+  const redirectTo = `${siteUrl}/auth/confirm?next=/auth/set-password`;
 
   const { data, error } = await admin.auth.admin.inviteUserByEmail(
     payload.email,

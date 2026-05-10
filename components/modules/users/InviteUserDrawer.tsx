@@ -29,7 +29,7 @@ import type { DbRole } from "@/lib/types/database";
 // Calls inviteUserAction → Supabase Auth Admin API → Resend email lands at
 // the invitee. Trigger creates the profiles row with status='Invited' and
 // the role we picked here. Their first sign-in flows through the magic
-// link → /auth/callback → /auth/set-password.
+// link → /auth/confirm → /auth/set-password.
 //
 // Role picker: only Admin + SalesRep are wired this session. The other
 // nine roles are visible-but-disabled with "Session B" hints, so admins

@@ -14,6 +14,7 @@ import { InviteUserDrawer } from "@/components/modules/users/InviteUserDrawer";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import type { DbProfile } from "@/lib/types/database";
+import type { AuditEventWithProfile } from "@/lib/api/audit";
 
 const TABS = [
   { key: "users", label: "Users" },
@@ -28,9 +29,10 @@ type TabKey = (typeof TABS)[number]["key"];
 
 interface UsersViewProps {
   realUsers: DbProfile[];
+  auditEvents: AuditEventWithProfile[];
 }
 
-export default function UsersView({ realUsers }: UsersViewProps) {
+export default function UsersView({ realUsers, auditEvents }: UsersViewProps) {
   const { user } = useAuth();
   const [tab, setTab] = useState<TabKey>("users");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -104,7 +106,7 @@ export default function UsersView({ realUsers }: UsersViewProps) {
       )}
       {tab === "roles" && <RolesTab />}
       {tab === "matrix" && <PermissionsMatrixTab />}
-      {tab === "log" && <ActivityLogTab />}
+      {tab === "log" && <ActivityLogTab events={auditEvents} />}
       {tab === "subs" && <SubcontractorsTab />}
       {tab === "invites" && <InvitationsTab realUsers={realUsers} />}
 

@@ -41,10 +41,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // Surface a one-shot error from /auth/callback redirects (expired link, etc.)
+  // Surface a one-shot error from /auth/confirm or RequireAuth redirects.
+  // Known short error codes (e.g. session_check_timeout) get a friendly
+  // message; anything else is shown verbatim (already a friendly string
+  // when emitted from /auth/confirm).
   useEffect(() => {
     const e = searchParams.get("error");
-    if (e) setError(e);
+    if (!e) return;
+    if (e === "session_check_timeout") {
+      setError(
+        "We couldn't verify your session. Please sign in again."
+      );
+    } else {
+      setError(e);
+    }
   }, [searchParams]);
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -49,7 +49,7 @@ export async function setPasswordAction(
 
   const supabase = await createClient();
 
-  // Caller must already have a session (set by the /auth/callback exchange).
+  // Caller must already have a session (set by the /auth/confirm exchange).
   const profile = await getCurrentProfile();
   if (!profile) {
     return {
