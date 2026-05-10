@@ -53,6 +53,7 @@ export async function POST(): Promise<NextResponse> {
 }
 
 export async function GET(): Promise<never> {
+  console.info("[/auth/signout] entry");
   // Fast path — synchronously clear every `sb-*` cookie via
   // cookieStore.set with maxAge=0. The Set-Cookie headers ride the
   // redirect() response, so the browser deletes them before sending the
@@ -69,6 +70,8 @@ export async function GET(): Promise<never> {
       cleared++;
     }
   }
-  console.info("[signout route] GET cookies_cleared", { cleared });
-  redirect("/login?signout=ok");
+  console.info("[/auth/signout] cookies_cleared", { cleared });
+  const dest = "/login?signout=ok";
+  console.info("[/auth/signout] redirecting_to", { url: dest });
+  redirect(dest);
 }

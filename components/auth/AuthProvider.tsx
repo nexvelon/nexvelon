@@ -77,6 +77,52 @@ function profileToUser(profile: DbProfile): AuthUser {
   };
 }
 
+// ----------------------------------------------------------------------------
+// "Signing out" flag (sessionStorage). Set when AuthProvider.signOut starts,
+// cleared when /login mounts with ?signout=ok. Both RequireAuth's
+// anonymous-redirect effect AND AuthProvider's onAuthStateChange handler
+// check this flag and SKIP their reactive redirects when it's set.
+//
+// Why: signOut() sets status='anonymous' synchronously so any rendered tree
+// sees the change. That state update used to make RequireAuth's
+// useEffect fire `window.location.replace('/login')` BEFORE the browser
+// actually executed our `window.location.replace('/auth/signout')` —
+// last `replace` in a task wins, so we'd land on plain `/login` (no
+// ?signout=ok hint, middleware sees still-valid cookies, bounces to
+// /dashboard, 5–10s of "Verifying session…" hang). The flag short-
+// circuits that race so the navigation we queued goes through.
+// ----------------------------------------------------------------------------
+
+const SIGNING_OUT_KEY = "nx_signing_out";
+
+export function isSigningOut(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(SIGNING_OUT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSigningOut(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SIGNING_OUT_KEY, "1");
+  } catch {
+    // sessionStorage unavailable — race window without the flag, but the
+    // primary fix (navigation to /auth/signout) still works often enough.
+  }
+}
+
+function clearSigningOut(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(SIGNING_OUT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 async function fetchProfile(userId: string): Promise<DbProfile | null> {
   const { data, error } = await supabase
     .from("profiles")
@@ -167,6 +213,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.info("[AuthProvider] skip_initial_check_signout");
       setProfile(null);
       setStatus("anonymous");
+      console.info("[AuthProvider] status set", {
+        status: "anonymous",
+        reason: "fast_path_signout",
+      });
+
+      // Sign-out flow has landed on /login — clear the "signing out"
+      // flag so RequireAuth's anonymous-redirect effect can resume normal
+      // behaviour on any subsequent unauthenticated navigation.
+      clearSigningOut();
 
       // Strip ?signout=ok so a refresh doesn't keep showing the fast-path
       // (which would re-skip the check and miss any future state change).
@@ -304,6 +359,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           hasSession: !!session?.user,
         });
 
+        // Skip SIGNED_OUT during sign-out flow — the explicit signOut()
+        // path is already navigating to /auth/signout, and a redundant
+        // setStatus("anonymous") here would make RequireAuth fire its
+        // own hardReload("/login") and clobber our navigation target.
+        if (
+          (event === "SIGNED_OUT" || !session?.user) &&
+          isSigningOut()
+        ) {
+          console.info("[AuthProvider] auth_state_changed_skipped_signing_out");
+          return;
+        }
+
         // Belt-and-braces: any "you're signed out" signal forces a clean
         // anonymous state, even if the initial getUser was racing this.
         if (event === "SIGNED_OUT" || !session?.user) {
@@ -371,11 +438,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // bounce us anywhere.
     console.info("[signOut] entry");
 
+    // Mark "signing out" BEFORE state changes so the reactive effects in
+    // RequireAuth + onAuthStateChange see the flag and skip their own
+    // redirects. Without this, setStatus("anonymous") below would race
+    // our window.location.replace("/auth/signout") and overwrite it
+    // with a window.location.replace("/login") (no ?signout=ok hint).
+    markSigningOut();
+
     setProfile(null);
     setStatus("anonymous");
     console.info("[signOut] state_cleared");
 
-    console.info("[signOut] redirecting");
+    console.info("[signOut] redirecting", { dest: "/auth/signout" });
     if (typeof window !== "undefined") {
       try {
         window.location.replace("/auth/signout");
@@ -395,7 +469,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (err: unknown) =>
         console.warn("[signOut] background_signout_failed server_route", err)
     );
-    void supabase.auth.signOut().then(
+    // scope: 'local' — clears in-memory + storage tokens only. Skips the
+    // POST to https://<project>.supabase.co/auth/v1/logout that the
+    // default scope: 'global' attempts and that was failing CORS in the
+    // browser (no Access-Control-Allow-Origin from Supabase Auth for
+    // that endpoint when called from app.nexvelonglobal.com). The
+    // server-side POST above + /auth/signout GET handle the real cookie
+    // teardown; refresh-token revocation happens server-to-server via
+    // the POST handler's await supabase.auth.signOut().
+    void supabase.auth.signOut({ scope: "local" }).then(
       () => console.info("[signOut] background_signout_complete client_sdk"),
       (err: unknown) =>
         console.warn("[signOut] background_signout_failed client_sdk", err)

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { useAuth } from "./AuthProvider";
+import { useAuth, isSigningOut } from "./AuthProvider";
 
 // ============================================================================
 // RequireAuth / RedirectIfAuthed
@@ -93,6 +93,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       return;
     }
     if (status === "anonymous") {
+      // Skip when sign-out is in flight. The signOut() flow queued a
+      // window.location.replace("/auth/signout") which clears cookies
+      // and redirects to /login?signout=ok atomically. Firing a
+      // hardReload("/login") here would lose the hint and race the
+      // navigation target — exactly the bug fixed in this commit.
+      if (isSigningOut()) {
+        console.info("[RequireAuth] skip_redirect_signing_out");
+        return;
+      }
       hardReload("/login", "anonymous");
     }
   }, [status, timedOut]);
