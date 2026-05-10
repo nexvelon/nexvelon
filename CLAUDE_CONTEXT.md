@@ -6,6 +6,108 @@
 
 ---
 
+## 0. Status as of 2026-05-10 (Session A wrap)
+
+> **Read `NEXVELON_SESSION_A_HANDOFF.md` first** for the full triage notes
+> on the two open bugs and the file-by-file state. This section is the
+> elevator summary; the handoff has the substance.
+
+### Where we are right now
+
+- **Latest commit:** `c527aa6` — "Unify bootstrap script invite + magic-link
+  emails under shared parchment design".
+- **Build:** clean. 0 TS errors. 5 pre-existing ESLint warnings in
+  `components/modules/financials/Tabs.tsx` (UI_ONLY, untouchable). Zero
+  new warnings introduced by Session A.
+- **Deploy:** https://app.nexvelonglobal.com auto-deploys from `main` on
+  every push. Last verified-live commit `deacabc`. `c527aa6` is a
+  CLI-only change (no Next build needed).
+- **DB rows right now:** `profiles`=0, `auth_otp`=0, `auth_audit_log`=0,
+  `clients`=3, `sites`=2, `contacts`=1. The user deleted themselves
+  mid-test; **no admin account exists this minute**, so the next step
+  in any Session B effort is to bootstrap fresh.
+
+### What landed in Session A (Phases 1–6 + post-acceptance fixes)
+
+1. **Phase 1** — Migrations 0002 + 0003 added: `profiles`, `auth_otp`,
+   `auth_audit_log`, `is_admin()`, `guard_profile_updates()`,
+   `handle_new_user()`, `has_pending_otp()`. Tightened
+   clients/sites/contacts RLS.
+2. **Phase 2** — Supabase Dashboard configured: invite-only signup,
+   email provider on, all OAuth off, MFA off (we roll our own),
+   custom Resend SMTP, branded email templates, URL allowlist + rate
+   limits.
+3. **Phase 3** — Real Supabase Auth wired: middleware, AuthProvider,
+   login + verify-otp + set-password + auth/confirm + auth/callback
+   pages, `lib/auth/*` server-only helpers, `lib/api/clients.ts`
+   swapped from admin-bypass to cookie-aware (RLS enforced).
+4. **Phase 4** — `/users` invite drawer (Admin-only, calls
+   `inviteUserByEmail`), per-row Suspend/Reactivate/Terminate actions
+   that revoke sessions + write audit-log rows.
+5. **Phase 5** — `scripts/bootstrap-admin.ts`. Now uses
+   deterministic `auth.admin.listUsers` existence check (replaces the
+   regex-on-error-text heuristic) and one shared parchment
+   `buildEmailHtml({ kind, confirmUrl, recipientEmail })` for both
+   invite + magic-link kinds; only six copy slots in `COPY[kind]`
+   differ. Verbose `[bootstrap]` structured logs.
+6. **Phase 6** — Demo cleanup: `lib/demo-accounts.ts` deleted,
+   `RoleSwitcher` deleted, demo env flags pruned, Holloway/ULC/ESA
+   branding scrubbed.
+7. **Post-acceptance fixes** (commits `0f51609` → `deacabc`):
+   - Avatar dropdown crash (Base UI #31 from `Menu.GroupLabel`
+     without `Menu.Group`) — fixed by replacing with plain `<div>`.
+   - OTP verify hang — fixed via `redirect()` from
+     `next/navigation` so cookie writes ride atomically with the
+     redirect response. Plus 30s client timeout fallback.
+   - Search bar in TopBar removed (latent crash via
+     `GlobalCommandPalette`).
+   - Sidebar count chips removed (were reading mock data).
+   - Activity Log tab in `/users` now renders real `auth_audit_log`
+     rows via new `lib/api/audit.ts`.
+   - `/auth/callback` deleted (no flow uses it; `/auth/confirm` is
+     canonical).
+   - `/auth/signout` route added with belt-and-braces server-side
+     cookie clear.
+   - Set-password now ALWAYS funnels through OTP (closes the
+     half-authenticated session bug).
+   - Sign-out hardened with 5s `Promise.race` + `window.location.replace`
+     for hard reload past stuck React state.
+
+### Open bugs blocking acceptance
+
+- **Bug A — Invite email reportedly not the parchment design.** May be
+  stale (user tested before `c527aa6`). Re-test required. See
+  `NEXVELON_SESSION_A_HANDOFF.md` §2.
+- **Bug B — "We can't find your profile" after set-password.** Most
+  likely the `on_auth_user_created` trigger isn't firing. See handoff
+  §2 for diagnostic SQL to run in Supabase SQL Editor.
+
+### Constraints that survived Session A
+
+- The 7 UI-only modules (Dashboard, Quotes, Projects, Inventory,
+  Scheduling, Financials, Settings) **stay as decorative shells**.
+  Migrate one at a time in priority order: Quotes → Projects →
+  Inventory → Vendors → Invoices → Subcontractors → Financials →
+  Scheduling.
+- **No regulatory claims.** Do NOT reintroduce "ULC Listed", "ESA
+  Licensed", or "Holloway Security Integration Group" anywhere.
+- **No demolition.** Don't delete UI-only modules or
+  `lib/mock-data/*` files. Each gets retired one-by-one as its
+  module is wired.
+- **Migration cadence:** every new module ships its own
+  `00NN_<module>_schema.sql` + `lib/api/<module>.ts` + server
+  actions + page rewrite (server component fetch, client view) —
+  mirroring the clients module reference.
+
+### Detailed history sections — read below
+
+§1–§16 of this document are the original handoff narrative kept for
+historical context. The single most important insertion since they
+were written is `NEXVELON_AUDIT.md` (read-only audit done early in
+Session A) and `NEXVELON_SESSION_A_HANDOFF.md` (this wrap-up).
+
+---
+
 ## 1. Project Overview
 
 **Nexvelon** is a private quote-to-cash workspace for **security-systems
