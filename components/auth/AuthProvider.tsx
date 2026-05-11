@@ -53,6 +53,18 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   /** Forces a refetch of the profile row — used after self-edits. */
   refreshProfile: () => Promise<void>;
+  /**
+   * Seed the provider with a server-fetched profile, before the
+   * client-side getUser+fetchProfile chain would run. Used by
+   * SessionSeededShell wrapping the (app) route group — eliminates the
+   * "Verifying session…" placeholder by handing the auth state down
+   * from the cookie-aware server layout that already validated it.
+   *
+   * Also flips an internal `seededRef` flag so the mount-time IIFE
+   * (which would otherwise duplicate the same network calls) skips
+   * itself.
+   */
+  seedSession: (profile: DbProfile) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -151,6 +163,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Tracks whether a parent (SessionSeededShell from (app)/layout.tsx) has
+  // already provided the profile via seedSession. When true, the mount-time
+  // useEffect below skips its getUser+fetchProfile chain entirely — the
+  // server already did that work and we don't need a duplicate round-trip.
+  // Critical for sub-2s dashboard loads when Supabase Auth latency spikes.
+  const seededRef = useRef(false);
+
+  const seedSession = useCallback((nextProfile: DbProfile) => {
+    seededRef.current = true;
+    setProfile(nextProfile);
+    setStatus("authenticated");
+    console.info("[AuthProvider] seed_session", {
+      user_id: nextProfile.id,
+    });
+  }, []);
+
   // Initial hydration + auth state subscription.
   //
   // Hardened in this commit:
@@ -202,7 +230,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.info("[AuthProvider] mounting", {
       fastPathSignin,
       fastPathSignout,
+      preSeeded: seededRef.current,
     });
+
+    // Server-seed fast path: SessionSeededShell (rendered by
+    // (app)/layout.tsx as an async server component) already called
+    // seedSession with a server-fetched profile. The DB round-trip to
+    // /auth/v1/user + /rest/v1/profiles already happened server-side
+    // — duplicating it client-side would just give us a "Verifying
+    // session…" placeholder for whatever Supabase Auth's current
+    // latency is (1–60s on free tier). Skip the IIFE entirely; still
+    // set up the auth-state-change subscription so cross-tab
+    // SIGNED_OUT events propagate.
+    if (seededRef.current) {
+      console.info("[AuthProvider] mount_skipped_pre_seeded");
+      const { data: subscription } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!mountedRef.current) return;
+          console.info("[AuthProvider] auth_state_changed", {
+            event,
+            hasSession: !!session?.user,
+            seeded: true,
+          });
+
+          // Ignore INITIAL_SESSION entirely when seeded. Supabase fires
+          // it synchronously on subscription with whatever's in the
+          // client SDK's storage at that moment — which can be null for
+          // a brief window after a hard navigation while
+          // @supabase/ssr's browser cookie reader catches up. Trusting
+          // that null would un-seed us back to "anonymous" and trigger
+          // RequireAuth's redirect-to-/login, exactly the loop this
+          // server-side seed is designed to eliminate.
+          if (event === "INITIAL_SESSION") {
+            return;
+          }
+
+          if (
+            (event === "SIGNED_OUT" || !session?.user) &&
+            isSigningOut()
+          ) {
+            console.info(
+              "[AuthProvider] auth_state_changed_skipped_signing_out"
+            );
+            return;
+          }
+          if (event === "SIGNED_OUT" || !session?.user) {
+            // Explicit sign-out (this tab or cross-tab broadcast) →
+            // flip to anonymous. RequireAuth's effect will then
+            // hardReload to /login.
+            setProfile(null);
+            setStatus("anonymous");
+            return;
+          }
+          // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED — refetch profile
+          // so role/status changes propagate within the same tab.
+          try {
+            const p = await fetchProfile(session.user.id);
+            if (!mountedRef.current) return;
+            setProfile(p);
+            setStatus(p ? "authenticated" : "anonymous");
+          } catch (e) {
+            console.error(
+              "[AuthProvider] fetchProfile during auth_state_changed failed",
+              e
+            );
+            if (!mountedRef.current) return;
+            setProfile(null);
+            setStatus("anonymous");
+          }
+        }
+      );
+      return () => {
+        cancelled = true;
+        subscription.subscription.unsubscribe();
+      };
+    }
 
     // Sign-out fast path: we arrived here via /auth/signout's redirect,
     // which already cleared the auth cookies server-side. Running
@@ -511,8 +613,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: status === "authenticated",
       signOut,
       refreshProfile,
+      seedSession,
     }),
-    [user, profile, status, signOut, refreshProfile]
+    [user, profile, status, signOut, refreshProfile, seedSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
