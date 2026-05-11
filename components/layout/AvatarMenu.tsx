@@ -1,7 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { useState, useTransition } from "react";
+import { KeyRound, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -10,28 +11,35 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ROLE_LABELS } from "@/lib/permissions";
 
 // ============================================================================
-// Avatar dropdown — minimal post-Phase 6 version.
+// Avatar dropdown — Phase 6 minimal + Session B Priority 2 addition.
 //
-// Previous incarnations included Profile / Settings / Switch Workspace /
-// Help links. Those routes don't all exist (or, for Profile, point at the
-// directory rather than a self-edit page) and were causing dead-end clicks.
-// They've been removed — we'll add real items back as the corresponding
-// pages ship.
+// Items (top to bottom):
+//   - profile header (name / email / role badge)
+//   - Change password   → /settings/security/change-password
+//   - Sign out          → AuthProvider.signOut()
 //
-// We also stopped using <DropdownMenuLabel>. That primitive wraps
-// @base-ui/react/menu's Menu.GroupLabel, which v1.4.x throws on when it
-// isn't nested inside a Menu.Group. Plain divs inside the Popup avoid the
-// constraint entirely and give us a freer hand with layout for the role
-// badge.
+// "Change password" is rendered as a <Link> styled with cn() +
+// buttonVariants(). NOT wrapped in DropdownMenuItem — base-ui's Menu.Item
+// renders as a <button> and we can't nest an <a> inside it without
+// asChild, which @base-ui/react doesn't support. The Link sits inside
+// DropdownMenuContent as a sibling of the Sign-out item and visually
+// matches the menu-item rhythm.
+//
+// DropdownMenu is controlled (open state) so the Link's onClick can
+// close the menu before navigation — otherwise the menu would stay
+// open after route change since the AppShell layout doesn't remount.
 // ============================================================================
 
 export function AvatarMenu({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const [pending, startTransition] = useTransition();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSignOut = () => {
     if (pending) return;
@@ -50,7 +58,7 @@ export function AvatarMenu({ children }: { children: React.ReactNode }) {
   const roleLabel = role ? ROLE_LABELS[role] : null;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger
         className="hover:ring-brand-gold/40 inline-flex items-center rounded-full transition hover:ring-2"
         aria-label="Open user menu"
@@ -85,6 +93,19 @@ export function AvatarMenu({ children }: { children: React.ReactNode }) {
           )}
         </div>
         <DropdownMenuSeparator />
+        <div className="p-1">
+          <Link
+            href="/settings/security/change-password"
+            onClick={() => setMenuOpen(false)}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "w-full justify-start gap-1.5 px-1.5 text-sm font-normal"
+            )}
+          >
+            <KeyRound className="mr-2 h-3.5 w-3.5" />
+            Change password
+          </Link>
+        </div>
         <DropdownMenuItem
           onClick={handleSignOut}
           disabled={pending}
