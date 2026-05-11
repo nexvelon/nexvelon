@@ -90,6 +90,13 @@ const JOB_TEMPLATES: Array<{
 ];
 
 export function buildJobs(): ScheduleJob[] {
+  // Pre-Quotes cleanup (2026-05-11): if there's no project source data,
+  // there are no jobs to derive. Without this guard, the loop below hits
+  // `projects[NaN]` (because `% 0` is NaN) and crashes /scheduling with
+  // "Cannot read properties of undefined (reading 'systemTypes')". Once
+  // the projects module wires to Supabase, this guard becomes a no-op.
+  if (projects.length === 0) return [];
+
   const ws = weekStart();
   const out: ScheduleJob[] = [];
   const allTechs = [...TECH_IDS, ...PM_IDS, ...SUB_IDS];
@@ -151,43 +158,11 @@ export interface UnassignedJob {
 }
 
 export function buildUnassigned(): UnassignedJob[] {
-  const ws = weekStart();
-  const out: UnassignedJob[] = [];
-  const queue: Array<{
-    type: JobType;
-    duration: number;
-    summary: string;
-    priority: ScheduleJob["priority"];
-    skills: string[];
-    clientId: string;
-    siteId?: string;
-    projectId?: string;
-    daysOut: number;
-  }> = [
-    { type: "Service", duration: 120, summary: "Camera offline at south loading bay", priority: "High", skills: ["Hanwha Wisenet"], clientId: "c-007", siteId: "s-c-007-2", projectId: "pr-007", daysOut: 2 },
-    { type: "Install", duration: 360, summary: "New employee badge enrollment & reader add", priority: "Normal", skills: ["Kantech certified"], clientId: "c-001", siteId: "s-c-001-1", projectId: "pr-001", daysOut: 4 },
-    { type: "Inspection", duration: 180, summary: "ULC annual fire inspection — substation 04", priority: "Normal", skills: ["CFAA certification", "ULC monitoring"], clientId: "c-017", siteId: "s-c-017-1", projectId: "pr-015", daysOut: 6 },
-    { type: "Emergency", duration: 90, summary: "Garage barrier arm down, no entry", priority: "Urgent", skills: ["Hartmann"], clientId: "c-008", siteId: "s-c-008-1", projectId: "pr-008", daysOut: 0 },
-    { type: "Service", duration: 60, summary: "Add 8 new credentials to tenant block", priority: "Low", skills: ["C-CURE 9000"], clientId: "c-001", siteId: "s-c-001-2", projectId: "pr-001", daysOut: 1 },
-    { type: "Commissioning", duration: 240, summary: "Walk-test cleanroom door interlocks", priority: "High", skills: ["ICT Protege"], clientId: "c-010", siteId: "s-c-010-1", projectId: "pr-010", daysOut: 3 },
-    { type: "Install", duration: 480, summary: "Mount and terminate 12 H6A bullets", priority: "Normal", skills: ["Avigilon ACC"], clientId: "c-002", siteId: "s-c-002-2", projectId: "pr-002", daysOut: 5 },
-    { type: "Service", duration: 90, summary: "Replace dead PG9914 sensor zone 14", priority: "Normal", skills: ["DSC Neo"], clientId: "c-005", siteId: "s-c-005-1", projectId: "pr-005", daysOut: 2 },
-  ];
-  queue.forEach((q, idx) => {
-    out.push({
-      id: `unassigned-${idx}`,
-      type: q.type,
-      clientId: q.clientId,
-      siteId: q.siteId,
-      projectId: q.projectId,
-      requestedDate: addDays(ws, q.daysOut).toISOString().slice(0, 10),
-      durationMin: q.duration,
-      priority: q.priority,
-      requiredSkills: q.skills,
-      systemSummary: q.summary,
-    });
-  });
-  return out;
+  // Pre-Quotes cleanup (2026-05-11): hardcoded queue removed (referenced
+  // client IDs that no longer exist after the wipe — c-007, c-001, etc.).
+  // Once the scheduling module wires to Supabase, this builds from the
+  // real unassigned jobs table.
+  return [];
 }
 
 export function jobLabelTime(j: ScheduleJob): string {

@@ -68,46 +68,58 @@ export function NotificationsBell() {
             {unread} unread · {items.length} total
           </p>
         </div>
-        <ul className="max-h-[480px] divide-y divide-[var(--border)] overflow-y-auto">
-          {items.map((n) => {
-            const Icon = n.icon;
-            return (
-              <li key={n.id}>
-                <Link
-                  href={n.href}
-                  onClick={() => handleClick(n.id)}
-                  className={cn(
-                    "hover:bg-muted/40 flex items-start gap-3 px-4 py-3 transition-colors",
-                    n.unread && "bg-brand-gold/5"
-                  )}
-                >
-                  <span
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+            <Bell className="text-muted-foreground/40 h-6 w-6" />
+            <p className="text-brand-charcoal mt-3 text-xs font-medium">
+              No new notifications
+            </p>
+            <p className="text-muted-foreground mt-1 text-[11px]">
+              You&rsquo;re all caught up.
+            </p>
+          </div>
+        ) : (
+          <ul className="max-h-[480px] divide-y divide-[var(--border)] overflow-y-auto">
+            {items.map((n) => {
+              const Icon = n.icon;
+              return (
+                <li key={n.id}>
+                  <Link
+                    href={n.href}
+                    onClick={() => handleClick(n.id)}
                     className={cn(
-                      "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                      TONE_BG[n.tone]
+                      "hover:bg-muted/40 flex items-start gap-3 px-4 py-3 transition-colors",
+                      n.unread && "bg-brand-gold/5"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-brand-charcoal text-xs leading-snug font-medium">
-                      {n.title}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
-                      {n.body}
-                    </p>
-                    <p className="text-muted-foreground/70 mt-1 text-[10px] uppercase tracking-wider">
-                      {n.timeAgo} ago
-                    </p>
-                  </div>
-                  {n.unread && (
-                    <span className="bg-brand-gold mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    <span
+                      className={cn(
+                        "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                        TONE_BG[n.tone]
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-brand-charcoal text-xs leading-snug font-medium">
+                        {n.title}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
+                        {n.body}
+                      </p>
+                      <p className="text-muted-foreground/70 mt-1 text-[10px] uppercase tracking-wider">
+                        {n.timeAgo} ago
+                      </p>
+                    </div>
+                    {n.unread && (
+                      <span className="bg-brand-gold mt-2 inline-block h-1.5 w-1.5 shrink-0 rounded-full" />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </PopoverContent>
     </Popover>
   );

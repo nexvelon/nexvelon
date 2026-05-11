@@ -86,6 +86,14 @@ export interface MovementRow {
 }
 
 export function movementHistory(p: Product, limit = 10): MovementRow[] {
+  // Pre-Quotes cleanup (2026-05-11): without source users + projects we
+  // can't derive a synthetic movement history. Without this guard, the
+  // loop hits `users[NaN]` / `projects[NaN]` and crashes via
+  // `tech.name.split(...)` or `proj.code`. Once the inventory module
+  // wires to Supabase, movement rows come from a real ledger table and
+  // this synthetic generator is retired.
+  if (users.length === 0 || projects.length === 0) return [];
+
   const start = TODAY;
   const out: MovementRow[] = [];
   const kinds: MovementRow["kind"][] = ["Receipt", "Pick", "Transfer", "Pick", "Return", "Adjustment"];
@@ -135,13 +143,11 @@ export interface StockTransfer {
   notes?: string;
 }
 
-export const transfers: StockTransfer[] = [
-  { id: "tr-1", number: "TR-2026-0041", from: "Main Warehouse", to: "Truck 1", itemCount: 12, status: "Received", date: "2026-04-22", initiatedById: "u-005" },
-  { id: "tr-2", number: "TR-2026-0042", from: "Main Warehouse", to: "Truck 2", itemCount: 8, status: "Received", date: "2026-04-23", initiatedById: "u-005" },
-  { id: "tr-3", number: "TR-2026-0043", from: "Branch — Mississauga", to: "Main Warehouse", itemCount: 24, status: "In Transit", date: "2026-04-28", initiatedById: "u-018", notes: "Returning Avigilon stock from Mississauga overflow" },
-  { id: "tr-4", number: "TR-2026-0044", from: "Main Warehouse", to: "Truck 3", itemCount: 6, status: "In Transit", date: "2026-04-29", initiatedById: "u-004" },
-  { id: "tr-5", number: "TR-2026-0045", from: "Truck 2", to: "Main Warehouse", itemCount: 3, status: "Draft", date: "2026-04-30", initiatedById: "u-005", notes: "Returning unused PG9914 sensors from Glenview survey" },
-];
+// Pre-Quotes cleanup (2026-05-11): hardcoded transfers removed —
+// referenced user IDs (u-004, u-005, u-018) that no longer exist after
+// the mock-data wipe. Once inventory wires to Supabase the
+// stock_transfers table feeds this.
+export const transfers: StockTransfer[] = [];
 
 // ────────────────────────────────────────────────────────────────────────────
 // Vendor info
@@ -254,71 +260,11 @@ export interface StandalonePO {
   items: { productId: string; qty: number; cost: number }[];
 }
 
-export const standalonePOs: StandalonePO[] = [
-  {
-    id: "po-stk-1",
-    number: "PO-STK-0188",
-    vendor: "ADI",
-    date: "2026-04-08",
-    expected: "2026-04-15",
-    status: "Received",
-    items: [
-      { productId: "p-053", qty: 24, cost: 195 },
-      { productId: "p-014", qty: 24, cost: 78 },
-      { productId: "p-015", qty: 60, cost: 42 },
-    ],
-  },
-  {
-    id: "po-stk-2",
-    number: "PO-STK-0189",
-    vendor: "Anixter",
-    date: "2026-04-12",
-    expected: "2026-04-22",
-    status: "Partially Received",
-    items: [
-      { productId: "p-057", qty: 12, cost: 685 },
-      { productId: "p-058", qty: 4, cost: 945 },
-    ],
-  },
-  {
-    id: "po-stk-3",
-    number: "PO-STK-0190",
-    vendor: "CDW",
-    date: "2026-04-22",
-    expected: "2026-04-30",
-    status: "Sent",
-    items: [
-      { productId: "p-073", qty: 4, cost: 1885 },
-      { productId: "p-074", qty: 1, cost: 8425 },
-    ],
-  },
-  {
-    id: "po-stk-4",
-    number: "PO-STK-0191",
-    vendor: "Provo",
-    date: "2026-04-25",
-    expected: "2026-05-08",
-    status: "Confirmed",
-    items: [
-      { productId: "p-077", qty: 2, cost: 985 },
-      { productId: "p-079", qty: 12, cost: 215 },
-      { productId: "p-080", qty: 24, cost: 65 },
-    ],
-  },
-  {
-    id: "po-stk-5",
-    number: "PO-STK-0192",
-    vendor: "Wesco",
-    date: "2026-04-29",
-    expected: "2026-05-09",
-    status: "Draft",
-    items: [
-      { productId: "p-075", qty: 100, cost: 12.5 },
-      { productId: "p-076", qty: 8, cost: 285 },
-      { productId: "p-069", qty: 2, cost: 1250 },
-    ],
-  },
-];
+// Pre-Quotes cleanup (2026-05-11): hardcoded standalone POs removed —
+// referenced product IDs (p-053, p-014, etc.) that no longer exist
+// after the mock-data wipe. Once inventory wires to Supabase the
+// purchase_orders table feeds this.
+export const standalonePOs: StandalonePO[] = [];
 
 export function isOpenPO(status: string): boolean {
   return status !== "Received" && status !== "Closed";
