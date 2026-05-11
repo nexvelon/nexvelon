@@ -374,11 +374,11 @@ const COPY: Record<EmailKind, EmailCopy> = {
     titleTag: "Nexvelon Enterprise Suite — Invitation",
   },
   magiclink: {
-    subject: "Your sign-in link to the Nexvelon Enterprise Suite",
+    subject: "Your password reset link for Nexvelon Enterprise Suite is ready",
     preheader:
-      "Your sign-in link to the Nexvelon Enterprise Suite. Single-use, expires within the hour.",
-    outerNotePrefix: "This sign-in link was prepared for",
-    titleTag: "Nexvelon Enterprise Suite — Sign In",
+      "Your password reset link for Nexvelon Enterprise Suite. Single-use, expires within the hour.",
+    outerNotePrefix: "This password reset link was prepared for",
+    titleTag: "Nexvelon Enterprise Suite — Password Reset",
   },
 };
 
