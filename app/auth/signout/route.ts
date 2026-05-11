@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -64,14 +64,37 @@ export async function GET(): Promise<never> {
   // we're fixing).
   const cookieStore = await cookies();
   let cleared = 0;
+  const clearedNames: string[] = [];
   for (const c of cookieStore.getAll()) {
     if (c.name.startsWith("sb-")) {
       cookieStore.set(c.name, "", { path: "/", maxAge: 0 });
       cleared++;
+      clearedNames.push(c.name);
     }
   }
-  console.info("[/auth/signout] cookies_cleared", { cleared });
+  console.info("[/auth/signout] cookies_cleared", {
+    cleared,
+    names: clearedNames,
+  });
+
   const dest = "/login?signout=ok";
-  console.info("[/auth/signout] redirecting_to", { url: dest });
+
+  // Build the full URL (with origin) for logging only — so we can
+  // confirm in the browser/Vercel logs that the query string survives.
+  // The actual redirect target stays relative because Next handles host
+  // resolution internally.
+  let fullUrl = dest;
+  try {
+    const hdrs = await headers();
+    const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host");
+    const proto = hdrs.get("x-forwarded-proto") ?? "https";
+    if (host) fullUrl = `${proto}://${host}${dest}`;
+  } catch {
+    // headers() unavailable — keep relative dest in the log.
+  }
+  console.info("[/auth/signout] redirecting_to", {
+    url: dest,
+    full_url: fullUrl,
+  });
   redirect(dest);
 }
