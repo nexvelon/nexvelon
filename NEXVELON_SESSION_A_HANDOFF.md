@@ -2,41 +2,50 @@
 
 > **Hand-off document for the next Claude Code session.**
 > Generated 2026-05-10 against `main` @ `c527aa6`.
+> **Updated 2026-05-11 against `main` @ `a59adab` — Session A officially
+> CLOSED.**
 >
 > Read this file end-to-end before proposing any change. Then read
-> `CLAUDE_CONTEXT.md` for the longer historical narrative and the
-> domain/branding constraints.
+> `CLAUDE_CONTEXT.md` §0 for the elevator status snapshot and the
+> Session B priority list.
 >
 > Session A goals were: replace the localStorage demo login with real
-> Supabase Auth + invite-only flow + email-OTP 2FA. Most of that is
-> shipped and live. Two open bugs are blocking final acceptance —
-> Section 2 documents both with everything needed to triage.
+> Supabase Auth + invite-only flow + email-OTP 2FA. **All goals
+> shipped, all blocking bugs resolved.** Both open bugs from the
+> original handoff are now closed (see §2 for fix references) and the
+> two auth UX hot spots that emerged during acceptance testing
+> (sign-in speed, sign-out speed) are also resolved. Section 9
+> documents Session B priorities.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## 1. CURRENT STATE
 ═══════════════════════════════════════════════════════════════════════════════
 
 ### Latest commit
-**`c527aa6` — "Unify bootstrap script invite + magic-link emails under shared parchment design"** (2026-05-10)
+**`a59adab` — "Update magiclink email subject to password reset wording"** (2026-05-10, Session A close)
 
-### Last 5 commits
+### Last 10 commits (Session A's full post-acceptance run)
 
 | Hash | Message |
 | --- | --- |
+| `a59adab` | Update magiclink email subject to password reset wording |
+| `9027b6e` | Email redesign: royal black + gold + ivory letter, invite + magiclink identical |
+| `24a3195` | Make sign-out instant via local-scope signOut + verify signout query param flow |
+| `6dd785a` | Fix Supabase signOut CORS error, ensure signout=ok reaches /login |
+| `0bbef7c` | Fix slow sign-out: ensure /login fast-path actually triggers |
+| `ccec631` | Add fast-path post-OTP redirect to /dashboard — skip duplicate session check |
+| `df86fab` | Make sign-out feel instant by fire-and-forgetting cleanup work |
+| `020eec2` | Fix on_auth_user_created trigger: add public. schema prefix + swallow profile-insert errors with WARNING |
+| `e623fe7` | Session A handoff: status snapshot + open bugs |
 | `c527aa6` | Unify bootstrap script invite + magic-link emails under shared parchment design |
-| `deacabc` | Fix bootstrap user-detection (invite vs magic link) and set-password session handling |
-| `6ec212a` | Force OTP challenge after set-password, fix sign-out hang, add timeout to redirect states |
-| `024a74a` | Fix latent crashes, harden RequireAuth, real audit log surface, cleanup orphans |
-| `0f51609` | Fix avatar menu, OTP verify hang, remove broken search bar |
 
 ### Build status
-**Clean.** `npm run build` → `✓ Compiled successfully in ~3s`. **0 TypeScript errors.** **5 ESLint warnings**, all pre-existing in `components/modules/financials/Tabs.tsx` (UI_ONLY module, untouchable per Session A constraint). **Zero new warnings introduced** anywhere.
+**Clean.** `npm run build` → `✓ Compiled successfully`. **0 TypeScript errors.** **5 ESLint warnings**, all pre-existing in `components/modules/financials/Tabs.tsx` (UI_ONLY module, untouchable per Session A constraint). **Zero new warnings introduced** anywhere across the full Session A run.
 
 ### Deploy status
 - **Live URL:** https://app.nexvelonglobal.com
-- **Vercel auto-deploys from `main` on every push.**
-- **Last verified-live commit:** `deacabc` (probed via `/auth/confirm` redirect text). `c527aa6` only touches `scripts/bootstrap-admin.ts` (CLI tool, not part of the Next build) — no Vercel deploy was needed for it.
-- Session B should re-confirm prod deploy state with a quick `curl https://app.nexvelonglobal.com/login` before testing.
+- **Vercel auto-deploys from `main` on every push.** All Session A commits live.
+- **Last verified-live commit:** `a59adab`. End-to-end sign-in / sign-out flow tested in production by the user after `24a3195` and re-confirmed after `9027b6e` + `a59adab`.
 
 ### What's working end-to-end (verified live in prior turns)
 
@@ -57,20 +66,36 @@
   - `[bootstrap]` structured logs at every step.
   - 30-of-30 render-smoke invariants pass (verified locally with a tsx script in `c527aa6`).
 
-### What's currently broken or unverified (live as of this writing)
+### Session A acceptance status
 
-- **DB state right now:** `profiles=0`, `auth_otp=0`, `auth_audit_log=0`. The user deleted themselves from Supabase Auth → Users mid-test (cascade nuked the profile + OTP rows; audit log was likely SQL-deleted manually). **Nobody can sign in until bootstrap is rerun.**
-- **Bug A — invite email template still rendering wrong** per user report. See §2.
-- **Bug B — "We can't find your profile" error after setting password** per user report. See §2.
-- **Mobile / cross-device test sweep** — never run on real iPhone/Android. See `CLAUDE_CONTEXT.md` §12 #15.
+- **All blocking bugs resolved.** Bug A (email design) closed by commit `9027b6e`. Bug B (missing profile after set-password) closed by migration `0004_fix_auth_user_trigger.sql` (`020eec2`), applied + verified in production.
+- **Auth UX hot spots resolved.** Sign-in to /dashboard now sub-2s via the `?just_signed_in=ok` fast-path (`ccec631`). Sign-out now 1–2s via the `/auth/signout` GET cookie-clear + redirect + `isSigningOut()` race-prevention flag (`0bbef7c`, `6dd785a`, `24a3195`).
+- **Email pipelines unified.** Bootstrap script (both `invite` and `magiclink` kinds) and Supabase Dashboard ("Invite user" + "Magic Link") templates all render the same royal black + gold + ivory letter design (`9027b6e` for the bootstrap side; Dashboard updated manually with matching HTML). Subject lines locked across pipelines (§7).
+- **Mobile / cross-device test sweep** — still never run on real iPhone/Android. Listed under §12 #15 in `CLAUDE_CONTEXT.md`. Carry forward to Session B if needed.
 
 ═══════════════════════════════════════════════════════════════════════════════
-## 2. OPEN BUGS RIGHT NOW
+## 2. RESOLVED BUGS (Session A close)
 ═══════════════════════════════════════════════════════════════════════════════
 
-### Bug A — Invite email is reportedly NOT the gorgeous parchment design after `c527aa6`
+> Both originally-open bugs are CLOSED. Kept here in full triage form
+> because the fix references + diagnosis pattern are useful precedent
+> for similar bugs in future sessions.
 
-**Symptom (user-reported):**
+### Bug A — Invite email is reportedly NOT the gorgeous parchment design after `c527aa6` — **RESOLVED (`9027b6e`)**
+
+**Resolution summary:** The parchment design was scrapped in favour of
+a brand-new royal black + 2px gold gradient frame + ivory `#FBFAF5`
+card design. `scripts/bootstrap-admin.ts` `buildEmailHtml()` was
+rewritten end-to-end; the `EmailCopy` interface trimmed to just the
+fields that actually differ between kinds (subject, preheader,
+outerNotePrefix, titleTag) and a `SHARED_BODY` constant holds the
+identical body / button / italic-subline copy used by both. A
+`--render-smoke [--kind=]` CLI flag was added so reviewers can eyeball
+the rendered HTML without firing Resend. Supabase Dashboard templates
+were manually updated by the user with the matching HTML so all four
+email pipelines now ship the same design.
+
+**Original symptom + triage notes (kept for precedent):**
 After running `npx tsx scripts/bootstrap-admin.ts` on a fresh delete-the-user, the email that arrives is NOT the unified parchment "Welcome to the Nexvelon Enterprise Suite" template. The user said "the invite email template still rendering wrong" without specifying what arrived instead.
 
 **Reproduction (best guess):**
@@ -103,9 +128,23 @@ After running `npx tsx scripts/bootstrap-admin.ts` on a fresh delete-the-user, t
 
 ---
 
-### Bug B — "We can't find your profile" error after setting password
+### Bug B — "We can't find your profile" error after setting password — **RESOLVED (`020eec2`)**
 
-**Symptom (user-reported):**
+**Resolution summary:** Root cause was schema-prefix drift on the
+`on_auth_user_created` trigger — the live trigger definition referenced
+`handle_new_user()` (no schema), and Supabase Auth's search_path
+during the `auth.users` insert didn't include `public`, so the call
+silently no-op'd and no profiles row was ever created. Migration
+`supabase/migrations/0004_fix_auth_user_trigger.sql` recreates the
+trigger with the explicit `public.handle_new_user()` reference and
+also hardens the function body with an inner `EXCEPTION WHEN OTHERS
+THEN RAISE WARNING ... ; RETURN NEW` around the profile insert so any
+future failure logs to Supabase Logs without rolling back the parent
+auth.users insert. Migration is idempotent (`create or replace
+function` + `drop trigger if exists`). Applied + verified in
+production — in-app invites now auto-create profile rows.
+
+**Original symptom + diagnosis (kept for precedent):**
 After clicking the invite link → `/auth/confirm` → `/auth/set-password`, entering a valid password, and submitting, the user sees the error message:
 
 > "We can't find your profile. Please contact your administrator."
@@ -370,27 +409,30 @@ Same 4 required vars. Marked Sensitive where appropriate. RESEND_API_KEY is Prod
 
 ### Bootstrap script (`scripts/bootstrap-admin.ts`)
 
-**One unified parchment template, two copy variants.** The script POSTs directly to Resend; Supabase Dashboard templates are NOT involved here.
+**Royal black + gold + ivory letter design, one shared HTML body.** The script POSTs directly to Resend; Supabase Dashboard templates are NOT involved here.
 
-- `buildEmailHtml({ kind, confirmUrl, recipientEmail })` — the shared HTML builder. Parchment outer `#F5F1E8`, cream card `#FBF8F1` with thin gold border, gold ◆ accents flanking the wordmark, Cormorant Garamond, hairline rules, signature block, footer with ◆-bracketed "© 2026 Nexvelon Global Inc.".
-- `buildEmailText({ kind, confirmUrl, recipientEmail })` — plain-text fallback.
-- `COPY: Record<EmailKind, EmailCopy>` — six copy slots per kind (subject, preheader, bodyPara1, bodyPara2, statusLine, buttonText, italicSubline) plus outerNotePrefix and titleTag.
+- `buildEmailHtml({ kind, confirmUrl, recipientEmail })` — the shared HTML builder. Black canvas `#000000`, 2px gold gradient frame (`linear-gradient(135deg, #8B6F2A 0%, #D4AF37 25%, #F4D77E 50%, #D4AF37 75%, #8B6F2A 100%)`), ivory card `#FBFAF5`, Cormorant Garamond wordmark `#A8843F` flanked by fading gold hairlines (transparent→gold / gold→transparent), 34px headline `#0A0A0A`, 16px body `#2A1F0F` left-aligned, dark gradient button (`#1A1A1A → #0A0A0A`) inside a gold gradient frame with `#F4D77E` text, signature block, footer band `#F5F1E4` with ◆-bracketed "© 2026 Nexvelon Global Inc.". See `9027b6e` for the full implementation.
+- `buildEmailText({ kind, confirmUrl, recipientEmail })` — plain-text fallback. Decodes `<br/>` to newline; preserves the body copy.
+- `SHARED_BODY` constant — all visible body copy (bodyPara1, bodyPara2, buttonText, italicSubline) is locked identical across both kinds. Single source of truth.
+- `COPY: Record<EmailKind, EmailCopy>` — only the four fields that semantically differ per kind: `subject`, `preheader`, `outerNotePrefix`, `titleTag`.
 
-The 6 copy slots that differ:
+**Subject lines locked across both bootstrap script and Supabase Dashboard templates (matching pipelines):**
 
-|                       | INVITE                                                          | MAGIC-LINK                                                                                       |
-| --------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| subject               | "Your seat at the Nexvelon Enterprise Suite is ready"          | "Your sign-in link to the Nexvelon Enterprise Suite"                                             |
-| bodyPara1             | "You've been selected to join the Nexvelon Enterprise Suite…" | "Welcome back. Use the link below to securely access your Nexvelon Enterprise Suite workspace." |
-| bodyPara2             | "Inside, you'll find … leads, quotes, projects, schedules…"   | "For your security, this single-use link expires within the hour…"                              |
-| statusLine            | "Full Access Configuration Complete"                           | "Single-Use Sign-In Link"                                                                        |
-| buttonText            | "Accept Your Invitation"                                       | "Sign In to Your Workspace"                                                                      |
-| italicSubline         | "Kindly set your password after accepting the invite."         | "This link expires within the hour. Use it once."                                                |
+|                  | INVITE                                                       | MAGIC-LINK / RESET                                                       |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| subject          | "Your seat at the Nexvelon Enterprise Suite is ready"        | "Your password reset link for Nexvelon Enterprise Suite is ready"        |
+| outerNotePrefix  | "This invitation was prepared for"                            | "This password reset link was prepared for"                              |
 
-Eyebrow ("By Invitation Only"), headline ("Welcome to the / Nexvelon Enterprise Suite."), subtitle ("Complete operating system in one place."), signature ("With regards from, / The Nexvelon Global Group. / Enterprise Suite · Private Issue") and footer are intentionally identical across both kinds.
+Body copy (paragraphs / button / italic subline / signature / footer) is intentionally identical across both kinds per explicit user direction — the two emails should look the same. Don't re-introduce per-kind body copy without explicit user approval.
+
+A `--render-smoke [--kind=invite|magiclink]` CLI flag prints the rendered HTML to stdout without firing Resend. Useful for visual review:
+
+```
+npx tsx scripts/bootstrap-admin.ts --render-smoke --kind=invite > /tmp/invite.html
+```
 
 ### Supabase Dashboard email templates
-See §5. Six templates exist; the bootstrap script doesn't use them. They're invoked when `inviteUserByEmail` is called from the regular `/users` invite drawer.
+The "Invite user" and "Magic Link" templates in the Supabase Dashboard were manually updated by the user with the **same royal black + gold HTML** the bootstrap script ships. Subject lines match the bootstrap subjects above. The user is responsible for keeping these in sync — any future redesign needs both pipelines updated. The other four Dashboard templates (Confirm signup, Change Email Address, Reset Password, Reauthentication) still use the older copy; see §5 + Session B Priority 3 for the Reset Password update plan.
 
 ### Resend
 - Domain `nexvelonglobal.com` DKIM/SPF verified.
@@ -475,33 +517,131 @@ See §5. Six templates exist; the bootstrap script doesn't use them. They're inv
 - `RedirectIfAuthed` (used in `(auth)/login/layout.tsx`): mirror — redirects authenticated users away. Same 10s timeout pattern.
 
 ═══════════════════════════════════════════════════════════════════════════════
-## 9. WHAT'S NEXT (PRIORITY ORDER)
+## 9. SESSION B PRIORITIES (in order)
 ═══════════════════════════════════════════════════════════════════════════════
 
-The user's stated goal: "taking client work tomorrow with this app." Realistically that means **clients only** as the wired surface, with auth working end-to-end. Until Bug A and Bug B are confirmed fixed, the app isn't usable by anyone other than someone who never has to sign in fresh.
+Session A is closed. Everything below is the Session B plan.
 
-### Priority 0 — BLOCKERS
+### Priority 1 — Forgot-password flow (anonymous)
 
-1. **Bug B — "We can't find your profile" after set-password.** Fix this first. Without it, even a successful invite can't onboard the admin. Diagnostic queries in §2 will tell us within 2 minutes whether it's the trigger, RLS, or something else. Likely a 30-min fix.
+**Goal:** Anonymous user with a forgotten password can request a reset
+link from the sign-in page.
 
-2. **Bug A — Confirm the unified parchment template is actually shipping.** May be already fixed by `c527aa6`; just needs the user to retest on a freshly-deleted user. If still broken: check Resend dashboard logs for the message body, compare against expected `buildEmailHtml({kind:'invite',…})` output. 15-min triage.
+- New route `app/(auth)/forgot-password/page.tsx` — single email-input
+  form. Mirrors the visual chrome of `/login`.
+- New `app/(auth)/forgot-password/actions.ts` — server action
+  `requestPasswordResetAction(email)` that:
+  - Validates the email format.
+  - Calls
+    `supabase.auth.resetPasswordForEmail(email, { redirectTo:
+    'https://app.nexvelonglobal.com/auth/confirm?type=recovery&next=/auth/set-password' })`.
+  - Writes a `password_reset_requested` audit-log row.
+  - Returns success regardless of whether the email matched a real
+    profile (don't leak account existence).
+- Add "Forgot password?" link from `/login` underneath the password
+  field.
+- Add `/auth/forgot-password` to middleware's `ANON_ALLOWED` set.
+- The `/auth/confirm` handler already supports `type=recovery` →
+  redirects to `next=/auth/set-password`, which already supports
+  setting a new password + funnelling through OTP. No changes needed
+  there.
 
-### Priority 1 — Reach a clean signed-in state
+### Priority 2 — Change-password flow (signed-in)
 
-3. **Bootstrap fresh admin.** After Bug B is fixed: delete any stale auth.users row, run `npx tsx scripts/bootstrap-admin.ts`, click email, set password, OTP verify, land on /dashboard. Captures the full happy path live for the first time end-to-end.
+**Goal:** A signed-in user can change their own password from inside
+the app.
 
-4. **Verify sign-out + refresh.** Once signed in, click avatar → Sign out → confirm /login lands within 5s. Refresh /dashboard while signed in → confirm clean reload, no "Redirecting…" hang. These were fixed in `6ec212a` and `024a74a` but not all reverified post-`deacabc`.
+- New page `app/(app)/settings/security/page.tsx` (server component)
+  + `SecurityForm.tsx` client component with current-password,
+  new-password, confirm-new-password fields.
+- New server action `changePasswordAction(current, next, confirm)`:
+  - Validates the new password against `lib/auth/password-policy.ts`.
+  - Re-authenticates by calling
+    `supabase.auth.signInWithPassword({ email: profile.email,
+    password: current })` against the user's own email to prove the
+    current password.
+  - Calls `supabase.auth.updateUser({ password: next })`.
+  - Writes a `password_changed` audit-log row with
+    `metadata: { source: 'in_app' }`.
+  - Server-side redirect on success.
+- Add a "Change password" item back into the avatar menu — currently
+  the menu only has Sign out. Link points at `/settings/security`.
 
-5. **Manual cross-device sweep.** Per CLAUDE_CONTEXT §12 #15: 320/768/1024/1440 px on Safari, Chrome, Firefox, Edge, iOS Safari, Android Chrome. Min 44px touch targets on auth surfaces.
+### Priority 3 — 5th email template: password reset
 
-### Priority 2 — Session B (Quotes module)
+**Goal:** Match the "Reset Password" email (sent by
+`resetPasswordForEmail`) to the same royal black + gold design as
+invite + magic-link. Same template lives in two pipelines
+(bootstrap script + Supabase Dashboard) per project convention.
 
-See §12 below for the rough plan. ~4-6 hours of focused work.
+- Add `reset` to the `EmailKind` union in
+  `scripts/bootstrap-admin.ts`.
+- Add the `reset` entry to the `COPY` config:
+  - `subject`: `"Your password reset link for Nexvelon Enterprise Suite is ready"` (matches the magiclink subject locked in `a59adab` — these two flows share the destination semantics).
+  - `outerNotePrefix`: `"This password reset link was prepared for"`.
+  - `preheader` + `titleTag` similarly worded.
+- The visual chrome stays identical — `buildEmailHtml()` already
+  handles arbitrary `kind` values.
+- Update Supabase Dashboard "Reset Password" template manually with
+  the matching HTML.
+- Subject lines locked across both pipelines (§7).
 
-### Priority 3 — Hardening + observability
+### Priority 4 — Quotes module wired to Supabase
 
-6. Sentry / error tracking. The structured `[<tag>] <event>` console logs we added are great in dev but get lost in Vercel's runtime logs over time. Wiring Sentry would surface the OTP and signin failure modes to a dashboard.
-7. The 5 pre-existing financials/Tabs.tsx ESLint warnings — fix as part of wiring the Financials module to DB, not a standalone task.
+**Goal:** First "real" module beyond clients/users. Estimated 4–6
+hours of focused work. Full plan in §12.
+
+- `supabase/migrations/0005_quotes_schema.sql` — `quotes`,
+  `quote_sections`, `quote_line_items` tables. Schema details in §12.
+- `lib/api/quotes.ts` — mirrors `lib/api/clients.ts`. Cookie-aware
+  client, RLS-enforced reads, service-role helpers for any
+  cross-user operations.
+- `lib/types/database.ts` — extend with `DbQuote`,
+  `DbQuoteSection`, `DbQuoteLineItem` + Insert/Update payload
+  variants.
+- `app/(app)/quotes/actions.ts` — server actions wrapping the API.
+- `app/(app)/quotes/page.tsx` — convert to server component fetching
+  via the API; render new `QuotesView.tsx` (client) for
+  interactivity.
+- `app/(app)/quotes/[id]/page.tsx` — server component. Fetch quote +
+  sections + line items. Render `QuoteBuilder` against real data
+  instead of localStorage.
+- `app/(app)/quotes/new/page.tsx` — server action initialises an
+  empty draft via `createQuote`, then `redirect(/quotes/[id])`.
+- `components/modules/quotes/builder/QuoteBuilder.tsx` — convert
+  from localStorage state to controlled props. Save / Send /
+  Convert all call server actions.
+- Delete `lib/quote-store.ts` once migration is complete.
+
+### Priority 5 — Modules to wire after Quotes (in priority order)
+
+Each module ships its own
+`00NN_<module>_schema.sql` + `lib/api/<module>.ts` + server actions
++ page rewrite, mirroring the clients/quotes pattern.
+
+1. **Projects**
+2. **Inventory**
+3. **Vendors**
+4. **Invoices**
+5. **Subcontractors**
+6. **Financials**
+7. **Scheduling**
+
+`lib/mock-data/*` files stay on disk for each module until that
+module's wiring lands. Don't bulk-delete them.
+
+### Priority 6 — Carry-forwards from Session A
+
+- **Mobile / cross-device test sweep.** 320 / 768 / 1024 / 1440 px on
+  Safari, Chrome, Firefox, Edge, iOS Safari, Android Chrome. Min 44px
+  touch targets on auth surfaces.
+- **Sentry / error tracking.** The structured `[<tag>] <event>`
+  console logs added during Session A are great in dev but get
+  diluted in Vercel's runtime logs. Wiring Sentry would surface OTP
+  + signin failure modes to a dashboard.
+- **Financials/Tabs.tsx ESLint warnings.** The 5 pre-existing
+  warnings get fixed as part of wiring the Financials module to DB,
+  not as a standalone task.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## 10. WORKING ASSUMPTIONS / CONSTRAINTS

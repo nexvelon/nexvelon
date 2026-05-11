@@ -6,26 +6,138 @@
 
 ---
 
-## 0. Status as of 2026-05-10 (Session A wrap)
+## 0. Status as of 2026-05-11 (Session A CLOSED)
 
-> **Read `NEXVELON_SESSION_A_HANDOFF.md` first** for the full triage notes
-> on the two open bugs and the file-by-file state. This section is the
-> elevator summary; the handoff has the substance.
+> **Session A officially complete.** All blocking bugs resolved, all
+> auth UX hot spots fixed, both email pipelines (bootstrap script +
+> Supabase Dashboard) ship the same royal black + gold + ivory design.
+> Read `NEXVELON_SESSION_A_HANDOFF.md` for the file-by-file state and
+> historical triage notes; this section is the elevator summary plus
+> the Session B priority list.
 
 ### Where we are right now
 
-- **Latest commit:** `c527aa6` — "Unify bootstrap script invite + magic-link
-  emails under shared parchment design".
+- **Latest commit:** `a59adab` — "Update magiclink email subject to
+  password reset wording".
 - **Build:** clean. 0 TS errors. 5 pre-existing ESLint warnings in
   `components/modules/financials/Tabs.tsx` (UI_ONLY, untouchable). Zero
-  new warnings introduced by Session A.
+  new warnings introduced anywhere in Session A.
 - **Deploy:** https://app.nexvelonglobal.com auto-deploys from `main` on
-  every push. Last verified-live commit `deacabc`. `c527aa6` is a
-  CLI-only change (no Next build needed).
-- **DB rows right now:** `profiles`=0, `auth_otp`=0, `auth_audit_log`=0,
-  `clients`=3, `sites`=2, `contacts`=1. The user deleted themselves
-  mid-test; **no admin account exists this minute**, so the next step
-  in any Session B effort is to bootstrap fresh.
+  every push. All Session A commits live.
+- **DB rows right now:** `profiles`≥1 (admin account live again after
+  migration 0004 fix), `auth_otp` populated per-session, `auth_audit_log`
+  accumulating, `clients`=3, `sites`=2, `contacts`=1.
+
+### Session A — bugs and UX issues, all RESOLVED
+
+- **Bug A — Invite email not the new design.** RESOLVED. Bootstrap
+  script now sends the royal black + gold + ivory letter design
+  (commit `9027b6e`). Both `invite` and `magiclink` kinds render
+  identical HTML; only subject + outerNotePrefix differ per the user's
+  explicit direction.
+- **Bug B — "We can't find your profile" after set-password.** RESOLVED.
+  Root cause was a missing `public.` schema prefix on the
+  `on_auth_user_created` trigger — Supabase Auth's search_path didn't
+  resolve the unqualified `handle_new_user()` reference and the trigger
+  silently no-op'd. Fixed via migration
+  `supabase/migrations/0004_fix_auth_user_trigger.sql` (commit `020eec2`),
+  which recreates the trigger with `public.handle_new_user()` and adds
+  a defensive `EXCEPTION WHEN OTHERS THEN RAISE WARNING` around the
+  profile insert. Migration applied + verified in production —
+  in-app invites now auto-create profile rows.
+- **Sign-in speed.** RESOLVED. Post-OTP redirect now appends
+  `?just_signed_in=ok` and AuthProvider + RequireAuth both honour the
+  hint as a render-immediately signal, skipping the duplicate
+  `getUser`+`fetchProfile` round-trip behind "Verifying session…"
+  (commit `ccec631`). Sub-2s click-to-dashboard.
+- **Sign-out speed.** RESOLVED. `signOut()` now navigates to
+  `/auth/signout` (GET), which synchronously deletes every `sb-*`
+  cookie via Set-Cookie headers attached to its redirect to
+  `/login?signout=ok`. Cookies are atomically gone before middleware
+  sees the follow-up request, so the hint actually reaches
+  RedirectIfAuthed. A `sessionStorage` "signing out" flag prevents
+  RequireAuth's reactive anonymous-redirect effect from racing the
+  navigation target. The client-side SDK call uses
+  `scope: 'local'` to skip a CORS-failing POST to Supabase Auth's
+  `/auth/v1/logout`. Commits `0bbef7c`, `6dd785a`, `24a3195`. 1-2s
+  click-to-login-form.
+- **Email design.** SHIPPED. Royal black canvas + 2px gold gradient
+  frame + ivory `#FBFAF5` card + Cormorant Garamond typography +
+  ◆-bracketed footer band. Identical across all four pipelines:
+  bootstrap invite, bootstrap magic-link, Supabase Dashboard
+  "Invite user" template, Supabase Dashboard "Magic Link" template
+  (commit `9027b6e` for the bootstrap side; Supabase Dashboard was
+  updated manually by the user with the matching HTML).
+
+### Subject lines locked across both pipelines
+
+- **Invite** (bootstrap script + Supabase Dashboard "Invite user"):
+  `"Your seat at the Nexvelon Enterprise Suite is ready"`.
+- **Magic-link / password reset** (bootstrap script + Supabase
+  Dashboard "Magic Link"): `"Your password reset link for Nexvelon
+  Enterprise Suite is ready"`.
+
+### Session B priorities (in order)
+
+1. **Forgot-password flow** — new `/auth/forgot-password` route
+   (anonymous, in `app/(auth)/forgot-password/page.tsx` +
+   `actions.ts`). Single email-input form → server action calls
+   `supabase.auth.resetPasswordForEmail({ redirectTo:
+   '/auth/confirm?type=recovery&next=/auth/set-password' })`. Reuse
+   the `/auth/confirm` token-hash redemption and the existing
+   `/auth/set-password` page. Add a "Forgot password?" link from
+   `/login`.
+2. **Change-password flow inside the app** — signed-in user changes
+   their password from the avatar menu or `/settings/security`. Server
+   action validates current password (re-auth via signInWithPassword
+   against the user's own email) before `supabase.auth.updateUser({
+   password })`. Audit log entry `password_changed` with
+   `source: 'in_app'`.
+3. **5th email template for password reset.** Add `kind: 'reset'`
+   variant to `scripts/bootstrap-admin.ts` `COPY` (same royal design,
+   different subject + body copy emphasising "you requested" + the
+   single-use one-hour TTL). Manually update Supabase Dashboard "Reset
+   Password" template to match the same HTML.
+4. **Quotes module wired to Supabase.** Migration
+   `0005_quotes_schema.sql` (`quotes`, `quote_sections`,
+   `quote_line_items` tables — schema sketched in
+   `NEXVELON_SESSION_A_HANDOFF.md` §12). `lib/api/quotes.ts` mirrors
+   `lib/api/clients.ts`. Server actions in `app/(app)/quotes/actions.ts`.
+   Page rewrites: `app/(app)/quotes/page.tsx` becomes a server
+   component fetching via the API; `QuoteBuilder` migrates from
+   localStorage to controlled props.
+5. **Modules to wire after Quotes (in priority order).** Each module
+   ships its own `00NN_<module>_schema.sql` + `lib/api/<module>.ts` +
+   server actions + page rewrite, mirroring the clients/quotes
+   pattern.
+   - Projects
+   - Inventory
+   - Vendors
+   - Invoices
+   - Subcontractors
+   - Financials
+   - Scheduling
+
+### Constraints that survived Session A (still apply for Session B)
+
+- The 7 UI-only modules (Dashboard, Quotes, Projects, Inventory,
+  Scheduling, Financials, Settings) **stay as decorative shells until
+  each is migrated**. Don't demolish them.
+- **No regulatory claims.** Do NOT reintroduce "ULC Listed", "ESA
+  Licensed", or "Holloway Security Integration Group" anywhere
+  user-facing or in templates.
+- **No demolition.** Don't delete UI-only modules or
+  `lib/mock-data/*` files. Each gets retired one-by-one as its
+  module is wired.
+- **Migration cadence:** every new module ships its own
+  `00NN_<module>_schema.sql` + `lib/api/<module>.ts` + server
+  actions + page rewrite (server component fetch, client view) —
+  mirroring the clients module reference.
+- **Don't migrate `lib/types.ts` to `lib/types/database.ts` yet.**
+  That's a separate refactor for after Quotes ships and the
+  permissions matrix expands.
+- **`/clients` and `/users` remain the only DB-wired surfaces until
+  Quotes lands.**
 
 ### What landed in Session A (Phases 1–6 + post-acceptance fixes)
 
@@ -44,67 +156,43 @@
 4. **Phase 4** — `/users` invite drawer (Admin-only, calls
    `inviteUserByEmail`), per-row Suspend/Reactivate/Terminate actions
    that revoke sessions + write audit-log rows.
-5. **Phase 5** — `scripts/bootstrap-admin.ts`. Now uses
-   deterministic `auth.admin.listUsers` existence check (replaces the
-   regex-on-error-text heuristic) and one shared parchment
+5. **Phase 5** — `scripts/bootstrap-admin.ts`. Deterministic
+   `auth.admin.listUsers` existence check; single shared royal-black
    `buildEmailHtml({ kind, confirmUrl, recipientEmail })` for both
-   invite + magic-link kinds; only six copy slots in `COPY[kind]`
-   differ. Verbose `[bootstrap]` structured logs.
+   invite + magic-link kinds (identical HTML, two semantic fields
+   differ); `[bootstrap]` structured logs; `--render-smoke` flag for
+   visual review without firing Resend.
 6. **Phase 6** — Demo cleanup: `lib/demo-accounts.ts` deleted,
    `RoleSwitcher` deleted, demo env flags pruned, Holloway/ULC/ESA
    branding scrubbed.
-7. **Post-acceptance fixes** (commits `0f51609` → `deacabc`):
-   - Avatar dropdown crash (Base UI #31 from `Menu.GroupLabel`
-     without `Menu.Group`) — fixed by replacing with plain `<div>`.
-   - OTP verify hang — fixed via `redirect()` from
-     `next/navigation` so cookie writes ride atomically with the
-     redirect response. Plus 30s client timeout fallback.
-   - Search bar in TopBar removed (latent crash via
-     `GlobalCommandPalette`).
-   - Sidebar count chips removed (were reading mock data).
-   - Activity Log tab in `/users` now renders real `auth_audit_log`
-     rows via new `lib/api/audit.ts`.
-   - `/auth/callback` deleted (no flow uses it; `/auth/confirm` is
-     canonical).
-   - `/auth/signout` route added with belt-and-braces server-side
-     cookie clear.
-   - Set-password now ALWAYS funnels through OTP (closes the
-     half-authenticated session bug).
-   - Sign-out hardened with 5s `Promise.race` + `window.location.replace`
-     for hard reload past stuck React state.
-
-### Open bugs blocking acceptance
-
-- **Bug A — Invite email reportedly not the parchment design.** May be
-  stale (user tested before `c527aa6`). Re-test required. See
-  `NEXVELON_SESSION_A_HANDOFF.md` §2.
-- **Bug B — "We can't find your profile" after set-password.** Most
-  likely the `on_auth_user_created` trigger isn't firing. See handoff
-  §2 for diagnostic SQL to run in Supabase SQL Editor.
-
-### Constraints that survived Session A
-
-- The 7 UI-only modules (Dashboard, Quotes, Projects, Inventory,
-  Scheduling, Financials, Settings) **stay as decorative shells**.
-  Migrate one at a time in priority order: Quotes → Projects →
-  Inventory → Vendors → Invoices → Subcontractors → Financials →
-  Scheduling.
-- **No regulatory claims.** Do NOT reintroduce "ULC Listed", "ESA
-  Licensed", or "Holloway Security Integration Group" anywhere.
-- **No demolition.** Don't delete UI-only modules or
-  `lib/mock-data/*` files. Each gets retired one-by-one as its
-  module is wired.
-- **Migration cadence:** every new module ships its own
-  `00NN_<module>_schema.sql` + `lib/api/<module>.ts` + server
-  actions + page rewrite (server component fetch, client view) —
-  mirroring the clients module reference.
+7. **Post-acceptance fixes** (commits `0f51609` → `a59adab`):
+   - Avatar dropdown crash (Base UI #31) — replaced `Menu.GroupLabel`
+     with plain `<div>`.
+   - OTP verify hang — `redirect()` from `next/navigation` so cookie
+     writes ride atomically with the redirect response. 30s client
+     timeout fallback.
+   - Bug A (email design) — fully redesigned to royal black + gold
+     + ivory letter (`9027b6e`).
+   - Bug B (missing profile after set-password) — migration `0004`
+     restores the trigger's schema prefix and hardens the function
+     body (`020eec2`).
+   - Sign-in fast-path — `?just_signed_in=ok` hint skips duplicate
+     session check on /dashboard (`ccec631`).
+   - Sign-out fast-path — `/auth/signout` GET clears cookies + 307s
+     to `/login?signout=ok`; `isSigningOut()` flag prevents the
+     reactive-redirect race; `scope: 'local'` SDK call avoids CORS
+     (`0bbef7c`, `6dd785a`, `24a3195`).
+   - Magic-link copy renamed to "password reset" wording (`a59adab`).
+   - Search bar removed from TopBar; sidebar count chips removed;
+     Activity Log tab now reads real `auth_audit_log` rows;
+     `/auth/callback` deleted; `/auth/signout` route added.
 
 ### Detailed history sections — read below
 
 §1–§16 of this document are the original handoff narrative kept for
-historical context. The single most important insertion since they
-were written is `NEXVELON_AUDIT.md` (read-only audit done early in
-Session A) and `NEXVELON_SESSION_A_HANDOFF.md` (this wrap-up).
+historical context. The most important supplementary docs are
+`NEXVELON_AUDIT.md` (read-only audit done early in Session A) and
+`NEXVELON_SESSION_A_HANDOFF.md` (the wrap-up).
 
 ---
 
