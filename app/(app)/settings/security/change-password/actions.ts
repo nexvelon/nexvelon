@@ -2,6 +2,7 @@
 
 import { createClient as createPlainSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { assertValidPassword, checkPassword } from "@/lib/auth/password-policy";
 import { writeAuditLog } from "@/lib/auth/audit";
 import { getRequestInfo } from "@/lib/auth/request-info";
@@ -22,24 +23,30 @@ import { getRequestInfo } from "@/lib/auth/request-info";
 //      client constructed from '@supabase/supabase-js' directly (NOT
 //      @supabase/ssr) so it doesn't touch the user's cookies. With
 //      `persistSession: false`, the signInWithPassword call validates
-//      the credential without mutating any storage.
+//      the credential without mutating any storage. This is our
+//      app-layer security check.
 //   3. Run the new password through the project's existing password
 //      policy (lib/auth/password-policy — same module the
 //      set-password / reset-password flows use).
 //   4. Reject if new === current (Supabase Auth doesn't enforce this
 //      itself, and a no-op "change" is a UX trap).
-//   5. supabase.auth.updateUser({ password }) on the THROWAWAY client
-//      (not the cookie-aware one). Supabase's "Secure password change"
-//      project setting gates updateUser on a recently-authenticated
-//      session — the user's cookie-bound session is older than the
-//      gate's threshold (typically 5 min) on a typical change-password
-//      flow, so calling updateUser there fails with "Current password
-//      required when setting new password". The throwaway client just
-//      authenticated in step 4, so its in-memory session is fresh and
-//      satisfies the gate. The password change propagates server-side
-//      (Supabase Auth doesn't care which session made the change).
+//   5. Update the password via the SERVICE-ROLE ADMIN endpoint
+//      (admin.auth.admin.updateUserById). Important: Supabase's
+//      "Secure password change" project setting gates the user-facing
+//      auth.updateUser endpoint on an explicit `nonce` obtained from
+//      auth.reauthenticate() — NOT just a recently-authenticated
+//      session, contrary to the previous theory in commit f82dc6c.
+//      Calling auth.updateUser on either the cookie-aware client OR a
+//      freshly-signed-in throwaway therefore both fail with
+//      "Current password required when setting new password". The
+//      admin endpoint bypasses that gate because it's intended for
+//      server-side privileged operations; our throwaway
+//      signInWithPassword in step 2 IS the security verification, so
+//      using the admin endpoint here is the standard pattern for
+//      SaaS apps with their own custom change-password UI.
 //   6. If signOutOtherDevices === true, sign out the *other* sessions
-//      via scope: 'others'. Current tab stays alive.
+//      via scope: 'others' on the cookie-aware client. Current tab
+//      stays alive.
 //   7. Audit `password_changed` with source: 'self' and a flag
 //      indicating whether other-devices was signed out.
 // ============================================================================
@@ -152,17 +159,20 @@ export async function changeOwnPasswordAction(
     return { ok: false, error: "Current password is incorrect." };
   }
 
-  // 5. Update password on the THROWAWAY client (which just authenticated
-  //    in step 4 above — its in-memory session is fresh enough to clear
-  //    Supabase's "Secure password change" recent-auth gate). Using the
-  //    cookie-aware `supabase` here would fail with "Current password
-  //    required when setting new password" whenever the user's session
-  //    is older than the gate's threshold (typically 5 min). The
-  //    password update propagates server-side regardless of which
-  //    session made the call.
-  const { error: updateErr } = await verifyClient.auth.updateUser({
-    password: newPassword,
-  });
+  // 5. Update password via the SERVICE-ROLE admin endpoint. The
+  //    user-facing auth.updateUser endpoint is gated by Supabase's
+  //    "Secure password change" project setting on a `nonce` parameter
+  //    obtained from auth.reauthenticate() — which neither the
+  //    cookie-aware nor the throwaway client provides. The admin
+  //    endpoint isn't subject to that gate (it's meant for server-
+  //    side privileged operations). Our step-2 throwaway
+  //    signInWithPassword is the actual security check; the admin
+  //    update is the privileged write that applies the result.
+  const admin = createAdminClient();
+  const { error: updateErr } = await admin.auth.admin.updateUserById(
+    user.id,
+    { password: newPassword }
+  );
   log("update_user_result", { error: updateErr?.message ?? null });
   if (updateErr) {
     return {
