@@ -300,27 +300,15 @@ export function recentActivity(limit = 10): ActivityEvent[] {
     }
   }
 
-  // A handful of synthetic PO receipts to round out the feed.
-  events.push(
-    {
-      id: "po-1",
-      kind: "po",
-      message: "PO to Anixter received — 28 Avigilon H6A bullets",
-      timestamp: new Date("2026-04-28T09:14:00"),
-    },
-    {
-      id: "po-2",
-      kind: "po",
-      message: "PO to ADI received — Kantech ioSmart readers (×24)",
-      timestamp: new Date("2026-04-26T15:32:00"),
-    },
-    {
-      id: "po-3",
-      kind: "po",
-      message: "PO to CDW received — Axis Q6225-LE PTZ (×4)",
-      timestamp: new Date("2026-04-22T11:08:00"),
-    }
-  );
+  // Synthetic PO receipts removed during the 2026-05-11 production-
+  // readiness cleanup — three hardcoded entries ("PO to Anixter
+  // received — 28 Avigilon H6A bullets", "PO to ADI received —
+  // Kantech ioSmart readers (×24)", "PO to CDW received — Axis
+  // Q6225-LE PTZ (×4)") were rendering as real activity on the
+  // dashboard even after the mock-data wipe. Activity feed now
+  // derives entirely from real quotes / invoices / projects in
+  // public.*. Once Inventory v1 ships its PO ledger, PO receipts
+  // will join the feed via a real query.
 
   return events
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())

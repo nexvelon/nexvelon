@@ -970,7 +970,7 @@ export function TaxTab({ range }: TabProps) {
             </p>
             <p className="text-brand-navy font-serif text-lg">{tax.filingPeriodLabel}</p>
             <p className="text-muted-foreground mt-1 text-xs">
-              Ontario HST 13% · CRA Business # 81245-6709 RT0001
+              Ontario HST 13% · CRA Business # set in Settings → Company Profile
             </p>
           </div>
           <Button onClick={() => toast.success("HST return PDF generated")}>

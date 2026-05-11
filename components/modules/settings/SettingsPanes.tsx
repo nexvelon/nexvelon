@@ -365,21 +365,37 @@ export function TaxCurrency() {
 // Integrations
 // ─────────────────────────────────────────────────────────────
 
-const INTEGRATIONS = [
-  { id: "qbo", name: "QuickBooks Online", category: "Accounting", connected: true, lastSync: "2h ago" },
-  { id: "xero", name: "Xero", category: "Accounting", connected: false },
-  { id: "stripe", name: "Stripe", category: "Payments", connected: true, lastSync: "12m ago" },
-  { id: "twilio", name: "Twilio", category: "SMS", connected: true, lastSync: "Yesterday" },
-  { id: "sendgrid", name: "SendGrid", category: "Email", connected: true, lastSync: "Yesterday" },
-  { id: "gcal", name: "Google Calendar", category: "Calendar", connected: false },
-  { id: "ms365", name: "Microsoft 365", category: "Calendar / Identity", connected: true, lastSync: "5m ago" },
-  { id: "genetec", name: "Genetec Security Center", category: "Security", connected: true, lastSync: "1h ago" },
-  { id: "avigilon", name: "Avigilon ACC", category: "Security", connected: true, lastSync: "1h ago" },
-  { id: "kantech", name: "Kantech EntraPass", category: "Access Control", connected: false },
-  { id: "ict", name: "ICT Protege", category: "Access Control", connected: true, lastSync: "3h ago" },
-] as const;
+// Pre-Quotes cleanup (2026-05-11): 11-entry hardcoded INTEGRATIONS
+// list removed. None of those integrations (QBO, Xero, Stripe,
+// Twilio, SendGrid, GCal, MS365, Genetec, Avigilon, Kantech, ICT)
+// are actually wired in our codebase yet — the "Connected · last
+// sync 2h ago" badges were demo scaffolding. Real integration
+// registry will live in a Supabase table once the Integrations
+// module ships (NEXVELON_ROADMAP.md, post-MVP).
+const INTEGRATIONS: ReadonlyArray<{
+  id: string;
+  name: string;
+  category: string;
+  connected: boolean;
+  lastSync?: string;
+}> = [];
 
 export function Integrations() {
+  if (INTEGRATIONS.length === 0) {
+    return (
+      <Card className="bg-card p-10 text-center shadow-sm">
+        <p className="text-brand-navy font-serif text-lg">
+          No integrations configured yet
+        </p>
+        <p className="text-muted-foreground mt-2 text-[12px]">
+          Accounting, payments, SMS, email, security platform, and
+          access-control integrations will appear here once the
+          Integrations module ships. Until then, Nexvelon operates
+          standalone.
+        </p>
+      </Card>
+    );
+  }
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -405,7 +421,7 @@ export function Integrations() {
             </div>
             <p className="text-brand-navy mt-3 font-serif text-base">{i.name}</p>
             <p className="text-muted-foreground text-[11px]">{i.category}</p>
-            {i.connected && (
+            {i.connected && i.lastSync && (
               <p className="text-muted-foreground mt-1 text-[10px]">
                 Last sync · {i.lastSync}
               </p>
@@ -602,16 +618,26 @@ export function AuditCompliance() {
 // API & Webhooks
 // ─────────────────────────────────────────────────────────────
 
-const SAMPLE_KEYS = [
-  { id: "k-1", name: "Production · CI", prefix: "nxv_live_84a9", created: "2025-11-12" },
-  { id: "k-2", name: "QuickBooks middleware", prefix: "nxv_live_77f2", created: "2026-02-04" },
-];
+// Pre-Quotes cleanup (2026-05-11): hardcoded API keys + webhooks
+// removed. The "Production · CI", "QuickBooks middleware" keys and
+// the hooks.nexvelon.com webhooks were demo scaffolding — none of
+// those endpoints exist. Real keys + webhooks will be issued and
+// managed via this pane once API issuance lands (NEXVELON_PRINCIPLES
+// .md §6: API-first design — every server action also exposes an
+// authenticated API surface).
+const SAMPLE_KEYS: Array<{
+  id: string;
+  name: string;
+  prefix: string;
+  created: string;
+}> = [];
 
-const WEBHOOKS = [
-  { id: "w-1", url: "https://hooks.nexvelon.com/quickbooks", events: 6, status: "Healthy" },
-  { id: "w-2", url: "https://hooks.nexvelon.com/twilio-sms", events: 3, status: "Healthy" },
-  { id: "w-3", url: "https://hooks.nexvelon.com/slack-ops", events: 12, status: "Failing" },
-];
+const WEBHOOKS: Array<{
+  id: string;
+  url: string;
+  events: number;
+  status: string;
+}> = [];
 
 export function ApiWebhooks() {
   return (
@@ -710,49 +736,32 @@ export function ApiWebhooks() {
 // ─────────────────────────────────────────────────────────────
 
 export function BillingPlan() {
+  // Pre-Quotes cleanup (2026-05-11): hardcoded "Enterprise · 10
+  // seats · $19,200 CAD / year · Renews Jan 1, 2027" subscription
+  // card removed. Nexvelon is the operator's own self-hosted suite
+  // — there is no SaaS billing relationship to render. If/when this
+  // ships as a multi-tenant product, this pane wires to a real
+  // billing source (Stripe Customer Portal probably).
   return (
     <div className="space-y-6">
       <Card className="border-t-2 border-t-[#C9A24B] p-6 shadow-sm">
         <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
-          Current plan
+          Deployment
         </p>
-        <div className="mt-1 flex items-end justify-between">
-          <div>
-            <h2 className="text-brand-navy font-serif text-3xl">Enterprise</h2>
-            <p className="text-muted-foreground text-xs">
-              10 seats · Annual · Renews Jan 1, 2027
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-brand-navy font-serif text-2xl tabular-nums">
-              $19,200
-            </p>
-            <p className="text-muted-foreground text-[10px]">CAD / year</p>
-          </div>
+        <div className="mt-1">
+          <h2 className="text-brand-navy font-serif text-3xl">
+            Nexvelon Enterprise Suite
+          </h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Self-hosted · No subscription required
+          </p>
         </div>
-        <ul className="text-brand-charcoal mt-4 space-y-1 text-xs">
-          {[
-            "Unlimited quotes, projects, and invoices",
-            "10 included seats — additional seats $79/mo",
-            "Branded PDFs, full audit log, MFA enforcement",
-            "QuickBooks / Xero / Stripe integrations",
-            "Data residency: ca-central-1",
-            "Priority support · 4-hour SLA",
-          ].map((p) => (
-            <li key={p} className="flex items-center gap-2">
-              <CheckCircle2 className="text-brand-gold h-3 w-3" />
-              {p}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-5 flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            Manage seats
-          </Button>
-          <Button variant="ghost" size="sm">
-            Download invoice
-          </Button>
-        </div>
+        <p className="text-brand-charcoal mt-4 text-[12px] leading-relaxed">
+          This deployment of the Nexvelon Enterprise Suite is operated
+          directly by Nexvelon Global Inc. — no per-seat licensing or
+          monthly fees apply. Vercel + Supabase hosting costs are
+          incurred by the operator at the infrastructure level.
+        </p>
       </Card>
     </div>
   );

@@ -25,6 +25,24 @@ function relative(d: Date): string {
 }
 
 export function ActivityFeed({ events }: Props) {
+  if (events.length === 0) {
+    return (
+      <Card className="h-full transition-shadow hover:shadow-md">
+        <CardHeader className="pb-2">
+          <CardTitle className="font-serif text-lg">Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground flex flex-col items-center justify-center gap-1 py-10 text-center">
+            <p className="text-sm">No recent activity</p>
+            <p className="text-[11px]">
+              Quote, invoice, and project events will appear here as they
+              happen.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card className="h-full transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">

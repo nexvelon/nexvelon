@@ -163,53 +163,16 @@ export interface VendorInfo {
   avgLeadTimeDays: number;
 }
 
-export const VENDOR_DIRECTORY: VendorInfo[] = [
-  {
-    name: "ADI",
-    accountNumber: "ADI-0084-NXVL",
-    rep: { name: "Tom Halloway", email: "thalloway@adiglobal.ca", phone: "(905) 555-0712" },
-    paymentTerms: "Net 30",
-    ytdSpend: 248_400,
-    poCount: 41,
-    avgLeadTimeDays: 4,
-  },
-  {
-    name: "Anixter",
-    accountNumber: "ANIX-2261-NEX",
-    rep: { name: "Sandra Whittaker", email: "swhittaker@anixter.com", phone: "(416) 555-0820" },
-    paymentTerms: "Net 45",
-    ytdSpend: 312_800,
-    poCount: 28,
-    avgLeadTimeDays: 7,
-  },
-  {
-    name: "Wesco",
-    accountNumber: "WES-7714-NV",
-    rep: { name: "Reginald Coombs", email: "rcoombs@wesco.com", phone: "(905) 555-0915" },
-    paymentTerms: "Net 30",
-    ytdSpend: 184_650,
-    poCount: 22,
-    avgLeadTimeDays: 6,
-  },
-  {
-    name: "CDW",
-    accountNumber: "CDW-0042-CAN",
-    rep: { name: "Priscilla Devereaux", email: "priscid@cdw.com", phone: "(905) 555-1100" },
-    paymentTerms: "Net 30",
-    ytdSpend: 142_200,
-    poCount: 18,
-    avgLeadTimeDays: 3,
-  },
-  {
-    name: "Provo",
-    accountNumber: "PROVO-0188",
-    rep: { name: "Lars Wittenberg", email: "lars.w@provo.ca", phone: "(905) 555-1224" },
-    paymentTerms: "Net 30",
-    ytdSpend: 38_900,
-    poCount: 6,
-    avgLeadTimeDays: 5,
-  },
-];
+// Pre-Quotes cleanup (2026-05-11): 5-entry hardcoded vendor
+// directory removed. Each row had fictitious rep names + emails +
+// phone numbers + YTD spend + PO counts that were rendering on
+// Settings → Vendors. Real vendor records will live in a Supabase
+// `vendors` table once the Vendors module ships (NEXVELON_ROADMAP
+// .md item 7). The `Vendor` union type in lib/types.ts is kept
+// because it still drives the supported-vendor dropdown in
+// QuoteBuilder + StockTab filter — it'll lift to a lookup table
+// per NEXVELON_PRINCIPLES.md §6 when Vendors is wired.
+export const VENDOR_DIRECTORY: VendorInfo[] = [];
 
 // ────────────────────────────────────────────────────────────────────────────
 // Aggregated helpers
