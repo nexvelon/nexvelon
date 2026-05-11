@@ -1,8 +1,83 @@
 # CLAUDE_CONTEXT.md
 
 > **Single source of truth for the Nexvelon project.**
-> A fresh Claude Code session should read this file end-to-end before
-> proposing any change.
+> A fresh Claude Code session should read **`NEXVELON_PRINCIPLES.md` first**
+> (the five non-negotiables), then the `## Current Session State` block
+> below, then any task-relevant section.
+
+---
+
+## Current Session State
+
+**As of 2026-05-11.**
+
+- **Last completed feature:** Session B Priority 2 — in-app
+  change-password flow. Final commit `e472b1c` ("fix(auth): use admin
+  update endpoint to bypass secure-change nonce requirement"). The
+  initial implementation landed in `047d8a9`; `e472b1c` is the working
+  version that bypasses Supabase's `nonce`-gated `auth.updateUser`
+  endpoint via the service-role `admin.auth.admin.updateUserById`.
+- **Latest commit on `main`:** `8d44ef7` — "chore(cleanup): empty mock
+  data + add wipe-test-data.sql script (pre-quotes cleanup)". Run
+  `git log -1 --oneline` for the truly latest after any new push.
+- **Auth surface:** ✅ COMPLETE. Sign-in (password + email OTP),
+  sign-out, forgot-password, reset-password, in-app change-password,
+  invite-only signup via bootstrap CLI, server-side dashboard
+  validation with sub-2s session check (no client-side
+  getUser+fetchProfile chain). No outstanding bugs.
+- **Pending pipeline (in order):**
+  1. **Pre-Quotes cleanup** — `scripts/wipe-test-data.sql` ready to
+     paste into Supabase SQL Editor manually. Mock data already
+     emptied in `8d44ef7`. **Once executed, every migration from that
+     point on is production-data-bearing** — see
+     `NEXVELON_PRINCIPLES.md` §1.
+  2. **Permissions system design** — DB schema + UX for per-user,
+     per-feature ACL with Admin overrides. Three UI states
+     (hidden/disabled/interactive) per gated control. Must ship
+     BEFORE Quotes per `NEXVELON_PRINCIPLES.md` §2.
+  3. **Permissions module build** — `0005_permissions_schema.sql`,
+     `lib/api/permissions.ts`, `lib/permissions.ts` rewrite, server-
+     action and route-level gates, Admin override UI.
+  4. **Quotes v1** — Session B Priority 4 from the Session A handoff
+     §12. Currently sketched as `0006_quotes_schema.sql` /
+     `lib/api/quotes.ts` / page rewrites. Numbering shifts by one
+     because permissions now ships first.
+- **Outstanding Quotes schema decisions** (revisit AFTER permissions
+  ships — the granular ACL changes the answers):
+  - **`quote_shares` table necessity.** Originally proposed for sharing
+    a quote with a client via tokenised link. With the per-user
+    permissions system, "share" might decompose into either (a) a
+    per-quote permission grant to a `ClientPortal` user, or (b) a
+    token-bound public-read view. The right shape depends on whether
+    ClientPortal users ever get accounts vs. anonymous link clicks.
+    Defer the decision.
+  - **`unit_label` enum vs. freeform `text`.** Quote line items have a
+    unit ("ea", "ft", "hr", "license"). Enum gives consistency for
+    reporting; freeform gives integrator flexibility for one-off
+    units. Likely answer: short enum + a freeform `unit_label_custom`
+    text override gated by a permission.
+  - **Currency at quote-level vs. client-level.** A single client may
+    have CA + US sites. Quote-level is more flexible but creates
+    aggregation friction in client-tier and dashboard reporting.
+    Likely answer: client default + per-quote override, both surfaced
+    in the UI.
+  - **Discount granularity** — line-item, section, total, or all
+    three? Affects margin calculation, audit log shape, and how the
+    competitive bar (D-Tools, QuoteWerks both support all three) is
+    met. Likely answer: all three, with section-level being the
+    default UI surface and line/total being progressive disclosure.
+- **Production status:** ⚠️ **GOING LIVE FOR REAL BUSINESS USE.** Data
+  preservation rules in `NEXVELON_PRINCIPLES.md` §1 apply from
+  `8d44ef7` (chore cleanup) forward. No more "we'll fix the data model
+  later" mode. Every migration is additive by default; drops require
+  the documented copy-deploy-drop sequence with operator sign-off
+  comment.
+- **Live URL:** https://app.nexvelonglobal.com (Vercel auto-deploys
+  from `main`).
+- **GitHub repo:** https://github.com/nexvelon/nexvelon (default
+  branch `main`).
+- **Admin account:** `jayshah.x@gmail.com` (Jay Shah, Admin role).
+  Preserved across the wipe script — see `scripts/wipe-test-data.sql`.
 
 ---
 
