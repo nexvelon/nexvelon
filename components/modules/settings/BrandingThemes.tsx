@@ -1,21 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { ROLE_LABELS } from "@/lib/permissions";
 import { useTheme } from "@/lib/theme-context";
 import { THEMES, THEME_ORDER, type ThemeKey } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function BrandingThemes() {
   const { theme, setTheme } = useTheme();
-  const [signature, setSignature] = useState(`Marcus Holloway
-Managing Director · Nexvelon Global Inc.
-240 Front Street West · Toronto, ON
-(416) 555-0100 · marcus.reyes@nexvelon.com`);
+  const { user, profile } = useAuth();
+
+  // Seed the email-signature template from the SIGNED-IN user's identity
+  // rather than the old hardcoded "Marcus Holloway / 240 Front Street …"
+  // block. The (app) layout has already validated the session by the
+  // time this pane renders, so `user`/`profile` are present. The user
+  // can edit the textarea — useMemo just gives us the initial value.
+  const initialSignature = useMemo(() => {
+    if (!user) return "";
+    const name = user.name;
+    const titleLine = ROLE_LABELS[user.role] ?? "Nexvelon Enterprise Suite";
+    const phone = profile?.phone ?? profile?.mobile ?? null;
+    const email = user.email;
+    const lines = [
+      name,
+      `${titleLine} · Nexvelon Global Inc.`,
+      phone ? `${phone} · ${email}` : email,
+    ].filter(Boolean);
+    return lines.join("\n");
+  }, [user, profile]);
+  const [signature, setSignature] = useState(initialSignature);
   const [loginBg, setLoginBg] = useState("filigree-default");
 
   return (
@@ -52,7 +71,7 @@ Managing Director · Nexvelon Global Inc.
           <div className="flex-1">
             <p className="text-brand-charcoal text-sm font-semibold">Current logo</p>
             <p className="text-muted-foreground text-[11px]">
-              SVG · 1024×1024 · uploaded Apr 8, 2026 by Marcus Holloway
+              SVG · 1024×1024 · placeholder N-glyph (replace with your own logo)
             </p>
           </div>
           <Button

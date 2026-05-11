@@ -43,21 +43,28 @@ export function CompanyProfile() {
     <div className="space-y-6">
       <Card className="bg-card p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Real company branding — keep. */}
           <Field label="Legal name" defaultValue="Nexvelon Global Inc." />
           <Field label="Trade name" defaultValue="Nexvelon" />
-          <Field label="GST/HST #" defaultValue="81245-6709 RT0001" />
-          <Field label="ESA license #" defaultValue="ESA/ECRA 7012-441" />
-          <Field label="ULC #" defaultValue="ULC-A-1188-CA" />
-          <Field label="WSIB #" defaultValue="WSIB 8842-7710-0042" />
+          {/* Regulatory + contact fields — empty until the operator fills
+              them in. The previous demo values (ESA/ECRA 7012-441,
+              ULC-A-1188-CA, 240 Front Street, etc.) were fictitious and
+              risked appearing on client-facing PDFs / quote letterheads.
+              These will persist to a company-profile DB table when
+              Settings wires to Supabase. */}
+          <Field label="GST/HST #" defaultValue="" />
+          <Field label="ESA license #" defaultValue="" />
+          <Field label="ULC #" defaultValue="" />
+          <Field label="WSIB #" defaultValue="" />
           <Field
             label="Headquarters address"
-            defaultValue="240 Front Street West, Suite 420"
+            defaultValue=""
             className="md:col-span-2"
           />
           <Field label="City" defaultValue="Toronto" />
-          <Field label="Province / Postal" defaultValue="ON · M5V 1A4" />
-          <Field label="Phone" defaultValue="(416) 555-0100" />
-          <Field label="Email" defaultValue="ops@nexvelon.com" />
+          <Field label="Province / Postal" defaultValue="ON" />
+          <Field label="Phone" defaultValue="" />
+          <Field label="Email" defaultValue="" />
           <div>
             <Label className="text-muted-foreground text-[11px]">Default tax rate</Label>
             <Input defaultValue="13.00%" />

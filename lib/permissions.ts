@@ -8,6 +8,7 @@ export type Resource =
   | "inventory"
   | "scheduling"
   | "financials"
+  | "reports"
   | "users"
   | "settings";
 
@@ -37,6 +38,7 @@ const ALL_RESOURCES: Resource[] = [
   "inventory",
   "scheduling",
   "financials",
+  "reports",
   "users",
   "settings",
 ];

@@ -266,10 +266,15 @@ export function QuoteDocument(props: DocProps) {
             <Text style={styles.brandSub}>Security Systems · Integrated Solutions</Text>
           </View>
           <View style={styles.contactBlock}>
-            <Text>240 Front Street West, Suite 420</Text>
-            <Text>Toronto, ON M5V 1A4 · Canada</Text>
-            <Text>(416) 555-0100 · sales@nexvelon.com</Text>
-            <Text>HST # 81245-6709 RT0001</Text>
+            {/* Contact details pulled from Settings → Company Profile
+                once that pane wires to Supabase. Hardcoded demo values
+                (240 Front Street West / (416) 555-0100 / sales@nexvelon
+                .com / HST 81245-6709) were removed during the 2026-05-11
+                production-readiness cleanup — they were fictitious and
+                would otherwise have appeared on every client-facing PDF
+                quote. Configure your real values in Settings → Company
+                Profile before sending a quote externally. */}
+            <Text>Configure address in Settings → Company Profile</Text>
           </View>
         </View>
 

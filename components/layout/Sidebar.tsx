@@ -134,29 +134,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* EST stamp + version */}
-      <div
-        className="flex items-center gap-2.5 border-t px-5 py-4"
-        style={{ borderColor: "var(--brand-sidebar-border)" }}
-      >
-        <span
-          className="flex h-7 w-7 items-center justify-center rounded-full font-serif text-[8px] tracking-[0.2em] uppercase"
-          style={{
-            border: "1px solid rgba(184,146,75,0.4)",
-            color: "var(--brand-accent-soft)",
-          }}
-        >
-          EST
-        </span>
-        <span
-          className="font-serif text-[10px] tracking-[0.18em] uppercase"
-          style={{ color: "rgba(184,146,75,0.6)" }}
-        >
-          v 4 . 18 . 2
-          <br />
-          <span className="font-serif tracking-[0.2em]">est. mmxxiv</span>
-        </span>
-      </div>
     </aside>
   );
 }

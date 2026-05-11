@@ -1,13 +1,14 @@
 import {
-  LayoutDashboard,
-  FileText,
-  FolderKanban,
-  Users,
+  BarChart3,
   Boxes,
   Calendar,
+  FileText,
+  FolderKanban,
+  LayoutDashboard,
   Receipt,
-  UserCog,
   Settings,
+  UserCog,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import type { Resource } from "@/lib/permissions";
@@ -39,6 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/inventory", label: "Inventory", icon: Boxes, resource: "inventory" },
   { href: "/scheduling", label: "Scheduling", icon: Calendar, resource: "scheduling" },
   { href: "/financials", label: "Financials", icon: Receipt, resource: "financials" },
+  { href: "/reports", label: "Reports", icon: BarChart3, resource: "reports" },
   { href: "/users", label: "Users & Permissions", icon: UserCog, resource: "users" },
   { href: "/settings", label: "Settings", icon: Settings, resource: "settings" },
 ];

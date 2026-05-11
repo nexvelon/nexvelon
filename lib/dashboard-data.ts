@@ -208,7 +208,13 @@ export function pipelineFunnel(): FunnelStage[] {
   const completed = projects
     .filter((p) => p.status === "Completed")
     .reduce((s, p) => s + p.budget, 0);
-  const lead = Math.round(quoted * 1.6 + 240000);
+  // Lead-stage estimate: a 1.6× expansion factor over the quoted value
+  // (rough industry rule of thumb for how much pipeline a quote stage
+  // implies above it). The previous "+ 240000" baseline constant has
+  // been removed — that was a leftover from the demo phase that
+  // inflated the funnel when quotes was empty. Real "Lead" values come
+  // from a leads/CRM table in a later session.
+  const lead = Math.round(quoted * 1.6);
 
   return [
     { name: "Lead", value: lead, fill: "#1A2C57" },
