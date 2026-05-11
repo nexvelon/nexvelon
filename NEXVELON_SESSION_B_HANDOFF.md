@@ -278,11 +278,12 @@ source arrays via `array[NaN]` patterns (modulo by zero):
   3. Competitive bar — **reference floors, not ceilings**;
      world-class SaaS rebuilt from scratch in 2026 with no
      legacy debt. Updated reference list per module: Quotes →
-     Sedona Office, Wisetrack. Projects → ServiceTrade,
-     Salesforce Field Service. Inventory → Anixter, Best Buy
-     distributor portal. Scheduling → ServiceFusion, Jobber.
-     Financials → QuickBooks (integration target). Auth/Users
-     dropped from the table — foundational, not competitive.
+     Sedona Office, Wisetrack, simPRO. Projects → ServiceTrade,
+     Salesforce Field Service, simPRO. Inventory → Anixter,
+     Best Buy distributor portal, simPRO. Scheduling →
+     ServiceFusion, Jobber, simPRO. Financials → QuickBooks
+     (integration target). Auth/Users dropped from the table —
+     foundational, not competitive.
   4. Audit everything — who/what/when/before/after/IP/UA on
      every business-record write. Append-only at the RLS policy
      level. 7-year retention.
@@ -404,13 +405,13 @@ Full descriptions in `NEXVELON_ROADMAP.md`. Sequence:
    .ts`, `lib/permissions.ts` rewrite, server-action + route gates,
    client hooks, Admin override UI.
 4. **Quotes v1** — first real business module beyond clients/users.
-   Beats Sedona Office + Wisetrack reference floor (§3) on margin
-   clarity + convert-to-project friction.
+   Beats Sedona Office + Wisetrack + simPRO reference floor (§3) on
+   margin clarity + convert-to-project friction.
 5. **Projects v1** — wires the existing detail UI to real DB.
    Quote→Project conversion end-to-end. Beats ServiceTrade +
-   Salesforce Field Service.
-6. **Inventory v1** — beats Anixter + Best Buy distributor portal
-   on the one-screen low-stock + on-order view.
+   Salesforce Field Service + simPRO.
+6. **Inventory v1** — beats Anixter + Best Buy distributor portal +
+   simPRO on the one-screen low-stock + on-order view.
 7. **Vendors v1** — splits out into a first-class module from the
    inventory + financials surfaces.
 8. **Invoices v1** — AR side of Financials. QuickBooks Online

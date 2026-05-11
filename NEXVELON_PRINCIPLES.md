@@ -107,10 +107,10 @@ real sales cycles — and remember the table is a floor, not a target:
 
 | Module | Reference floor | Direction we exceed |
 |---|---|---|
-| **Quotes** | Sedona Office, Wisetrack | Web-native multi-section quotes with live margin per line, single-click convert-to-project, custom fields on every line item, PDF export that doesn't require a designer to look professional. |
-| **Projects** | ServiceTrade, Salesforce Field Service | Tighter integration with quotes + inventory + scheduling; fewer manual handoffs; the operator never re-types a line item between modules. |
-| **Inventory** | Anixter web portal, Best Buy distributor portal | Per-vendor reorder rules tied to manufacturer lead times; vendor-aware bills of material derived from quotes; one-screen low-stock + on-order view rather than the 4-click flow distributor portals impose. |
-| **Scheduling** | ServiceFusion, Jobber | Tech-by-tech route + capacity optimisation that respects panel-cert qualifications (Kantech, Genetec, C-CURE, etc.), not just radius or availability. |
+| **Quotes** | Sedona Office, Wisetrack, simPRO | Web-native multi-section quotes with live margin per line, single-click convert-to-project, custom fields on every line item, PDF export that doesn't require a designer to look professional. |
+| **Projects** | ServiceTrade, Salesforce Field Service, simPRO | Tighter integration with quotes + inventory + scheduling; fewer manual handoffs; the operator never re-types a line item between modules. |
+| **Inventory** | Anixter web portal, Best Buy distributor portal, simPRO | Per-vendor reorder rules tied to manufacturer lead times; vendor-aware bills of material derived from quotes; one-screen low-stock + on-order view rather than the 4-click flow distributor portals impose. |
+| **Scheduling** | ServiceFusion, Jobber, simPRO | Tech-by-tech route + capacity optimisation that respects panel-cert qualifications (Kantech, Genetec, C-CURE, etc.), not just radius or availability. |
 | **Financials** | QuickBooks (integration target, not replacement) | First-class margin reporting per quote / project / client tier, owned inside Nexvelon; QBO syncs the GL side but Nexvelon owns the operational analytics. |
 
 **Auth, users, and permissions are foundational — not competitive.**

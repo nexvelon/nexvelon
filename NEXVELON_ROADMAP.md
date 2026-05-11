@@ -119,8 +119,8 @@ Expired / Converted seeded; operator can rename/retire). Permission
 gates wired (`quotes:create`, `quotes:viewMargin`, `quotes:approve`,
 `quotes:convert`, `quotes:viewInternal`). PDF export reads from
 company-profile DB table (built incidentally — see deferred
-decisions). Beats the Sedona Office / Wisetrack reference floor on
-margin clarity and convert-to-project friction.
+decisions). Beats the Sedona Office / Wisetrack / simPRO reference
+floor on margin clarity and convert-to-project friction.
 
 ---
 
@@ -137,7 +137,8 @@ session wires it to real DB.
 permission gates, audit. Quotes → Projects conversion wired
 end-to-end (single click; `quote_id` becomes `project.source_quote_id`
 with materials and pricing carried over). Beats the ServiceTrade /
-Salesforce Field Service reference floor on cross-module continuity.
+Salesforce Field Service / simPRO reference floor on cross-module
+continuity.
 
 ---
 
@@ -155,8 +156,8 @@ variants, license keys, serial numbers). Movement ledger is the
 real audit trail; every adjustment writes a row with reason +
 operator + before/after qty. Allocation against project is a
 typed link to the Projects module. Beats the Anixter / Best Buy
-distributor portal reference floor on the one-screen low-stock +
-on-order view.
+distributor portal / simPRO reference floor on the one-screen
+low-stock + on-order view.
 
 ---
 
@@ -235,8 +236,9 @@ mock-data scheduling page.
 project tasks OR ad-hoc. Drag-to-assign in the calendar view.
 Hard-block on assignment when a tech doesn't carry the required
 panel certification (Kantech, Genetec, C-CURE, etc.) — the §3 bar
-above ServiceFusion/Jobber. Custom fields on job. Audit on every
-assignment change. Route + capacity optimisation deferred to v2.
+above ServiceFusion / Jobber / simPRO. Custom fields on job. Audit
+on every assignment change. Route + capacity optimisation deferred
+to v2.
 
 ---
 
@@ -353,9 +355,9 @@ v1 design.
 
 Line-item, section, total, or all three? Affects margin
 calculation, audit log shape, and how the §3 reference floor
-(Sedona Office, Wisetrack both support all three) is met. Likely
-answer: all three, with section-level being the default UI surface
-and line/total being progressive disclosure.
+(Sedona Office, Wisetrack, simPRO all support all three) is met.
+Likely answer: all three, with section-level being the default UI
+surface and line/total being progressive disclosure.
 
 ### Company-profile data source (PDF letterhead)
 
