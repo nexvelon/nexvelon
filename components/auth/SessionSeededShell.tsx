@@ -48,10 +48,9 @@ export function SessionSeededShell({
   useIsomorphicLayoutEffect(() => {
     seedSession(profile);
     // Re-seed on profile.id change (e.g. impersonation, rapid re-auth in
-    // same tab). Don't depend on seedSession — it's a stable useCallback
-    // from AuthProvider.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile.id]);
+    // same tab). seedSession is a stable useCallback from AuthProvider
+    // so depending on it is a no-op cost but keeps the rule happy.
+  }, [profile, profile.id, seedSession]);
 
   return <>{children}</>;
 }

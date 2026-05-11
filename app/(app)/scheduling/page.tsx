@@ -106,8 +106,8 @@ export default function SchedulingPage() {
             <p className="text-xs leading-relaxed text-amber-900/80">
               Your role can see only its own swimlane. Switch to Admin / PM /
               Accountant in the role-switcher to see everyone.{" "}
-              {currentUser.name} is the demo user — you&apos;ll see Marcus&apos;s
-              lane when in Technician role.
+              {currentUser?.name ?? "The signed-in user"} is the demo user —
+              you&apos;ll see their lane when in Technician role.
             </p>
           </div>
         </div>

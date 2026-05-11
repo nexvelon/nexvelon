@@ -34,9 +34,10 @@ import {
   type RangeKey,
 } from "@/lib/dashboard-data";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { currentUser } from "@/lib/mock-data/users";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [range, setRange] = useState<RangeKey>("mtd");
   const kpis = useMemo(() => buildKpis(range), [range]);
   const trend = useMemo(() => trailing12MonthsTrend(), []);
@@ -53,7 +54,10 @@ export default function DashboardPage() {
       : TODAY.getHours() < 18
         ? "Good afternoon"
         : "Good evening";
-  const firstName = currentUser.name.split(" ")[0];
+  // Real signed-in user from AuthProvider — (app) layout guarantees one.
+  // Fallback to "there" only for the brief moment between AuthProvider's
+  // seedSession and the user.name being available.
+  const firstName = user?.name.split(" ")[0] ?? "there";
 
   return (
     <div className="space-y-6">

@@ -58,7 +58,7 @@ export function CalendarView({
   // Filter techs based on role.
   const visibleTechs = canViewAll
     ? allTechs
-    : allTechs.filter((u) => u.id === currentUser.id);
+    : allTechs.filter((u) => u.id === currentUser?.id);
 
   const days = useMemo(() => {
     const start = weekStart();
