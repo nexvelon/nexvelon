@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
+  CheckCircle2,
   Eye,
   EyeOff,
   FileText,
@@ -39,6 +41,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // Surface a one-shot error from /auth/confirm or RequireAuth redirects.
@@ -54,6 +57,14 @@ export default function LoginPage() {
       );
     } else {
       setError(e);
+    }
+  }, [searchParams]);
+
+  // Surface the reset-success banner when /auth/reset-password's
+  // updatePasswordAction redirected here with ?reset=ok.
+  useEffect(() => {
+    if (searchParams.get("reset") === "ok") {
+      setResetSuccess(true);
     }
   }, [searchParams]);
 
@@ -191,12 +202,21 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="password"
-                  className="nx-eyebrow-soft text-[10px]"
-                >
-                  Password
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label
+                    htmlFor="password"
+                    className="nx-eyebrow-soft text-[10px]"
+                  >
+                    Password
+                  </Label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="hover:text-brand-primary text-[10px] tracking-[0.04em] underline-offset-2 transition hover:underline"
+                    style={{ color: "var(--brand-accent)" }}
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -223,6 +243,26 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {resetSuccess && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+                  style={{
+                    background:
+                      "color-mix(in oklab, var(--brand-status-green, #2F7A4D) 10%, transparent)",
+                    borderColor:
+                      "color-mix(in oklab, var(--brand-status-green, #2F7A4D) 35%, transparent)",
+                    color: "var(--brand-status-green, #2F7A4D)",
+                  }}
+                >
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Password updated. Sign in with your new password to
+                    continue.
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div
@@ -257,9 +297,6 @@ export default function LoginPage() {
             </form>
 
             <p className="text-muted-foreground mt-6 text-center text-[11px]">
-              Forgot password? Contact your administrator.
-            </p>
-            <p className="text-muted-foreground mt-1 text-center text-[11px]">
               For your security every sign-in requires a code we email you.
             </p>
           </Card>

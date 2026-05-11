@@ -346,16 +346,25 @@ function escape(s: string): string {
 // they should look the same.
 // ============================================================================
 
-type EmailKind = "invite" | "magiclink";
+type EmailKind = "invite" | "magiclink" | "reset";
 
 interface EmailCopy {
   subject: string;
   preheader: string;
   outerNotePrefix: string;
   titleTag: string;
+  /** Optional per-kind body overrides. When absent, falls back to
+   *  SHARED_BODY (invite/magiclink copy). Reset uses kind-specific
+   *  body + button text. */
+  bodyPara1?: string;
+  bodyPara2?: string;
+  buttonText?: string;
+  italicSubline?: string;
 }
 
-/** Body copy is shared between invite and magiclink. Single source of truth. */
+/** Default body copy — used by invite and magiclink. Reset overrides via
+ *  COPY.reset (its semantics are "we received a request", not "you've
+ *  been selected"). */
 const SHARED_BODY = {
   bodyPara1:
     "You&rsquo;ve been selected and invited to join The Nexvelon Global Group&rsquo;s :<br/>Security Systems Business : Enterprise Suite Operating System.",
@@ -380,6 +389,19 @@ const COPY: Record<EmailKind, EmailCopy> = {
     outerNotePrefix: "This password reset link was prepared for",
     titleTag: "Nexvelon Enterprise Suite — Password Reset",
   },
+  reset: {
+    subject: "Reset your Nexvelon password",
+    preheader:
+      "Reset your Nexvelon Enterprise Suite password. Single-use, expires in one hour.",
+    outerNotePrefix: "This password reset was requested for",
+    titleTag: "Nexvelon Enterprise Suite — Password Reset",
+    bodyPara1:
+      "We received a request to reset the password on your Nexvelon Enterprise Suite account.",
+    bodyPara2:
+      "Use the button below to set a new password. The link is single-use and expires within the hour. If you didn&rsquo;t request this reset, you can safely ignore this email &mdash; your account remains secure.",
+    buttonText: "Reset Your Password",
+    italicSubline: "This link expires in one hour. Use it once.",
+  },
 };
 
 interface BuildEmailArgs {
@@ -390,12 +412,28 @@ interface BuildEmailArgs {
 
 function buildEmailHtml(args: BuildEmailArgs): string {
   const c = COPY[args.kind];
+  // Body copy: fall back to SHARED_BODY when the kind doesn't override.
+  // Today only the `reset` kind overrides (different semantics — "we
+  // received a request", not "you've been selected").
+  const bodyPara1 = c.bodyPara1 ?? SHARED_BODY.bodyPara1;
+  const bodyPara2 = c.bodyPara2 ?? SHARED_BODY.bodyPara2;
+  const buttonText = c.buttonText ?? SHARED_BODY.buttonText;
+  const italicSubline = c.italicSubline ?? SHARED_BODY.italicSubline;
+  // Headline tracks the kind's verb — invite/magic-link still say
+  // "Welcome to the / Nexvelon Enterprise Suite." Reset says
+  // "Reset your / Nexvelon password." (matches lib/email/templates/
+  // reset-password.ts).
+  const headline =
+    args.kind === "reset"
+      ? "Reset your<br/>Nexvelon password."
+      : "Welcome to the<br/>Nexvelon Enterprise Suite.";
+
   const urlEsc = escape(args.confirmUrl);
   const emailEsc = escape(args.recipientEmail);
   const titleEsc = escape(c.titleTag);
   const preheaderEsc = escape(c.preheader);
-  const buttonTextEsc = escape(SHARED_BODY.buttonText);
-  const italicSublineEsc = escape(SHARED_BODY.italicSubline);
+  const buttonTextEsc = escape(buttonText);
+  const italicSublineEsc = escape(italicSubline);
   const outerNotePrefixEsc = escape(c.outerNotePrefix);
 
   // The gold gradient used for the outer frame and the button surround.
@@ -492,7 +530,7 @@ ${preheaderEsc}
               <tr>
                 <td align="center" class="px-pad" style="padding:30px 56px 0;background-color:#FBFAF5;">
                   <div class="h1 serif" style="font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:34px;line-height:1.15;color:#0A0A0A;font-weight:400;letter-spacing:-0.3px;mso-line-height-rule:exactly;">
-                    Welcome to the<br/>Nexvelon Enterprise Suite.
+                    ${headline}
                   </div>
                 </td>
               </tr>
@@ -500,8 +538,8 @@ ${preheaderEsc}
               <!-- Letter body -->
               <tr>
                 <td class="px-pad body-text serif" style="padding:30px 56px 0;background-color:#FBFAF5;font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:16px;line-height:1.7;color:#2A1F0F;font-weight:400;text-align:left;">
-                  <p style="margin:0 0 18px;">${SHARED_BODY.bodyPara1}</p>
-                  <p style="margin:0;">${SHARED_BODY.bodyPara2}</p>
+                  <p style="margin:0 0 18px;">${bodyPara1}</p>
+                  <p style="margin:0;">${bodyPara2}</p>
                 </td>
               </tr>
 
@@ -606,19 +644,28 @@ function buildEmailText(args: BuildEmailArgs): string {
       .replace(/&amp;/g, "&")
       .replace(/&hellip;/g, "…")
       .replace(/&nbsp;/g, " ");
+  const bodyPara1 = c.bodyPara1 ?? SHARED_BODY.bodyPara1;
+  const bodyPara2 = c.bodyPara2 ?? SHARED_BODY.bodyPara2;
+  const buttonText = c.buttonText ?? SHARED_BODY.buttonText;
+  const italicSubline = c.italicSubline ?? SHARED_BODY.italicSubline;
+  const headlineText =
+    args.kind === "reset"
+      ? "Reset your Nexvelon password."
+      : "Welcome to the Nexvelon Enterprise Suite.";
+
   return [
     "Nexvelon Enterprise Suite",
     "",
-    "Welcome to the Nexvelon Enterprise Suite.",
+    headlineText,
     "",
-    decode(SHARED_BODY.bodyPara1),
+    decode(bodyPara1),
     "",
-    decode(SHARED_BODY.bodyPara2),
+    decode(bodyPara2),
     "",
-    `${SHARED_BODY.buttonText} (single-use link):`,
+    `${buttonText} (single-use link):`,
     args.confirmUrl,
     "",
-    SHARED_BODY.italicSubline,
+    italicSubline,
     "",
     "—",
     "",
@@ -714,10 +761,16 @@ async function main() {
 // send. Usage:
 //   npx tsx scripts/bootstrap-admin.ts --render-smoke
 //   npx tsx scripts/bootstrap-admin.ts --render-smoke --kind=magiclink
+//   npx tsx scripts/bootstrap-admin.ts --render-smoke --kind=reset
 if (process.argv.includes("--render-smoke")) {
   const kindArg = process.argv.find((a) => a.startsWith("--kind="));
+  const kindValue = kindArg?.split("=")[1];
   const kind: EmailKind =
-    kindArg?.split("=")[1] === "magiclink" ? "magiclink" : "invite";
+    kindValue === "magiclink"
+      ? "magiclink"
+      : kindValue === "reset"
+        ? "reset"
+        : "invite";
   const html = buildEmailHtml({
     kind,
     confirmUrl:

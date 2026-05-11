@@ -16,12 +16,19 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 /**
  * Routes that an anonymous visitor may load directly.
- *   /auth/confirm  - Supabase Auth lands here with no cookie set yet;
- *                    the route handler itself sets the cookie via verifyOtp.
- *   /auth/signout  - belt-and-braces server-side cookie cleanup. Must be
- *                    reachable even when the caller's cookies are stale
- *                    (i.e. Supabase's getUser() returns null) so the route
- *                    can still issue delete-cookie instructions.
+ *   /auth/confirm           - Supabase Auth lands here with no cookie set
+ *                             yet; the route handler itself sets the cookie
+ *                             via verifyOtp.
+ *   /auth/signout           - belt-and-braces server-side cookie cleanup.
+ *                             Must be reachable even when the caller's
+ *                             cookies are stale.
+ *   /auth/forgot-password   - anonymous-by-design entry point for the
+ *                             reset flow.
+ *   /auth/reset-password    - listed here so anonymous visitors aren't
+ *                             redirected to /login first; the page itself
+ *                             checks for a valid session and bounces to
+ *                             /auth/forgot-password?expired=1 if the
+ *                             recovery token never landed.
  *
  * /auth/callback was retired (route file deleted). If OAuth is reintroduced
  * later, add a fresh callback handler and re-add it here.
@@ -30,6 +37,8 @@ const ANON_ALLOWED = new Set<string>([
   "/login",
   "/auth/confirm",
   "/auth/signout",
+  "/auth/forgot-password",
+  "/auth/reset-password",
 ]);
 
 /**

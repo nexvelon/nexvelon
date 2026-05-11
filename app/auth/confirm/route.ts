@@ -103,11 +103,20 @@ export async function GET(request: NextRequest) {
 
   switch (type) {
     case "invite":
-    case "recovery":
       console.info("[/auth/confirm] redirecting_default", {
         dest: "/auth/set-password",
       });
       redirect("/auth/set-password");
+    case "recovery":
+      // Recovery flows (forgot-password) land on the dedicated reset page,
+      // which calls supabase.auth.updateUser({password}) + signs out +
+      // redirects to /login?reset=ok. /auth/set-password is invite-specific
+      // (flips profile.status='Active', funnels through OTP) and is the
+      // wrong landing for a returning user changing their password.
+      console.info("[/auth/confirm] redirecting_default", {
+        dest: "/auth/reset-password",
+      });
+      redirect("/auth/reset-password");
     case "email_change":
     case "magiclink":
     case "signup":

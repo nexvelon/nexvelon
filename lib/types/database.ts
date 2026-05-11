@@ -275,6 +275,7 @@ export type AuthAuditEvent =
   | "mfa_challenge_verified"
   | "mfa_challenge_failed"
   | "password_changed"
+  | "password_reset_requested"
   | "user_invited"
   | "user_suspended"
   | "user_reactivated"
