@@ -19,8 +19,10 @@
   ("fix(auth): use admin update endpoint to bypass secure-change
   nonce requirement").
 - **Latest commit on `main`:** see `git log -1 --oneline`. As of
-  this docs commit, the auth surface is complete and the pre-Quotes
-  cleanup pass has landed.
+  this docs commit, the auth surface is complete, the pre-Quotes
+  cleanup pass has landed, and the inline-mock-data sweep is
+  exhaustive (three sweeps total — see "Mock data wipe state"
+  below).
 - **Auth surface:** ✅ COMPLETE. Sign-in (password + email OTP),
   sign-out, forgot-password, reset-password, in-app change-password,
   invite-only signup via bootstrap CLI, server-side dashboard
@@ -31,12 +33,30 @@
   forward. No more "we'll fix the data model later" mode. Every
   migration is additive by default; drops require the documented
   copy-deploy-drop sequence with operator sign-off comment.
-- **Mock data zeroed.** All `lib/mock-data/*` files are `[]`. Empty-
-  data crash paths are guarded across `lib/scheduling-data.ts`,
-  `lib/inventory-data.ts`, `lib/dashboard-data.ts`. Hardcoded fake
-  identities (Marcus Holloway, fictitious phones/emails/ULC numbers)
-  purged from `BrandingThemes`, `SettingsPanes.CompanyProfile`,
-  `QuoteDocument` letterhead, `NotificationsBell` seed.
+- **Mock data wipe state:** **thorough — three sweeps total.**
+  1. `8d44ef7` — initial wipe. All `lib/mock-data/*` files
+     emptied; `scripts/wipe-test-data.sql` committed (paste into
+     Supabase SQL Editor manually).
+  2. `b3fab6f` — first follow-up. Guarded empty-data crash paths
+     in `lib/scheduling-data.ts`, `lib/inventory-data.ts`,
+     `lib/notifications.ts`; added `NotificationsBell` empty
+     state; surfaced hardcoded fake identities in
+     `BrandingThemes`, `SettingsPanes.CompanyProfile`,
+     `QuoteDocument` letterhead.
+  3. `5fbca47` — exhaustive final. Found residual hits earlier
+     passes missed: 3 hardcoded PO events in dashboard
+     `recentActivity()`; 11 fake integrations + 2 fake API keys
+     + 3 fake webhooks + fake Enterprise subscription card in
+     Settings; hardcoded CRA business number in Financials HST
+     card; 5 fake vendors in `VENDOR_DIRECTORY`. Added "No
+     recent activity" empty state to `ActivityFeed`.
+  
+  Defense-in-depth note: `lib/project-data.ts` hardcoded
+  scaffolding (TASK_TEMPLATE, RICH_ZONES, etc.) and
+  `/projects/[id]` tab sub-components are NOT yet cleaned —
+  they're unreachable with `public.projects` empty, and get
+  cleaned when Projects v1 wires per `NEXVELON_ROADMAP.md`
+  item 5.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT
   executed. Paste into Supabase SQL Editor manually when ready.
   Admin account `jayshah.x@gmail.com` preserved.
@@ -83,6 +103,22 @@
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (default
   branch `main`).
 - **Admin account:** `jayshah.x@gmail.com` (Jay Shah, Admin role).
+
+### Open In-Flight Items
+
+**None.** The Claude Code session that produced this commit holds no
+uncommitted plans, half-finished migrations, or in-progress designs.
+All Session B work is committed and reflected in this persistence
+layer. The next Claude Code session reconstructs full context from
+this repo cold — start with `NEXVELON_PRINCIPLES.md`, then the
+`## Current Session State` block above, then the four other docs in
+the reading order at the top of this file.
+
+The only "in-flight" item in the GLOBAL sense (not session-specific)
+is `scripts/wipe-test-data.sql` — it's committed but NOT executed.
+The next session can either execute it (paste into Supabase SQL
+Editor) or leave it for the operator to execute themselves before
+Quotes v1 starts. Either is fine.
 
 ---
 

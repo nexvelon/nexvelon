@@ -1,6 +1,6 @@
 # NEXVELON_PRINCIPLES.md
 
-> **Five non-negotiables for Nexvelon.** Every commit, every migration,
+> **Six non-negotiables for Nexvelon.** Every commit, every migration,
 > every UI decision is measured against these. A new Claude Code session
 > reads this file FIRST, then `CLAUDE_CONTEXT.md`, then any handoff doc.
 >
@@ -165,12 +165,17 @@ type added.
 
 **Any new Claude Code session reads, in order:**
 
-1. **`NEXVELON_PRINCIPLES.md`** (this file) — the five non-negotiables.
+1. **`NEXVELON_PRINCIPLES.md`** (this file) — the six non-negotiables.
 2. **`CLAUDE_CONTEXT.md`** — the `## Current Session State` block at
    the top, then any new task-relevant section.
-3. **`NEXVELON_SESSION_A_HANDOFF.md`** — file-by-file state from
-   Session A close, for historical context.
-4. Any other doc explicitly referenced in `CLAUDE_CONTEXT.md`'s
+3. **`NEXVELON_SESSION_<latest>_HANDOFF.md`** — file-by-file state
+   from the most recent session close. As of this writing the latest
+   is `NEXVELON_SESSION_B_HANDOFF.md`; previous sessions
+   (`NEXVELON_SESSION_A_HANDOFF.md`, …) are preserved as historical
+   reference.
+4. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1
+   acceptance bars baked in for each upcoming module.
+5. Any other doc explicitly referenced in `CLAUDE_CONTEXT.md`'s
    `## Current Session State` block.
 
 **Until claude.ai memory is enabled across sessions, the repo IS the

@@ -1,7 +1,9 @@
 # NEXVELON_SESSION_B_HANDOFF.md
 
 > **Hand-off document for the next Claude Code session.**
-> Generated 2026-05-11 against `main` @ `91677d6`.
+> Generated 2026-05-11 against `main` @ `91677d6`. Updated with
+> post-codification commits — see "Final Cleanup Commits" subsection
+> at the bottom of §1 CURRENT STATE.
 >
 > Read this file end-to-end before proposing any change. Reading order
 > for a cold start:
@@ -56,6 +58,82 @@ when Financials wires to DB per `NEXVELON_ROADMAP.md` item 10).
 - **Last verified-live commit:** `91677d6`. End-to-end auth flow
   (sign-in → OTP → dashboard → change password → sign-out) tested in
   production by the user.
+
+### Final Cleanup Commits (post-codification)
+
+Two commits shipped after this handoff was originally codified at
+`6e6e41f`. They are pure tidy-up — no new module surface, no
+architectural decisions, no migrations:
+
+- **`b70d11b` — simPRO refinement (docs-only).** Added simPRO as a
+  reference floor in `NEXVELON_PRINCIPLES.md` §3 (Quotes, Projects,
+  Inventory, Scheduling rows; not Financials — QuickBooks stays the
+  integration target there). Propagated to `NEXVELON_SESSION_B_
+  HANDOFF.md` §4 mirror of the table, the §7 "beats X" prose for
+  Quotes / Projects / Inventory, and `NEXVELON_ROADMAP.md` items
+  4 (Quotes) / 5 (Projects) / 6 (Inventory) / 11 (Scheduling) +
+  the "Discount granularity" deferred-decision section. No code
+  change.
+
+- **`5fbca47` — exhaustive inline mock-data sweep.** Fourth and
+  final cleanup pass. Found the residual hardcoded entries that
+  earlier sweeps missed (prior passes stopped at the first hit
+  per file or only scanned `lib/mock-data/*`). Seven files
+  touched:
+  1. `lib/dashboard-data.ts` `recentActivity()` — removed 3
+     hardcoded synthetic PO events ("PO to Anixter received —
+     28 Avigilon H6A bullets", "PO to ADI received — Kantech
+     ioSmart readers (×24)", "PO to CDW received — Axis
+     Q6225-LE PTZ (×4)") that bypassed `lib/mock-data` by being
+     appended directly inside the function. Was the specific
+     bug the user reported.
+  2. `components/modules/dashboard/ActivityFeed.tsx` — added
+     "No recent activity" empty state when events is empty.
+  3. `components/modules/settings/SettingsPanes.tsx`
+     Integrations — removed 11 hardcoded fake-connected
+     integrations (QBO, Xero, Stripe, Twilio, SendGrid, GCal,
+     MS365, Genetec, Avigilon, Kantech, ICT) with "2h ago"
+     timestamps. Empty-state card now renders.
+  4. `components/modules/settings/SettingsPanes.tsx`
+     ApiWebhooks — emptied `SAMPLE_KEYS` (2 fake API keys) and
+     `WEBHOOKS` (3 fake hooks.nexvelon.com endpoints).
+  5. `components/modules/settings/SettingsPanes.tsx`
+     BillingPlan — replaced the fake "Enterprise · 10 seats ·
+     $19,200 CAD / year" subscription card with a deliberate
+     "Self-hosted · No subscription required" placeholder.
+  6. `components/modules/financials/Tabs.tsx` — cleaned
+     hardcoded "CRA Business # 81245-6709 RT0001" from the HST
+     return card → "set in Settings → Company Profile" pattern.
+  7. `lib/inventory-data.ts` — emptied `VENDOR_DIRECTORY` (5
+     fake vendors with fictitious rep names + emails + account
+     numbers + YTD spend + PO counts).
+
+  Categories of fake data purged across the seven files:
+   - **Security industry product brands** (Avigilon, Kantech,
+     Axis, Genetec, ICT) in dashboard + integrations pane.
+   - **Distributor names** (Anixter, ADI, CDW, Wesco, Provo) in
+     dashboard PO events + vendor directory. The `Vendor` union
+     type stays — drives filter dropdowns; lifts to a lookup
+     table when Vendors v1 wires per ROADMAP item 7.
+   - **Fake people names** (Tom Halloway, Sandra Whittaker,
+     Reginald Coombs, Priscilla Devereaux, Lars Wittenberg) in
+     vendor directory.
+   - **Suspicious round numbers** (248_400 / 312_800 / 184_650
+     YTD spend; 19_200 annual subscription).
+   - **Hardcoded relative timestamps as literal strings** ("2h
+     ago", "Yesterday", "1h ago", "12m ago", "5m ago", "3h
+     ago", "Apr 28", "Apr 26", "Apr 22") in integrations pane
+     and PO synthesis.
+   - **Prefixed mock IDs** (`k-1`, `k-2`, `w-1`, `w-2`, `w-3`,
+     `po-1`, `po-2`, `po-3`) in API keys, webhooks, PO events.
+   - **Sample contact info** (`thalloway@adiglobal.ca`,
+     `swhittaker@anixter.com`, `rcoombs@wesco.com`,
+     `priscid@cdw.com`, `lars.w@provo.ca`, `(905) 555-####`,
+     `(416) 555-####`, hooks.nexvelon.com endpoints).
+   - **Fictitious CRA business number** (81245-6709 RT0001) on
+     the Financials HST return card.
+
+  Build: 0 TS errors, 0 new lint warnings. Routes unchanged.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ## 2. WHAT SHIPPED — Auth surface complete
