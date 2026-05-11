@@ -28,8 +28,16 @@ import { getRequestInfo } from "@/lib/auth/request-info";
 //      set-password / reset-password flows use).
 //   4. Reject if new === current (Supabase Auth doesn't enforce this
 //      itself, and a no-op "change" is a UX trap).
-//   5. supabase.auth.updateUser({ password }) on the cookie-aware
-//      client.
+//   5. supabase.auth.updateUser({ password }) on the THROWAWAY client
+//      (not the cookie-aware one). Supabase's "Secure password change"
+//      project setting gates updateUser on a recently-authenticated
+//      session — the user's cookie-bound session is older than the
+//      gate's threshold (typically 5 min) on a typical change-password
+//      flow, so calling updateUser there fails with "Current password
+//      required when setting new password". The throwaway client just
+//      authenticated in step 4, so its in-memory session is fresh and
+//      satisfies the gate. The password change propagates server-side
+//      (Supabase Auth doesn't care which session made the change).
 //   6. If signOutOtherDevices === true, sign out the *other* sessions
 //      via scope: 'others'. Current tab stays alive.
 //   7. Audit `password_changed` with source: 'self' and a flag
@@ -144,8 +152,15 @@ export async function changeOwnPasswordAction(
     return { ok: false, error: "Current password is incorrect." };
   }
 
-  // 5. Update password on the user's actual cookie-bound session.
-  const { error: updateErr } = await supabase.auth.updateUser({
+  // 5. Update password on the THROWAWAY client (which just authenticated
+  //    in step 4 above — its in-memory session is fresh enough to clear
+  //    Supabase's "Secure password change" recent-auth gate). Using the
+  //    cookie-aware `supabase` here would fail with "Current password
+  //    required when setting new password" whenever the user's session
+  //    is older than the gate's threshold (typically 5 min). The
+  //    password update propagates server-side regardless of which
+  //    session made the call.
+  const { error: updateErr } = await verifyClient.auth.updateUser({
     password: newPassword,
   });
   log("update_user_result", { error: updateErr?.message ?? null });
