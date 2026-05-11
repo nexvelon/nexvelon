@@ -91,28 +91,38 @@ designed to avoid.
 
 ## 3. Competitive bar
 
-**Each module's v1 beats a named competitor.** When a feature decision
-is ambiguous, the test is: *what does the named competitor do, and how
-do we exceed it?* Not "match" — exceed. If we can't articulate the
-delta, the feature isn't done.
+**Competitors are reference floors, not ceilings — the bar is what a
+world-class SaaS would look like rebuilt from scratch in 2026 for
+security integrators with no legacy debt.** Each named competitor below
+is a product the operator has used or evaluated in the wild; matching
+it isn't the goal, it's the absolute minimum. The real test is: *if
+nothing in this category existed and we got to design it today,
+knowing what we know about the integrator's workflow, would we land
+where we did?*
 
-Named competitors per module (the security-systems integrator vertical
-is small; these are the products Nexvelon must outperform on v1 of each
-surface). Refine as Nexvelon goes head-to-head in real sales cycles:
+Named reference floors per module (the security-systems integrator
+vertical is small; these are the products Nexvelon's operator has
+hands-on familiarity with). Refine as Nexvelon goes head-to-head in
+real sales cycles — and remember the table is a floor, not a target:
 
-| Module | Named competitor | Where we exceed |
+| Module | Reference floor | Direction we exceed |
 |---|---|---|
-| **Quotes** | D-Tools System Integrator, QuoteWerks | Multi-section quotes with live margin per line, web-native (D-Tools is desktop), single-click convert-to-project. |
-| **Projects** | Procore (for the GC-adjacent work), D-Tools Cloud | Tighter integration with quotes + inventory; fewer manual handoffs. |
-| **Inventory** | Sortly, Fishbowl | Per-vendor reorder rules tied to manufacturer lead times; vendor-aware bills of material from quotes. |
-| **Scheduling** | ServiceTitan, BuildOps | Tech-by-tech route optimisation that respects panel-cert qualifications, not just radius. |
-| **Financials** | QuickBooks (integration target, not replacement) | First-class margin reporting per quote / project / client tier. |
-| **Subcontractors** | ServiceTrade Subcontractor, Procore Subs | WSIB / insurance expiry rollup with hard-block on assignment when expired. |
-| **Auth + Users** | Auth0, Okta (high bar — beat for invite-only, per-user permissions UX) | Custom-designed for the SME integrator workflow; no 50-user minimum, no per-MAU pricing. |
+| **Quotes** | Sedona Office, Wisetrack | Web-native multi-section quotes with live margin per line, single-click convert-to-project, custom fields on every line item, PDF export that doesn't require a designer to look professional. |
+| **Projects** | ServiceTrade, Salesforce Field Service | Tighter integration with quotes + inventory + scheduling; fewer manual handoffs; the operator never re-types a line item between modules. |
+| **Inventory** | Anixter web portal, Best Buy distributor portal | Per-vendor reorder rules tied to manufacturer lead times; vendor-aware bills of material derived from quotes; one-screen low-stock + on-order view rather than the 4-click flow distributor portals impose. |
+| **Scheduling** | ServiceFusion, Jobber | Tech-by-tech route + capacity optimisation that respects panel-cert qualifications (Kantech, Genetec, C-CURE, etc.), not just radius or availability. |
+| **Financials** | QuickBooks (integration target, not replacement) | First-class margin reporting per quote / project / client tier, owned inside Nexvelon; QBO syncs the GL side but Nexvelon owns the operational analytics. |
+
+**Auth, users, and permissions are foundational — not competitive.**
+They are a launch gate every module sits on top of. They don't appear
+in this table because they aren't a feature we differentiate on; they
+are correctness, not advantage.
 
 **When two designs satisfy the principle, choose the one that costs the
 customer less hand-entry.** Every form, every default, every list
-filter is measured in keystrokes saved versus the competitor.
+filter is measured in keystrokes saved versus the reference floor.
+Modules ship deeply or don't ship — see §6 on the depth-over-breadth
+constraint.
 
 ---
 
@@ -186,3 +196,67 @@ the chain is the audit trail of the project itself.
 **Never assume the next session remembers anything.** Write every
 comment, every commit body, every doc update as if the person reading
 it just walked into the room.
+
+---
+
+## 6. Extensibility & Customization
+
+**Every operator gets a different version of Nexvelon without forking
+the codebase.** The platform's surface area must bend to the
+integrator's workflow, not the other way around. Five concrete rules
+follow from that:
+
+**Custom fields on every entity.** Clients, sites, contacts, quotes,
+quote line items, projects, inventory items, schedule entries, and
+invoices each get a per-entity custom-field surface. The pattern is
+two tables: `<entity>_custom_field_definitions` (Admin-managed schema
+— name, type, options, required, sort order, visibility) and
+`<entity>_custom_field_values` (the per-row values). Forms, search,
+list-view columns, reports, and PDF exports all honour the
+definitions automatically — there is no module where the operator
+hits a wall and has to ask for code.
+
+**Status enums become lookup tables, not hard-coded DB enums.** The
+default seed (Draft, Sent, Approved, Rejected, Expired, Converted on
+quotes; In Progress, On Hold, At Risk, Completed, Closed on projects;
+etc.) ships pre-populated, but the operator can rename, reorder, add,
+retire — without code changes. A `*_statuses` table per relevant
+entity, with `is_archived` to retire without breaking historical
+rows, plus a `default_for_new` flag.
+
+**Workflow rules in data, not code (Phase 2 commitment).** When
+"Quote approved" should auto-trigger "Create project" + "Notify PM" +
+"Allocate inventory", those rules live in a `workflow_rules` table
+the operator edits in Settings — not in a server action's else-if.
+Phase 1 of each module ships with sensible defaults hard-coded; Phase
+2 hoists those rules into the data layer.
+
+**Field-level permissions, not just feature-level.** §2 covers role ×
+resource × action. §6 extends that to per-field: an Admin can hide an
+individual field on the quote form from SalesReps without removing
+their `quotes:edit` grant. Permissions storage model is one of the
+open architectural decisions in `NEXVELON_ROADMAP.md`.
+
+**Module-level extension points: server-side events + UI slots.**
+Every server action that mutates a business record emits a typed
+event (`quote.created`, `project.status_changed`, etc.) on a
+project-internal event bus. UI slots — declared positions in each
+module's primary surface — accept optional renderers from a registry,
+so an operator who needs a custom widget on the quote builder can ship
+one without touching the module's source.
+
+**API-first design.** Every server action also exposes a clean,
+authenticated API surface (REST or RPC; under one `/api/v1/*` tree).
+The action is the implementation; the API is the contract. Same
+permission gates, same audit-log writes, same RLS-scoped reads.
+External integrations — accounting sync, BIM imports, custom
+dashboards — never need a parallel data path.
+
+**Depth over breadth: ship deeply or don't ship.** No "module lite."
+Demo-quality is forbidden. If a module can't ship with full audit
+coverage, full permissions integration, full custom-field support, and
+its named reference floor (§3) beaten on the operator's measured
+workflow — it doesn't ship yet. Deferred features go into
+`NEXVELON_ROADMAP.md` with a clear description of what's missing and
+why. A half-done module on the sidebar tells the operator the rest
+of the suite is also half-done; we don't ship that signal.

@@ -1,83 +1,88 @@
 # CLAUDE_CONTEXT.md
 
 > **Single source of truth for the Nexvelon project.**
-> A fresh Claude Code session should read **`NEXVELON_PRINCIPLES.md` first**
-> (the five non-negotiables), then the `## Current Session State` block
-> below, then any task-relevant section.
+> A fresh Claude Code session reads, in order:
+>   1. **`NEXVELON_PRINCIPLES.md`** — the six non-negotiables (incl. §6 Extensibility).
+>   2. The `## Current Session State` block immediately below.
+>   3. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
+>   4. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
+>   5. `NEXVELON_SESSION_A_HANDOFF.md` — historical auth-surface reference.
 
 ---
 
 ## Current Session State
 
-**As of 2026-05-11.**
+**As of 2026-05-11. Session B CLOSED.**
 
 - **Last completed feature:** Session B Priority 2 — in-app
-  change-password flow. Final commit `e472b1c` ("fix(auth): use admin
-  update endpoint to bypass secure-change nonce requirement"). The
-  initial implementation landed in `047d8a9`; `e472b1c` is the working
-  version that bypasses Supabase's `nonce`-gated `auth.updateUser`
-  endpoint via the service-role `admin.auth.admin.updateUserById`.
-- **Latest commit on `main`:** `8d44ef7` — "chore(cleanup): empty mock
-  data + add wipe-test-data.sql script (pre-quotes cleanup)". Run
-  `git log -1 --oneline` for the truly latest after any new push.
+  change-password flow. The final working commit is `e472b1c`
+  ("fix(auth): use admin update endpoint to bypass secure-change
+  nonce requirement").
+- **Latest commit on `main`:** see `git log -1 --oneline`. As of
+  this docs commit, the auth surface is complete and the pre-Quotes
+  cleanup pass has landed.
 - **Auth surface:** ✅ COMPLETE. Sign-in (password + email OTP),
   sign-out, forgot-password, reset-password, in-app change-password,
   invite-only signup via bootstrap CLI, server-side dashboard
-  validation with sub-2s session check (no client-side
-  getUser+fetchProfile chain). No outstanding bugs.
-- **Pending pipeline (in order):**
-  1. **Pre-Quotes cleanup** — `scripts/wipe-test-data.sql` ready to
-     paste into Supabase SQL Editor manually. Mock data already
-     emptied in `8d44ef7`. **Once executed, every migration from that
-     point on is production-data-bearing** — see
-     `NEXVELON_PRINCIPLES.md` §1.
-  2. **Permissions system design** — DB schema + UX for per-user,
-     per-feature ACL with Admin overrides. Three UI states
-     (hidden/disabled/interactive) per gated control. Must ship
-     BEFORE Quotes per `NEXVELON_PRINCIPLES.md` §2.
-  3. **Permissions module build** — `0005_permissions_schema.sql`,
-     `lib/api/permissions.ts`, `lib/permissions.ts` rewrite, server-
-     action and route-level gates, Admin override UI.
-  4. **Quotes v1** — Session B Priority 4 from the Session A handoff
-     §12. Currently sketched as `0006_quotes_schema.sql` /
-     `lib/api/quotes.ts` / page rewrites. Numbering shifts by one
-     because permissions now ships first.
-- **Outstanding Quotes schema decisions** (revisit AFTER permissions
-  ships — the granular ACL changes the answers):
-  - **`quote_shares` table necessity.** Originally proposed for sharing
-    a quote with a client via tokenised link. With the per-user
-    permissions system, "share" might decompose into either (a) a
-    per-quote permission grant to a `ClientPortal` user, or (b) a
-    token-bound public-read view. The right shape depends on whether
-    ClientPortal users ever get accounts vs. anonymous link clicks.
-    Defer the decision.
-  - **`unit_label` enum vs. freeform `text`.** Quote line items have a
-    unit ("ea", "ft", "hr", "license"). Enum gives consistency for
-    reporting; freeform gives integrator flexibility for one-off
-    units. Likely answer: short enum + a freeform `unit_label_custom`
-    text override gated by a permission.
-  - **Currency at quote-level vs. client-level.** A single client may
-    have CA + US sites. Quote-level is more flexible but creates
-    aggregation friction in client-tier and dashboard reporting.
-    Likely answer: client default + per-quote override, both surfaced
-    in the UI.
-  - **Discount granularity** — line-item, section, total, or all
-    three? Affects margin calculation, audit log shape, and how the
-    competitive bar (D-Tools, QuoteWerks both support all three) is
-    met. Likely answer: all three, with section-level being the
-    default UI surface and line/total being progressive disclosure.
-- **Production status:** ⚠️ **GOING LIVE FOR REAL BUSINESS USE.** Data
-  preservation rules in `NEXVELON_PRINCIPLES.md` §1 apply from
-  `8d44ef7` (chore cleanup) forward. No more "we'll fix the data model
-  later" mode. Every migration is additive by default; drops require
-  the documented copy-deploy-drop sequence with operator sign-off
-  comment.
+  validation with sub-2s session check via the
+  `SessionSeededShell` pattern. No outstanding bugs.
+- **Production mode:** ⚠️ **LIVE.** Data preservation rules in
+  `NEXVELON_PRINCIPLES.md` §1 apply from `8d44ef7` (chore cleanup)
+  forward. No more "we'll fix the data model later" mode. Every
+  migration is additive by default; drops require the documented
+  copy-deploy-drop sequence with operator sign-off comment.
+- **Mock data zeroed.** All `lib/mock-data/*` files are `[]`. Empty-
+  data crash paths are guarded across `lib/scheduling-data.ts`,
+  `lib/inventory-data.ts`, `lib/dashboard-data.ts`. Hardcoded fake
+  identities (Marcus Holloway, fictitious phones/emails/ULC numbers)
+  purged from `BrandingThemes`, `SettingsPanes.CompanyProfile`,
+  `QuoteDocument` letterhead, `NotificationsBell` seed.
+- **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT
+  executed. Paste into Supabase SQL Editor manually when ready.
+  Admin account `jayshah.x@gmail.com` preserved.
+- **Pending pipeline (in order)** — full descriptions in
+  `NEXVELON_ROADMAP.md`:
+  1. **Comprehensive feature audit + sidebar expansion** —
+     scoping pass BEFORE the permissions module is designed.
+     Without this audit the ACL would ship against incomplete
+     action vocabulary.
+  2. **Permissions module — design pass.** Written design doc
+     for per-user, per-feature ACL with three UI states + Admin
+     override UX + field-level permission storage model.
+  3. **Permissions module — build.** Migration, `lib/api/
+     permissions.ts`, `lib/permissions.ts` DB-backed rewrite,
+     server-action + route gates, client hooks, Admin override
+     UI.
+  4. **Quotes v1.** First real business module beyond clients +
+     users. Beats Sedona Office / Wisetrack reference floor.
+  5. **Projects → Inventory → Vendors → Invoices →
+     Subcontractors → Financials → Scheduling.** Each ships
+     fully per `NEXVELON_PRINCIPLES.md` §6 (depth over breadth —
+     no "module lite"). Reports v1 wires after enough modules
+     have real data.
+- **Open architectural decisions** — see `NEXVELON_ROADMAP.md`
+  "Open architectural decisions awaiting design":
+  - Custom-field implementation (per-entity vs. generic vs.
+    JSONB).
+  - Workflow rule format (Phase 2 commitment per PRINCIPLES §6).
+  - Field-level permission storage model.
+- **Open product decisions** — see `NEXVELON_ROADMAP.md` "Open
+  product decisions deferred from earlier conversations":
+  - `quote_shares` table necessity given the new permissions
+    system (likely redundant).
+  - `unit_label` enum vs. freeform (likely enum + override).
+  - Currency at quote vs. client level (likely client default +
+    per-quote override).
+  - Discount granularity (likely all three: line + section +
+    total).
+  - Company-profile data source for PDF letterhead (likely a
+    `settings_company_profile` singleton table, alongside
+    Quotes v1).
 - **Live URL:** https://app.nexvelonglobal.com (Vercel auto-deploys
   from `main`).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (default
   branch `main`).
 - **Admin account:** `jayshah.x@gmail.com` (Jay Shah, Admin role).
-  Preserved across the wipe script — see `scripts/wipe-test-data.sql`.
 
 ---
 
