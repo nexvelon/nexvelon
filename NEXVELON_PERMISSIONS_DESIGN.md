@@ -10,16 +10,16 @@
 >   5. `NEXVELON_SESSION_<latest>_HANDOFF.md`
 >   6. **This file** — Permissions design specification
 >
-> **Status:** v0.4 — Passes 1-4 complete. Pending: Pass 5 (Status
-> surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-
-> admin-access workflow), Pass 8 (Permissions editor UI), Pass 9
-> (Effective-permissions caching strategy), Pass 10 (Cross-cutting
-> enforcement patterns), Pass 11 (Migration plan).
+> **Status:** v0.5 — Passes 1-5 complete. Pending: Pass 6 (Append-only
+> audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions
+> editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10
+> (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
 >
 > Pass 1 (Action Vocabulary Catalog) condensed §1-§8; full at `9008fad`.
 > Pass 2 (Database Schema) condensed §9; full at `1bafbd4`.
-> Pass 3 (Resolution Algorithm) condensed §10-§10.5; full at `ff08703`.
-> Pass 4 (Field Visibility Engine) full content begins at §11.
+> Pass 3 (Resolution Algorithm) condensed §10; full at `ff08703`.
+> Pass 4 (Field Visibility Engine) condensed §11; full at `de1905f`.
+> Pass 5 (Status Surface Binding Layer) full content begins at §12.
 
 ---
 
@@ -36,8 +36,8 @@ Design specification for the Nexvelon permissions runtime.
 | 1 | Action vocabulary catalog | ✅ COMPLETE (full at `9008fad`; condensed §1-§8) |
 | 2 | Database schema | ✅ COMPLETE (full at `1bafbd4`; condensed §9) |
 | 3 | Permission resolution algorithm | ✅ COMPLETE (full at `ff08703`; condensed §10) |
-| 4 | Field-level visibility engine | ✅ COMPLETE (this version) |
-| 5 | Status surface binding layer | PENDING |
+| 4 | Field-level visibility engine | ✅ COMPLETE (full at `de1905f`; condensed §11) |
+| 5 | Status surface binding layer | ✅ COMPLETE (this version) |
 | 6 | Append-only audit pattern | PENDING |
 | 7 | Request-admin-access workflow | PENDING |
 | 8 | Permissions editor UI | PENDING |
@@ -47,7 +47,7 @@ Design specification for the Nexvelon permissions runtime.
 
 ### 0.3 Role abbreviations
 
-**A** Admin, **PM** Project Manager, **SR** Sales Rep, **Tech** Technician, **Sub** Subcontractor (portal), **Acc** Accounting, **VO** View Only. Plus **Dispatcher** (M12), **Bookkeeper** (M11), **HR-role**, **Executive** (M13). Operators can create unlimited custom roles via the M2 framework.
+**A** Admin, **PM** Project Manager, **SR** Sales Rep, **Tech** Technician, **Sub** Subcontractor (portal), **Acc** Accounting, **VO** View Only. Plus **Dispatcher** (M12), **Bookkeeper** (M11), **HR-role**, **Executive** (M13).
 
 ---
 
@@ -73,7 +73,7 @@ Verb (8 categories): view / create / edit / state-transition / configuration / c
 Action dependencies, mutually exclusive (§0.4 #11), action chains. Public actions (signed URL), Admin exceptions (13), system-generated (10+), append-only (9 resources per §0.4 #10).
 
 ## 8. Six Pass 1 open questions resolved
-Compound verbs vs qualifier form (both); per-record vs per-class (capability at class); role inheritance (NO at v1); per-tenant custom actions (NO at v1); action versioning (new actions default denied); action deprecation (mark; 1 release; clean).
+Compound verbs vs qualifier (both); per-record vs per-class (capability at class); role inheritance (NO at v1); per-tenant custom actions (NO at v1); action versioning (new actions default denied); action deprecation (mark; 1 release; clean).
 
 ---
 
@@ -89,15 +89,15 @@ Compound verbs vs qualifier form (both); per-record vs per-class (capability at 
 
 **Group 2 — Field visibility (3):** `field_visibility_definitions`, `role_field_visibility`, `user_field_visibility_overrides`.
 
-**Group 3 — Data scopes (3, orthogonal to grants):** `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`.
+**Group 3 — Data scopes (3):** `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`.
 
 **Group 4 — Audit (1, append-only):** `permission_audit_log` with UPDATE/DELETE blocked at PostgreSQL trigger level.
 
-**Group 5 — Cross-cutting constraints (3):** `separation_of_duties_constraints` (§0.4 #11; supports co-sign), `regulatory_expiry_overrides` (§0.4 #12), `geolocation_retention_policies` (§0.4 #13).
+**Group 5 — Cross-cutting constraints (3):** `separation_of_duties_constraints` (§0.4 #11), `regulatory_expiry_overrides` (§0.4 #12), `geolocation_retention_policies` (§0.4 #13).
 
-**Plus materialized view:** `permission_resolution_view` (admin UI; runtime hot path uses `effective_permissions_cache`).
+**Plus materialized view:** `permission_resolution_view`.
 
-Three architectural decisions locked: one row per action; trigger-invalidated cache (no TTL); orthogonal data scopes.
+Three architectural decisions locked: one row per action; trigger-invalidated cache; orthogonal data scopes.
 
 ---
 
@@ -109,932 +109,738 @@ Three architectural decisions locked: one row per action; trigger-invalidated ca
 
 ## 10. Three runtime algorithms
 
-**A1 — Action grant resolution** (7-phase): cache lookup (Phase 1, <1ms hit) → base table resolution on miss (Phase 2) → cross-cutting constraint checks (Phase 3: separation of duties + regulatory expiry) → audit logging (Phase 4: sensitive + admin exceptions) → return.
+**A1 — Action grant resolution** (7-phase): cache lookup → base table resolution on miss → cross-cutting constraint checks (separation of duties + regulatory expiry; Pass 5 adds **status binding check** as third constraint) → audit logging → return.
 
-**A2 — Data scope resolution:** returns SQL filter clause + bind parameters. Uses `data_scope_definitions.filter_sql_template`. Substitutes `:current_user`.
+**A2 — Data scope resolution:** returns SQL filter clause + bind parameters.
 
-**A3 — Field visibility resolution:** returns `visible` / `masked` / `hidden`. Honors `is_never_granted` for PCI compliance. Triggers audit-on-read for sensitive fields.
+**A3 — Field visibility resolution:** returns visible / masked / hidden.
 
-### 10.1 Performance budget
-<5ms p99 compound; <1ms cache hit; <50ms p99 typical list endpoint; <15ms p99 detail; <30ms p99 action. Cache hit rate target >95%.
+Performance budget: <5ms p99 compound; <1ms cache hit; <50ms p99 typical list endpoint. Cache hit rate target >95%.
 
-### 10.2 Cache invalidation triggers
-5 events. 4 PostgreSQL triggers (role_permissions, user_permission_overrides, users.role_id, permission_definitions.is_deprecated). 1 daily cron (expired temporary overrides).
+Failure modes: fail-closed for action grants, regulatory expiry, separation of duties. Fail-open for audit logging and cache warming.
 
-### 10.3 Edge cases handled
-- User override does NOT bypass regulatory expiry (§0.4 #12 supersedes; only `regulatory_expiry_overrides` entries bypass).
-- Co-sign actions (allows_co_sign + co_sign_role_codes).
-- Public actions (signed URL; A1 NOT called).
-- System-generated actions ("system" identity; NULL actor_user_id).
-- Expired temporary overrides (cache miss → fallback → audit).
-
-### 10.4 Failure modes
-Fail-closed for action grants, regulatory expiry, separation of duties. Fail-open for audit logging (retried) and cache warming.
-
-### 10.5 Debug API
-Admin-only `GET /api/admin/permission-debug` returns full resolution trace for support staff diagnosing "why was that user blocked?"
-
-Two architectural decisions locked: invalidate-and-lazy-fill cache (not write-through); separation of duties enforced via runtime check (primary) + database trigger (defense-in-depth).
+Two architectural decisions: invalidate-and-lazy-fill cache; separation of duties runtime + DB-trigger.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part IV — Pass 4 (Field-Level Visibility Engine) — FULL CONTENT
+# Part IV — Pass 4 (Field-Level Visibility Engine) — condensed summary
 ═══════════════════════════════════════════════════════════════════
 
-## 11. Overview
+*Full Pass 4 content at commit `de1905f`.*
 
-Pass 4 implements Algorithm A3 from Pass 3 (`resolve_field_visibility`) across two layers:
+## 11. Two-layer architecture
 
-**Backend layer:** Applies visibility to API responses before serialization. Hidden fields don't appear in JSON; masked fields appear with masked values; visible fields appear normally.
+**Backend layer:** 8-stage serialization pipeline. Bulk visibility resolution (resolve ONCE per user-resource-section per request). 12 standard mask types library (card_last_4, sin_last_3, email_partial, etc.). Mask character `•` (U+2022).
 
-**Frontend layer:** Applies visibility to React component tree before render. Hidden fields aren't rendered; masked fields render inert placeholders; visible fields render normally.
+**Frontend layer:** `<FieldGated flagName="...">` component with VisibilityContext provider. Hooks: `useVisibility`, `useCanDoAction`.
 
-**The two layers query the same A3 resolver and must agree.** Defense-in-depth: backend hiding while frontend renders a placeholder is fine. Backend exposing while frontend hides is also fine. **What's never fine: backend exposes, frontend renders.** That's a security regression detectable via integration tests.
+**Plus database view layer:** Postgres views for 5 highest-sensitivity resources (clients, employees, vendors, contractors, payments). SQL function `user_field_visibility(flag_name)` consults `effective_field_visibility_cache`.
 
-Plus a third layer for the highest-sensitivity fields:
+**Async batched audit-on-read:** 100ms timer / 50-entry size / 1000-entry backpressure / circuit breaker / reconciliation cron.
 
-**Database view layer:** Postgres views (`v_clients_with_visibility`, `v_employees_with_visibility`, etc.) mask sensitive fields at the SQL query level by consulting `effective_field_visibility_cache` via SQL function. App code reading these views never sees raw banking/payroll/SIN values for users who shouldn't see them. Used for: banking, payroll, SIN, full card number, executive compensation. NOT used for all visibility flags — would be too many views — only the most sensitive.
+**Complete 47-flag catalog** mapped to database columns + mask types + role defaults across all 13 modules. 1 never-granted (PCI). 9 audit-on-read. 3 row-level (handled by scope/predicate).
 
-## 12. Backend serialization pipeline
+Three architectural decisions: app transformer primary + Postgres views for sensitive 5 (defense-in-depth); per-field `<FieldGated>` standard; async batched audit-on-read.
 
-### 12.1 Pipeline architecture
+---
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Request enters route handler                           │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  1. Auth middleware → user_id, role_id in context       │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  2. Action grant check (A1)                             │
-│     - if denied → 403 + return                          │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  3. Data scope resolution (A2)                          │
-│     - inject WHERE clause                               │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  4. Database query (using view if available)           │
-│     - rows fetched from `v_<table>_with_visibility`     │
-│       for highest-sensitivity tables                    │
-│     - rows fetched from base table for the rest         │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  5. Bulk field visibility resolution (A3)               │
-│     - resolve ONCE per (user, resource, field_section)  │
-│     - returns visibility plan for all rows              │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  6. Serialization transformer                           │
-│     - apply visibility plan to each row                 │
-│     - mask masked sections                              │
-│     - delete hidden sections                            │
-│     - leave visible sections untouched                  │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  7. Async audit-on-read enqueue                         │
-│     - for sensitive fields where state=visible          │
-│     - batched in memory                                 │
-└─────────────────────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│  8. JSON response → client                              │
-└─────────────────────────────────────────────────────────┘
+═══════════════════════════════════════════════════════════════════
+# Part V — Pass 5 (Status Surface Binding Layer) — FULL CONTENT
+═══════════════════════════════════════════════════════════════════
+
+## 12. Overview
+
+Per audit §0.4 #4: "lookup-table rows carry behavior bindings." 80 status surfaces across 13 modules each carry flags that drive runtime behavior. Pass 5 turns these from "documented in audit" into "queried by runtime."
+
+### 12.1 Why this matters
+
+A naive ERP scatters business logic across action handlers:
+
+```typescript
+// BAD: business logic hardcoded in handler
+async function editInvoice(invoice) {
+  if (invoice.status_name === 'Sent' 
+      || invoice.status_name === 'Paid' 
+      || invoice.status_name === 'Void') {
+    throw new Error('Cannot edit invoice in this status');
+  }
+  // ... edit logic
+}
 ```
 
-### 12.2 Visibility plan resolution (bulk)
+Every status check duplicated. Every status name hardcoded. Adding a new status requires code changes everywhere it's referenced.
 
-The naive approach — call `resolve_field_visibility` per record per section — produces 50 records × 5 sections = 250 resolver calls. Each call is a cache lookup, so still fast, but unnecessary.
+The behavior-binding model inverts this:
 
-The bulk approach: resolve ONCE per `(user_id, resource, field_section)` for the request. Build a visibility plan:
+```typescript
+// GOOD: business logic owned by lookup row
+async function editInvoice(invoice) {
+  const bindings = await getStatusBindings('invoice_statuses', invoice.status_id);
+  if (!bindings.allows_edit) {
+    throw new Error(bindings.deny_reason ?? 'Cannot edit invoice in this status');
+  }
+  // ... edit logic
+}
+```
+
+The lookup row owns the rules. Adding a new status (say `Pending Customer Approval` between `Sent` and `Approved`) means inserting a row with configured bindings — no code change anywhere.
+
+### 12.2 Three properties of bindings
+
+**Property 1 — Action-gating bindings:** affect whether an action is permitted on an entity in this status. Examples: `allows_edit`, `allows_send`, `allows_payment`, `allows_state_transition_to_X`.
+
+**Property 2 — Effect-triggering bindings:** affect what happens when an entity *enters* this status. Examples: `triggers_late_fee`, `starts_lien_clock`, `auto_notify_customer`, `creates_gl_entry`.
+
+**Property 3 — UI-driving bindings:** affect how the entity in this status renders. Examples: `display_color`, `display_badge`, `display_priority`, `is_terminal` (greys out further actions).
+
+All three properties supported by Pass 5 schema.
+
+## 13. Schema extension
+
+### 13.1 New table: `status_behavior_bindings`
+
+Polymorphic — one table for all bindings across all 80 status surfaces.
+
+```sql
+CREATE TABLE status_behavior_bindings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Polymorphic reference to the status row
+  status_table_name TEXT NOT NULL,              -- e.g., 'invoice_statuses', 'appointment_statuses'
+  status_row_id UUID NOT NULL,                   -- the specific status row in that table
+  
+  -- The binding
+  binding_name TEXT NOT NULL,                    -- e.g., 'allows_edit', 'triggers_late_fee', 'is_terminal'
+  binding_category TEXT NOT NULL CHECK (binding_category IN (
+    'action_gate',          -- gates a permitted action on entity in this status
+    'effect_trigger',       -- triggers a downstream effect on entering this status
+    'ui_driver'             -- drives UI rendering
+  )),
+  
+  -- The value (typed)
+  value_boolean BOOLEAN,
+  value_text TEXT,
+  value_integer INTEGER,
+  value_numeric NUMERIC,
+  value_jsonb JSONB,
+  value_type TEXT NOT NULL CHECK (value_type IN ('boolean', 'text', 'integer', 'numeric', 'jsonb')),
+  
+  -- Reason / context (helps UIs explain "cannot edit" etc.)
+  deny_reason_template TEXT,                     -- used when binding denies an action; e.g., "Cannot edit Sent invoices"
+  
+  -- Operator vs system control
+  is_system_locked BOOLEAN NOT NULL DEFAULT FALSE,    -- TRUE: operators cannot modify in Settings; system enforces
+  
+  -- Lifecycle
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES users(id),
+  
+  -- Uniqueness
+  CONSTRAINT status_behavior_bindings_unique UNIQUE (status_table_name, status_row_id, binding_name)
+);
+
+-- Critical performance indexes — runtime queries by (status_table_name, status_row_id) returning all bindings
+CREATE INDEX idx_status_bindings_lookup ON status_behavior_bindings(status_table_name, status_row_id);
+CREATE INDEX idx_status_bindings_by_name ON status_behavior_bindings(binding_name, status_table_name);
+```
+
+**Why polymorphic over per-table columns:**
+
+- 80 status tables × ~6 bindings each = 480 columns spread across schema. Bindings are NOT identity attributes; they're behavior attributes. Better to colocate behavior than scatter it.
+- New bindings are easy: add a row, no schema migration.
+- Operator UI for managing bindings (Pass 8) reads from one table.
+- Reporting on "which statuses across all modules trigger late fees" is trivial.
+
+### 13.2 New table: `status_transition_definitions`
+
+Defines which state transitions are valid per status surface.
+
+```sql
+CREATE TABLE status_transition_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Source + target
+  status_table_name TEXT NOT NULL,               -- e.g., 'invoice_statuses'
+  from_status_row_id UUID NOT NULL,
+  to_status_row_id UUID NOT NULL,
+  
+  -- Transition properties
+  is_allowed BOOLEAN NOT NULL DEFAULT TRUE,
+  requires_admin_approval BOOLEAN NOT NULL DEFAULT FALSE,
+  requires_reason_capture BOOLEAN NOT NULL DEFAULT FALSE,
+  required_action_name TEXT,                     -- which action triggers this transition (e.g., 'invoices:send' triggers Draft → Sent)
+  
+  -- Effects on transition
+  triggers_effects JSONB,                        -- list of effect descriptors; runtime executes these on transition
+  
+  -- Operator vs system
+  is_system_locked BOOLEAN NOT NULL DEFAULT FALSE,
+  
+  -- Lifecycle
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Uniqueness
+  CONSTRAINT status_transitions_unique UNIQUE (status_table_name, from_status_row_id, to_status_row_id)
+);
+
+CREATE INDEX idx_status_transitions_from ON status_transition_definitions(status_table_name, from_status_row_id);
+CREATE INDEX idx_status_transitions_to ON status_transition_definitions(status_table_name, to_status_row_id);
+```
+
+The state transition matrix per status surface is the set of rows in this table filtered by `status_table_name`.
+
+### 13.3 Cache table: `effective_status_bindings_cache`
+
+Bindings queried often in hot paths. Cache them.
+
+```sql
+CREATE TABLE effective_status_bindings_cache (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  status_table_name TEXT NOT NULL,
+  status_row_id UUID NOT NULL,
+  
+  -- Serialized binding map for this status row
+  bindings JSONB NOT NULL,                       -- { 'allows_edit': false, 'allows_send': false, 'is_terminal': false, ... }
+  
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT effective_status_bindings_cache_unique UNIQUE (status_table_name, status_row_id)
+);
+
+CREATE INDEX idx_effective_status_bindings_lookup ON effective_status_bindings_cache(status_table_name, status_row_id);
+```
+
+Invalidated by triggers on `status_behavior_bindings` INSERT/UPDATE/DELETE.
+
+Hot-path read: `SELECT bindings FROM effective_status_bindings_cache WHERE status_table_name = 'invoice_statuses' AND status_row_id = $1` — single indexed lookup, returns full JSONB binding map. <1ms.
+
+## 14. The 14 standard binding names
+
+Across 80 status surfaces, these are the recurring binding names. New bindings can be added; this is the v1 baseline.
+
+### 14.1 Action-gating bindings (8)
+
+| Binding name | Type | Purpose |
+|---|---|---|
+| `allows_edit` | boolean | Can entity be edited in this status? |
+| `allows_delete` | boolean | Can entity be hard-deleted? (rare; usually Admin-only) |
+| `allows_send` | boolean | Can entity be sent (invoice send, quote send)? |
+| `allows_payment` | boolean | Can payment be recorded against this entity? |
+| `allows_reversal` | boolean | Can entity be reversed (void → reopen)? |
+| `allows_state_transition` | jsonb | List of status_ids this entity can transition to from current status |
+| `is_terminal` | boolean | No further state transitions allowed (e.g., Paid, Void) |
+| `requires_admin_to_modify` | boolean | Modifications require Admin role even with role grant |
+
+### 14.2 Effect-triggering bindings (6)
+
+| Binding name | Type | Purpose |
+|---|---|---|
+| `triggers_notification_template` | text | Template name to send on entering this status (e.g., 'invoice_sent') |
+| `triggers_late_fee` | boolean | Reaching this status with overdue date starts late fee accumulation |
+| `creates_gl_entry` | boolean | Reaching this status posts to GL (e.g., invoice Sent → AR posting) |
+| `starts_lien_clock` | boolean | Reaching this status starts Ontario 60-day lien clock for trade contractors |
+| `auto_notifies_customer` | boolean | Customer email triggered on entering this status |
+| `triggers_holdback_release` | boolean | Reaching this status triggers 45-day holdback release timer per Canadian Construction Act |
+
+### 14.3 UI-driving bindings (5)
+
+| Binding name | Type | Purpose |
+|---|---|---|
+| `display_color` | text | Hex color or semantic name (e.g., `'#10b981'` or `'success'`) |
+| `display_badge` | text | Badge variant for UI (e.g., 'success', 'warning', 'danger', 'neutral') |
+| `display_priority` | integer | Sort/list priority; higher = more prominent |
+| `display_icon` | text | Icon name for UI |
+| `display_show_in_filter_chips` | boolean | Whether this status appears in filter chip lists |
+
+## 15. The 80 status surfaces × bindings inventory
+
+Catalog by module. Conventions:
+
+- ✓ = binding present + value typical default
+- ⊘ = binding present + value explicitly FALSE/NULL
+- — = binding not applicable to this status surface
+- 🔒 = system-locked (operators cannot modify)
+- 🟢 = operator-configurable in Settings
+
+### 15.1 M1 — Clients + Sites + Contacts (15 status surfaces)
+
+| Status surface | Notable bindings |
+|---|---|
+| `client_statuses` (Lead/Active/On Hold/Archived) | Lead→Active: allows_state_transition (PM/SR). On Hold: 🔒 allows_send=FALSE, blocks new dispatches. Archived: 🔒 is_terminal=TRUE. |
+| `client_tiers` (Standard/Premium/VIP/Strategic) | display_priority for UI sort. 🟢 operator-configurable thresholds. |
+| `customer_types` (16 seeded types) | UI driver only; no action gating. |
+| `site_statuses` (Active/Inactive/Decommissioned) | Decommissioned: 🔒 is_terminal, blocks new appointments. |
+| `service_contract_statuses` (Draft/Active/Paused/Renewed/Expired/Cancelled) | Active: ✓ allows_recurring_billing. Cancelled/Expired: 🔒 is_terminal. Renewed: triggers new contract creation. |
+| `client_onboarding_gate_types` | Each gate type has binding `gate_blocks_quote_send` and `gate_blocks_contract_send`. |
+| `client_communication_log_types` | UI driver. |
+| `client_communication_preferences` | Bindings drive notification routing (email/SMS/none). |
+| `payment_methods` | 🔒 fixed bindings drive payment processing flow. |
+| `payment_terms` (Net 15/30/45/60/On Receipt) | 🟢 operator can add custom terms. |
+| `client_holdback_config_types` (Excl Tax/Incl Tax/None) | 🔒 fixed; affects invoice calculation. |
+| `client_tags` | UI driver only. |
+| `address_types`, `contact_types`, `relationship_types` | UI drivers. |
+| `client_credit_statuses` (Good Standing/On Hold/Collections) | 🔒 On Hold + Collections: blocks new sale. |
+
+### 15.2 M2 — Employees + Permissions (11 status surfaces)
+
+| Status surface | Notable bindings |
+|---|---|
+| `employee_statuses` (Active/On Leave/Terminated/Resigned) | 🔒 Terminated/Resigned: is_terminal, blocks login. On Leave: allows scheduling=FALSE. |
+| `employee_employment_types` (Full-time/Part-time/Contractor/Temp) | Affects payroll calculation. |
+| `certification_types` (25+) | Each has `gate_blocks_action` mapping to actions requiring this cert (e.g., ULC required for fire alarm install). 🔒 |
+| `territory_statuses` | UI driver. |
+| `employee_absence_types` (Vacation/Sick/Personal/Bereavement) | Affects scheduling availability. |
+| `employee_role_levels` (Apprentice/Journey/Senior/Master) | Affects labor rate calculation. |
+| `request_admin_access_statuses` (Pending/Approved/Rejected/Expired) | 🔒 |
+| (more) | |
+
+### 15.3 M3-M13 — Status surfaces
+
+Similar coverage. Notable highlights:
+
+**M5 Quotes:**
+- `quote_statuses` (Draft/Pending Approval/Approved/Sent/Viewed/Accepted/Rejected/Expired/Cancelled) — Sent: 🔒 allows_edit=FALSE; triggers snapshot capture; immutable. Accepted: triggers project creation. Viewed: auto-set from portal access.
+
+**M6 Projects:**
+- `project_statuses` (Planning/In Progress/Completed/On Hold/Cancelled) — Cancelled: 🔒 is_terminal.
+- `change_order_statuses` — Approved: triggers GL adjustment; updates project budget.
+- `commissioning_statuses` — Verified: ULC verification auto-attaches.
+
+**M7 Inventory:**
+- `inventory_movement_types` — 🔒 each type triggers specific GL postings (Receive: Inventory DR, AP CR; Issue: COGS DR, Inventory CR; etc.).
+- `purchase_order_statuses` (Draft/Sent/Acknowledged/Partial Receipt/Received/Closed/Cancelled) — Cancelled allowed only before receipt.
+- `inventory_adjustment_reasons` — Each reason has specific GL account mapping.
+
+**M8 Vendors:**
+- `vendor_statuses` (Lead/Active/Inactive/On Hold/Archived) — On Hold: blocks PO creation.
+- `vendor_onboarding_gate_types` — Each gate has `blocks_po_creation` binding.
+- `vendor_performance_grades` (A/B/C/D) — Grade C/D triggers preferred-status auto-removal.
+
+**M9 Invoices:**
+- `invoice_statuses` (11 statuses) — Sent: 🔒 allows_edit=FALSE, immutable snapshot; Paid: 🔒 is_terminal; Overdue: triggers_late_fee per client config; Void: requires_admin_to_modify.
+- `payment_statuses` — Bounced: reverses invoice payment + alert.
+- `ap_bill_statuses` (Received/Pending Approval/Approved for Payment/Paid/Disputed/Void) — Approved for Payment: allows addition to payment run; 🔒 separation of duties enforced (Pass 3 §11.3).
+- `credit_note_statuses` — Applied: reduces target invoice balance.
+
+**M10 Subcontractors:**
+- `contractor_statuses` (Lead/Active/Inactive/On Hold/Archived) — On Hold: blocks WO creation. WSIB expired triggers automatic On Hold (Pass 3 cross-cutting constraint).
+- `contractor_wo_statuses` (12 statuses) — Lien Period: starts_lien_clock=TRUE (Ontario 60-day); allows_payment=FALSE; Closed: only allowed after lien deadline passed (60 days from substantial completion).
+
+**M11 Financials:**
+- `gl_entry_statuses` (Draft/Posted/Reversed/Locked) — Locked: 🔒 is_terminal, no edits allowed (period closed).
+- `period_statuses` (Open/Soft Close/Hard Close/Reopened) — Hard Close requires A+Acc co-sign per Pass 3 §15.2. Reopened: requires_admin + reason capture.
+- `tax_filing_statuses` — Filed: 🔒 is_terminal in current period.
+
+**M12 Scheduling:**
+- `appointment_statuses` (Tentative/Confirmed/En Route/On Site/In Progress/Completed/Cancelled by Customer/Cancelled by Us/No Show/Rescheduled) — Cancelled by Customer triggers cancellation fee assessment.
+- `dispatch_record_statuses` — In Progress: SLA clock active; sla_breach_alerts may auto-generate.
+- `sla_breach_statuses` (Approaching 75%/Imminent 90%/Breached/Acknowledged/Waived/Resolved) — Waived: requires Admin + reason (Pass 3 admin exception).
+- `priority_levels` (P0 Critical/P1 High/P2 Normal/P3 Low) — affects SLA window calculation.
+
+**M13 Reports:**
+- `report_statuses` (Active/Archived/Draft/Deprecated) — Deprecated: 🔒 hides from new subscriptions but allows existing schedules.
+- `tax_filing_statuses` — overlap with M11.
+
+### 15.4 Total inventory
+
+- **80 status surfaces** across 13 modules
+- Each surface has 3-10 status rows
+- Average ~5 bindings per status row
+- ~400 status rows total × ~5 bindings = **~2000 binding rows** at v1 seed
+- Plus ~600 transition rows in `status_transition_definitions`
+
+## 16. Action handler integration
+
+### 16.1 Standard binding check pattern
+
+Every action handler that's gated by entity state follows this pattern:
 
 ```typescript
 // Pseudocode for build phase reference
-async function buildVisibilityPlan(userId: string, resource: string): Promise<VisibilityPlan> {
-  // Resolve all sections for this user + resource in parallel
-  const sections = await getApplicableSections(resource);  // from field_visibility_definitions
+async function editInvoice(invoice: Invoice, updates: Partial<Invoice>) {
+  // 1. Standard A1 action grant check (Pass 3)
+  await assertActionGrant(currentUser.id, 'invoices:edit', invoice.id);
   
-  const planEntries = await Promise.all(
-    sections.map(async section => {
-      const state = await resolveFieldVisibility(userId, resource, section);
-      return [section, state] as const;
-    })
+  // 2. NEW: Status binding check
+  const bindings = await getEffectiveBindings('invoice_statuses', invoice.status_id);
+  if (!bindings.allows_edit) {
+    throw new BindingDeniedError({
+      action: 'invoices:edit',
+      entity: invoice,
+      binding: 'allows_edit',
+      reason: bindings.deny_reason_template ?? 'Cannot edit invoice in this status'
+    });
+  }
+  
+  // 3. Proceed with edit
+  await db.update('invoices', invoice.id, updates);
+  
+  // 4. Audit (standard)
+  await auditAction({ ... });
+}
+```
+
+`getEffectiveBindings` queries `effective_status_bindings_cache`:
+
+```typescript
+async function getEffectiveBindings(statusTableName: string, statusRowId: string): Promise<BindingMap> {
+  const cached = await db.query(
+    'SELECT bindings FROM effective_status_bindings_cache WHERE status_table_name = $1 AND status_row_id = $2',
+    [statusTableName, statusRowId]
   );
   
-  return new Map(planEntries);  // Map<sectionName, {state, requires_audit_on_read}>
-}
-```
-
-Then apply the plan to every row:
-
-```typescript
-function applyVisibilityPlan(rows: any[], plan: VisibilityPlan): any[] {
-  return rows.map(row => transformRow(row, plan));
-}
-
-function transformRow(row: any, plan: VisibilityPlan): any {
-  const result = { ...row };
-  for (const [section, visibility] of plan) {
-    if (visibility.state === 'hidden') {
-      deleteSectionFields(result, section);
-    } else if (visibility.state === 'masked') {
-      maskSectionFields(result, section);
-    }
-    // visible: do nothing
-  }
-  return result;
-}
-```
-
-Result: 250 resolver calls → 5 resolver calls + 50 row transformations. Same data, much less work.
-
-### 12.3 Field-to-section mapping
-
-Every database column maps to a section. Sections are defined in `field_visibility_definitions` (`field_section` column). The mapping lives in code (not database) because it's static configuration:
-
-```typescript
-// Pseudocode mapping
-const FIELD_SECTION_MAP: Record<string, Record<string, string>> = {
-  clients: {
-    banking_account_name: 'banking',
-    banking_routing_number: 'banking',
-    banking_account_number: 'banking',
-    internal_notes: 'internal_notes',
-    onboarding_notes: 'internal_notes',
-    discount_reason: 'discount_reason',
-    // ...other columns map to no section (always visible)
-  },
-  employees: {
-    sin: 'sin',
-    bank_account_name: 'banking',
-    bank_account_number: 'banking',
-    hourly_cost_rate: 'cost_rate',
-    payroll_annual_salary: 'payroll',
-    payroll_tax_status: 'payroll',
-    // ...
-  },
-  // ...full catalog at §17 below
-};
-```
-
-For each row, the transformer iterates the relevant section columns and applies the visibility state.
-
-### 12.4 Serialization transformer pseudocode
-
-```typescript
-// Backend transformer (pseudocode for build phase reference)
-
-interface VisibilityPlan {
-  sections: Map<string, { state: 'visible' | 'masked' | 'hidden'; requires_audit_on_read: boolean }>;
-}
-
-interface MaskRule {
-  mask_type: 'card_last_4' | 'email_partial' | 'phone_last_4' | 'address_city_only' 
-            | 'sin_last_3' | 'bank_account_last_4' | 'redacted' | 'generic';
-}
-
-const MASK_RULES: Record<string, Record<string, MaskRule>> = {
-  // resource → column → mask_type
-  payments: {
-    full_card_number: { mask_type: 'card_last_4' },
-    bank_account_info: { mask_type: 'bank_account_last_4' }
-  },
-  clients: {
-    banking_account_number: { mask_type: 'bank_account_last_4' },
-    banking_routing_number: { mask_type: 'redacted' }
-  },
-  employees: {
-    sin: { mask_type: 'sin_last_3' },
-    bank_account_number: { mask_type: 'bank_account_last_4' }
-  },
-  // ...full catalog at §17 below
-};
-
-function transformRow(row: Record<string, any>, plan: VisibilityPlan, resource: string): Record<string, any> {
-  const result: Record<string, any> = {};
+  if (cached.rows[0]) return cached.rows[0].bindings;
   
-  for (const [columnName, value] of Object.entries(row)) {
-    const section = FIELD_SECTION_MAP[resource]?.[columnName];
-    
-    if (!section) {
-      // Field has no visibility gate — always visible
-      result[columnName] = value;
-      continue;
-    }
-    
-    const visibility = plan.sections.get(section);
-    
-    if (!visibility || visibility.state === 'hidden') {
-      // Skip the field entirely (don't add to result)
-      continue;
-    }
-    
-    if (visibility.state === 'masked') {
-      const maskRule = MASK_RULES[resource]?.[columnName];
-      result[columnName] = applyMask(value, maskRule?.mask_type || 'generic');
-      continue;
-    }
-    
-    if (visibility.state === 'visible') {
-      result[columnName] = value;
-      
-      if (visibility.requires_audit_on_read) {
-        enqueueAuditOnRead(currentUserId, resource, section, row.id);
-      }
-    }
+  // Cache miss — resolve from base table, write back
+  return await resolveAndCacheBindings(statusTableName, statusRowId);
+}
+```
+
+### 16.2 State transition handlers
+
+Transitions (e.g., `invoices:approve` moving Pending → Approved) consult `status_transition_definitions`:
+
+```typescript
+async function approveInvoice(invoice: Invoice) {
+  await assertActionGrant(currentUser.id, 'invoices:approve', invoice.id);
+  
+  const targetStatus = await getStatusRowByName('invoice_statuses', 'Approved');
+  
+  // Check transition is allowed
+  const transition = await getTransition('invoice_statuses', invoice.status_id, targetStatus.id);
+  if (!transition || !transition.is_allowed) {
+    throw new TransitionDeniedError({
+      from: invoice.status_name,
+      to: 'Approved',
+      reason: 'Transition not defined for this status pair'
+    });
   }
   
-  return result;
-}
-```
-
-### 12.5 List endpoint pattern
-
-```typescript
-// Pseudocode for build phase
-
-async function listClients(userId: string, queryParams: any) {
-  // 1. Action grant
-  const grant = await resolveActionGrant(userId, 'clients:viewList');
-  if (!grant.is_granted) throw new ForbiddenError(grant.reason_if_denied);
-  
-  // 2. Scope filter
-  const scope = await resolveDataScope(userId, 'clients');
-  
-  // 3. Build visibility plan ONCE
-  const plan = await buildVisibilityPlan(userId, 'clients');
-  
-  // 4. Query (use view if highest-sensitivity table)
-  const useView = SHOULD_USE_VIEW.has('clients');
-  const fromClause = useView ? 'v_clients_with_visibility' : 'clients';
-  const rows = await db.query(
-    `SELECT * FROM ${fromClause} WHERE ${scope.sql_filter_clause} AND archived_at IS NULL`,
-    { current_user: userId, ...scope.bind_parameters }
-  );
-  
-  // 5. Apply visibility plan to every row
-  const transformed = rows.map(row => transformRow(row, plan, 'clients'));
-  
-  // 6. Audit batched (async; already enqueued by transformRow)
-  
-  return transformed;
-}
-```
-
-## 13. Mask formatting library
-
-Standard mask types. Implemented as pure functions; deterministic; no I/O.
-
-### 13.1 The 12 standard mask types
-
-| Mask type | Input | Output | Notes |
-|---|---|---|---|
-| `card_last_4` | `'4532123456789012'` | `'•••• •••• •••• 9012'` | PCI compliance; last 4 only |
-| `card_brand_last_4` | `{brand: 'Visa', last4: '9012'}` | `'Visa ending in 9012'` | Display variant |
-| `bank_account_last_4` | `'00012345678'` | `'•••••••5678'` | Last 4 only |
-| `routing_number_redacted` | `'01200012'` | `'••••••••'` | Full redaction (routing is sensitive in CA but not displayed even in last-4 form) |
-| `sin_last_3` | `'123 456 789'` | `'••• ••• 789'` | Canadian SIN; last 3 |
-| `ssn_last_4` | `'123-45-6789'` | `'•••-••-6789'` | US SSN; last 4 |
-| `email_partial` | `'john.smith@example.com'` | `'j••••@example.com'` | First char + domain |
-| `email_full_redact` | `'john.smith@example.com'` | `'•••••@•••••'` | Full redaction (for VO seeing customer emails) |
-| `phone_last_4` | `'+1 416-555-1234'` | `'+1 ••••••1234'` | Country code + last 4 |
-| `address_city_only` | `{street: '123 Main', city: 'Toronto', province: 'ON'}` | `{city: 'Toronto', province: 'ON'}` | Drop street; keep city/province |
-| `redacted` | (any) | `'•••••••'` | Full redaction; fixed length 7 chars |
-| `generic` | (any) | `'•••'` | Fallback; 3 chars |
-
-### 13.2 Mask implementation
-
-```typescript
-// Mask functions are pure
-function maskCardLast4(value: string): string {
-  if (!value || value.length < 4) return '••••';
-  const last4 = value.slice(-4);
-  return `•••• •••• •••• ${last4}`;
-}
-
-function maskBankAccountLast4(value: string): string {
-  if (!value || value.length < 4) return '••••';
-  const last4 = value.slice(-4);
-  const masked = '•'.repeat(Math.min(value.length - 4, 8));
-  return `${masked}${last4}`;
-}
-
-function maskSinLast3(value: string): string {
-  if (!value || value.length < 3) return '••• ••• •••';
-  const cleaned = value.replace(/[\s-]/g, '');
-  const last3 = cleaned.slice(-3);
-  return `••• ••• ${last3}`;
-}
-
-function maskEmailPartial(value: string): string {
-  if (!value) return '•••••@•••••';
-  const [local, domain] = value.split('@');
-  if (!local || !domain) return '•••••@•••••';
-  const firstChar = local[0];
-  return `${firstChar}••••@${domain}`;
-}
-
-// ...and so on for all 12 mask types
-```
-
-### 13.3 Localization
-
-Mask characters (•) are Unicode bullet character (U+2022). Renders consistently across en + fr. No localization variants needed at v1.
-
-## 14. Async batched audit-on-read
-
-Per Pass 3, sensitive field reads trigger audit log entries. At list-endpoint scale (50 records × 2 sensitive sections), per-read synchronous inserts are catastrophic. Pass 4 specifies the async batched implementation.
-
-### 14.1 Buffer architecture
-
-Per-process in-memory buffer with periodic flush:
-
-```
-┌────────────────────────────────────────┐
-│  Buffer (in-memory):                   │
-│  [                                     │
-│    { user_id, resource, section,       │
-│      entity_id, occurred_at },         │
-│    ...                                 │
-│  ]                                     │
-└────────────────────────────────────────┘
-         │                  │
-         ▼                  ▼
-   Flush triggers:    Backpressure:
-   - every 100ms      - if buffer > 1000
-   - every 50 reads     entries: force
-   - on shutdown        synchronous flush
-```
-
-### 14.2 Flush implementation
-
-```typescript
-// Pseudocode
-interface AuditOnReadEntry {
-  user_id: string;
-  resource: string;
-  section: string;
-  entity_id: string;
-  occurred_at: Date;
-}
-
-class AuditOnReadBuffer {
-  private buffer: AuditOnReadEntry[] = [];
-  private flushTimer: NodeJS.Timer | null = null;
-  
-  enqueue(entry: AuditOnReadEntry): void {
-    this.buffer.push(entry);
-    
-    // Backpressure: force flush if buffer too large
-    if (this.buffer.length >= 1000) {
-      this.flushSync();
-      return;
-    }
-    
-    // Periodic flush
-    if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => this.flush(), 100);
-    }
-    
-    // Size-based flush
-    if (this.buffer.length >= 50) {
-      this.flush();
-    }
+  // Check admin approval if required
+  if (transition.requires_admin_approval && !currentUser.isAdmin) {
+    throw new AdminApprovalRequiredError(...);
   }
   
-  async flush(): Promise<void> {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    
-    if (this.buffer.length === 0) return;
-    
-    const batch = this.buffer;
-    this.buffer = [];
-    
-    try {
-      await db.query(
-        `INSERT INTO permission_audit_log 
-          (event_type, actor_user_id, target_resource, target_field_section, target_entity_id, occurred_at)
-        VALUES ${batch.map(() => '($1, $2, $3, $4, $5, $6)').join(', ')}`,
-        batch.flatMap(e => ['field_read_with_audit', e.user_id, e.resource, e.section, e.entity_id, e.occurred_at])
-      );
-    } catch (err) {
-      // Log error; do NOT block response; reconciliation cron will retry
-      logger.error('audit-on-read flush failed', { batch_size: batch.length, error: err });
-      // Put back in buffer if reasonable; circuit breaker if repeated failures
-    }
+  // Reason capture if required
+  if (transition.requires_reason_capture && !context.reason) {
+    throw new ReasonRequiredError(...);
   }
   
-  private flushSync(): void {
-    // Called on backpressure or shutdown — block until flushed
-    return this.flush();
+  // Update status
+  await db.update('invoices', invoice.id, { status_id: targetStatus.id });
+  
+  // Execute triggered effects
+  await executeEffects(transition.triggers_effects, { invoice, targetStatus, context });
+  
+  // Audit
+  await auditAction({ ... });
+}
+```
+
+### 16.3 Effect execution
+
+`triggers_effects` JSONB on a transition row is a list of effect descriptors:
+
+```json
+[
+  { "type": "create_gl_entry", "template": "invoice_approved" },
+  { "type": "send_email", "template_name": "invoice_approved_internal" },
+  { "type": "update_field", "field": "approved_by", "value": "$currentUser" },
+  { "type": "schedule_followup", "delay_days": 7, "task_template": "invoice_followup" }
+]
+```
+
+Effect executor:
+
+```typescript
+async function executeEffects(effects: Effect[], context: EffectContext) {
+  for (const effect of effects) {
+    switch (effect.type) {
+      case 'create_gl_entry':
+        await glService.createFromTemplate(effect.template, context);
+        break;
+      case 'send_email':
+        await emailService.sendFromTemplate(effect.template_name, context);
+        break;
+      case 'update_field':
+        await db.updateField(context.entity, effect.field, resolveValue(effect.value, context));
+        break;
+      case 'schedule_followup':
+        await scheduler.schedule({
+          delay_days: effect.delay_days,
+          template: effect.task_template,
+          context
+        });
+        break;
+      // ... more effect types
+    }
   }
 }
 ```
 
-### 14.3 Audit ordering
+Effects are idempotent — re-running shouldn't double-create. The effect executor records execution to a side table for deduplication.
 
-Within a single user's reads, audit entries are inserted in occurrence order (the buffer is FIFO). Across users, ordering is best-effort. For compliance auditing this is acceptable — the per-user ordering is what matters for forensic analysis ("at 14:23, user X read banking for client A; at 14:24, they read banking for client B").
+## 17. Integration with Pass 3 algorithms
 
-### 14.4 Backpressure handling
+Per Decision 2 (chat walk): binding checks fit inside Phase 3 of A1 as another cross-cutting constraint.
 
-If buffer fills (>1000 entries):
-1. Force synchronous flush
-2. Log warning to monitoring
-3. If repeated (3+ within 1 minute): circuit-breaker → disable async audit; fall back to synchronous per-read inserts; alert ops
+### 17.1 Updated Phase 3 of Pass 3 A1
 
-Worst case: ops sees latency spike but audit completeness preserved.
+Pass 3 Phase 3 originally had:
+- 3.1: Separation of duties check
+- 3.2: Regulatory expiry check
 
-### 14.5 Reconciliation cron
+Now extended to:
+- 3.1: Separation of duties check
+- 3.2: Regulatory expiry check
+- **3.3: Status binding check (new)**
 
-Daily cron job:
-1. Verify audit log row counts match expected reads per user (heuristic check)
-2. Look for gaps (consecutive entity_id reads without audit row when there should be)
-3. Alert if anomalies detected
-
-Compliance requirement satisfied by completeness, not real-time precision.
-
-## 15. Frontend component wrapper architecture
-
-### 15.1 `<FieldGated>` component
-
-React wrapper that consults the visibility plan (passed via context or props) and renders accordingly.
-
-```typescript
-// Pseudocode for build phase reference
-interface FieldGatedProps {
-  flagName: string;        // e.g., 'visibility.clients.banking'
-  children: React.ReactNode;
-  fallback?: React.ReactNode;  // rendered when masked
-  maskedValue?: string;        // displayed value when masked
-}
-
-function FieldGated({ flagName, children, fallback, maskedValue }: FieldGatedProps) {
-  const visibility = useVisibility(flagName);  // hook reads from context
+```
+PHASE 3.3: Status binding check (NEW)
+  Inputs: action_name, target_entity_id, context
   
-  if (visibility.state === 'hidden') {
-    return null;  // don't render
-  }
+  3.3.1: Determine if this action has a binding dependency
+    - Look up permission_definitions for action_name
+    - Read new column `binding_dependencies` (jsonb)
+      e.g., for 'invoices:edit': [{ entity_type: 'invoice', status_table: 'invoice_statuses', binding: 'allows_edit', expected: true }]
+    - If no binding_dependencies: skip; final_grant unchanged
+    
+  3.3.2: For each binding dependency:
+    - Fetch the target entity (e.g., invoice with id = target_entity_id)
+    - Get its status_id
+    - Get bindings via effective_status_bindings_cache
+    - Compare to expected value
+    - If mismatch:
+      final_grant = FALSE
+      resolution_source = 'status_binding_violation:' + binding_name
+      reason_if_denied = "[Entity] is in status [X]; this status does not allow [action]"
+      Return immediately (don't check other dependencies)
   
-  if (visibility.state === 'masked') {
-    return fallback ?? <MaskedValue value={maskedValue ?? '•••'} />;
-  }
-  
-  return <>{children}</>;
-}
-
-// Usage
-<FieldGated flagName="visibility.clients.banking">
-  <BankingPanel client={client} />
-</FieldGated>
-
-<FieldGated flagName="visibility.payments.fullCardNumber" maskedValue={`•••• •••• •••• ${last4}`}>
-  <FullCardNumber value={fullNumber} />
-</FieldGated>
+  3.3.3: If all checks pass, final_grant unchanged
 ```
 
-### 15.2 Visibility context provider
+### 17.2 Schema extension for binding dependencies
 
-At the page level, fetch the visibility plan once and provide to all `<FieldGated>` descendants:
-
-```typescript
-// Pseudocode
-function ClientDetailPage({ clientId }: { clientId: string }) {
-  const { data: visibilityPlan } = useQuery(['visibility', 'clients'], () =>
-    fetchVisibilityPlan('clients')
-  );
-  
-  return (
-    <VisibilityProvider plan={visibilityPlan}>
-      <ClientDetail clientId={clientId} />
-    </VisibilityProvider>
-  );
-}
-```
-
-### 15.3 Section-level wrappers
-
-For clearly-bounded sections where every field shares one flag:
-
-```typescript
-// Banking panel — all fields gated by visibility.clients.banking
-<FieldGated flagName="visibility.clients.banking">
-  <BankingPanel>
-    <Field label="Account Holder" value={client.bankingAccountName} />
-    <Field label="Routing Number" value={client.bankingRoutingNumber} />
-    <Field label="Account Number" value={client.bankingAccountNumber} />
-  </BankingPanel>
-</FieldGated>
-```
-
-For mixed-sensitivity sections, per-field wrappers:
-
-```typescript
-// Client detail with mixed sensitivity
-<ClientCard>
-  <Field label="Name" value={client.commonName} />  {/* No gate; always visible */}
-  <Field label="Tier" value={client.tier} />         {/* No gate */}
-  <FieldGated flagName="visibility.clients.internalNotes">
-    <Field label="Internal Notes" value={client.internalNotes} />
-  </FieldGated>
-  <FieldGated flagName="visibility.clients.discountReason">
-    <Field label="Last Discount Reason" value={client.discountReason} />
-  </FieldGated>
-</ClientCard>
-```
-
-### 15.4 Hooks
-
-```typescript
-// useVisibility — read state for a flag
-function useVisibility(flagName: string): VisibilityState {
-  const plan = useContext(VisibilityContext);
-  return plan?.sections.get(flagName) ?? { state: 'hidden' };
-}
-
-// useCanDoAction — wrapper for action grant check (Pass 3 A1)
-function useCanDoAction(actionName: string): boolean {
-  const { data: grant } = useQuery(['action-grant', actionName], () =>
-    resolveActionGrant(currentUser.id, actionName)
-  );
-  return grant?.is_granted ?? false;
-}
-
-// Usage in render
-function InvoiceActions({ invoice }: { invoice: Invoice }) {
-  const canApprove = useCanDoAction('invoices:approve');
-  const canSend = useCanDoAction('invoices:send');
-  
-  return (
-    <>
-      {canApprove && <Button onClick={approveInvoice}>Approve</Button>}
-      {canSend && <Button onClick={sendInvoice}>Send</Button>}
-    </>
-  );
-}
-```
-
-### 15.5 Edit gating
-
-Hidden fields don't render. Masked fields render but read-only. Editing a masked field is impossible (the input is replaced with the masked display):
-
-```typescript
-function FieldGatedInput({ flagName, value, onChange, ...inputProps }: FieldGatedInputProps) {
-  const visibility = useVisibility(flagName);
-  
-  if (visibility.state === 'hidden') return null;
-  if (visibility.state === 'masked') {
-    return <MaskedDisplay value={maskValue(value, getMaskType(flagName))} />;
-  }
-  
-  return <input value={value} onChange={onChange} {...inputProps} />;
-}
-```
-
-User with `view:masked` on banking can SEE last-4 but cannot EDIT. To edit, they need `visible` visibility AND `clients:editBanking` action grant.
-
-## 16. Database view layer (defense-in-depth for highest sensitivity)
-
-Per Decision 1 in chat walk: highest-sensitivity fields get Postgres view layer in addition to application transformer.
-
-### 16.1 Which fields get views
-
-Five view tables built at v1:
-- `v_clients_with_visibility` — masks banking
-- `v_employees_with_visibility` — masks SIN, banking, payroll, cost_rate
-- `v_vendors_with_visibility` — masks banking, T5018 YTD amount
-- `v_contractors_with_visibility` — masks banking, labor rates (for SR), worker manifest (for non-PM)
-- `v_payments_with_visibility` — masks full card number (always; never granted), bank account info
-
-Not all 50+ flags get views — would explode view count. Only fields where DB-level masking adds material defense beyond application-layer.
-
-### 16.2 View example: `v_employees_with_visibility`
+Pass 2's `permission_definitions` gets a new column:
 
 ```sql
-CREATE OR REPLACE VIEW v_employees_with_visibility AS
-SELECT
-  id,
-  legal_name,
-  common_name,
-  role_id,
-  hire_date,
-  email,
-  phone,
-  
-  -- SIN: masked or hidden based on current user's visibility
-  CASE
-    WHEN user_field_visibility('visibility.employees.sin') = 'visible' THEN sin
-    WHEN user_field_visibility('visibility.employees.sin') = 'masked' THEN 
-      CONCAT('••• ••• ', RIGHT(REGEXP_REPLACE(sin, '[\s-]', '', 'g'), 3))
-    ELSE NULL
-  END AS sin,
-  
-  -- Banking
-  CASE 
-    WHEN user_field_visibility('visibility.employees.banking') = 'visible' THEN bank_account_number
-    WHEN user_field_visibility('visibility.employees.banking') = 'masked' THEN
-      CONCAT('•'.''.REPEAT(GREATEST(LENGTH(bank_account_number) - 4, 0), '•'), RIGHT(bank_account_number, 4))
-    ELSE NULL
-  END AS bank_account_number,
-  
-  -- Cost rate
-  CASE
-    WHEN user_field_visibility('visibility.employees.cost_rate') = 'visible' THEN hourly_cost_rate
-    ELSE NULL
-  END AS hourly_cost_rate,
-  
-  -- Payroll
-  CASE 
-    WHEN user_field_visibility('visibility.employees.payroll') = 'visible' THEN payroll_annual_salary
-    ELSE NULL
-  END AS payroll_annual_salary,
-  
-  -- All other columns always visible
-  created_at,
-  archived_at
-  
-FROM employees;
+ALTER TABLE permission_definitions
+ADD COLUMN binding_dependencies JSONB;
+
+-- Example value for 'invoices:edit':
+-- [{ "entity_type": "invoice", "status_table": "invoice_statuses", "binding": "allows_edit", "expected": true }]
 ```
 
-`user_field_visibility(flag_name)` is a SQL function that:
-1. Reads `current_setting('app.current_user_id')` (set by application per connection)
-2. Queries `effective_field_visibility_cache` for that user + flag
-3. Returns the state
+Population at seed time per the action catalog from Pass 1.
 
-### 16.3 SQL function
+### 17.3 Performance budget impact
 
-```sql
-CREATE OR REPLACE FUNCTION user_field_visibility(flag_name TEXT)
-RETURNS TEXT 
-LANGUAGE plpgsql
-STABLE  -- result depends only on inputs + DB state; safe to cache within a query
-AS $$
-DECLARE
-  current_user_id UUID;
-  result_state TEXT;
-BEGIN
-  current_user_id := current_setting('app.current_user_id')::UUID;
+Per Pass 3 §16, original budget for cross-cutting constraint checks was 0-2ms.
+
+Adding binding check:
+- effective_status_bindings_cache lookup: <0.5ms (single indexed read)
+- comparison logic: negligible
+- Total Phase 3.3 overhead: <1ms
+
+Adjusted Phase 3 total budget: 1-3ms with all three checks. Total A1 budget unchanged (<5ms p99 compound).
+
+### 17.4 Updated resolution traces
+
+Adding a binding-check example to Pass 3's worked traces:
+
+**Trace 6: User attempts `invoices:edit` on Sent invoice**
+
+```
+Input: { user_id, action_name: "invoices:edit", target_entity_id: invoice_42 }
+
+PHASE 1: Cache lookup → hit, granted by role default for PM
+PHASE 3.1: No separation of duties for invoices:edit → skip
+PHASE 3.2: No regulatory expiry concern → skip
+PHASE 3.3: Status binding check
+  binding_dependencies = [{ entity_type: 'invoice', status_table: 'invoice_statuses', binding: 'allows_edit', expected: true }]
+  Fetch invoice_42 → status_id = <Sent>
+  Get bindings via cache → { allows_edit: false, allows_send: false, is_terminal: false, ... }
+  Comparison: allows_edit (false) !== expected (true) → MISMATCH
   
-  -- Cache lookup
-  SELECT visibility_state INTO result_state
-  FROM effective_field_visibility_cache
-  WHERE user_id = current_user_id
-    AND flag_name = flag_name
-  LIMIT 1;
-  
-  IF result_state IS NULL THEN
-    -- Cache miss — resolve from base tables
-    -- (resolution logic equivalent to Pass 3 A3)
-    -- ... resolution code ...
-  END IF;
-  
-  RETURN COALESCE(result_state, 'hidden');  -- fail-closed
-END;
-$$;
+  → final_grant = FALSE
+  → resolution_source = 'status_binding_violation:allows_edit'
+  → reason_if_denied = "Invoice INV-2024-001 is in status Sent; this status does not allow edit. Per immutable send snapshot policy (§0.4 #8)."
+
+PHASE 5: Return
+  { is_granted: FALSE, ui_state: 'disabled', resolution_source: '...', reason_if_denied: '...', ... }
 ```
 
-### 16.4 Application using views
+## 18. Operator-configurable vs system-locked bindings
 
-App reads from view, not base table, for the 5 highest-sensitivity resources:
+Some bindings are operator-tunable in Settings. Others are system-locked because they enforce architectural commitments from the audit (§0.4 series).
+
+### 18.1 System-locked bindings (cannot be modified by operators)
+
+Per audit cross-cutting commitments:
+
+- **§0.4 #8 — Immutable snapshots:** `allows_edit = FALSE` on Sent statuses of quotes, invoices, change orders, contractor WOs is 🔒 system-locked.
+- **§0.4 #11 — Separation of duties:** Co-sign requirement on `accounting_periods:hardClose` is 🔒.
+- **§0.4 #12 — Regulatory expiry:** WSIB expired → On Hold transition is 🔒.
+- **§0.4 #13 — Geolocation retention:** 30-day retention default is 🔒 (but threshold value is operator-configurable per Pass 2).
+- **PCI compliance:** `payments.fullCardNumber` visibility is 🔒.
+- **Canadian Construction Act:** 45-day holdback release timing on retention release invoices is 🔒.
+- **Ontario lien deadline:** 60-day clock on Trade Contractor WOs is 🔒.
+- **Append-only ledgers:** Inventory movements, commissioning records, GL entries: `allows_edit=FALSE, allows_delete=FALSE` is 🔒.
+
+These show as locked (greyed) in the permissions editor (Pass 8). Tooltip explains why.
+
+### 18.2 Operator-configurable bindings
+
+Operator can tune in Settings:
+
+- Custom status added by operator (e.g., 'Pending Customer Approval' in quote_statuses) → all its bindings configurable
+- Late fee thresholds (`triggers_late_fee` plus accumulator config)
+- Notification template assignments (`triggers_notification_template`)
+- Display colors / badges / priorities / icons (UI drivers)
+- Approval thresholds (e.g., quotes:approve thresholds in M5 — managed via Settings per Pass 1 catalog)
+- Per-tenant retention day count (under the 30-day default minimum for compliance)
+- Reorder thresholds for inventory
+
+### 18.3 Hybrid bindings
+
+Some bindings are partially system-locked: the existence is system-required but the specific value is operator-tunable.
+
+Example: `triggers_late_fee` binding on `invoice_statuses.Overdue` row.
+
+- 🔒 system: binding MUST exist; cannot be deleted
+- 🟢 operator: value can be tuned (default `true`; can disable per-tenant)
+
+UI shows these as partial-edit (some sub-fields editable, some locked).
+
+## 19. State transition matrices (sample)
+
+For each status surface, the set of rows in `status_transition_definitions` forms a state transition matrix.
+
+### 19.1 Example: `invoice_statuses` matrix
+
+| From → To | Draft | Pending Approval | Approved | Sent | Viewed | Partial Paid | Paid | Overdue | Void | Cancelled | Refunded |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Draft** | self | ✓ submit | ✓ approve (skip) | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
+| **Pending Approval** | ✓ reject (back to Draft) | self | ✓ approve | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
+| **Approved** | ⊘ | ⊘ | self | ✓ send | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
+| **Sent** | ⊘ (locked) | ⊘ | ⊘ | self | ✓ auto (portal viewed) | ✓ partial payment | ✓ full payment | ✓ overdue (date-trigger) | ✓ void (A+reason) | ⊘ | ⊘ |
+| **Viewed** | ⊘ | ⊘ | ⊘ | ⊘ | self | ✓ partial | ✓ full | ✓ overdue | ✓ void (A) | ⊘ | ⊘ |
+| **Partial Paid** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ✓ full | ✓ overdue (if past due) | ✓ void (A+reason) | ⊘ | ⊘ |
+| **Paid** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ | ⊘ | ⊘ | ✓ refund (A) |
+| **Overdue** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ partial | ✓ full | self | ✓ void | ⊘ | ⊘ |
+| **Void** | ✓ reopen (A only) | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ | ⊘ |
+| **Cancelled** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ |
+| **Refunded** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self |
+
+Each ✓ corresponds to a row in `status_transition_definitions` with the relevant `required_action_name` populated.
+
+### 19.2 Example: `contractor_wo_statuses` matrix
+
+The 60-day lien clock is enforced through this matrix.
+
+Lien Period (post-substantial-completion) → Closed: transition only allowed if (current_date >= lien_period_started_at + 60 days). Otherwise denied with reason "Lien deadline has not passed; cannot close work order yet (Ontario Construction Act)."
+
+This check is implemented in the transition handler:
 
 ```typescript
-// For these 5 resources, use view
-const VIEW_BACKED_RESOURCES = new Set(['clients', 'employees', 'vendors', 'contractors', 'payments']);
-
-async function fetchResource(resource: string, where: string, bind: any) {
-  const tableName = VIEW_BACKED_RESOURCES.has(resource) 
-    ? `v_${resource}_with_visibility` 
-    : resource;
-  return await db.query(`SELECT * FROM ${tableName} WHERE ${where}`, bind);
+if (fromStatus.name === 'Lien Period' && toStatus.name === 'Closed') {
+  const lienStartedAt = await getLienPeriodStartedAt(workOrder.id);
+  const lienDeadlinePassed = isAfter(new Date(), addDays(lienStartedAt, 60));
+  if (!lienDeadlinePassed) {
+    throw new TransitionDeniedError({ reason: 'Lien deadline has not passed (Ontario Construction Act 60-day)' });
+  }
 }
 ```
 
-App still runs `transformRow` from §12.4 as defense-in-depth (view masks → transformer no-ops on already-NULL field; no harm).
+System-locked: `requires_admin_approval=TRUE` for this transition pre-60-days, with audit captured.
 
-### 16.5 RLS + view interaction
+## 20. Performance characteristics
 
-Both RLS policies (Pass 3 §12.5) and views apply simultaneously. Order of operations:
+### 20.1 Cache lookup performance
 
-1. RLS filters rows the user can see at all (data scope)
-2. View masks/hides specific columns within those rows (field visibility)
+- `effective_status_bindings_cache`: indexed by `(status_table_name, status_row_id)`. <1ms hit.
+- ~400 status rows total → cache fits in memory at ~50KB. Effectively zero-cost.
 
-Both must be set up correctly. If RLS forgets to filter, scope leak. If view forgets to mask, field leak. Defense-in-depth means both layers exist.
+### 20.2 Cache invalidation
 
-## 17. Complete field visibility flag catalog
+PostgreSQL triggers:
+- INSERT/UPDATE/DELETE on `status_behavior_bindings` → invalidate matching row in cache
+- INSERT/UPDATE/DELETE on `status_transition_definitions` → no cache impact directly (transitions are runtime lookups; could add a transition cache in Pass 9 if needed)
 
-Maps every `visibility.*` flag to its database columns + mask type + role defaults.
+Cache warming: bindings cache populated lazily on first read per status row.
 
-### 17.1 M1 — Clients
+### 20.3 Effect execution
 
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.clients.banking` | clients | `banking_account_name`, `banking_routing_number`, `banking_account_number` | bank_account_last_4 (account_number); redacted (others) | A: visible; Acc: visible (audit-on-read); PM: masked; SR/Tech/VO: hidden |
-| `visibility.clients.internalNotes` | clients | `internal_notes`, `onboarding_notes` | redacted | A: visible; PM: visible; Acc: visible; SR/Tech/VO: hidden |
-| `visibility.clients.discountReason` | clients | `discount_reason`, `last_discount_at` | redacted | A: visible; PM: visible; SR: visible; Acc: visible; Tech/VO: hidden |
-| `visibility.clients.tierDetails` | clients | `tier_thresholds`, `tier_benefits` | generic | A: visible; PM: visible (for own team); SR: hidden; Tech: hidden; Acc: hidden; VO: hidden |
+Effects are async fire-and-forget where possible:
+- `send_email`: enqueued to job queue
+- `create_gl_entry`: synchronous (atomic with state transition)
+- `schedule_followup`: async (added to scheduler queue)
+- `update_field`: synchronous
 
-### 17.2 M2 — Employees
+GL entry creation must be synchronous and atomic with the state transition (single transaction). Other effects can be async with retry on failure.
 
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.employees.sin` | employees | `sin` | sin_last_3 | A: visible (audit); HR: visible (audit); Acc: visible (audit); others: hidden |
-| `visibility.employees.banking` | employees | `bank_account_name`, `bank_routing`, `bank_account_number` | bank_account_last_4 | A: visible (audit); Acc: visible (audit); HR: visible (audit); others: hidden |
-| `visibility.employees.payroll` | employees | `payroll_annual_salary`, `payroll_pay_frequency`, `payroll_deductions`, `payroll_tax_status` | redacted | A: visible; HR: visible; Acc: visible; employee_self: visible (own only); others: hidden |
-| `visibility.employees.cost_rate` | employees | `hourly_cost_rate`, `loaded_cost_rate` | redacted | A: visible; Acc: visible; PM: visible (for team); SR: hidden; Tech: hidden; VO: hidden |
-| `visibility.employees.privatePhone` | employees | `personal_phone`, `personal_email`, `emergency_contact` | phone_last_4 / email_partial | A: visible; HR: visible; PM: masked (team); others: hidden |
-| `visibility.employees.documents` | employees | `(employee_documents.*)` | generic | A: visible; HR: visible; employee_self: visible (own); others: hidden |
-
-### 17.3 M5 — Quotes
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.quotes.margin` | quotes | `gross_margin_pct`, `gross_margin_amount`, `internal_cost_total` | redacted | A: visible; PM: visible; Acc: visible; SR: hidden (sees price only); Tech/VO: hidden |
-| `visibility.quotes.internalNotes` | quotes | `internal_notes` | redacted | A: visible; PM: visible; SR: visible (own quotes only); others: hidden |
-| `visibility.quotes.approvalHistory` | quotes | `(quote_approvals.*)` | generic | A: visible; PM: visible; SR: visible (own); Acc: visible; others: hidden |
-
-### 17.4 M6 — Projects
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.projects.actualCosts` | projects | `actual_cost_labor`, `actual_cost_materials`, `actual_cost_subs`, `actual_total` | redacted | A: visible; PM: visible (own); Acc: visible; SR: hidden; Tech: hidden (own labor only via timesheets); VO: hidden |
-| `visibility.projects.estimatedMargin` | projects | `estimated_gross_margin`, `committed_gross_margin` | redacted | A: visible; PM: visible (own); Acc: visible; others: hidden |
-| `visibility.projects.changeOrderImpact` | projects | `change_order_total_margin_impact` | redacted | A: visible; PM: visible (own); Acc: visible; others: hidden |
-| `visibility.projects.commissioningInternal` | projects | `commissioning_internal_notes`, `commissioning_findings` | redacted | A: visible; PM: visible (own); Tech: visible (assigned); others: hidden |
-
-### 17.5 M7 — Inventory
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.inventory.unitCost` | inventory_items | `unit_cost_fifo`, `vendor_unit_cost` | redacted | A: visible; PM: visible; Acc: visible; SR: hidden (sees sell price only); Tech: hidden; VO: hidden |
-| `visibility.inventory.vendorMargin` | vendor_catalog | `vendor_margin_pct` | redacted | A: visible; Acc: visible; PM: visible (limited); others: hidden |
-
-### 17.6 M8 — Vendors
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.vendors.banking` | vendors | `banking_account_name`, `banking_routing`, `banking_account_number` | bank_account_last_4 | A: visible (audit); Acc: visible (audit); others: hidden |
-| `visibility.vendors.t5018YtdAmount` | vendors | `t5018_ytd_amount` | redacted | A: visible; Acc: visible; HR-role: visible; others: hidden |
-| `visibility.vendors.performanceInternal` | vendors | `performance_internal_notes`, `auto_degrade_history` | redacted | A: visible; PM: visible; Acc: visible; others: hidden |
-
-### 17.7 M9 — Invoices, Payments, Credit Notes
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.invoices.profit` | invoices | `gross_profit`, `cost_total`, `margin_pct` | redacted | A: visible; PM: visible (own); Acc: visible; SR: hidden; Tech: hidden; VO: hidden |
-| `visibility.invoices.discountReason` | invoices | `discount_reason`, `discount_authorized_by` | redacted | A: visible; PM: visible; SR: visible (own); Acc: visible; others: hidden |
-| `visibility.invoices.lineCost` | invoice_lines | `line_unit_cost`, `line_total_cost` | redacted | A: visible; Acc: visible; PM: visible; others: hidden |
-| `visibility.payments.fullCardNumber` | payments | `card_number_full` (encrypted at rest; never decrypted for display) | NEVER VISIBLE (is_never_granted=TRUE) | All: hidden (PCI compliance) |
-| `visibility.payments.bankAccountInfo` | payments | `bank_account_full`, `bank_routing_full` | bank_account_last_4 | A: visible (audit); Acc: visible (audit); others: hidden |
-
-### 17.8 M10 — Subcontractors
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.contractors.banking` | contractors | `banking_account_name`, `banking_routing`, `banking_account_number` | bank_account_last_4 | A: visible (audit); Acc: visible (audit); others: hidden |
-| `visibility.contractors.laborRates` | contractor_labor_rates | `base_rate`, `overtime_rate`, `weekend_rate`, `holiday_rate`, `travel_rate` | redacted | A: visible; PM: visible; Acc: visible; SR: hidden (sees availability only); Tech: hidden; VO: hidden |
-| `visibility.contractors.unitCost` | contractor_work_orders | `our_unit_cost` (markup applied for project costing) | redacted | A: visible; Acc: visible; PM: visible (own); others: hidden |
-| `visibility.contractors.performanceScores` | contractors | `performance_scores`, `auto_degrade_history` | redacted | A: visible; PM: visible (own); Acc: visible; others: hidden |
-| `visibility.contractors.workerManifest` | contractor_worker_manifest | full table | generic | A: visible; PM: visible (project-scoped); AM: visible (assigned); others: hidden |
-| `visibility.contractors.t5018YtdAmount` | contractors | `t5018_ytd_amount` | redacted | A: visible; Acc: visible; others: hidden |
-| `visibility.contractors.internalNotes` | contractors | `internal_notes` | redacted | A: visible; others: hidden |
-
-### 17.9 M11 — Financials
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.financials.bankBalances` | bank_accounts | `current_balance`, `opening_balance` | redacted | A: visible; Acc: visible; Bookkeeper: visible; others: hidden |
-| `visibility.financials.taxLiability` | tax_filings | `total_collected`, `total_remittance` | redacted | A: visible; Acc: visible; Bookkeeper: visible; others: hidden |
-| `visibility.financials.payrollGl` | gl_journal_entries (payroll subset) | full | redacted | A: visible; Acc: visible; HR-role: visible; others: hidden |
-| `visibility.financials.executiveCompensation` | gl_journal_entries (exec comp subset) | full | redacted | A: visible; Executive: visible; others: hidden |
-| `visibility.financials.proprietaryFinancials` | financial_reports | full | redacted | A: visible; Acc: visible; Executive: visible; others: hidden |
-| `visibility.financials.intercompanyTransfers` | gl_journal_entries (intercompany subset) | full | redacted | A: visible only (Phase 2 multi-entity) |
-| `visibility.financials.foreignExchangeRates` | fx_revaluation_runs | full | redacted | A: visible; Acc: visible; others: hidden |
-| `visibility.financials.unrealizedGainLoss` | fx_revaluation_runs | `total_unrealized_gain_loss` | redacted | A: visible; Acc: visible; others: hidden |
-
-### 17.10 M12 — Scheduling
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.scheduling.fullCalendarAcrossTeams` | appointments | (scoping flag — affects which rows returned, not which fields masked) | n/a — see Pass 3 §12 (data scopes) | A: visible; Dispatcher: visible; others: scoped |
-| `visibility.scheduling.employeeCostRate` | appointment_resources | `employee_cost_rate` | redacted | A: visible; Acc: visible; others: hidden |
-| `visibility.scheduling.privateAppointments` | appointments | (where appointment_type='Internal Meeting' AND created_by=own_user) | n/a — affects row visibility | owner: visible; others: hidden |
-| `visibility.scheduling.customerPii` | appointments | `customer_phone`, `customer_email`, `site_access_codes` | phone_last_4 / email_partial / redacted | A: visible; PM: visible (own projects); assigned_tech: visible; others: hidden |
-| `visibility.scheduling.geolocationHistory` | appointments | `clock_in_geo`, `clock_out_geo`, `on_site_geo` | redacted | A: visible; owner: visible (own); others: hidden. 30-day retention per §0.4 #13 |
-
-### 17.11 M13 — Reports
-
-| Flag | Resource | Columns affected | Mask type | Default state per role |
-|---|---|---|---|---|
-| `visibility.reports.executiveReports` | report_definitions | full row for executive category | n/a — affects row visibility | A: visible; Executive: visible; VO: visible (limited rows); others: hidden |
-| `visibility.reports.payrollReports` | report_definitions | full row for payroll-related | n/a | A: visible; HR-role: visible; Acc: visible; others: hidden |
-| `visibility.reports.crossUserData` | reports | (predicate flag controlling cross-user query) | n/a — affects query generation | A: visible; granted role: visible; others: predicate "current_user only" applied |
-
-### 17.12 Catalog stats
-
-- **47 distinct flags** across 13 modules
-- **5 mask types most used:** redacted, bank_account_last_4, sin_last_3, phone_last_4, email_partial
-- **1 never-granted flag:** `visibility.payments.fullCardNumber` (PCI compliance)
-- **9 flags with `requires_audit_on_read=TRUE`:** all banking + SIN + payroll variants
-- **3 flags affecting row-level not field-level:** privateAppointments, fullCalendarAcrossTeams, crossUserData (handled by scope/predicate, not transformer)
-
-## 18. Performance characteristics
-
-### 18.1 Backend serialization overhead
-
-| Scenario | Overhead |
-|---|---|
-| Plan build (parallel section resolution) | <5ms once per request |
-| Per-row transform | <0.1ms per row (no I/O; pure CPU) |
-| 50-row list | <10ms total transformation overhead |
-| Audit-on-read async enqueue | <0.01ms per read; 0ms blocking |
-| Audit-on-read async flush | ~5ms per batch of 50 entries (batched insert) |
-
-### 18.2 Frontend render overhead
-
-| Scenario | Overhead |
-|---|---|
-| Visibility plan fetch | 1 network call (~50ms one-time per page) |
-| `<FieldGated>` overhead per field | ~0.1ms (Map lookup + conditional render) |
-| Page with 100 gated fields | ~10ms additional render time |
-
-### 18.3 View layer overhead (highest-sensitivity tables)
-
-| Scenario | Overhead |
-|---|---|
-| SELECT from view vs base table | <5% additional query time (function call per column) |
-| `user_field_visibility` function call | <0.5ms per call (cache hit) |
-
-## 19. Failure modes
+## 21. Failure modes
 
 | Failure | Behavior |
 |---|---|
-| Visibility plan fetch fails | Fail-closed: treat all gated fields as hidden; show error banner; user can retry |
-| Audit-on-read flush fails | Action proceeds; failed batch logged; reconciliation cron retries |
-| View layer SQL function fails | Fall back to base table; warning to monitoring; defense-in-depth degraded but app continues |
-| Mask function throws on invalid input | Return generic mask (`'•••'`); log warning; never expose raw value |
-| Frontend wrapper renders without visibility context | Render nothing (fail-closed); console warning in dev |
+| Cache lookup fails | Fall back to base table query (slower but correct) |
+| Binding row not found for expected binding | Treat as `false` for action gates (fail-closed); `null` for triggers; default value for UI drivers |
+| Transition not found in `status_transition_definitions` | Deny transition; surface generic "Transition not defined" |
+| Effect execution fails (async) | Retry per effect type policy; alert on repeated failures |
+| Effect execution fails (synchronous, e.g., GL entry creation) | Roll back the transition; return error to caller |
 
-## 20. Per-tenant customization (Phase 2 placeholder)
+## 22. Migration order extension
 
-At v1, the flag catalog (§17) is global — every tenant has the same 47 flags with the same column mappings.
+Adding to Pass 2's 16-step migration order:
 
-Phase 2: operators can customize which fields belong to which flag. For example, an operator might want their custom `external_consultant_rate` column on contractors to be gated by `visibility.contractors.laborRates`. Mechanism: per-tenant override of `FIELD_SECTION_MAP` (currently code; would move to a `field_section_mappings` table at Phase 2).
+- Step 17: Create `status_behavior_bindings` table
+- Step 18: Create `status_transition_definitions` table
+- Step 19: Create `effective_status_bindings_cache` table
+- Step 20: Add `binding_dependencies` column to `permission_definitions`
+- Step 21: Seed `status_behavior_bindings` from audit catalog (~2000 rows)
+- Step 22: Seed `status_transition_definitions` from audit (~600 rows)
+- Step 23: Populate `effective_status_bindings_cache` from initial bindings (lazy fill via first read after seed)
 
-Also Phase 2: operator-defined custom flags. At v1 the 47 flags are fixed.
+## 23. Open questions (Pass 5)
 
-## 21. Open questions (Pass 4)
+1. **Should bindings have version history?** When an operator changes `triggers_late_fee` from true to false, should we audit? Decision: YES — same audit pattern as permissions (logged to `permission_audit_log` with event_type='status_binding_changed').
 
-1. **Should the view layer cover all 47 flags or just the highest-sensitivity ones?** Decision: just the 5 highest-sensitivity resources (clients, employees, vendors, contractors, payments). Building 13 views is enough defense-in-depth without the maintenance burden of 47.
+2. **Multi-status entities** — e.g., invoice has `status` AND `payment_status`. Should bindings combine? Decision: handlers query bindings per-status; combine logic in the handler when needed. No automated combination.
 
-2. **Should `<FieldGated>` show a tooltip explaining why a field is hidden?** Decision: NO at v1. Hidden means hidden — no signal that data exists. Phase 2 could add an admin-toggleable "show locked sections" preview mode.
+3. **Performance of effect execution at scale** — when an invoice transitions Sent → Paid, fires 3-5 effects. 1000 invoices/day = 3000-5000 effect executions. Sustainable? Decision: YES via async queue for non-atomic effects; ops dashboard monitors queue depth.
 
-3. **Audit-on-read for masked reads?** When user sees masked card number, should that be audited? Decision: NO — masked reads are the safe path; audit creates noise. Only `visible` reads of sensitive fields audit.
+4. **Operator-added bindings** — can operators add NEW binding names beyond the 14 standard? Decision: NO at v1 (fixed binding name catalog). Phase 2 consideration when plugin architecture lands.
 
-4. **Cross-field masking dependencies.** If `discount_reason` requires `discount_authorized_by` for context, are they always gated together? Decision: gated together by being in the same field_section. Section is the atomic unit of visibility.
+5. **Conditional bindings** — should bindings have conditions (e.g., `allows_edit=TRUE only if user is creator within 30 minutes`)? Decision: NO at v1 — bindings are static per status row. Conditional logic stays in action handlers when needed. Phase 2 may add conditional bindings.
 
-5. **Mask format internationalization.** Should mask characters change for non-Latin scripts? Decision: NO — `•` (U+2022) is universally rendered and recognized. Consistent across languages.
+6. **Cross-status binding dependencies** — e.g., invoice `allows_payment` should also check if client is `On Stop` (client status). How? Decision: at v1, handler queries bindings from multiple status surfaces sequentially. Phase 2 could add a cross-status rule engine.
 
-6. **Test strategy for visibility leaks.** How do we catch a regression where backend exposes but frontend hides? Decision: integration tests with snapshot comparison per role. Run nightly across all 47 flags × 11 base roles = ~520 test cases. Detailed test spec in build phase.
+7. **UI representation of locked bindings** — should the permissions editor show locked bindings at all, or hide them? Decision: SHOW but render as greyed/locked with explanatory tooltip ("This binding enforces §0.4 #8 immutable snapshot policy"). Transparency over concealment.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 22. What's next (Pass 5 preview)
+# 24. What's next (Pass 6 preview)
 ═══════════════════════════════════════════════════════════════════
 
-**Pass 5: Status surface binding layer.**
+**Pass 6: Append-only audit pattern.**
 
-Per Pass 1 §0.4 #4 and the 80 status surfaces catalogued across the audit: lookup-table rows carry behavior bindings. e.g., `invoice_statuses.Sent` has `allows-edit=false`, `triggers-late-fee=true`, `terminal=false`. These bindings drive runtime behavior of actions.
+The `permission_audit_log` table was specified in Pass 2. Pass 6 details the audit pattern across the entire permissions runtime:
 
-Pass 5 covers:
-- The schema for behavior bindings on status surfaces (extends Pass 2 schema with `status_behavior_bindings` table)
-- The 80 status surfaces × their bindings inventory (full catalog)
-- How action handlers consult bindings (e.g., `invoices:edit` checks `current_status.allows_edit` before proceeding)
-- The state transition matrix per status surface (which transitions are valid)
-- Integration with Pass 3 algorithms (binding checks happen in Phase 3 alongside cross-cutting constraints)
-- Operator-configurable bindings (which can operators tune in Settings vs which are system-locked)
+- Insert-only enforcement (PostgreSQL triggers blocking UPDATE/DELETE — already specified)
+- 18+ enumerated event types and when each fires
+- JSON payload schema per event type
+- Audit query patterns (admin debugging, compliance export, security review)
+- Append-only ledger pattern propagation to other modules (M6 commissioning, M7 inventory movements, M11 GL — extending §0.4 #10)
+- Retention policies and archival strategy (Phase 2 cold storage)
+- Audit data extraction for compliance reports
+- Performance: how audit log scales to ~10M entries/year without degrading
 
-Pass 5 will produce v0.5 of the design doc.
+Pass 6 will produce v0.6 of the design doc.
 
 ---
 
-**End of v0.4.** Pass 4 (Field-Level Visibility Engine) complete. Backend serialization pipeline + frontend component wrapper architecture + mask formatting library (12 standard mask types) + async batched audit-on-read + bulk visibility resolution + defense-in-depth Postgres views for 5 highest-sensitivity tables + complete 47-flag catalog mapped to database columns + performance characteristics + failure modes + Phase 2 customization placeholder. Six Pass 4 open questions resolved.
+**End of v0.5.** Pass 5 (Status Surface Binding Layer) complete. New schema: `status_behavior_bindings` table (polymorphic across 80 status surfaces) + `status_transition_definitions` + `effective_status_bindings_cache`. Three binding property categories: action-gating (8 bindings), effect-triggering (6), UI-driving (5) — 14 standard binding names total. 80 status surfaces × ~5 bindings = ~2000 binding rows + ~600 transition rows at v1 seed. Integration with Pass 3 A1 algorithm via new Phase 3.3 status binding check (<1ms overhead; preserves <5ms total budget). State transition matrices specified for invoice_statuses and contractor_wo_statuses examples (Ontario 60-day lien clock enforcement). Operator-configurable vs system-locked bindings catalogued (cross-cutting commitments §0.4 #8/#11/#12/#13/PCI/Construction Act/lien/append-only ledgers are 🔒). Seven Pass 5 open questions resolved.

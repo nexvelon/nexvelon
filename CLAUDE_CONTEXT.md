@@ -12,48 +12,50 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session S CLOSED. Permissions Design Pass 4 of 11 complete.**
+**As of 2026-05-12. Session T CLOSED. Permissions Design Pass 5 of 11 complete.**
 
-- **Session S focus:** Permissions Design — Pass 4 (Field-Level Visibility Engine). Implements Algorithm A3 from Pass 3 across two layers: backend serialization pipeline (8-stage: auth → action grant → scope → query → bulk visibility resolution → transformer → audit enqueue → JSON response) and frontend React component wrappers (`<FieldGated>` with VisibilityContext provider). Bulk visibility resolution: resolve ONCE per (user, resource, section) per request; apply plan to all rows (50-row list: 250 resolver calls → 5 calls + 50 transforms). Mask formatting library: 12 standard mask types. Async batched audit-on-read implementation (100ms timer + 50-entry size + 1000-entry backpressure + reconciliation cron + circuit breaker). Defense-in-depth Postgres views for 5 highest-sensitivity resources only (not all 47 flags). Complete 47-flag catalog mapped to database columns + mask types + role defaults across all 13 modules. Six Pass 4 open questions resolved.
-- **Latest commit:** `docs: permissions design Pass 4 — field visibility engine`. See `git log -1 --oneline`.
+- **Session T focus:** Permissions Design — Pass 5 (Status Surface Binding Layer). Implements audit §0.4 #4 ("lookup-table rows carry behavior bindings") across the 80 status surfaces catalogued M1-M13. New schema: status_behavior_bindings (polymorphic), status_transition_definitions, effective_status_bindings_cache. 14 standard binding names across 3 categories (8 action-gating, 6 effect-triggering, 5 UI-driving). ~2000 binding rows + ~600 transition rows at v1 seed. Integration with Pass 3 A1 via new Phase 3.3 (status binding check after separation of duties and regulatory expiry; <1ms overhead). State transition matrices specified for invoice_statuses and contractor_wo_statuses (Ontario 60-day lien clock enforcement). Operator-configurable vs system-locked bindings catalogued. Effect executor pattern with idempotent execution. Seven Pass 5 open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 5 — status surface binding layer`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 4 of 11 passes complete. Pending: Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.4 condenses Pass 1 (§1-§8), Pass 2 (§9), Pass 3 (§10). Full Pass 1 at 9008fad; Pass 2 at 1bafbd4; Pass 3 at ff08703. Pass 4 full content §11-§21.
+- **Permissions design progress:** 5 of 11 passes complete. Pending: Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.5 condenses Pass 1 (§1-§8), Pass 2 (§9), Pass 3 (§10), Pass 4 (§11). Full content preserved in git history at noted commits. Pass 5 full content §12-§23.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 4 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 5 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 4:**
-  - **Two-layer field visibility implementation:** backend serialization (primary) + frontend `<FieldGated>` wrapper (UI hygiene). Both query Pass 3 A3 resolver. Both must agree — backend exposes + frontend renders is the only forbidden combination.
-  - **Bulk visibility resolution pattern:** resolve ONCE per (user, resource, section) per request; apply plan to all rows. Cuts resolver calls from N×M to M.
-  - **Defense-in-depth Postgres views** for 5 highest-sensitivity resources only (clients, employees, vendors, contractors, payments). 42 other flags handled by application transformer alone. SQL function `user_field_visibility(flag_name)` consults `effective_field_visibility_cache` per row.
-  - **Per-field `<FieldGated>` standard** with section-level wrappers OK for clearly-bounded sections (banking panel, payroll panel) where every field shares one flag. Mixed-sensitivity sections always use per-field.
-  - **Async batched audit-on-read:** 100ms timer + 50-entry size + 1000-entry backpressure threshold + circuit breaker on repeated failures. Buffer FIFO; per-user ordering preserved. Reconciliation cron checks completeness daily.
-  - **Masking layer order:** RLS filters rows (data scope) → views mask columns (field visibility for sensitive 5) → transformer applies masks (all 47 flags) → audit enqueue.
-  - **12 standard mask types** library: card_last_4, card_brand_last_4, bank_account_last_4, routing_number_redacted, sin_last_3, ssn_last_4, email_partial, email_full_redact, phone_last_4, address_city_only, redacted, generic. Pure functions; no I/O; deterministic.
-  - **Edit gating**: hidden fields don't render; masked fields render read-only display (input replaced with MaskedDisplay component); user needs `visible` visibility AND action grant to edit.
-  - **Mask character is `•` (U+2022) Unicode bullet** — universally rendered; no localization variants needed at v1.
-  - **47-flag catalog complete**: covers all 13 modules. 1 never-granted flag (PCI). 9 flags with requires_audit_on_read=TRUE. 3 flags affecting row-level not field-level (handled by scope/predicate, not transformer).
-  - **Phase 2 deferrals locked:** per-tenant custom flags, per-tenant column mappings, admin "preview locked sections" mode, cross-field masking dependency engine, full report builder.
-- **Six Pass 4 open questions resolved:**
-  - View layer coverage: 5 highest-sensitivity resources only (not all 47 flags)
-  - `<FieldGated>` tooltip on hidden fields: NO at v1; Phase 2 admin-toggleable preview mode
-  - Audit-on-read for masked reads: NO; only `visible` reads audit
-  - Cross-field masking dependencies: same field_section = atomic visibility unit
-  - Mask format i18n: NO; `•` universal
-  - Test strategy: integration tests with snapshot comparison per role; nightly run; ~520 test cases (47 flags × 11 base roles); spec in build phase
+- **Major architectural decisions from Pass 5:**
+  - **Bindings as polymorphic separate table** (status_behavior_bindings keyed by status_table_name + status_row_id + binding_name). Not columns on each of 80 status tables. Flexibility for new bindings; simpler operator UI; easier cross-status reporting.
+  - **Binding check fits inside Pass 3 A1 Phase 3** as third cross-cutting constraint (after separation of duties at 3.1, regulatory expiry at 3.2, status binding at 3.3). Uniform treatment with existing constraints.
+  - **14 standard binding names** locked across 3 property categories: action-gating (allows_edit, allows_delete, allows_send, allows_payment, allows_reversal, allows_state_transition, is_terminal, requires_admin_to_modify), effect-triggering (triggers_notification_template, triggers_late_fee, creates_gl_entry, starts_lien_clock, auto_notifies_customer, triggers_holdback_release), UI-driving (display_color, display_badge, display_priority, display_icon, display_show_in_filter_chips).
+  - **Polymorphic schema** with typed value columns (value_boolean, value_text, value_integer, value_numeric, value_jsonb) + value_type discriminator. Allows different binding types without table per category.
+  - **State transitions via dedicated table** (status_transition_definitions) with from_status_row_id + to_status_row_id + is_allowed + requires_admin_approval + requires_reason_capture + required_action_name + triggers_effects JSONB.
+  - **Effect executor pattern** with idempotent execution. Effect types: create_gl_entry (synchronous + atomic with transition), send_email (async queue), update_field (synchronous), schedule_followup (async).
+  - **System-locked bindings** enforce architectural commitments: §0.4 #8 immutable snapshots (allows_edit=FALSE on Sent invoices/quotes), §0.4 #11 separation of duties co-sign on hardClose, §0.4 #12 regulatory expiry On Hold, §0.4 #13 30-day geolocation retention, PCI compliance for full_card_number, Canadian Construction Act 45-day holdback release, Ontario 60-day lien deadline on Trade Contractor WOs, append-only ledgers (inventory movements / commissioning / GL entries).
+  - **Operator-configurable bindings**: custom statuses, late fee thresholds, notification templates, UI drivers, approval thresholds, retention day count (above minimum), reorder thresholds, hybrid bindings (existence locked + value tunable).
+  - **Cache strategy** consistent with Pass 2: effective_status_bindings_cache; trigger-invalidated; <1ms hit; ~400 status rows × ~5 bindings = ~50KB fits in memory effectively zero-cost.
+  - **Ontario 60-day lien clock enforcement** in Trade Contractor WO transition from Lien Period → Closed: implementation in transition handler checks lien_period_started_at + 60 days has passed; otherwise deny with reason "Lien deadline has not passed (Ontario Construction Act 60-day)."
+  - **Performance budget preserved**: Pass 3 A1's <5ms p99 maintained with Phase 3.3 added (<1ms overhead).
+  - **Migration order extended** (7 new steps; seed ~2000 binding rows + ~600 transition rows).
+- **Seven Pass 5 open questions resolved:**
+  - Binding version history: YES (audit logged via permission_audit_log with event_type='status_binding_changed')
+  - Multi-status entities (e.g., invoice has status + payment_status): handlers query bindings per-status; combine logic in handler when needed; no automated combination
+  - Effect execution at scale: YES via async queue for non-atomic effects; ops dashboard monitors queue depth
+  - Operator-added binding names: NO at v1 (fixed 14-name catalog); Phase 2 when plugin architecture lands
+  - Conditional bindings: NO at v1; static per status row; conditional logic stays in action handlers; Phase 2 consideration
+  - Cross-status binding dependencies: handler queries multiple status surfaces sequentially at v1; Phase 2 cross-status rule engine
+  - UI representation of locked bindings: SHOW but render as greyed/locked with explanatory tooltip; transparency over concealment
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 4 produced no uncommitted plans. Next session continues with Pass 5 (Status surface binding layer) — extends Pass 2 schema with `status_behavior_bindings` table; catalogs the 80 status surfaces × their bindings from the audit; defines how action handlers consult bindings; specifies state transition matrices per status surface; integrates with Pass 3 algorithms (binding checks in Phase 3 alongside cross-cutting constraints); clarifies operator-configurable bindings vs system-locked.
+**None.** Pass 5 produced no uncommitted plans. Next session continues with Pass 6 (Append-only audit pattern) — details the audit pattern across the entire permissions runtime; 18+ enumerated event types with JSON payload schemas; audit query patterns; append-only ledger pattern propagation to other modules (M6 commissioning, M7 inventory movements, M11 GL); retention policies and Phase 2 cold storage archival; audit data extraction for compliance reports; performance: how audit log scales to ~10M entries/year without degrading.
 
 ---
 
