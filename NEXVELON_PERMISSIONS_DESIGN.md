@@ -10,16 +10,17 @@
 >   5. `NEXVELON_SESSION_<latest>_HANDOFF.md`
 >   6. **This file** — Permissions design specification
 >
-> **Status:** v0.5 — Passes 1-5 complete. Pending: Pass 6 (Append-only
-> audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions
-> editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10
-> (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+> **Status:** v0.6 — Passes 1-6 complete. Pending: Pass 7 (Request-
+> admin-access workflow), Pass 8 (Permissions editor UI), Pass 9
+> (Effective-permissions caching strategy), Pass 10 (Cross-cutting
+> enforcement patterns), Pass 11 (Migration plan).
 >
 > Pass 1 (Action Vocabulary Catalog) condensed §1-§8; full at `9008fad`.
 > Pass 2 (Database Schema) condensed §9; full at `1bafbd4`.
 > Pass 3 (Resolution Algorithm) condensed §10; full at `ff08703`.
 > Pass 4 (Field Visibility Engine) condensed §11; full at `de1905f`.
-> Pass 5 (Status Surface Binding Layer) full content begins at §12.
+> Pass 5 (Status Surface Binding Layer) condensed §12; full at `904bfe5`.
+> Pass 6 (Append-Only Audit Pattern) full content begins at §13.
 
 ---
 
@@ -37,8 +38,8 @@ Design specification for the Nexvelon permissions runtime.
 | 2 | Database schema | ✅ COMPLETE (full at `1bafbd4`; condensed §9) |
 | 3 | Permission resolution algorithm | ✅ COMPLETE (full at `ff08703`; condensed §10) |
 | 4 | Field-level visibility engine | ✅ COMPLETE (full at `de1905f`; condensed §11) |
-| 5 | Status surface binding layer | ✅ COMPLETE (this version) |
-| 6 | Append-only audit pattern | PENDING |
+| 5 | Status surface binding layer | ✅ COMPLETE (full at `904bfe5`; condensed §12) |
+| 6 | Append-only audit pattern | ✅ COMPLETE (this version) |
 | 7 | Request-admin-access workflow | PENDING |
 | 8 | Permissions editor UI | PENDING |
 | 9 | Effective-permissions caching strategy | PENDING |
@@ -52,7 +53,7 @@ Design specification for the Nexvelon permissions runtime.
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part I — Pass 1 (Action Vocabulary Catalog) — condensed summary
+# Part I — Pass 1 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
 *Full Pass 1 content at commit `9008fad`.*
@@ -60,787 +61,923 @@ Design specification for the Nexvelon permissions runtime.
 ## 1. Format
 `resource:verb[:qualifier]` — plural noun + camelCase verb + optional qualifier.
 
-## 2-3. Verb + Qualifier taxonomies
-Verb (8 categories): view / create / edit / state-transition / configuration / communication / admin / workflow. Qualifier (4 categories): scope / state / modal / field-section.
-
-## 4. Resource taxonomy
-140+ resources across 13 modules, mapped 1:1 to database tables.
-
-## 5. Action grouping for permissions editor UI
-4-tier hierarchy (Module → Resource → Category → Individual action) + 6 cross-cut tabs. Three UI states per §0.4 #2: hidden/disabled/interactive.
-
-## 6-7. Cross-references + special-case treatment
-Action dependencies, mutually exclusive (§0.4 #11), action chains. Public actions (signed URL), Admin exceptions (13), system-generated (10+), append-only (9 resources per §0.4 #10).
-
-## 8. Six Pass 1 open questions resolved
-Compound verbs vs qualifier (both); per-record vs per-class (capability at class); role inheritance (NO at v1); per-tenant custom actions (NO at v1); action versioning (new actions default denied); action deprecation (mark; 1 release; clean).
+## 2-8. Taxonomies and treatment
+Verb taxonomy (8 categories). Qualifier taxonomy (4 categories: scope/state/modal/field-section). 140+ resources. 4-tier UI hierarchy + 6 cross-cut tabs. Three UI states (hidden/disabled/interactive). Action dependencies, mutual exclusions, chains. Public actions, Admin exceptions, system-generated, append-only special cases. Six open questions resolved.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part II — Pass 2 (Database Schema) — condensed summary
+# Part II — Pass 2 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
 *Full Pass 2 content at commit `1bafbd4`.*
 
 ## 9. 14 tables across 5 groups + 1 materialized view
 
-**Group 1 — Core permissions (5):** `permission_definitions`, `roles`, `role_permissions`, `user_permission_overrides`, `effective_permissions_cache`.
+Core permissions (5): `permission_definitions`, `roles`, `role_permissions`, `user_permission_overrides`, `effective_permissions_cache`. Field visibility (3): `field_visibility_definitions`, `role_field_visibility`, `user_field_visibility_overrides`. Data scopes (3): `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`. Audit (1, append-only): `permission_audit_log` with UPDATE/DELETE blocked at PostgreSQL trigger level. Cross-cutting constraints (3): `separation_of_duties_constraints` (§0.4 #11), `regulatory_expiry_overrides` (§0.4 #12), `geolocation_retention_policies` (§0.4 #13). Plus materialized view `permission_resolution_view`.
 
-**Group 2 — Field visibility (3):** `field_visibility_definitions`, `role_field_visibility`, `user_field_visibility_overrides`.
-
-**Group 3 — Data scopes (3):** `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`.
-
-**Group 4 — Audit (1, append-only):** `permission_audit_log` with UPDATE/DELETE blocked at PostgreSQL trigger level.
-
-**Group 5 — Cross-cutting constraints (3):** `separation_of_duties_constraints` (§0.4 #11), `regulatory_expiry_overrides` (§0.4 #12), `geolocation_retention_policies` (§0.4 #13).
-
-**Plus materialized view:** `permission_resolution_view`.
-
-Three architectural decisions locked: one row per action; trigger-invalidated cache; orthogonal data scopes.
+Three architectural decisions: one row per action; trigger-invalidated cache; orthogonal data scopes.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part III — Pass 3 (Resolution Algorithm) — condensed summary
+# Part III — Pass 3 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
 *Full Pass 3 content at commit `ff08703`.*
 
 ## 10. Three runtime algorithms
 
-**A1 — Action grant resolution** (7-phase): cache lookup → base table resolution on miss → cross-cutting constraint checks (separation of duties + regulatory expiry; Pass 5 adds **status binding check** as third constraint) → audit logging → return.
+**A1 — Action grant resolution** (7-phase): cache lookup → base table resolution → Phase 3 cross-cutting constraint checks (3.1 separation of duties, 3.2 regulatory expiry, 3.3 status binding from Pass 5) → audit logging → return. <5ms p99 compound. <1ms cache hit.
 
 **A2 — Data scope resolution:** returns SQL filter clause + bind parameters.
 
-**A3 — Field visibility resolution:** returns visible / masked / hidden.
+**A3 — Field visibility resolution:** returns visible/masked/hidden. Honors `is_never_granted` for PCI compliance.
 
-Performance budget: <5ms p99 compound; <1ms cache hit; <50ms p99 typical list endpoint. Cache hit rate target >95%.
-
-Failure modes: fail-closed for action grants, regulatory expiry, separation of duties. Fail-open for audit logging and cache warming.
-
-Two architectural decisions: invalidate-and-lazy-fill cache; separation of duties runtime + DB-trigger.
+Failure modes: fail-closed for grants/expiry/SoD; fail-open for audit logging and cache warming.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part IV — Pass 4 (Field-Level Visibility Engine) — condensed summary
+# Part IV — Pass 4 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
 *Full Pass 4 content at commit `de1905f`.*
 
-## 11. Two-layer architecture
+## 11. Field visibility engine
 
-**Backend layer:** 8-stage serialization pipeline. Bulk visibility resolution (resolve ONCE per user-resource-section per request). 12 standard mask types library (card_last_4, sin_last_3, email_partial, etc.). Mask character `•` (U+2022).
-
-**Frontend layer:** `<FieldGated flagName="...">` component with VisibilityContext provider. Hooks: `useVisibility`, `useCanDoAction`.
-
-**Plus database view layer:** Postgres views for 5 highest-sensitivity resources (clients, employees, vendors, contractors, payments). SQL function `user_field_visibility(flag_name)` consults `effective_field_visibility_cache`.
-
-**Async batched audit-on-read:** 100ms timer / 50-entry size / 1000-entry backpressure / circuit breaker / reconciliation cron.
-
-**Complete 47-flag catalog** mapped to database columns + mask types + role defaults across all 13 modules. 1 never-granted (PCI). 9 audit-on-read. 3 row-level (handled by scope/predicate).
-
-Three architectural decisions: app transformer primary + Postgres views for sensitive 5 (defense-in-depth); per-field `<FieldGated>` standard; async batched audit-on-read.
+Backend serialization pipeline (8 stages, bulk visibility resolution pattern). Frontend `<FieldGated>` component + VisibilityContext provider. Database views layer for 5 highest-sensitivity resources (clients/employees/vendors/contractors/payments). 12 standard mask types library. Async batched audit-on-read (100ms timer / 50-entry size / 1000-entry backpressure / circuit breaker). Complete 47-flag catalog mapped to database columns. 1 never-granted (PCI). 9 audit-on-read. 3 row-level.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part V — Pass 5 (Status Surface Binding Layer) — FULL CONTENT
+# Part V — Pass 5 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
-## 12. Overview
+*Full Pass 5 content at commit `904bfe5`.*
 
-Per audit §0.4 #4: "lookup-table rows carry behavior bindings." 80 status surfaces across 13 modules each carry flags that drive runtime behavior. Pass 5 turns these from "documented in audit" into "queried by runtime."
+## 12. Status surface binding layer
 
-### 12.1 Why this matters
+Polymorphic `status_behavior_bindings` table across 80 status surfaces. 14 standard binding names (8 action-gating, 6 effect-triggering, 5 UI-driving). `status_transition_definitions` with triggers_effects JSONB. `effective_status_bindings_cache`. New `permission_definitions.binding_dependencies` column. Phase 3.3 added to Pass 3 A1 algorithm (<1ms overhead; preserves <5ms budget). State transition matrices (invoice_statuses 11×11; contractor_wo_statuses with Ontario 60-day lien clock). System-locked enforces audit commitments (§0.4 #8/#11/#12/#13/PCI/Construction Act/lien/append-only). Operator-configurable: custom statuses, late fees, notifications, UI drivers, approval thresholds. Effect executor with idempotent execution. ~2000 binding rows + ~600 transition rows at v1 seed.
 
-A naive ERP scatters business logic across action handlers:
+---
 
-```typescript
-// BAD: business logic hardcoded in handler
-async function editInvoice(invoice) {
-  if (invoice.status_name === 'Sent' 
-      || invoice.status_name === 'Paid' 
-      || invoice.status_name === 'Void') {
-    throw new Error('Cannot edit invoice in this status');
-  }
-  // ... edit logic
-}
-```
+═══════════════════════════════════════════════════════════════════
+# Part VI — Pass 6 (Append-Only Audit Pattern) — FULL CONTENT
+═══════════════════════════════════════════════════════════════════
 
-Every status check duplicated. Every status name hardcoded. Adding a new status requires code changes everywhere it's referenced.
+## 13. Overview
 
-The behavior-binding model inverts this:
+Audit lives in two places by now: the permissions runtime (specified in Pass 2's `permission_audit_log`) and the seven append-only ledgers committed across the audit per §0.4 #10:
 
-```typescript
-// GOOD: business logic owned by lookup row
-async function editInvoice(invoice) {
-  const bindings = await getStatusBindings('invoice_statuses', invoice.status_id);
-  if (!bindings.allows_edit) {
-    throw new Error(bindings.deny_reason ?? 'Cannot edit invoice in this status');
-  }
-  // ... edit logic
-}
-```
+- `inventory_movements` (M7)
+- `commissioning_records` (M6)
+- `project_acceptance_records` (M6)
+- `vendor_performance_scores` (M8)
+- `contractor_performance_scores` (M10)
+- `gl_journal_lines` (M11)
+- `appointment_change_log` (M12)
+- `report_snapshots` (M13) — also append-only per §0.4 #10
 
-The lookup row owns the rules. Adding a new status (say `Pending Customer Approval` between `Sent` and `Approved`) means inserting a row with configured bindings — no code change anywhere.
+Each enforces append-only at the database level (no UPDATE, no DELETE). Each captures who/when/what for forensic + compliance needs. Each scales to millions of rows per year.
 
-### 12.2 Three properties of bindings
+Pass 6 specifies the **uniform pattern** they all apply, the **event type taxonomy** for permission audit specifically, the **query API surface** for admins and compliance officers, and **performance at scale** (partitioning, indexing, archival).
 
-**Property 1 — Action-gating bindings:** affect whether an action is permitted on an entity in this status. Examples: `allows_edit`, `allows_send`, `allows_payment`, `allows_state_transition_to_X`.
+### 13.1 What's NOT in Pass 6
 
-**Property 2 — Effect-triggering bindings:** affect what happens when an entity *enters* this status. Examples: `triggers_late_fee`, `starts_lien_clock`, `auto_notify_customer`, `creates_gl_entry`.
+Pass 6 does not:
+- Replicate the audit logic each ledger captures (that's in each module's spec in `NEXVELON_FEATURE_AUDIT.md`)
+- Specify the M11 GL posting logic (that's Pass 11 migration concern + M11 own logic)
+- Specify Phase 2 cold storage details (that's deferred)
 
-**Property 3 — UI-driving bindings:** affect how the entity in this status renders. Examples: `display_color`, `display_badge`, `display_priority`, `is_terminal` (greys out further actions).
+What Pass 6 *does*:
+- Specify the **canonical append-only ledger pattern** that all seven apply
+- Define every audit event type in the permissions runtime (`permission_audit_log` is the primary subject)
+- Specify the query API surface for admins and reporters
+- Lock partitioning strategy for scale
 
-All three properties supported by Pass 5 schema.
+## 14. The append-only ledger pattern
 
-## 13. Schema extension
+A single pattern applied uniformly across all 8 ledgers (`permission_audit_log` + 7 module ledgers).
 
-### 13.1 New table: `status_behavior_bindings`
+### 14.1 Required schema elements
 
-Polymorphic — one table for all bindings across all 80 status surfaces.
+Every append-only ledger MUST have:
 
 ```sql
-CREATE TABLE status_behavior_bindings (
+-- These columns are mandatory for any append-only ledger:
+CREATE TABLE example_ledger (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-  -- Polymorphic reference to the status row
-  status_table_name TEXT NOT NULL,              -- e.g., 'invoice_statuses', 'appointment_statuses'
-  status_row_id UUID NOT NULL,                   -- the specific status row in that table
   
-  -- The binding
-  binding_name TEXT NOT NULL,                    -- e.g., 'allows_edit', 'triggers_late_fee', 'is_terminal'
-  binding_category TEXT NOT NULL CHECK (binding_category IN (
-    'action_gate',          -- gates a permitted action on entity in this status
-    'effect_trigger',       -- triggers a downstream effect on entering this status
-    'ui_driver'             -- drives UI rendering
+  -- WHO
+  actor_user_id UUID REFERENCES users(id),       -- NULL for system events
+  actor_type TEXT NOT NULL DEFAULT 'user' CHECK (actor_type IN (
+    'user', 'system', 'public_signed_url', 'integration', 'cron'
   )),
   
-  -- The value (typed)
-  value_boolean BOOLEAN,
-  value_text TEXT,
-  value_integer INTEGER,
-  value_numeric NUMERIC,
-  value_jsonb JSONB,
-  value_type TEXT NOT NULL CHECK (value_type IN ('boolean', 'text', 'integer', 'numeric', 'jsonb')),
+  -- WHEN
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
-  -- Reason / context (helps UIs explain "cannot edit" etc.)
-  deny_reason_template TEXT,                     -- used when binding denies an action; e.g., "Cannot edit Sent invoices"
+  -- WHAT (event discriminator + payload)
+  event_type TEXT NOT NULL,
+  before_state JSONB,                            -- snapshot before change (NULL for inserts)
+  after_state JSONB,                             -- snapshot after change (NULL for deletes)
   
-  -- Operator vs system control
-  is_system_locked BOOLEAN NOT NULL DEFAULT FALSE,    -- TRUE: operators cannot modify in Settings; system enforces
+  -- WHERE (entity context — polymorphic for module ledgers)
+  -- ... ledger-specific columns
   
-  -- Lifecycle
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_by UUID REFERENCES users(id),
+  -- WHY (optional but expected for sensitive events)
+  reason TEXT,
+  notes TEXT,
   
-  -- Uniqueness
-  CONSTRAINT status_behavior_bindings_unique UNIQUE (status_table_name, status_row_id, binding_name)
-);
-
--- Critical performance indexes — runtime queries by (status_table_name, status_row_id) returning all bindings
-CREATE INDEX idx_status_bindings_lookup ON status_behavior_bindings(status_table_name, status_row_id);
-CREATE INDEX idx_status_bindings_by_name ON status_behavior_bindings(binding_name, status_table_name);
+  -- FORENSIC METADATA
+  ip_address INET,
+  user_agent TEXT,
+  request_id UUID,                               -- correlates with HTTP request log
+  source_event_id UUID,                          -- if triggered by another event (chain tracking)
+  
+  -- PARTITION KEY (for time-based partitioning per §14.3)
+  occurred_month DATE GENERATED ALWAYS AS (date_trunc('month', occurred_at)::DATE) STORED
+)
+PARTITION BY RANGE (occurred_month);
 ```
 
-**Why polymorphic over per-table columns:**
+Ledger-specific columns are added per ledger (e.g., `inventory_movements` adds `from_location_id`, `to_location_id`, `quantity_change`, `unit_cost_fifo`; `gl_journal_lines` adds `debit`, `credit`, `account_id`).
 
-- 80 status tables × ~6 bindings each = 480 columns spread across schema. Bindings are NOT identity attributes; they're behavior attributes. Better to colocate behavior than scatter it.
-- New bindings are easy: add a row, no schema migration.
-- Operator UI for managing bindings (Pass 8) reads from one table.
-- Reporting on "which statuses across all modules trigger late fees" is trivial.
+### 14.2 PostgreSQL trigger to block UPDATE/DELETE
 
-### 13.2 New table: `status_transition_definitions`
-
-Defines which state transitions are valid per status surface.
+Every append-only ledger has identical trigger logic:
 
 ```sql
-CREATE TABLE status_transition_definitions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE OR REPLACE FUNCTION block_ledger_modifications()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION '% is append-only; UPDATE and DELETE blocked. To void an entry, insert a reversal event.', TG_TABLE_NAME
+    USING ERRCODE = 'P0001';
+END;
+$$;
 
-  -- Source + target
-  status_table_name TEXT NOT NULL,               -- e.g., 'invoice_statuses'
-  from_status_row_id UUID NOT NULL,
-  to_status_row_id UUID NOT NULL,
-  
-  -- Transition properties
-  is_allowed BOOLEAN NOT NULL DEFAULT TRUE,
-  requires_admin_approval BOOLEAN NOT NULL DEFAULT FALSE,
-  requires_reason_capture BOOLEAN NOT NULL DEFAULT FALSE,
-  required_action_name TEXT,                     -- which action triggers this transition (e.g., 'invoices:send' triggers Draft → Sent)
-  
-  -- Effects on transition
-  triggers_effects JSONB,                        -- list of effect descriptors; runtime executes these on transition
-  
-  -- Operator vs system
-  is_system_locked BOOLEAN NOT NULL DEFAULT FALSE,
-  
-  -- Lifecycle
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  
-  -- Uniqueness
-  CONSTRAINT status_transitions_unique UNIQUE (status_table_name, from_status_row_id, to_status_row_id)
-);
+-- Apply to all append-only ledgers
+CREATE TRIGGER prevent_update_inventory_movements
+  BEFORE UPDATE ON inventory_movements
+  FOR EACH ROW EXECUTE FUNCTION block_ledger_modifications();
 
-CREATE INDEX idx_status_transitions_from ON status_transition_definitions(status_table_name, from_status_row_id);
-CREATE INDEX idx_status_transitions_to ON status_transition_definitions(status_table_name, to_status_row_id);
+CREATE TRIGGER prevent_delete_inventory_movements
+  BEFORE DELETE ON inventory_movements
+  FOR EACH ROW EXECUTE FUNCTION block_ledger_modifications();
+
+-- Repeat for all 8 ledgers
 ```
 
-The state transition matrix per status surface is the set of rows in this table filtered by `status_table_name`.
+**Reversal pattern:** to "void" an entry, INSERT a new row with `event_type = 'reversal'`, `source_event_id` pointing to the original. The original is untouched; the new row provides the offsetting effect.
 
-### 13.3 Cache table: `effective_status_bindings_cache`
+### 14.3 Time-based monthly partitioning
 
-Bindings queried often in hot paths. Cache them.
+Per Decision 2 (chat walk). PostgreSQL native partitioning.
 
 ```sql
-CREATE TABLE effective_status_bindings_cache (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  
-  status_table_name TEXT NOT NULL,
-  status_row_id UUID NOT NULL,
-  
-  -- Serialized binding map for this status row
-  bindings JSONB NOT NULL,                       -- { 'allows_edit': false, 'allows_send': false, 'is_terminal': false, ... }
-  
-  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  
-  CONSTRAINT effective_status_bindings_cache_unique UNIQUE (status_table_name, status_row_id)
-);
+-- Parent partitioned table (definition above)
+CREATE TABLE permission_audit_log (
+  -- columns from §14.1
+) PARTITION BY RANGE (occurred_month);
 
-CREATE INDEX idx_effective_status_bindings_lookup ON effective_status_bindings_cache(status_table_name, status_row_id);
+-- Initial partitions (create monthly going forward)
+CREATE TABLE permission_audit_log_2026_01 PARTITION OF permission_audit_log
+  FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE permission_audit_log_2026_02 PARTITION OF permission_audit_log
+  FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+-- ... future months created by monthly cron
 ```
 
-Invalidated by triggers on `status_behavior_bindings` INSERT/UPDATE/DELETE.
+Monthly cron job creates next month's partition 7 days before it's needed:
 
-Hot-path read: `SELECT bindings FROM effective_status_bindings_cache WHERE status_table_name = 'invoice_statuses' AND status_row_id = $1` — single indexed lookup, returns full JSONB binding map. <1ms.
-
-## 14. The 14 standard binding names
-
-Across 80 status surfaces, these are the recurring binding names. New bindings can be added; this is the v1 baseline.
-
-### 14.1 Action-gating bindings (8)
-
-| Binding name | Type | Purpose |
-|---|---|---|
-| `allows_edit` | boolean | Can entity be edited in this status? |
-| `allows_delete` | boolean | Can entity be hard-deleted? (rare; usually Admin-only) |
-| `allows_send` | boolean | Can entity be sent (invoice send, quote send)? |
-| `allows_payment` | boolean | Can payment be recorded against this entity? |
-| `allows_reversal` | boolean | Can entity be reversed (void → reopen)? |
-| `allows_state_transition` | jsonb | List of status_ids this entity can transition to from current status |
-| `is_terminal` | boolean | No further state transitions allowed (e.g., Paid, Void) |
-| `requires_admin_to_modify` | boolean | Modifications require Admin role even with role grant |
-
-### 14.2 Effect-triggering bindings (6)
-
-| Binding name | Type | Purpose |
-|---|---|---|
-| `triggers_notification_template` | text | Template name to send on entering this status (e.g., 'invoice_sent') |
-| `triggers_late_fee` | boolean | Reaching this status with overdue date starts late fee accumulation |
-| `creates_gl_entry` | boolean | Reaching this status posts to GL (e.g., invoice Sent → AR posting) |
-| `starts_lien_clock` | boolean | Reaching this status starts Ontario 60-day lien clock for trade contractors |
-| `auto_notifies_customer` | boolean | Customer email triggered on entering this status |
-| `triggers_holdback_release` | boolean | Reaching this status triggers 45-day holdback release timer per Canadian Construction Act |
-
-### 14.3 UI-driving bindings (5)
-
-| Binding name | Type | Purpose |
-|---|---|---|
-| `display_color` | text | Hex color or semantic name (e.g., `'#10b981'` or `'success'`) |
-| `display_badge` | text | Badge variant for UI (e.g., 'success', 'warning', 'danger', 'neutral') |
-| `display_priority` | integer | Sort/list priority; higher = more prominent |
-| `display_icon` | text | Icon name for UI |
-| `display_show_in_filter_chips` | boolean | Whether this status appears in filter chip lists |
-
-## 15. The 80 status surfaces × bindings inventory
-
-Catalog by module. Conventions:
-
-- ✓ = binding present + value typical default
-- ⊘ = binding present + value explicitly FALSE/NULL
-- — = binding not applicable to this status surface
-- 🔒 = system-locked (operators cannot modify)
-- 🟢 = operator-configurable in Settings
-
-### 15.1 M1 — Clients + Sites + Contacts (15 status surfaces)
-
-| Status surface | Notable bindings |
-|---|---|
-| `client_statuses` (Lead/Active/On Hold/Archived) | Lead→Active: allows_state_transition (PM/SR). On Hold: 🔒 allows_send=FALSE, blocks new dispatches. Archived: 🔒 is_terminal=TRUE. |
-| `client_tiers` (Standard/Premium/VIP/Strategic) | display_priority for UI sort. 🟢 operator-configurable thresholds. |
-| `customer_types` (16 seeded types) | UI driver only; no action gating. |
-| `site_statuses` (Active/Inactive/Decommissioned) | Decommissioned: 🔒 is_terminal, blocks new appointments. |
-| `service_contract_statuses` (Draft/Active/Paused/Renewed/Expired/Cancelled) | Active: ✓ allows_recurring_billing. Cancelled/Expired: 🔒 is_terminal. Renewed: triggers new contract creation. |
-| `client_onboarding_gate_types` | Each gate type has binding `gate_blocks_quote_send` and `gate_blocks_contract_send`. |
-| `client_communication_log_types` | UI driver. |
-| `client_communication_preferences` | Bindings drive notification routing (email/SMS/none). |
-| `payment_methods` | 🔒 fixed bindings drive payment processing flow. |
-| `payment_terms` (Net 15/30/45/60/On Receipt) | 🟢 operator can add custom terms. |
-| `client_holdback_config_types` (Excl Tax/Incl Tax/None) | 🔒 fixed; affects invoice calculation. |
-| `client_tags` | UI driver only. |
-| `address_types`, `contact_types`, `relationship_types` | UI drivers. |
-| `client_credit_statuses` (Good Standing/On Hold/Collections) | 🔒 On Hold + Collections: blocks new sale. |
-
-### 15.2 M2 — Employees + Permissions (11 status surfaces)
-
-| Status surface | Notable bindings |
-|---|---|
-| `employee_statuses` (Active/On Leave/Terminated/Resigned) | 🔒 Terminated/Resigned: is_terminal, blocks login. On Leave: allows scheduling=FALSE. |
-| `employee_employment_types` (Full-time/Part-time/Contractor/Temp) | Affects payroll calculation. |
-| `certification_types` (25+) | Each has `gate_blocks_action` mapping to actions requiring this cert (e.g., ULC required for fire alarm install). 🔒 |
-| `territory_statuses` | UI driver. |
-| `employee_absence_types` (Vacation/Sick/Personal/Bereavement) | Affects scheduling availability. |
-| `employee_role_levels` (Apprentice/Journey/Senior/Master) | Affects labor rate calculation. |
-| `request_admin_access_statuses` (Pending/Approved/Rejected/Expired) | 🔒 |
-| (more) | |
-
-### 15.3 M3-M13 — Status surfaces
-
-Similar coverage. Notable highlights:
-
-**M5 Quotes:**
-- `quote_statuses` (Draft/Pending Approval/Approved/Sent/Viewed/Accepted/Rejected/Expired/Cancelled) — Sent: 🔒 allows_edit=FALSE; triggers snapshot capture; immutable. Accepted: triggers project creation. Viewed: auto-set from portal access.
-
-**M6 Projects:**
-- `project_statuses` (Planning/In Progress/Completed/On Hold/Cancelled) — Cancelled: 🔒 is_terminal.
-- `change_order_statuses` — Approved: triggers GL adjustment; updates project budget.
-- `commissioning_statuses` — Verified: ULC verification auto-attaches.
-
-**M7 Inventory:**
-- `inventory_movement_types` — 🔒 each type triggers specific GL postings (Receive: Inventory DR, AP CR; Issue: COGS DR, Inventory CR; etc.).
-- `purchase_order_statuses` (Draft/Sent/Acknowledged/Partial Receipt/Received/Closed/Cancelled) — Cancelled allowed only before receipt.
-- `inventory_adjustment_reasons` — Each reason has specific GL account mapping.
-
-**M8 Vendors:**
-- `vendor_statuses` (Lead/Active/Inactive/On Hold/Archived) — On Hold: blocks PO creation.
-- `vendor_onboarding_gate_types` — Each gate has `blocks_po_creation` binding.
-- `vendor_performance_grades` (A/B/C/D) — Grade C/D triggers preferred-status auto-removal.
-
-**M9 Invoices:**
-- `invoice_statuses` (11 statuses) — Sent: 🔒 allows_edit=FALSE, immutable snapshot; Paid: 🔒 is_terminal; Overdue: triggers_late_fee per client config; Void: requires_admin_to_modify.
-- `payment_statuses` — Bounced: reverses invoice payment + alert.
-- `ap_bill_statuses` (Received/Pending Approval/Approved for Payment/Paid/Disputed/Void) — Approved for Payment: allows addition to payment run; 🔒 separation of duties enforced (Pass 3 §11.3).
-- `credit_note_statuses` — Applied: reduces target invoice balance.
-
-**M10 Subcontractors:**
-- `contractor_statuses` (Lead/Active/Inactive/On Hold/Archived) — On Hold: blocks WO creation. WSIB expired triggers automatic On Hold (Pass 3 cross-cutting constraint).
-- `contractor_wo_statuses` (12 statuses) — Lien Period: starts_lien_clock=TRUE (Ontario 60-day); allows_payment=FALSE; Closed: only allowed after lien deadline passed (60 days from substantial completion).
-
-**M11 Financials:**
-- `gl_entry_statuses` (Draft/Posted/Reversed/Locked) — Locked: 🔒 is_terminal, no edits allowed (period closed).
-- `period_statuses` (Open/Soft Close/Hard Close/Reopened) — Hard Close requires A+Acc co-sign per Pass 3 §15.2. Reopened: requires_admin + reason capture.
-- `tax_filing_statuses` — Filed: 🔒 is_terminal in current period.
-
-**M12 Scheduling:**
-- `appointment_statuses` (Tentative/Confirmed/En Route/On Site/In Progress/Completed/Cancelled by Customer/Cancelled by Us/No Show/Rescheduled) — Cancelled by Customer triggers cancellation fee assessment.
-- `dispatch_record_statuses` — In Progress: SLA clock active; sla_breach_alerts may auto-generate.
-- `sla_breach_statuses` (Approaching 75%/Imminent 90%/Breached/Acknowledged/Waived/Resolved) — Waived: requires Admin + reason (Pass 3 admin exception).
-- `priority_levels` (P0 Critical/P1 High/P2 Normal/P3 Low) — affects SLA window calculation.
-
-**M13 Reports:**
-- `report_statuses` (Active/Archived/Draft/Deprecated) — Deprecated: 🔒 hides from new subscriptions but allows existing schedules.
-- `tax_filing_statuses` — overlap with M11.
-
-### 15.4 Total inventory
-
-- **80 status surfaces** across 13 modules
-- Each surface has 3-10 status rows
-- Average ~5 bindings per status row
-- ~400 status rows total × ~5 bindings = **~2000 binding rows** at v1 seed
-- Plus ~600 transition rows in `status_transition_definitions`
-
-## 16. Action handler integration
-
-### 16.1 Standard binding check pattern
-
-Every action handler that's gated by entity state follows this pattern:
-
-```typescript
-// Pseudocode for build phase reference
-async function editInvoice(invoice: Invoice, updates: Partial<Invoice>) {
-  // 1. Standard A1 action grant check (Pass 3)
-  await assertActionGrant(currentUser.id, 'invoices:edit', invoice.id);
-  
-  // 2. NEW: Status binding check
-  const bindings = await getEffectiveBindings('invoice_statuses', invoice.status_id);
-  if (!bindings.allows_edit) {
-    throw new BindingDeniedError({
-      action: 'invoices:edit',
-      entity: invoice,
-      binding: 'allows_edit',
-      reason: bindings.deny_reason_template ?? 'Cannot edit invoice in this status'
-    });
-  }
-  
-  // 3. Proceed with edit
-  await db.update('invoices', invoice.id, updates);
-  
-  // 4. Audit (standard)
-  await auditAction({ ... });
-}
-```
-
-`getEffectiveBindings` queries `effective_status_bindings_cache`:
-
-```typescript
-async function getEffectiveBindings(statusTableName: string, statusRowId: string): Promise<BindingMap> {
-  const cached = await db.query(
-    'SELECT bindings FROM effective_status_bindings_cache WHERE status_table_name = $1 AND status_row_id = $2',
-    [statusTableName, statusRowId]
+```sql
+-- Runs monthly, 7 days before month-end
+CREATE OR REPLACE FUNCTION create_next_month_partitions()
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  next_month_start DATE := date_trunc('month', NOW() + INTERVAL '1 month');
+  next_month_end DATE := next_month_start + INTERVAL '1 month';
+  partition_name TEXT;
+BEGIN
+  -- Repeat for all 8 ledgers
+  partition_name := 'permission_audit_log_' || to_char(next_month_start, 'YYYY_MM');
+  EXECUTE format(
+    'CREATE TABLE IF NOT EXISTS %I PARTITION OF permission_audit_log FOR VALUES FROM (%L) TO (%L)',
+    partition_name, next_month_start, next_month_end
   );
   
-  if (cached.rows[0]) return cached.rows[0].bindings;
-  
-  // Cache miss — resolve from base table, write back
-  return await resolveAndCacheBindings(statusTableName, statusRowId);
-}
+  -- Repeat for inventory_movements, commissioning_records, etc.
+END;
+$$;
 ```
 
-### 16.2 State transition handlers
+Benefits:
+- Indexes per partition stay small (~1M rows per partition for `permission_audit_log` at peak load)
+- Queries with date filters (the common case) hit only relevant partitions
+- Old partitions can be detached for cold archival in Phase 2 without rewrites
+- Vacuum/analyze run per-partition
 
-Transitions (e.g., `invoices:approve` moving Pending → Approved) consult `status_transition_definitions`:
+### 14.4 Indexes per partition
 
-```typescript
-async function approveInvoice(invoice: Invoice) {
-  await assertActionGrant(currentUser.id, 'invoices:approve', invoice.id);
-  
-  const targetStatus = await getStatusRowByName('invoice_statuses', 'Approved');
-  
-  // Check transition is allowed
-  const transition = await getTransition('invoice_statuses', invoice.status_id, targetStatus.id);
-  if (!transition || !transition.is_allowed) {
-    throw new TransitionDeniedError({
-      from: invoice.status_name,
-      to: 'Approved',
-      reason: 'Transition not defined for this status pair'
-    });
-  }
-  
-  // Check admin approval if required
-  if (transition.requires_admin_approval && !currentUser.isAdmin) {
-    throw new AdminApprovalRequiredError(...);
-  }
-  
-  // Reason capture if required
-  if (transition.requires_reason_capture && !context.reason) {
-    throw new ReasonRequiredError(...);
-  }
-  
-  // Update status
-  await db.update('invoices', invoice.id, { status_id: targetStatus.id });
-  
-  // Execute triggered effects
-  await executeEffects(transition.triggers_effects, { invoice, targetStatus, context });
-  
-  // Audit
-  await auditAction({ ... });
-}
-```
-
-### 16.3 Effect execution
-
-`triggers_effects` JSONB on a transition row is a list of effect descriptors:
-
-```json
-[
-  { "type": "create_gl_entry", "template": "invoice_approved" },
-  { "type": "send_email", "template_name": "invoice_approved_internal" },
-  { "type": "update_field", "field": "approved_by", "value": "$currentUser" },
-  { "type": "schedule_followup", "delay_days": 7, "task_template": "invoice_followup" }
-]
-```
-
-Effect executor:
-
-```typescript
-async function executeEffects(effects: Effect[], context: EffectContext) {
-  for (const effect of effects) {
-    switch (effect.type) {
-      case 'create_gl_entry':
-        await glService.createFromTemplate(effect.template, context);
-        break;
-      case 'send_email':
-        await emailService.sendFromTemplate(effect.template_name, context);
-        break;
-      case 'update_field':
-        await db.updateField(context.entity, effect.field, resolveValue(effect.value, context));
-        break;
-      case 'schedule_followup':
-        await scheduler.schedule({
-          delay_days: effect.delay_days,
-          template: effect.task_template,
-          context
-        });
-        break;
-      // ... more effect types
-    }
-  }
-}
-```
-
-Effects are idempotent — re-running shouldn't double-create. The effect executor records execution to a side table for deduplication.
-
-## 17. Integration with Pass 3 algorithms
-
-Per Decision 2 (chat walk): binding checks fit inside Phase 3 of A1 as another cross-cutting constraint.
-
-### 17.1 Updated Phase 3 of Pass 3 A1
-
-Pass 3 Phase 3 originally had:
-- 3.1: Separation of duties check
-- 3.2: Regulatory expiry check
-
-Now extended to:
-- 3.1: Separation of duties check
-- 3.2: Regulatory expiry check
-- **3.3: Status binding check (new)**
-
-```
-PHASE 3.3: Status binding check (NEW)
-  Inputs: action_name, target_entity_id, context
-  
-  3.3.1: Determine if this action has a binding dependency
-    - Look up permission_definitions for action_name
-    - Read new column `binding_dependencies` (jsonb)
-      e.g., for 'invoices:edit': [{ entity_type: 'invoice', status_table: 'invoice_statuses', binding: 'allows_edit', expected: true }]
-    - If no binding_dependencies: skip; final_grant unchanged
-    
-  3.3.2: For each binding dependency:
-    - Fetch the target entity (e.g., invoice with id = target_entity_id)
-    - Get its status_id
-    - Get bindings via effective_status_bindings_cache
-    - Compare to expected value
-    - If mismatch:
-      final_grant = FALSE
-      resolution_source = 'status_binding_violation:' + binding_name
-      reason_if_denied = "[Entity] is in status [X]; this status does not allow [action]"
-      Return immediately (don't check other dependencies)
-  
-  3.3.3: If all checks pass, final_grant unchanged
-```
-
-### 17.2 Schema extension for binding dependencies
-
-Pass 2's `permission_definitions` gets a new column:
+Each partition gets indexes inherited from the parent. Standard set for permission_audit_log:
 
 ```sql
-ALTER TABLE permission_definitions
-ADD COLUMN binding_dependencies JSONB;
+CREATE INDEX idx_permission_audit_log_actor_occurred 
+  ON permission_audit_log(actor_user_id, occurred_at DESC);
 
--- Example value for 'invoices:edit':
--- [{ "entity_type": "invoice", "status_table": "invoice_statuses", "binding": "allows_edit", "expected": true }]
+CREATE INDEX idx_permission_audit_log_event_type_occurred 
+  ON permission_audit_log(event_type, occurred_at DESC);
+
+CREATE INDEX idx_permission_audit_log_target_user_occurred 
+  ON permission_audit_log(target_user_id, occurred_at DESC);
+
+CREATE INDEX idx_permission_audit_log_target_permission_occurred 
+  ON permission_audit_log(target_permission_id, occurred_at DESC);
+
+CREATE INDEX idx_permission_audit_log_target_entity 
+  ON permission_audit_log(target_entity_id, occurred_at DESC)
+  WHERE target_entity_id IS NOT NULL;
+
+CREATE INDEX idx_permission_audit_log_request_id 
+  ON permission_audit_log(request_id)
+  WHERE request_id IS NOT NULL;
+
+CREATE INDEX idx_permission_audit_log_source_event 
+  ON permission_audit_log(source_event_id)
+  WHERE source_event_id IS NOT NULL;
 ```
 
-Population at seed time per the action catalog from Pass 1.
+Partial indexes (`WHERE target_entity_id IS NOT NULL`) skip indexing irrelevant rows — saves storage.
 
-### 17.3 Performance budget impact
+### 14.5 The 8 append-only ledgers — quick reference
 
-Per Pass 3 §16, original budget for cross-cutting constraint checks was 0-2ms.
+| Ledger | Module | Primary use | Volume estimate |
+|---|---|---|---|
+| `permission_audit_log` | (cross-cutting) | Permission grants/revokes/overrides; admin exceptions; sensitive field reads; binding changes | ~10M/year at scale |
+| `inventory_movements` | M7 | Stock receive/issue/transfer/write-off; FIFO layer consumption | ~2M/year |
+| `commissioning_records` | M6 | Per-equipment test results; ULC verification attachments | ~500k/year |
+| `project_acceptance_records` | M6 | Customer sign-off; handover acknowledgments | ~50k/year |
+| `vendor_performance_scores` | M8 | Period scoring; grade transitions; auto-degrade events | ~10k/year |
+| `contractor_performance_scores` | M10 | Same pattern as vendor | ~10k/year |
+| `gl_journal_lines` | M11 | Every accounting line item ever posted | ~20M/year at scale |
+| `appointment_change_log` | M12 | Every reschedule/reassign/state-change on appointments | ~5M/year |
+| `report_snapshots` | M13 | Immutable historical report instances | ~100k/year |
 
-Adding binding check:
-- effective_status_bindings_cache lookup: <0.5ms (single indexed read)
-- comparison logic: negligible
-- Total Phase 3.3 overhead: <1ms
+Total scale: ~38M rows/year combined. Monthly partitions keep individual partition sizes manageable.
 
-Adjusted Phase 3 total budget: 1-3ms with all three checks. Total A1 budget unchanged (<5ms p99 compound).
+## 15. Permission audit event type taxonomy
 
-### 17.4 Updated resolution traces
+`permission_audit_log` has 18+ enumerated event types covering everything that happens in the permissions runtime. Each has a defined JSON payload schema.
 
-Adding a binding-check example to Pass 3's worked traces:
+### 15.1 Event type catalog
 
-**Trace 6: User attempts `invoices:edit` on Sent invoice**
+| Event type | Triggered by | Required JSONB fields | Optional fields |
+|---|---|---|---|
+| `role_permission_granted` | Admin grants a permission to a role | `role_id`, `permission_id`, `previous_state`, `new_state`, `ui_state_override` | `notes` |
+| `role_permission_revoked` | Admin revokes a permission from a role | `role_id`, `permission_id`, `previous_state` | `notes` |
+| `role_permission_ui_state_changed` | Admin changes UI state (hidden/disabled/interactive) for a role permission | `role_id`, `permission_id`, `previous_ui_state`, `new_ui_state` | |
+| `user_override_granted` | Admin grants per-user override | `user_id`, `permission_id`, `override_state`, `is_temporary`, `expires_at` | `notes` |
+| `user_override_revoked` | Admin revokes per-user override | `user_id`, `permission_id`, `revocation_reason` | |
+| `user_override_expired` | System auto-revokes expired temporary override | `user_id`, `permission_id`, `originally_expired_at` | |
+| `field_visibility_role_changed` | Admin changes field visibility for a role | `role_id`, `flag_id`, `previous_state`, `new_state` | |
+| `field_visibility_user_override_granted` | Admin grants per-user field visibility override | `user_id`, `flag_id`, `override_state` | |
+| `field_visibility_user_override_revoked` | Admin revokes per-user field visibility override | `user_id`, `flag_id` | |
+| `data_scope_role_changed` | Admin changes scope for a role | `role_id`, `resource`, `previous_scope_id`, `new_scope_id` | |
+| `data_scope_user_override_granted` | Admin grants per-user scope override | `user_id`, `resource`, `override_scope_id` | |
+| `data_scope_user_override_revoked` | Admin revokes per-user scope override | `user_id`, `resource` | |
+| `role_created` | Admin creates new role | `role_id`, `display_name`, `cloned_from_role_id` | |
+| `role_archived` | Admin archives role | `role_id` | |
+| `admin_exception_invoked` | Admin executes an admin-exception action (e.g., `clients:overrideSla`) | `permission_id`, `target_entity_id`, `target_entity_type`, `reason` | `additional_context` |
+| `regulatory_block_overridden` | Admin overrides a §0.4 #12 regulatory block | `override_type`, `target_entity_id`, `blocked_action`, `valid_until`, `reason`, `emergency_justification` | |
+| `permission_definition_deprecated` | Admin marks permission deprecated | `permission_id`, `deprecation_reason`, `replaced_by_action_name` | |
+| `field_read_with_audit` | User reads a sensitive field (banking, SIN, etc.) | `target_resource`, `target_field_section`, `target_entity_id` | |
+| `status_binding_changed` | Admin changes a status binding value | `status_table_name`, `status_row_id`, `binding_name`, `previous_value`, `new_value` | |
+| `status_transition_executed` | Action handler executes a state transition | `status_table_name`, `from_status_row_id`, `to_status_row_id`, `entity_type`, `entity_id`, `triggered_action` | `effects_executed` |
+| `co_sign_executed` | Second signer completes a co-sign action (e.g., A + Acc hardClose) | `constraint_name`, `entity_type`, `entity_id`, `first_signer_user_id`, `second_signer_user_id` | |
 
+### 15.2 Sample event payloads
+
+**`role_permission_granted`:**
+```json
+{
+  "id": "...",
+  "event_type": "role_permission_granted",
+  "actor_user_id": "admin_user_123",
+  "actor_type": "user",
+  "occurred_at": "2026-05-12T14:23:45.123Z",
+  "after_state": {
+    "role_id": "pm_role",
+    "permission_id": "invoices_approve",
+    "previous_state": "default",
+    "new_state": "granted",
+    "ui_state_override": null
+  },
+  "reason": "PM tier-2 promotion; approval authority added",
+  "ip_address": "10.0.0.1",
+  "request_id": "req_abc123"
+}
 ```
-Input: { user_id, action_name: "invoices:edit", target_entity_id: invoice_42 }
 
-PHASE 1: Cache lookup → hit, granted by role default for PM
-PHASE 3.1: No separation of duties for invoices:edit → skip
-PHASE 3.2: No regulatory expiry concern → skip
-PHASE 3.3: Status binding check
-  binding_dependencies = [{ entity_type: 'invoice', status_table: 'invoice_statuses', binding: 'allows_edit', expected: true }]
-  Fetch invoice_42 → status_id = <Sent>
-  Get bindings via cache → { allows_edit: false, allows_send: false, is_terminal: false, ... }
-  Comparison: allows_edit (false) !== expected (true) → MISMATCH
-  
-  → final_grant = FALSE
-  → resolution_source = 'status_binding_violation:allows_edit'
-  → reason_if_denied = "Invoice INV-2024-001 is in status Sent; this status does not allow edit. Per immutable send snapshot policy (§0.4 #8)."
-
-PHASE 5: Return
-  { is_granted: FALSE, ui_state: 'disabled', resolution_source: '...', reason_if_denied: '...', ... }
+**`admin_exception_invoked` (clients:overrideSla):**
+```json
+{
+  "id": "...",
+  "event_type": "admin_exception_invoked",
+  "actor_user_id": "admin_user_456",
+  "actor_type": "user",
+  "occurred_at": "2026-05-12T16:45:00Z",
+  "target_user_id": null,
+  "target_permission_id": "clients_overrideSla",
+  "target_entity_id": "client_xyz_id",
+  "target_entity_type": "client",
+  "before_state": {
+    "sla_response_time_hours": 4
+  },
+  "after_state": {
+    "sla_response_time_hours": 24
+  },
+  "reason": "Customer requested temporary relaxation due to internal IT migration; 30-day duration confirmed in email thread."
+}
 ```
 
-## 18. Operator-configurable vs system-locked bindings
+**`regulatory_block_overridden` (WSIB expired):**
+```json
+{
+  "id": "...",
+  "event_type": "regulatory_block_overridden",
+  "actor_user_id": "admin_user_789",
+  "actor_type": "user",
+  "occurred_at": "2026-05-12T09:15:30Z",
+  "target_entity_id": "contractor_abc_id",
+  "target_entity_type": "contractor",
+  "after_state": {
+    "override_type": "contractor_wsib_expired",
+    "blocked_action": "contractor_work_orders:create",
+    "valid_until": "2026-05-19T23:59:59Z"
+  },
+  "reason": "WSIB renewal in process; CRA confirmation received; portal lag expected",
+  "notes": "Emergency dispatch required for service call SC-2026-0512-003"
+}
+```
 
-Some bindings are operator-tunable in Settings. Others are system-locked because they enforce architectural commitments from the audit (§0.4 series).
+**`field_read_with_audit`:**
+```json
+{
+  "id": "...",
+  "event_type": "field_read_with_audit",
+  "actor_user_id": "acc_user_001",
+  "actor_type": "user",
+  "occurred_at": "2026-05-12T11:30:15.789Z",
+  "after_state": {
+    "target_resource": "vendors",
+    "target_field_section": "banking",
+    "target_entity_id": "vendor_def_id"
+  },
+  "request_id": "req_xyz789"
+}
+```
 
-### 18.1 System-locked bindings (cannot be modified by operators)
-
-Per audit cross-cutting commitments:
-
-- **§0.4 #8 — Immutable snapshots:** `allows_edit = FALSE` on Sent statuses of quotes, invoices, change orders, contractor WOs is 🔒 system-locked.
-- **§0.4 #11 — Separation of duties:** Co-sign requirement on `accounting_periods:hardClose` is 🔒.
-- **§0.4 #12 — Regulatory expiry:** WSIB expired → On Hold transition is 🔒.
-- **§0.4 #13 — Geolocation retention:** 30-day retention default is 🔒 (but threshold value is operator-configurable per Pass 2).
-- **PCI compliance:** `payments.fullCardNumber` visibility is 🔒.
-- **Canadian Construction Act:** 45-day holdback release timing on retention release invoices is 🔒.
-- **Ontario lien deadline:** 60-day clock on Trade Contractor WOs is 🔒.
-- **Append-only ledgers:** Inventory movements, commissioning records, GL entries: `allows_edit=FALSE, allows_delete=FALSE` is 🔒.
-
-These show as locked (greyed) in the permissions editor (Pass 8). Tooltip explains why.
-
-### 18.2 Operator-configurable bindings
-
-Operator can tune in Settings:
-
-- Custom status added by operator (e.g., 'Pending Customer Approval' in quote_statuses) → all its bindings configurable
-- Late fee thresholds (`triggers_late_fee` plus accumulator config)
-- Notification template assignments (`triggers_notification_template`)
-- Display colors / badges / priorities / icons (UI drivers)
-- Approval thresholds (e.g., quotes:approve thresholds in M5 — managed via Settings per Pass 1 catalog)
-- Per-tenant retention day count (under the 30-day default minimum for compliance)
-- Reorder thresholds for inventory
-
-### 18.3 Hybrid bindings
-
-Some bindings are partially system-locked: the existence is system-required but the specific value is operator-tunable.
-
-Example: `triggers_late_fee` binding on `invoice_statuses.Overdue` row.
-
-- 🔒 system: binding MUST exist; cannot be deleted
-- 🟢 operator: value can be tuned (default `true`; can disable per-tenant)
-
-UI shows these as partial-edit (some sub-fields editable, some locked).
-
-## 19. State transition matrices (sample)
-
-For each status surface, the set of rows in `status_transition_definitions` forms a state transition matrix.
-
-### 19.1 Example: `invoice_statuses` matrix
-
-| From → To | Draft | Pending Approval | Approved | Sent | Viewed | Partial Paid | Paid | Overdue | Void | Cancelled | Refunded |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Draft** | self | ✓ submit | ✓ approve (skip) | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
-| **Pending Approval** | ✓ reject (back to Draft) | self | ✓ approve | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
-| **Approved** | ⊘ | ⊘ | self | ✓ send | ⊘ | ⊘ | ⊘ | ⊘ | ✓ void | ✓ cancel | ⊘ |
-| **Sent** | ⊘ (locked) | ⊘ | ⊘ | self | ✓ auto (portal viewed) | ✓ partial payment | ✓ full payment | ✓ overdue (date-trigger) | ✓ void (A+reason) | ⊘ | ⊘ |
-| **Viewed** | ⊘ | ⊘ | ⊘ | ⊘ | self | ✓ partial | ✓ full | ✓ overdue | ✓ void (A) | ⊘ | ⊘ |
-| **Partial Paid** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ✓ full | ✓ overdue (if past due) | ✓ void (A+reason) | ⊘ | ⊘ |
-| **Paid** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ | ⊘ | ⊘ | ✓ refund (A) |
-| **Overdue** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ✓ partial | ✓ full | self | ✓ void | ⊘ | ⊘ |
-| **Void** | ✓ reopen (A only) | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ | ⊘ |
-| **Cancelled** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self | ⊘ |
-| **Refunded** | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ | self |
-
-Each ✓ corresponds to a row in `status_transition_definitions` with the relevant `required_action_name` populated.
-
-### 19.2 Example: `contractor_wo_statuses` matrix
-
-The 60-day lien clock is enforced through this matrix.
-
-Lien Period (post-substantial-completion) → Closed: transition only allowed if (current_date >= lien_period_started_at + 60 days). Otherwise denied with reason "Lien deadline has not passed; cannot close work order yet (Ontario Construction Act)."
-
-This check is implemented in the transition handler:
-
-```typescript
-if (fromStatus.name === 'Lien Period' && toStatus.name === 'Closed') {
-  const lienStartedAt = await getLienPeriodStartedAt(workOrder.id);
-  const lienDeadlinePassed = isAfter(new Date(), addDays(lienStartedAt, 60));
-  if (!lienDeadlinePassed) {
-    throw new TransitionDeniedError({ reason: 'Lien deadline has not passed (Ontario Construction Act 60-day)' });
+**`co_sign_executed` (hard close):**
+```json
+{
+  "id": "...",
+  "event_type": "co_sign_executed",
+  "actor_user_id": "admin_user_456",
+  "actor_type": "user",
+  "occurred_at": "2026-05-12T23:59:59Z",
+  "after_state": {
+    "constraint_name": "hard_close_co_sign",
+    "entity_type": "accounting_period",
+    "entity_id": "period_2026_q1_id",
+    "first_signer_user_id": "acc_user_002",
+    "first_signer_role": "accounting",
+    "first_signed_at": "2026-05-12T17:30:00Z",
+    "second_signer_user_id": "admin_user_456",
+    "second_signer_role": "admin"
   }
 }
 ```
 
-System-locked: `requires_admin_approval=TRUE` for this transition pre-60-days, with audit captured.
+### 15.3 Event correlation
 
-## 20. Performance characteristics
+`request_id` correlates audit events with the originating HTTP request. Standard middleware pattern:
 
-### 20.1 Cache lookup performance
+```typescript
+// Pseudocode for build phase
+function requestIdMiddleware(req, res, next) {
+  req.id = req.headers['x-request-id'] || uuidv4();
+  // Set on response for client tracking
+  res.setHeader('x-request-id', req.id);
+  // Set as session-level Postgres setting
+  db.query(`SET app.request_id = '${req.id}'`);
+  next();
+}
+```
 
-- `effective_status_bindings_cache`: indexed by `(status_table_name, status_row_id)`. <1ms hit.
-- ~400 status rows total → cache fits in memory at ~50KB. Effectively zero-cost.
+Trigger functions (or application code) reads `current_setting('app.request_id')` and includes in audit row.
 
-### 20.2 Cache invalidation
+`source_event_id` correlates chained events. Example: a single state transition (`invoices:approve` Sent → Approved) emits:
+1. `status_transition_executed` (root event)
+2. `creates_gl_entry` effect → `gl_journal_lines` row (source_event_id = root)
+3. `auto_notifies_customer` effect → email log (source_event_id = root)
 
-PostgreSQL triggers:
-- INSERT/UPDATE/DELETE on `status_behavior_bindings` → invalidate matching row in cache
-- INSERT/UPDATE/DELETE on `status_transition_definitions` → no cache impact directly (transitions are runtime lookups; could add a transition cache in Pass 9 if needed)
+Querying by `source_event_id` reconstructs the full effect chain.
 
-Cache warming: bindings cache populated lazily on first read per status row.
+## 16. Audit query API
 
-### 20.3 Effect execution
+Three first-class API endpoints for admins + compliance. Plus M13 reports module integration.
 
-Effects are async fire-and-forget where possible:
-- `send_email`: enqueued to job queue
-- `create_gl_entry`: synchronous (atomic with state transition)
-- `schedule_followup`: async (added to scheduler queue)
-- `update_field`: synchronous
+### 16.1 Entity-history endpoint
 
-GL entry creation must be synchronous and atomic with the state transition (single transaction). Other effects can be async with retry on failure.
+`GET /api/admin/audit/entity-history?entity_type={type}&entity_id={id}&from={date}&to={date}`
 
-## 21. Failure modes
+Returns full audit trail for a specific entity (e.g., "show all changes to invoice X").
 
-| Failure | Behavior |
-|---|---|
-| Cache lookup fails | Fall back to base table query (slower but correct) |
-| Binding row not found for expected binding | Treat as `false` for action gates (fail-closed); `null` for triggers; default value for UI drivers |
-| Transition not found in `status_transition_definitions` | Deny transition; surface generic "Transition not defined" |
-| Effect execution fails (async) | Retry per effect type policy; alert on repeated failures |
-| Effect execution fails (synchronous, e.g., GL entry creation) | Roll back the transition; return error to caller |
+```json
+// Response shape
+{
+  "entity_type": "invoice",
+  "entity_id": "...",
+  "events": [
+    {
+      "id": "...",
+      "occurred_at": "...",
+      "actor": { "user_id": "...", "user_name": "Jane Doe", "role": "PM" },
+      "event_type": "status_transition_executed",
+      "summary": "Status changed: Draft → Pending Approval",
+      "details": { ... }
+    },
+    ...
+  ],
+  "total_count": 47,
+  "page": 1,
+  "page_size": 50
+}
+```
 
-## 22. Migration order extension
+Permission: `audit:view:entity` — A always; PM for own projects' entities only.
 
-Adding to Pass 2's 16-step migration order:
+### 16.2 User-actions endpoint
 
-- Step 17: Create `status_behavior_bindings` table
-- Step 18: Create `status_transition_definitions` table
-- Step 19: Create `effective_status_bindings_cache` table
-- Step 20: Add `binding_dependencies` column to `permission_definitions`
-- Step 21: Seed `status_behavior_bindings` from audit catalog (~2000 rows)
-- Step 22: Seed `status_transition_definitions` from audit (~600 rows)
-- Step 23: Populate `effective_status_bindings_cache` from initial bindings (lazy fill via first read after seed)
+`GET /api/admin/audit/user-actions?user_id={id}&from={date}&to={date}&event_types={list}`
 
-## 23. Open questions (Pass 5)
+Returns all actions performed by a specific user.
 
-1. **Should bindings have version history?** When an operator changes `triggers_late_fee` from true to false, should we audit? Decision: YES — same audit pattern as permissions (logged to `permission_audit_log` with event_type='status_binding_changed').
+Permission: `audit:view:user` — A only (security review).
 
-2. **Multi-status entities** — e.g., invoice has `status` AND `payment_status`. Should bindings combine? Decision: handlers query bindings per-status; combine logic in the handler when needed. No automated combination.
+### 16.3 Event-stream endpoint
 
-3. **Performance of effect execution at scale** — when an invoice transitions Sent → Paid, fires 3-5 effects. 1000 invoices/day = 3000-5000 effect executions. Sustainable? Decision: YES via async queue for non-atomic effects; ops dashboard monitors queue depth.
+`GET /api/admin/audit/event-stream?event_type={type}&from={date}&to={date}&filter_by_entity_type={type}`
 
-4. **Operator-added bindings** — can operators add NEW binding names beyond the 14 standard? Decision: NO at v1 (fixed binding name catalog). Phase 2 consideration when plugin architecture lands.
+Returns events filtered by type + time window. Compliance use cases ("show all admin exceptions invoked in Q4").
 
-5. **Conditional bindings** — should bindings have conditions (e.g., `allows_edit=TRUE only if user is creator within 30 minutes`)? Decision: NO at v1 — bindings are static per status row. Conditional logic stays in action handlers when needed. Phase 2 may add conditional bindings.
+Permission: `audit:view:stream` — A and compliance role only.
 
-6. **Cross-status binding dependencies** — e.g., invoice `allows_payment` should also check if client is `On Stop` (client status). How? Decision: at v1, handler queries bindings from multiple status surfaces sequentially. Phase 2 could add a cross-status rule engine.
+### 16.4 Power-user SQL view
 
-7. **UI representation of locked bindings** — should the permissions editor show locked bindings at all, or hide them? Decision: SHOW but render as greyed/locked with explanatory tooltip ("This binding enforces §0.4 #8 immutable snapshot policy"). Transparency over concealment.
+For complex queries that don't fit the API pattern, A has direct SELECT access to audit tables through a read-only `audit_log_view` that combines `permission_audit_log` + the 7 module ledgers behind a single query interface:
+
+```sql
+CREATE OR REPLACE VIEW audit_log_combined AS
+SELECT 
+  'permission_audit_log' AS source_table,
+  id, actor_user_id, actor_type, occurred_at, event_type,
+  target_user_id, target_permission_id, target_resource, target_entity_id,
+  before_state, after_state, reason, notes, ip_address, request_id, source_event_id
+FROM permission_audit_log
+UNION ALL
+SELECT 
+  'inventory_movements' AS source_table,
+  id, actor_user_id, actor_type, occurred_at, event_type,
+  NULL AS target_user_id, NULL AS target_permission_id, 
+  'inventory_items' AS target_resource, item_id AS target_entity_id,
+  before_state, after_state, reason, notes, NULL AS ip_address, request_id, source_event_id
+FROM inventory_movements
+UNION ALL
+-- ... repeat for 6 more ledgers
+;
+```
+
+Used sparingly — primary access pattern is via API. View available for export-to-CSV via M13.
+
+### 16.5 M13 reports integration
+
+`audit_log_combined` view exposed as a data source in M13 reports module. Pre-built standard reports include:
+
+- "Audit Trail by User" (admin's user_id filter)
+- "Admin Exceptions Last 90 Days" (event_type = admin_exception_invoked)
+- "Sensitive Field Reads" (event_type = field_read_with_audit, filtered by section = 'banking')
+- "Regulatory Override History" (event_type = regulatory_block_overridden)
+- "Co-Sign Activity" (event_type = co_sign_executed)
+- "Permission Grant Changes Last Quarter" (role_permission_granted / role_permission_revoked)
+
+These appear in M13's Compliance category. Default role access: A and Acc.
+
+## 17. Append-only audit performance at scale
+
+### 17.1 Volume estimates
+
+Per §14.5, ~38M rows/year across 8 ledgers at steady-state. Top contributors:
+- `gl_journal_lines` ~20M (~7 lines per accounting entry × ~3M entries/year)
+- `permission_audit_log` ~10M (most user actions + sensitive field reads)
+- `appointment_change_log` ~5M (scheduling-heavy operations)
+
+### 17.2 Insert performance
+
+- Single-row inserts: <5ms at p99 (target — actually <2ms typical)
+- Batched audit-on-read flushes (Pass 4): <5ms per batch of 50
+- Async fire-and-forget pattern (no blocking on user request response)
+
+### 17.3 Query performance per partition pattern
+
+With monthly partitioning + the indexes from §14.4:
+
+| Query pattern | Hits which partitions | p99 latency |
+|---|---|---|
+| "User X actions last 7 days" | 1 partition | <100ms |
+| "Entity Y history (all time)" | All historical partitions | 100-500ms (acceptable for admin tool) |
+| "All admin exceptions Q4 2025" | 3 partitions | <500ms |
+| "Sensitive field reads today" | 1 partition | <200ms |
+
+PostgreSQL partition pruning ensures only relevant partitions are scanned.
+
+### 17.4 Cold archival strategy (Phase 2 deferred)
+
+Phase 2 plan (committed but not implemented at v1):
+
+1. Partitions older than 12 months DETACHed from parent
+2. DETACHed partitions converted to compressed Parquet files via `pg_dump` + custom export
+3. Parquet files uploaded to S3 Glacier Deep Archive
+4. Metadata table tracks which months are archived
+5. Compliance query needing >12 months data triggers async restore from S3 (24-48 hour SLA)
+6. Restored data attached to parent partition temporarily; detached after query window
+
+At v1, no archival — partitions stay in hot storage permanently. Storage cost acceptable for first 3-5 years.
+
+### 17.5 Vacuum / analyze
+
+PostgreSQL autovacuum handles partition-level vacuum. With partitioning, vacuum runs per-partition; old partitions vacuum once (since they're immutable append-only) and don't need re-running.
+
+Manual ANALYZE per partition after partition creation completes (within hours of first inserts).
+
+## 18. Append-only ledger pattern across the 7 module ledgers
+
+Each module ledger applies the pattern from §14 but adds ledger-specific columns. Specified per ledger:
+
+### 18.1 `inventory_movements` (M7)
+
+```sql
+CREATE TABLE inventory_movements (
+  -- Standard append-only columns (from §14.1)
+  id, actor_user_id, actor_type, occurred_at, event_type, before_state, after_state,
+  reason, notes, ip_address, user_agent, request_id, source_event_id, occurred_month,
+  
+  -- M7-specific columns
+  item_id UUID NOT NULL REFERENCES inventory_items(id),
+  from_location_id UUID REFERENCES stock_locations(id),
+  to_location_id UUID REFERENCES stock_locations(id),
+  quantity_change NUMERIC NOT NULL,           -- positive = receive, negative = issue
+  unit_cost_fifo NUMERIC,                     -- FIFO cost of this layer
+  fifo_layer_id UUID,                         -- which FIFO layer consumed
+  serial_numbers TEXT[],                      -- for serialized items
+  related_po_id UUID,
+  related_project_id UUID
+) PARTITION BY RANGE (occurred_month);
+
+-- Event types specific to M7:
+-- 'receive', 'issue_to_project', 'transfer', 'write_off', 'adjustment_count',
+-- 'reservation_consumed', 'reservation_released', 'fifo_layer_consumed'
+```
+
+### 18.2 `commissioning_records` (M6)
+
+```sql
+CREATE TABLE commissioning_records (
+  -- Standard columns
+  ...
+  
+  -- M6-specific
+  project_id UUID NOT NULL REFERENCES projects(id),
+  equipment_id UUID NOT NULL,
+  test_name TEXT NOT NULL,
+  test_result TEXT NOT NULL CHECK (test_result IN ('pass', 'fail', 'pending_recheck')),
+  attached_ulc_cert_url TEXT,
+  technician_user_id UUID REFERENCES users(id)
+);
+
+-- Event types: 'test_executed', 'test_recheck_scheduled', 'ulc_cert_attached'
+```
+
+### 18.3 `project_acceptance_records` (M6)
+
+```sql
+CREATE TABLE project_acceptance_records (
+  -- Standard columns
+  ...
+  
+  -- M6-specific
+  project_id UUID NOT NULL REFERENCES projects(id),
+  acceptance_type TEXT NOT NULL CHECK (acceptance_type IN ('phase_completion', 'substantial_completion', 'final_handover')),
+  customer_signature_image_url TEXT,
+  signed_by_customer_name TEXT,
+  signed_by_customer_email TEXT,
+  warranty_start_date DATE,
+  handover_package_url TEXT
+);
+
+-- Event types: 'phase_accepted', 'substantial_completion_signed', 'final_handover_signed'
+```
+
+### 18.4 `vendor_performance_scores` + `contractor_performance_scores` (M8 + M10)
+
+Identical pattern:
+
+```sql
+CREATE TABLE vendor_performance_scores (
+  -- Standard columns
+  ...
+  
+  -- M8/M10-specific
+  entity_id UUID NOT NULL,                    -- vendor_id or contractor_id
+  scoring_period_start DATE NOT NULL,
+  scoring_period_end DATE NOT NULL,
+  on_time_completion_pct NUMERIC,
+  quality_score NUMERIC,
+  safety_incidents_count INTEGER,
+  total_volume_value NUMERIC,
+  computed_grade TEXT CHECK (computed_grade IN ('A', 'B', 'C', 'D')),
+  previous_grade TEXT,
+  triggered_auto_degrade BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Event types: 'period_score_computed', 'auto_degrade_applied', 'preferred_status_removed', 'preferred_status_restored'
+```
+
+### 18.5 `gl_journal_lines` (M11)
+
+Largest table by row count. Special partitioning + indexing.
+
+```sql
+CREATE TABLE gl_journal_lines (
+  -- Standard columns
+  ...
+  
+  -- M11-specific
+  journal_entry_id UUID NOT NULL REFERENCES gl_journal_entries(id),
+  account_id UUID NOT NULL REFERENCES coa(id),
+  debit NUMERIC NOT NULL DEFAULT 0,
+  credit NUMERIC NOT NULL DEFAULT 0,
+  currency_id UUID REFERENCES currency_codes(id),
+  exchange_rate NUMERIC,
+  foreign_currency_amount NUMERIC,
+  line_description TEXT,
+  cost_center_id UUID,
+  
+  CONSTRAINT gl_journal_lines_debit_or_credit CHECK (
+    (debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0)
+  )
+);
+
+-- Event types: 'auto_posted', 'manual_posted', 'reversal_posted'
+-- Note: reversals always insert new lines; never modify existing
+```
+
+### 18.6 `appointment_change_log` (M12)
+
+```sql
+CREATE TABLE appointment_change_log (
+  -- Standard columns
+  ...
+  
+  -- M12-specific
+  appointment_id UUID NOT NULL REFERENCES appointments(id),
+  change_type TEXT NOT NULL CHECK (change_type IN (
+    'created', 'rescheduled', 'reassigned', 'cancelled', 'status_changed',
+    'customer_confirmed', 'tech_clock_in', 'tech_clock_out', 'sla_breach'
+  )),
+  before_resource_assignments JSONB,
+  after_resource_assignments JSONB,
+  geolocation_data JSONB                       -- for clock-in/out events; subject to §0.4 #13 retention
+);
+```
+
+### 18.7 `report_snapshots` (M13)
+
+```sql
+CREATE TABLE report_snapshots (
+  -- Standard columns
+  ...
+  
+  -- M13-specific
+  report_id UUID NOT NULL REFERENCES report_definitions(id),
+  parameters JSONB NOT NULL,
+  output_pdf_url TEXT,
+  output_csv_url TEXT,
+  output_excel_url TEXT,
+  generated_for_subscription_id UUID,
+  retention_until DATE                         -- per operator policy in Settings
+);
+```
+
+## 19. Reversal pattern (writing offsets, never modifying)
+
+§0.4 #10's append-only requirement means we never UPDATE or DELETE. To "void" or "correct" a prior entry, INSERT a new row with `event_type = 'reversal'` and `source_event_id` linking back.
+
+### 19.1 Example: GL reversal
+
+Original entry (incorrectly posted by Acc):
+```json
+{
+  "id": "entry_001",
+  "event_type": "manual_posted",
+  "actor_user_id": "acc_user",
+  "occurred_at": "2026-05-10T15:00:00Z",
+  "debit": 1000,
+  "credit": 0,
+  "account_id": "5100 - COGS",
+  "line_description": "Invoice INV-2024-555 cost (WRONG ACCOUNT - should be 5200)"
+}
+```
+
+Reversal:
+```json
+{
+  "id": "entry_002",
+  "event_type": "reversal_posted",
+  "actor_user_id": "acc_user_other",   // separation of duties; different user
+  "occurred_at": "2026-05-11T09:30:00Z",
+  "debit": 0,
+  "credit": 1000,
+  "account_id": "5100 - COGS",
+  "line_description": "Reversal of entry_001 - wrong account",
+  "source_event_id": "entry_001"
+}
+```
+
+Correction:
+```json
+{
+  "id": "entry_003",
+  "event_type": "manual_posted",
+  "actor_user_id": "acc_user_other",
+  "occurred_at": "2026-05-11T09:31:00Z",
+  "debit": 1000,
+  "credit": 0,
+  "account_id": "5200 - Materials Direct",
+  "line_description": "Correction of entry_001 - posting to correct account",
+  "source_event_id": "entry_001"
+}
+```
+
+Three rows; all permanent. Net effect on COGS account: 0 (cancels). Net effect on Materials Direct: +$1000. Audit trail intact.
+
+### 19.2 Example: Invoice void
+
+Original status_transition_executed:
+```json
+{
+  "id": "event_a",
+  "event_type": "status_transition_executed",
+  "occurred_at": "...",
+  "entity_type": "invoice",
+  "entity_id": "INV-001",
+  "from_status_row_id": "approved_status_id",
+  "to_status_row_id": "sent_status_id"
+}
+```
+
+Void:
+```json
+{
+  "id": "event_b",
+  "event_type": "status_transition_executed",
+  "actor_user_id": "admin_user",
+  "occurred_at": "...",
+  "entity_type": "invoice",
+  "entity_id": "INV-001",
+  "from_status_row_id": "sent_status_id",
+  "to_status_row_id": "void_status_id",
+  "source_event_id": "event_a",    // optional but recommended for chain tracking
+  "reason": "Customer cancelled order"
+}
+```
+
+The invoice rows in the main `invoices` table get UPDATEd (status_id changes to void) — `invoices` is not append-only, only the audit log is. The audit log captures the transition immutably.
+
+## 20. Compliance export
+
+### 20.1 What compliance officers need
+
+For external audit (SOC 2, GDPR right-to-access requests, regulatory investigations):
+
+- Filtered audit slice by time + event type + actor + target
+- Exported in tamper-evident format (PDF report or signed CSV with hash chain)
+- Includes integrity proof (cryptographic hash of each row chained to prior)
+
+### 20.2 Hash chain for tamper-evidence (deferred to Phase 2)
+
+At v1, audit completeness is enforced by trigger-blocked UPDATE/DELETE. No row-level hash chain.
+
+Phase 2 enhancement (for SOC 2 and similar): add `row_hash` column computed at insert time:
+
+```
+row_hash = SHA256(prev_row_hash || row_content_json)
+```
+
+Any tampering (even at the file system level) breaks the chain. Verification cron runs nightly.
+
+Not at v1 — the trigger-blocked write pattern + audit-immutable architecture is sufficient for most operator compliance needs. SOC 2 audit comes later.
+
+### 20.3 Compliance export endpoint
+
+`POST /api/admin/audit/export`
+
+Body:
+```json
+{
+  "from": "2025-10-01",
+  "to": "2025-12-31",
+  "event_types": ["admin_exception_invoked", "regulatory_block_overridden"],
+  "actor_user_ids": ["..."],
+  "target_entity_types": ["client", "vendor"],
+  "format": "pdf"  // or "csv", "json"
+}
+```
+
+Returns: signed URL to download the export. Export PDF includes eight-layer print protection (per §0.4 #9).
+
+Permission: `audit:export` — A and compliance role only.
+
+## 21. Open questions (Pass 6)
+
+1. **Should every state transition emit a `status_transition_executed` audit event?** Decision: YES — uniformly. Storage cost is acceptable; forensic value is high. Phase 3 of Pass 3 algorithm tracks this.
+
+2. **Should view-only field reads (non-sensitive) be audited?** Decision: NO at v1. Only flags with `requires_audit_on_read=TRUE` (the 9 sensitive flags from Pass 4 §17). Non-sensitive reads would explode the audit log.
+
+3. **Should `permission_audit_log` track FAILED action attempts (denied actions)?** Decision: YES for sensitive + admin-exception denials only. NO for routine denials (e.g., SR trying to view banking — repeatedly denied as designed). Sensitive denials may indicate attack or misconfiguration; routine denials are noise.
+
+4. **Should we keep IP addresses in audit logs given privacy concerns?** Decision: YES at v1 — operationally critical for forensic analysis. Retention 12 months for IP only (the IP column nulled after 12 months while other columns retained per row's retention policy). Phase 2 GDPR-compliant configurable retention.
+
+5. **Cross-row hash chain for tamper evidence at v1?** Decision: NO at v1. Append-only enforcement via triggers is sufficient. Hash chain Phase 2.
+
+6. **Should audit retention be configurable per event type?** Decision: NO at v1 — uniform "keep forever" for permissions audit. Module ledgers may have specific retention (e.g., `report_snapshots.retention_until` per snapshot). Phase 2 considers per-event-type configurable retention.
+
+7. **Where do "system" actor events get logged?** Decision: same `permission_audit_log` table; `actor_user_id = NULL`, `actor_type = 'system'`. Distinguishable in queries; not segregated to separate table.
+
+## 22. Performance summary
+
+| Operation | Target | Strategy |
+|---|---|---|
+| Single audit row insert | <2ms p99 | Indexed insert; partition pruning to current month only |
+| Batched insert (50 rows) | <5ms p99 | Single multi-value INSERT statement |
+| Entity history query (last 90 days) | <200ms p99 | Index on `target_entity_id` + partition pruning |
+| User actions query (last 7 days) | <100ms p99 | Index on `actor_user_id` + partition pruning to 1 partition |
+| Compliance export (1 month, all events) | <5s | Full scan of 1 partition; streamed result |
+| Cross-ledger combined view query | <2s | UNION ALL view; relies on per-ledger indexes |
+
+## 23. Migration order extension
+
+Adding to Pass 5's 23-step migration order:
+
+- Step 24: Convert `permission_audit_log` to partitioned table (recreate as partitioned; migrate existing rows if any)
+- Step 25: Convert other 7 ledgers to partitioned tables (`inventory_movements`, `commissioning_records`, `project_acceptance_records`, `vendor_performance_scores`, `contractor_performance_scores`, `gl_journal_lines`, `appointment_change_log`, `report_snapshots`)
+- Step 26: Create initial 3 months of partitions per ledger (current + previous + next)
+- Step 27: Install monthly partition-creation cron job
+- Step 28: Apply UPDATE/DELETE blocking triggers to all 8 ledgers
+- Step 29: Create `audit_log_combined` UNION view
+- Step 30: Install indexes per partition (the standard set from §14.4)
+- Step 31: Install audit query API endpoints
+- Step 32: Seed M13 compliance reports (audit data source registration)
+
+Pass 11 covers production migration logistics.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 24. What's next (Pass 6 preview)
+# 24. What's next (Pass 7 preview)
 ═══════════════════════════════════════════════════════════════════
 
-**Pass 6: Append-only audit pattern.**
+**Pass 7: Request-admin-access workflow.**
 
-The `permission_audit_log` table was specified in Pass 2. Pass 6 details the audit pattern across the entire permissions runtime:
+The M2 audit committed to a request-admin-access workflow: users who need a temporary or permanent permission they don't have can REQUEST it; admins approve/reject; an audit trail of every request + decision is kept. Pass 7 specifies it end-to-end:
 
-- Insert-only enforcement (PostgreSQL triggers blocking UPDATE/DELETE — already specified)
-- 18+ enumerated event types and when each fires
-- JSON payload schema per event type
-- Audit query patterns (admin debugging, compliance export, security review)
-- Append-only ledger pattern propagation to other modules (M6 commissioning, M7 inventory movements, M11 GL — extending §0.4 #10)
-- Retention policies and archival strategy (Phase 2 cold storage)
-- Audit data extraction for compliance reports
-- Performance: how audit log scales to ~10M entries/year without degrading
+- The `request_admin_access` table (specified in Pass 2 §9; expanded here)
+- Request lifecycle states (Pending → Approved → Granted → Expired → Revoked, plus Rejected paths)
+- Request types (one-time vs ongoing; temporary vs permanent; specific action vs broader role grant)
+- The approval workflow (Admin sees request notification; reviews context; approves with optional duration limit; auto-grants user_permission_override)
+- Notification routing (Slack/email/in-app to admins on request creation)
+- Auto-expiry handling (temporary grants expire via the daily cron from Pass 3)
+- Edge cases (multiple pending requests for same user-permission; user re-requesting after rejection; admin self-requesting)
+- Integration with Pass 4 audit-on-read for sensitive permissions
+- UI surfaces (Pass 8 elaborates on the UI itself; Pass 7 specifies what data flows)
 
-Pass 6 will produce v0.6 of the design doc.
+Pass 7 will produce v0.7 of the design doc.
 
 ---
 
-**End of v0.5.** Pass 5 (Status Surface Binding Layer) complete. New schema: `status_behavior_bindings` table (polymorphic across 80 status surfaces) + `status_transition_definitions` + `effective_status_bindings_cache`. Three binding property categories: action-gating (8 bindings), effect-triggering (6), UI-driving (5) — 14 standard binding names total. 80 status surfaces × ~5 bindings = ~2000 binding rows + ~600 transition rows at v1 seed. Integration with Pass 3 A1 algorithm via new Phase 3.3 status binding check (<1ms overhead; preserves <5ms total budget). State transition matrices specified for invoice_statuses and contractor_wo_statuses examples (Ontario 60-day lien clock enforcement). Operator-configurable vs system-locked bindings catalogued (cross-cutting commitments §0.4 #8/#11/#12/#13/PCI/Construction Act/lien/append-only ledgers are 🔒). Seven Pass 5 open questions resolved.
+**End of v0.6.** Pass 6 (Append-Only Audit Pattern) complete. Uniform append-only ledger pattern specified for all 8 ledgers (permission_audit_log + 7 module ledgers). Time-based monthly partitioning at v1. PostgreSQL UPDATE/DELETE triggers block modifications. 18+ event types enumerated for permission_audit_log with JSON payload schemas. Reversal pattern (write offsets, never modify) catalogued. 3 first-class API endpoints (entity-history, user-actions, event-stream) + M13 compliance reports integration. Cold archival deferred to Phase 2. Hash-chain tamper-evidence deferred to Phase 2. Performance budget specified (<2ms insert; <200ms entity history; <2s cross-ledger view). 7 Pass 6 open questions resolved. Migration order extended (+9 steps; now 32 total).

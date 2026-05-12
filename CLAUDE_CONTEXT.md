@@ -12,50 +12,50 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session T CLOSED. Permissions Design Pass 5 of 11 complete.**
+**As of 2026-05-12. Session U CLOSED. Permissions Design Pass 6 of 11 complete.**
 
-- **Session T focus:** Permissions Design — Pass 5 (Status Surface Binding Layer). Implements audit §0.4 #4 ("lookup-table rows carry behavior bindings") across the 80 status surfaces catalogued M1-M13. New schema: status_behavior_bindings (polymorphic), status_transition_definitions, effective_status_bindings_cache. 14 standard binding names across 3 categories (8 action-gating, 6 effect-triggering, 5 UI-driving). ~2000 binding rows + ~600 transition rows at v1 seed. Integration with Pass 3 A1 via new Phase 3.3 (status binding check after separation of duties and regulatory expiry; <1ms overhead). State transition matrices specified for invoice_statuses and contractor_wo_statuses (Ontario 60-day lien clock enforcement). Operator-configurable vs system-locked bindings catalogued. Effect executor pattern with idempotent execution. Seven Pass 5 open questions resolved.
-- **Latest commit:** `docs: permissions design Pass 5 — status surface binding layer`. See `git log -1 --oneline`.
+- **Session U focus:** Permissions Design — Pass 6 (Append-Only Audit Pattern). Uniform pattern across 8 ledgers (permission_audit_log + 7 module ledgers from §0.4 #10: inventory_movements/commissioning_records/project_acceptance_records/vendor_performance_scores/contractor_performance_scores/gl_journal_lines/appointment_change_log/report_snapshots). Time-based monthly partitioning at v1. PostgreSQL UPDATE/DELETE blocking triggers on all 8 ledgers. 21 enumerated event types for permission_audit_log with JSON payload schemas. Reversal pattern (insert offsets; never modify). 3 API endpoints (entity-history, user-actions, event-stream) + M13 reports integration + audit_log_combined UNION view for power users. Cold archival + hash-chain tamper-evidence deferred Phase 2. Performance specified (<2ms insert, <200ms entity history, <2s cross-ledger). Volume estimate ~38M rows/year combined. Migration order extended +9 steps (now 32 total). 7 Pass 6 open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 6 — append-only audit pattern`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 5 of 11 passes complete. Pending: Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.5 condenses Pass 1 (§1-§8), Pass 2 (§9), Pass 3 (§10), Pass 4 (§11). Full content preserved in git history at noted commits. Pass 5 full content §12-§23.
+- **Permissions design progress:** 6 of 11 passes complete. Pending: Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.6 condenses Pass 1-5 to summary sections. Full content preserved in git history at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5). Pass 6 full content §13-§23.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 5 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 6 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 5:**
-  - **Bindings as polymorphic separate table** (status_behavior_bindings keyed by status_table_name + status_row_id + binding_name). Not columns on each of 80 status tables. Flexibility for new bindings; simpler operator UI; easier cross-status reporting.
-  - **Binding check fits inside Pass 3 A1 Phase 3** as third cross-cutting constraint (after separation of duties at 3.1, regulatory expiry at 3.2, status binding at 3.3). Uniform treatment with existing constraints.
-  - **14 standard binding names** locked across 3 property categories: action-gating (allows_edit, allows_delete, allows_send, allows_payment, allows_reversal, allows_state_transition, is_terminal, requires_admin_to_modify), effect-triggering (triggers_notification_template, triggers_late_fee, creates_gl_entry, starts_lien_clock, auto_notifies_customer, triggers_holdback_release), UI-driving (display_color, display_badge, display_priority, display_icon, display_show_in_filter_chips).
-  - **Polymorphic schema** with typed value columns (value_boolean, value_text, value_integer, value_numeric, value_jsonb) + value_type discriminator. Allows different binding types without table per category.
-  - **State transitions via dedicated table** (status_transition_definitions) with from_status_row_id + to_status_row_id + is_allowed + requires_admin_approval + requires_reason_capture + required_action_name + triggers_effects JSONB.
-  - **Effect executor pattern** with idempotent execution. Effect types: create_gl_entry (synchronous + atomic with transition), send_email (async queue), update_field (synchronous), schedule_followup (async).
-  - **System-locked bindings** enforce architectural commitments: §0.4 #8 immutable snapshots (allows_edit=FALSE on Sent invoices/quotes), §0.4 #11 separation of duties co-sign on hardClose, §0.4 #12 regulatory expiry On Hold, §0.4 #13 30-day geolocation retention, PCI compliance for full_card_number, Canadian Construction Act 45-day holdback release, Ontario 60-day lien deadline on Trade Contractor WOs, append-only ledgers (inventory movements / commissioning / GL entries).
-  - **Operator-configurable bindings**: custom statuses, late fee thresholds, notification templates, UI drivers, approval thresholds, retention day count (above minimum), reorder thresholds, hybrid bindings (existence locked + value tunable).
-  - **Cache strategy** consistent with Pass 2: effective_status_bindings_cache; trigger-invalidated; <1ms hit; ~400 status rows × ~5 bindings = ~50KB fits in memory effectively zero-cost.
-  - **Ontario 60-day lien clock enforcement** in Trade Contractor WO transition from Lien Period → Closed: implementation in transition handler checks lien_period_started_at + 60 days has passed; otherwise deny with reason "Lien deadline has not passed (Ontario Construction Act 60-day)."
-  - **Performance budget preserved**: Pass 3 A1's <5ms p99 maintained with Phase 3.3 added (<1ms overhead).
-  - **Migration order extended** (7 new steps; seed ~2000 binding rows + ~600 transition rows).
-- **Seven Pass 5 open questions resolved:**
-  - Binding version history: YES (audit logged via permission_audit_log with event_type='status_binding_changed')
-  - Multi-status entities (e.g., invoice has status + payment_status): handlers query bindings per-status; combine logic in handler when needed; no automated combination
-  - Effect execution at scale: YES via async queue for non-atomic effects; ops dashboard monitors queue depth
-  - Operator-added binding names: NO at v1 (fixed 14-name catalog); Phase 2 when plugin architecture lands
-  - Conditional bindings: NO at v1; static per status row; conditional logic stays in action handlers; Phase 2 consideration
-  - Cross-status binding dependencies: handler queries multiple status surfaces sequentially at v1; Phase 2 cross-status rule engine
-  - UI representation of locked bindings: SHOW but render as greyed/locked with explanatory tooltip; transparency over concealment
+- **Major architectural decisions from Pass 6:**
+  - **Many tables, one pattern** — 8 ledgers each apply the same append-only pattern (schema requirements + triggers + partitioning) rather than consolidating to single polymorphic table. Ledger-specific columns matter for type safety + indexability (e.g., gl_journal_lines.debit/credit constraint; inventory_movements.quantity_change; commissioning_records.test_result).
+  - **Monthly time-based partitioning at v1** — PostgreSQL native PARTITION BY RANGE (occurred_month). Monthly cron creates next month's partition 7 days before needed. Partition pruning handles common date-filtered queries.
+  - **Audit query: 3 layers** — first-class API endpoints (entity-history / user-actions / event-stream) for common patterns; M13 reports integration for compliance reports; audit_log_combined SQL view (UNION ALL across all 8 ledgers) for power users / complex queries.
+  - **Reversal pattern** — to "void" or "correct" a prior entry, INSERT a new row with event_type='reversal_posted' (or appropriate) and source_event_id linking back. Original untouched. GL example: 3 rows for original + reversal + correction; net effect correct; full audit intact.
+  - **Event correlation via request_id** — HTTP middleware propagates request_id to Postgres setting (`app.request_id`); audit row INSERTs include it. Reconstructs all events from one HTTP request.
+  - **Event correlation via source_event_id** — chained effects (status transition triggers GL entry + email + scheduled followup) all carry source_event_id pointing to root event. Reconstructs effect chains.
+  - **21 enumerated event types** for permission_audit_log with JSON payload schemas. Covers: role permission changes (granted/revoked/ui_state), user overrides (granted/revoked/expired), field visibility changes, data scope changes, role lifecycle, admin exceptions, regulatory overrides, permission deprecation, field reads with audit, status binding changes, status transitions, co-sign executions.
+  - **Forensic metadata** every audit row carries: ip_address, user_agent, request_id, source_event_id. IP retention 12 months only (Phase 2 GDPR-configurable).
+  - **Cold archival deferred to Phase 2** — partitions older than 12 months DETACHed → Parquet → S3 Glacier; async restore SLA 24-48h. At v1, all partitions stay in hot storage.
+  - **Hash-chain tamper-evidence deferred to Phase 2** — trigger-blocked UPDATE/DELETE sufficient at v1. Phase 2 adds row_hash column for SOC 2 audit support.
+  - **Compliance export** — POST /api/admin/audit/export with date range + event type filters; outputs PDF (with §0.4 #9 eight-layer print protection) / CSV / JSON. Permission audit:export — A and compliance role only.
+  - **Volume + performance**: ~38M rows/year combined; <2ms insert p99; <100-500ms typical admin queries; <2s cross-ledger UNION view; <5s compliance export.
+- **Seven Pass 6 open questions resolved:**
+  - Every state transition emits audit event: YES uniformly (storage acceptable; forensic value high)
+  - Non-sensitive field reads audited: NO at v1 (only the 9 sensitive flags from Pass 4 §17)
+  - Failed action attempts audited: YES for sensitive + admin-exception denials only; NO for routine denials (noise)
+  - IP addresses in audit: YES at v1 with 12-month retention (Phase 2 GDPR-configurable)
+  - Cross-row hash chain at v1: NO; trigger-blocked enforcement sufficient; Phase 2
+  - Audit retention configurable per event type: NO at v1 (uniform "keep forever" for permissions audit); Phase 2 consideration
+  - System actor events location: same permission_audit_log table; actor_user_id=NULL, actor_type='system'; distinguishable in queries
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 5 produced no uncommitted plans. Next session continues with Pass 6 (Append-only audit pattern) — details the audit pattern across the entire permissions runtime; 18+ enumerated event types with JSON payload schemas; audit query patterns; append-only ledger pattern propagation to other modules (M6 commissioning, M7 inventory movements, M11 GL); retention policies and Phase 2 cold storage archival; audit data extraction for compliance reports; performance: how audit log scales to ~10M entries/year without degrading.
+**None.** Pass 6 produced no uncommitted plans. Next session continues with Pass 7 (Request-admin-access workflow) — request lifecycle states (Pending → Approved → Granted → Expired → Revoked), request types (one-time vs ongoing; temporary vs permanent; specific action vs broader role grant), approval workflow (admin notification → review → approve with optional duration → auto-grants user_permission_override), notification routing (Slack/email/in-app), auto-expiry via Pass 3 daily cron, edge cases (multiple pending requests, re-request after rejection, admin self-request), integration with Pass 4 audit-on-read for sensitive permissions.
 
 ---
 
