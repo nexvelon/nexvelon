@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session C (2026-05-12):** Module 1 of 13 (Clients + Sites + Contacts) complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.2. Module 1's spec is genuinely comprehensive — ~110 actions, 14 new field visibilities, 15 lookup tables, 54 acceptance-criteria test scenarios. Modules 2-13 pending in subsequent sessions: Users + Permissions, Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Same 14-subsection rubric proved out by Module 1. Cross-cutting commitments from Module 1 (ten dimensions of permission control, behavior-bound lookups, guided creation, SLA precedence, T&C composition, eight-layer print protection) propagate forward and don't need to be re-derived per module.
+**Progress as of Session D (2026-05-12):** Modules 1 and 2 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.3. Module 1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. Module 2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. Module 2's spec synthesizes competitor research from simPRO, ServiceTitan, FieldWire, ServiceTrade, Salesforce Field Service. Sessions C + D also locked the People parent menu sidebar architecture (§0.7) and the "Employees" terminology replacement. Modules 3-13 pending in subsequent sessions: Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -80,6 +80,15 @@ migration strategy for replacing the current static `lib/permissions
 - Approval delegation framework with value caps + time bounds
 - Field-level encryption-at-rest for sensitive fields (gate codes, bank account numbers) via pgcrypto + Supabase Vault
 - Three-state per-tab gating on detail pages (hidden / disabled / interactive)
+
+**Inputs from Session D** (additions from Module 2 walk):
+- Effective-permissions caching pattern (sub-10ms checks via `effective_permissions_cache` jsonb column)
+- Request-admin-access workflow with auto-expiry
+- Six-tab permissions editor structure per `/employees/[id]/permissions`
+- Certification-driven scheduling auto-match with critical flag
+- Multi-territory model (Primary/Secondary/Relocation per Salesforce pattern)
+- Resource Absences with approval workflow + scheduling block
+- Phase 2 deferrals locked: SSO/SAML, API tokens, role hierarchy, multi-company, crews, two-tier permissions
 
 ---
 

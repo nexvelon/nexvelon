@@ -12,43 +12,38 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session C CLOSED.**
+**As of 2026-05-12. Session D CLOSED.**
 
-- **Session C focus:** Module 1 of the feature audit (Clients + Sites + Contacts) — operator design pass. Resulted in a major v0.2 of `NEXVELON_FEATURE_AUDIT.md` with full 14-subsection rubric proved out against real code, plus extensive operator-driven feature additions (banking config, per-site SLAs, response time precedence, individual-vs-company branching, customer-types expansion to 16 industries, payment terms flexibility, holdback, PO required, late fees, On Stop credit hold, onboarding gates with auto-injected T&C composition, eight-layer print protection, ten dimensions of permission control).
-- **Latest commit:** `docs: codify Session C — Module 1 audit + PRINCIPLES clarifications + handoff`. See `git log -1 --oneline`.
+- **Session D focus:** Module 2 of the feature audit (Employees + Permissions) — operator design pass with comprehensive competitor research. Also locked in the People parent menu sidebar architecture (§0.7 of audit doc) and the "Employees" terminology replacement for "Users."
+- **Latest commit:** `docs: codify Session D — Module 2 audit + People menu architecture + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
-- **Production mode:** ⚠️ LIVE (unchanged from Session B). Data preservation rules apply from `8d44ef7` forward.
-- **Mock data wipe state:** thorough — three sweeps total (unchanged from Session B).
+- **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 1 of 13 modules walked. Module 1 spec is genuinely comprehensive (~110 actions, 14 new field visibilities, 15 lookup tables, 54 acceptance-criteria test scenarios). Modules 2-13 pending.
+- **Feature audit progress:** 2 of 13 modules walked (Clients + Sites + Contacts complete; Employees + Permissions complete). Module 2's spec captures ~80 actions, 11 lookup tables, 55 acceptance criteria, and synthesizes competitor research from simPRO, ServiceTitan, FieldWire, ServiceTrade, Salesforce Field Service. Modules 3-13 pending.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 2-13** — Users + Permissions, Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Use same 14-subsection rubric. Most will be less deep than Module 1 — many cross-cutting commitments (ten dimensions, behavior-bound lookups, guided creation, SLA precedence, T&C composition, eight-layer print) were captured in Module 1 and propagate forward.
-  2. **Permissions module — design pass.** Consumes the consolidated action vocabulary from the audit.
-  3. **Permissions module — build.** Includes the ten-dimensional control system.
-  4. **Quotes v1** — first revenue module. Brings SLA management UI, onboarding gates, T&C composition.
+  1. **Feature audit Modules 3-13** — Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D propagate.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session D additions (effective-perms caching, request-admin-access workflow, certification-driven scheduling, etc.).
+  3. **Permissions module — build** (ROADMAP item 3).
+  4. **Quotes v1** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session C** (all captured in `NEXVELON_FEATURE_AUDIT.md` §1 and `NEXVELON_PRINCIPLES.md` §2 + §6 clarifications):
-  - Lookup rows carry behavior bindings, not just labels (every lookup table includes config columns)
-  - Guided-creation wizards for every lookup-table "+ Add" flow
-  - Versioned T&C clauses + templates + SLA language (snapshot at dispatch time)
-  - Ten dimensions of permission control (role / per-user / data scope / field / action / approval / system / UI / audit / lookup mgmt)
-  - Contractual integrity exception: `clients:overrideSlaResponseTime` is Admin-only, no per-user override permitted
-  - Eight-layer print protection for sensitive PDFs
-  - SLAs are per-site (not per-client) — property management firms have different service expectations per building
-  - Response time precedence: per-site SLA > per-site response field > per-client response field > tier default
-  - Individual-vs-Company toggle on client creation
-  - Client name renames: "Common Name" + "Legal Name" (instead of just "Name")
-  - 16 customer types (industry-flavored: Charity, Commercial Real Estate, Condo, Construction, Facility Services, Financial Institutions, Food, Health Care, IT/Tech, Power/Infrastructure, Retail/Office, Transportation, TV/Film, Residential, Government, Other)
-  - Banking, On Stop credit hold, holdback (10%/Excl/45-day default), PO required, late fee config — all on Client record
-  - Onboarding gates with clause-per-gate composition auto-injected into quote T&C
-  - Address autocomplete via OpenStreetMap Nominatim (free, no billing account required)
+- **Major architectural decisions from Session D:**
+  - **People parent menu sidebar architecture** — top-level "People" item hover-expands to Clients, Sites, Employees, Vendors, Contractors, Misc Contacts. Each sub-item has its own list view + create flow.
+  - **"Employees" replaces "Users"** as terminology throughout the system. Action prefixes use `employees:*`. UI labels say "Employees." Database column `user_id` stays as technical naming.
+  - **Misc Contacts as extension of existing Contacts entity** — nullable `client_id` + new `misc_category` FK to `misc_contact_categories` lookup (8 seeded values). Not a separate table.
+  - **Ten-dimensional permission model fully scoped** — six tabs in `/employees/[id]/permissions`: Role & Overrides / Data & Field Access / Workflows & Delegations / Security & Sessions / UI & Audit / API & SSO.
+  - **Certification tracking with scheduling auto-match + critical flag** — operator-editable cert types (25+ seeded: Kantech, Genetec, C-CURE, DSC, Honeywell, Bosch, Avigilon, Lenel, Paxton, ESA, ULC, CFAA, OSHA-30, WHMIS, etc.), 30/60/90 day renewal alerts, hard-block on scheduling when critical cert expired.
+  - **Multi-territory model** (per Salesforce pattern) — Primary / Secondary / Relocation with date bounds.
+  - **Resource Absences with approval workflow** + scheduling impact + balance tracking per absence type.
+  - **Request-admin-access workflow** (per FieldWire pattern, extended) — when permission denied, "Request access" button submits reasoned request to Admin queue with one-click Approve/Deny.
+  - **Effective-permissions caching** — sub-10ms permission checks via `effective_permissions_cache` jsonb column, invalidated on grant/revoke events.
+  - **Phase 2 deferrals** locked in: SSO/SAML, personal API tokens, role hierarchy, multi-company, crew assignments, two-tier (account+project) permissions, Employee Portal pattern.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session C produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.2, the PRINCIPLES §2 + §6 clarifications, the updated ROADMAP, and `NEXVELON_SESSION_C_HANDOFF.md`. The next session reconstructs full context from the repo cold per the reading order at the top of `CLAUDE_CONTEXT.md`.
+**None.** Session D produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.3, the updated ROADMAP, and `NEXVELON_SESSION_D_HANDOFF.md`. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
