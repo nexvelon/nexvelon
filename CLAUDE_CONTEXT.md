@@ -12,50 +12,77 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session U CLOSED. Permissions Design Pass 6 of 11 complete.**
+**As of 2026-05-12. Session V CLOSED. Permissions Design Pass 7 of 11 complete.**
 
-- **Session U focus:** Permissions Design — Pass 6 (Append-Only Audit Pattern). Uniform pattern across 8 ledgers (permission_audit_log + 7 module ledgers from §0.4 #10: inventory_movements/commissioning_records/project_acceptance_records/vendor_performance_scores/contractor_performance_scores/gl_journal_lines/appointment_change_log/report_snapshots). Time-based monthly partitioning at v1. PostgreSQL UPDATE/DELETE blocking triggers on all 8 ledgers. 21 enumerated event types for permission_audit_log with JSON payload schemas. Reversal pattern (insert offsets; never modify). 3 API endpoints (entity-history, user-actions, event-stream) + M13 reports integration + audit_log_combined UNION view for power users. Cold archival + hash-chain tamper-evidence deferred Phase 2. Performance specified (<2ms insert, <200ms entity history, <2s cross-ledger). Volume estimate ~38M rows/year combined. Migration order extended +9 steps (now 32 total). 7 Pass 6 open questions resolved.
-- **Latest commit:** `docs: permissions design Pass 6 — append-only audit pattern`. See `git log -1 --oneline`.
+- **Session V focus:** Permissions Design — Pass 7 (Request-Admin-Access Workflow). State machine (Pending → Approved → Granted → Expired/Revoked + Rejected/Cancelled paths). Four request types: permission_grant / field_visibility_grant / data_scope_grant / role_temporary_assignment. New `user_role_assignments` table introduced for multi-role support. Full schema for request_admin_access expanded with 30+ columns. Approval workflow end-to-end. Notification routing v1 (all admins; Phase 2 routing rules placeholder). Auto-expiry handling 3 paths. 8 edge cases. Integration with Pass 4 audit-on-read for sensitive permissions. 9 new event types added to permission_audit_log catalog (30 total). 7 Pass 7 open questions resolved. Migration order extended +7 steps (now 39 total).
+- **Latest commit:** `docs: permissions design Pass 7 — request-admin-access workflow`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 6 of 11 passes complete. Pending: Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.6 condenses Pass 1-5 to summary sections. Full content preserved in git history at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5). Pass 6 full content §13-§23.
+- **Permissions design progress:** 7 of 11 passes complete. Pending: Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.7 condenses Pass 1-6 to summaries. Full content preserved at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58). Pass 7 full content §14-§26.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 6 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 7 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 6:**
-  - **Many tables, one pattern** — 8 ledgers each apply the same append-only pattern (schema requirements + triggers + partitioning) rather than consolidating to single polymorphic table. Ledger-specific columns matter for type safety + indexability (e.g., gl_journal_lines.debit/credit constraint; inventory_movements.quantity_change; commissioning_records.test_result).
-  - **Monthly time-based partitioning at v1** — PostgreSQL native PARTITION BY RANGE (occurred_month). Monthly cron creates next month's partition 7 days before needed. Partition pruning handles common date-filtered queries.
-  - **Audit query: 3 layers** — first-class API endpoints (entity-history / user-actions / event-stream) for common patterns; M13 reports integration for compliance reports; audit_log_combined SQL view (UNION ALL across all 8 ledgers) for power users / complex queries.
-  - **Reversal pattern** — to "void" or "correct" a prior entry, INSERT a new row with event_type='reversal_posted' (or appropriate) and source_event_id linking back. Original untouched. GL example: 3 rows for original + reversal + correction; net effect correct; full audit intact.
-  - **Event correlation via request_id** — HTTP middleware propagates request_id to Postgres setting (`app.request_id`); audit row INSERTs include it. Reconstructs all events from one HTTP request.
-  - **Event correlation via source_event_id** — chained effects (status transition triggers GL entry + email + scheduled followup) all carry source_event_id pointing to root event. Reconstructs effect chains.
-  - **21 enumerated event types** for permission_audit_log with JSON payload schemas. Covers: role permission changes (granted/revoked/ui_state), user overrides (granted/revoked/expired), field visibility changes, data scope changes, role lifecycle, admin exceptions, regulatory overrides, permission deprecation, field reads with audit, status binding changes, status transitions, co-sign executions.
-  - **Forensic metadata** every audit row carries: ip_address, user_agent, request_id, source_event_id. IP retention 12 months only (Phase 2 GDPR-configurable).
-  - **Cold archival deferred to Phase 2** — partitions older than 12 months DETACHed → Parquet → S3 Glacier; async restore SLA 24-48h. At v1, all partitions stay in hot storage.
-  - **Hash-chain tamper-evidence deferred to Phase 2** — trigger-blocked UPDATE/DELETE sufficient at v1. Phase 2 adds row_hash column for SOC 2 audit support.
-  - **Compliance export** — POST /api/admin/audit/export with date range + event type filters; outputs PDF (with §0.4 #9 eight-layer print protection) / CSV / JSON. Permission audit:export — A and compliance role only.
-  - **Volume + performance**: ~38M rows/year combined; <2ms insert p99; <100-500ms typical admin queries; <2s cross-ledger UNION view; <5s compliance export.
-- **Seven Pass 6 open questions resolved:**
-  - Every state transition emits audit event: YES uniformly (storage acceptable; forensic value high)
-  - Non-sensitive field reads audited: NO at v1 (only the 9 sensitive flags from Pass 4 §17)
-  - Failed action attempts audited: YES for sensitive + admin-exception denials only; NO for routine denials (noise)
-  - IP addresses in audit: YES at v1 with 12-month retention (Phase 2 GDPR-configurable)
-  - Cross-row hash chain at v1: NO; trigger-blocked enforcement sufficient; Phase 2
-  - Audit retention configurable per event type: NO at v1 (uniform "keep forever" for permissions audit); Phase 2 consideration
-  - System actor events location: same permission_audit_log table; actor_user_id=NULL, actor_type='system'; distinguishable in queries
+- **Major architectural decisions from Pass 7:**
+  - **State machine separates Approved from Granted** — supports future-dated grants (admin approves with start_at in future; cron fires grant at start_at) and atomicity on grant failure (request stays at Approved if user_permission_override insert fails for any reason). In typical case (immediate grant), transition happens in same transaction; user perceives as one event.
+  - **Four request types cover the design space:**
+    - `permission_grant` — most common (specific action permission)
+    - `field_visibility_grant` — sensitive field visibility (banking, SIN, payroll, etc.)
+    - `data_scope_grant` — widen scope on a resource (e.g., team → all temporarily)
+    - `role_temporary_assignment` — take on second role for coverage periods
+  - **`user_role_assignments` table introduced** for multi-role support. Primary role (`is_primary=TRUE`) is user's default. Additional roles from requests have `is_primary=FALSE`. A1 resolution unions all active role grants for the user. UNIQUE constraint with DEFERRABLE INITIALLY DEFERRED handles primary role re-assignment.
+  - **Polymorphic target columns** in request_admin_access support all four request types in one table (target_permission_id OR target_flag_id OR target_resource+target_scope_id OR target_role_id, exactly one populated per request).
+  - **Notification fanout v1: all admins** notified via in-app + email + Slack. routing_rule_id column (NULL at v1) prepared for Phase 2 routing rules table. Single-tenant systems have 1-3 admins typically; routing adds complexity without solving real v1 problem.
+  - **Three notification channels per request event:** in-app (always), email (per admin preference), Slack (if configured). Per-admin channel preferences in Settings.
+  - **Auto-expiry handles 3 paths:**
+    - Pending timeout (default 7 days; operator-configurable in Settings)
+    - Duration end (granted-temporary expires at end_at; Pass 3 cron handles override revocation; this cron handles request status update)
+    - One-time used (one_time grants schedule revocation 24h after first use as grace period)
+  - **Self-approval blocked at CHECK constraint** (`requester_user_id != decided_by_user_id`) plus UI prevention. Admins use direct override editor for self-grants (audit captures their action).
+  - **Duplicate request check** includes related_entity_id — same permission for different entities allowed; same permission for same entity rejects with "you have a pending request; cancel or wait."
+  - **Already-granted permission requests** validation rejects with helpful explanation including reason_if_denied from current grant resolution (helps user understand why UI showed disabled — often status binding, not permission).
+  - **Sensitive flag requests trigger triple audit**: grant event + pre-emptive grant audit (for `requires_audit_on_read=TRUE` flags) + every read via Pass 4 async batched.
+  - **M13 compliance report joins** request_admin_access + permission_audit_log for "Sensitive Field Reads" report — shows full chain: who requested, who approved, when granted, every read.
+  - **Operator-configurable alerts**: Slack push when granted sensitive permission is actually used (catches usage patterns not matching original justification).
+  - **Active actions complete on grant expiry**; new actions fail. UI shows "Your access has expired" toast.
+  - **User deactivation cascades**: pending requests auto-cancelled; granted overrides revoked via Pass 3 §11.4 trigger on users.is_active change.
+- **Nine new event types added to permission_audit_log catalog (30 total now):**
+  - request_admin_access_submitted
+  - request_admin_access_approved
+  - request_admin_access_rejected
+  - request_admin_access_granted
+  - request_admin_access_cancelled
+  - request_admin_access_expired
+  - request_admin_access_revoked
+  - request_admin_access_auto_cancelled (user deactivated)
+  - request_one_time_used
+- **Seven Pass 7 open questions resolved:**
+  - Rejection rate-limiting alerts: NO at v1; Phase 2 consideration
+  - Multi-step approval hierarchy: NO at v1; co-sign pattern handles high-stakes
+  - Comment threads on requests: NO at v1; use "need more info" rejection pattern
+  - Mobile push notifications: deferred to build phase
+  - Templated justifications: NO at v1; free text enforces thoughtfulness
+  - Request analytics dashboard: deferred to M13 reports
+  - Auto-approval rules: NO at v1; defeats audit-trail purpose
+- **Phase 2 deferrals from Pass 7:**
+  - Notification routing rules (table placeholder ready)
+  - Auto-escalation after 3-day pending
+  - Multi-admin approval requirements for highest-stakes permissions
+  - Threaded comments on requests
+  - Templated justifications
+  - Auto-approval rules with conservative defaults
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 6 produced no uncommitted plans. Next session continues with Pass 7 (Request-admin-access workflow) — request lifecycle states (Pending → Approved → Granted → Expired → Revoked), request types (one-time vs ongoing; temporary vs permanent; specific action vs broader role grant), approval workflow (admin notification → review → approve with optional duration → auto-grants user_permission_override), notification routing (Slack/email/in-app), auto-expiry via Pass 3 daily cron, edge cases (multiple pending requests, re-request after rejection, admin self-request), integration with Pass 4 audit-on-read for sensitive permissions.
+**None.** Pass 7 produced no uncommitted plans. Next session continues with Pass 8 (Permissions editor UI) — six-tab editor with all the data flows from Passes 1-7 now rendered in UI. Tab 1 (Actions hierarchy), Tab 2 (Field Visibility 47 flags), Tab 3 (Data Scopes matrix), Tab 4 (Overrides + request management sub-tab), Tab 5 (Custom Roles wizard), Tab 6 (Audit Log embedded view). Plus search/filter, save-and-validate flow, conflict detection, mobile responsive considerations, accessibility.
 
 ---
 
