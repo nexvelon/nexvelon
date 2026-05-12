@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session E (2026-05-12):** Modules 1, 2, and 3 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.4. Module 1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. Module 2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. Module 3 (Settings): ~270 actions (heavily templated), 16 Settings-specific tables, 4 status surfaces, 42 acceptance criteria. Settings is now the configuration spine that every other module reads from. The three foundational modules are complete. Modules 4-13 pending: Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+**Progress as of Session F (2026-05-12):** Modules 1, 2, 3, and 4 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.5. M1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. M2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. M3 (Settings): ~270 actions (heavily templated), 16 Settings-specific tables, 4 status surfaces, 42 acceptance criteria. M4 (Dashboard): ~35 actions, 5 new tables, 3 status surfaces, 25 acceptance criteria, six seeded role layouts (A/PM/SR/Tech/Acc/VO), three-way widget visibility gate. The three foundational modules plus Dashboard are complete; remaining 9 are operational/feature surfaces consuming the foundations. Modules 5-13 pending: Quotes (major), Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -98,6 +98,14 @@ migration strategy for replacing the current static `lib/permissions
 - OAuth token encryption-at-rest pattern in Supabase Vault
 - Workflow rule versioning (already-running executions carry rule version)
 - Per-user display format override pattern
+
+**Inputs from Session F** (additions from Module 4 walk):
+- UI presentation as 10th dimension of permission (sidebar + dashboard layout + landing page)
+- Three-way widget visibility gate pattern
+- Per-user dashboard layout customization with role default override
+- Code-defined widget catalog (operators don't add new widget types at v1)
+- Per-user landing page choice
+- Permission-aware widget data queries with drill-through respecting source-module permissions
 
 ---
 

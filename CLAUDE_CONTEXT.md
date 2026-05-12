@@ -12,37 +12,38 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session E CLOSED.**
+**As of 2026-05-12. Session F CLOSED.**
 
-- **Session E focus:** Module 3 of the feature audit (Settings) — operator design pass enumerating ~70 Settings sub-pages organized into 10 categories: company identity & branding, lookup management (29 lookups with guided-creation wizards), custom field definitions per entity (12 entities), workflow & automation, templates, security policy, audit & compliance, integrations, system, subscription/billing. Six open questions resolved in-session.
-- **Latest commit:** `docs: codify Session E — Module 3 (Settings) audit + handoff`. See `git log -1 --oneline`.
+- **Session F focus:** Module 4 of the feature audit (Dashboard) — operator design pass enumerating ~20 seeded widgets, six default role layouts (A/PM/SR/Tech/Acc/VO), three-way widget visibility gate, per-user landing page choice. Five in-session open questions resolved. Module 4 confirmed light as predicted.
+- **Latest commit:** `docs: codify Session F — Module 4 (Dashboard) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 3 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings all complete). The three foundational modules are now done. Modules 4-13 pending: Dashboard (light), Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+- **Feature audit progress:** 4 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard all complete). The three foundational modules plus Dashboard are now done. Modules 5-13 pending: Quotes (next; first revenue module — major), Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 4-13** — Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D + E propagate.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session C + D + E additions.
+  1. **Feature audit Modules 5-13** — Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D + E + F propagate.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session C + D + E + F additions.
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session E:**
-  - **Settings as configuration spine** — every module reads from Settings; ~70 sub-pages organized in 10 categories (A-J).
-  - **29 operator-editable lookups** with uniform guided-creation wizard pattern per §0.4 #5.
-  - **12 custom-field-definition entities** with uniform CRUD pattern.
-  - **Workflow Rules editor: condition-action table at v1** (visual flowchart Phase 2). Operator views, clones, edits, disables seeded rules.
-  - **Workflow rule sandboxing:** 30s execution timeout, max 100 actions per firing, auto-disable after 3 consecutive failures, audit + alert on every failure.
-  - **Email/PDF templates** with Handlebars safe-subset merge tags + split-pane live preview + per-language versioning + stale-translation flagging.
-  - **Settings change preview** — for behavior-binding changes (e.g., editing tier SLA hours), modal shows "This affects N records" + apply-scope choice (new only / all existing). Audit captures choice + count snapshot.
-  - **Display formats:** company-wide default + per-user override allowed on employee record.
-  - **Phase 2 deferrals locked:** SMS templates, SSO config, multi-company, subscription billing (until productized externally), Settings JSON export/restore, API key per-key rate limiting, visual flowchart workflow editor.
+- **Major architectural decisions from Session F:**
+  - **Dashboard as per-role presentation layer** — composes widgets reading from every other module. Six seeded role layouts.
+  - **UI presentation locked as 10th dimension of permission control** — sidebar visibility + dashboard widget layout + landing page choice all gated by permission framework.
+  - **Three-way widget visibility gate** — widget shown only if source-module list permission granted AND widget enabled company-wide AND user has not hidden it.
+  - **Widget catalog is code-defined at v1** — same pattern as permissions catalog. Phase 2 introduces "saved-report-as-widget" for operator-defined widgets.
+  - **Per-user dashboard layout customization** — drag-drop rearrange, resize, hide/show individual widgets. Per-user override takes precedence over role default. Admin edits role default but not specific users' overrides.
+  - **Per-user landing page choice** — any module's list view (Clients, Projects, Schedule) can replace /dashboard as user's default landing.
+  - **5-min cached widget data with on-focus refresh for critical widgets** — SLA breach and today's schedule refresh on focus; manual refresh button always available.
+  - **CSV export per tabular widget** — respects data scope.
+  - **Drill-through everywhere** — every widget header links to source-module list view filtered by widget's criteria; respects user's source-module permission.
+  - **Mobile responsive at v1; native app Phase 2.**
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session E produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.4, the updated ROADMAP, and `NEXVELON_SESSION_E_HANDOFF.md`. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session F produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
