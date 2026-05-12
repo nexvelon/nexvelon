@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session I (2026-05-12):** Modules 1-7 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.8. Cumulative: ~785 actions, 49 permissions design implications, ~336 acceptance criteria. M1 (Clients + Sites + Contacts): ~110 actions, foundation with onboarding gates auto-T&C composition. M2 (Employees + Permissions): ~80 actions, six-tab permissions editor with ten dimensions. M3 (Settings): ~270 actions, configuration spine. M4 (Dashboard): ~35 actions, ~20 seeded widgets, three-way visibility gate. M5 (Quotes): ~85 actions, three quote types, online portal acceptance, immutable send snapshots. M6 (Projects): ~110 actions, three-state costing, change order workflow, commissioning, handover, progress invoicing. M7 (Inventory): ~95 actions, 15 new tables, FIFO valuation, serial number lifecycle tracking, multi-location stock with vehicles, vendor catalog sync, append-only movement ledger, photo-on-receive, project-reserved stock locking, eight-layer print on PO PDFs. Modules 8-13 pending: Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports. Audit file management: v0.8 condenses M1-M6 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708).
+**Progress as of Session J (2026-05-12):** Modules 1-8 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.9. Cumulative: ~850 actions, 53 permissions design implications, ~371 acceptance criteria. M8 (Vendors): ~65 actions, 8 new tables, 4 status surfaces, T5018 YTD tracking + annual report (Canada compliance), W9/W8-BEN for US, vendor onboarding gates mirroring client gates, insurance + WSIB expiry tracking with auto-PO-block, vendor performance scoring with auto-degrade-of-preferred-status, eight-layer print on remittance advice + T5018 PDFs, banking encrypted at rest with audit-on-read. Modules 9-13 pending: Invoices (next), Subcontractors, Financials, Scheduling, Reports. Audit file management: v0.9 condenses M1-M7 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d).
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -134,6 +134,15 @@ migration strategy for replacing the current static `lib/permissions
 - Photo evidence capture pattern for receive flows (extending commissioning pattern)
 - PO approval threshold separate from quote/CO thresholds
 - Project-reserved stock locking enforcement at quote acceptance
+
+**Inputs from Session J** (additions from Module 8 walk):
+- Banking encryption-at-rest with audit-on-read pattern extends from M1 clients to M8 vendors
+- T5018 YTD as gated field requiring A/Acc only (tax-sensitive)
+- Auto-degrade workflow pattern (performance triggers preferred-status removal)
+- Vendor-side T&C composition extending clause-per-gate pattern from clients
+- Cross-link flag pattern (is_also_contractor) for entities serving dual roles
+- Insurance/WSIB expiry auto-block-PO pattern (regulatory compliance enforcement)
+- Vendor consolidated billing pattern for AP
 
 ---
 

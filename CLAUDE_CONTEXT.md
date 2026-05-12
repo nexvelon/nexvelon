@@ -12,47 +12,44 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session I CLOSED.**
+**As of 2026-05-12. Session J CLOSED.**
 
-- **Session I focus:** Module 7 of the feature audit (Inventory) — materials management. Multi-location stock (warehouses + vehicles + project sites + consignment + transit + quarantine). FIFO valuation with append-only fifo_layers. Append-only inventory_movements ledger. Serial number tracking with full lifecycle for security equipment. Vendor catalog sync from major security distributors. Photo capture on receive. Project-reserved stock locking. Eight-layer print protection extended to PO PDFs. Mobile barcode scan-and-go. Eight in-session open questions resolved.
-- **Latest commit:** `docs: codify Session I — Module 7 (Inventory) audit + handoff`. See `git log -1 --oneline`.
+- **Session J focus:** Module 8 of the feature audit (Vendors) — supplier master entity. T5018 YTD tracking + annual report generation (Canada compliance). Vendor onboarding gate framework mirroring client onboarding from Module 1. Insurance + WSIB expiry tracking with auto-PO-block. Vendor performance scoring with auto-degrade-of-preferred-status. Banking encrypted at rest with audit-on-read. Nine in-session open questions resolved.
+- **Latest commit:** `docs: codify Session J — Module 8 (Vendors) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 7 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes, Projects, Inventory all complete). Modules 8-13 pending: Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports.
-- **File size management note:** Through v0.8, M1-M6 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 at 073b393, M2 at 4dc0cc2, M3 at 87a9fc8, M4 at 6283d0f, M5 at 5633e25, M6 at bafb708. Current session module always gets full content in the doc.
+- **Feature audit progress:** 8 of 13 modules walked. Modules 9-13 pending: Invoices (next), Subcontractors, Financials, Scheduling, Reports.
+- **File size management note:** Through v0.9, M1-M7 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d. Current session module always gets full content in the doc.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 8-13** — Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~785 actions across 7 modules) + ten-dimensional model + Session C-I additions.
+  1. **Feature audit Modules 9-13** — Invoices (next), Subcontractors, Financials, Scheduling, Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~850 actions across 8 modules) + ten-dimensional model + Session C-J additions.
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session I:**
-  - **Pricebook as master catalog** — pricebook_items from Module 5 IS the master item catalog; Module 7 adds is_inventoried flag. Non-inventoried items (subcontracted labor, travel) don't get stock tracking.
-  - **Multi-location stock model** — Warehouse, Branch Office, Vehicle (assigned to employee), Project Site, Customer Site (Consignment), Transit Buffer, Quarantine. Each location is a discrete stock-holding entity.
-  - **FIFO valuation** — Canadian GAAP standard. inventory_fifo_layers append-only table tracks each receive at its cost. Movements consume layers oldest-first.
-  - **Append-only inventory_movements ledger** — every stock change is a new row; reversals create offsetting entries; no UPDATE/DELETE on existing rows.
-  - **Serial number tracking with full lifecycle** — Available → Reserved → Issued → Installed → warranty period → Returned/Decommissioned. Essential for security equipment warranty + asset tracking. Append-only serial history.
-  - **Photo capture on receive** — packing slip + damage evidence stored with receipt record.
-  - **Project-reserved stock locking** — at quote acceptance, materials reserved; can't be allocated to another project. Released on quote cancellation or project completion.
-  - **Eight-layer print protection on PO PDFs** sent to vendors (consistent with M5/M6 pattern for external-facing documents).
-  - **Mobile barcode scan-and-go** — camera-based scanner for serial tracking, receive flows, stocktake counting.
-  - **Vendor catalog sync** — recurring sync from major security distributors (Avigilon, Genetec, Bosch, Honeywell, Lenel, Paxton, DSC, Software House). Mapping rules + conflict resolution interface.
-  - **Vendor performance scoring** — on-time delivery, price accuracy, damage rate tracked per vendor.
-  - **Price discrepancy auto-flagging** — PO unit cost vs invoice unit cost mismatch triggers alert.
-  - **PO approval workflow** — defaults: <$1k self-approve, $1-10k → PM, >$10k → Admin. Configurable in Settings.
-  - **Multi-currency POs** — vendor's currency converted to base at receive with exchange rate snapshot retained.
-  - **Field-level cost visibility** — SR/Tech see availability (on_hand, on_order, available) but not unit cost or valuation. A/PM/Acc see costs.
-  - **Stocktake workflow** — blind count (expected hidden), variance review, reason capture (Damage/Theft/Mis-Count/Found/Lost/Other), finalize posts adjustments to ledger + accounting.
-  - **Stock alerts** — min/restock levels per item per location; one-click reorder opens PO wizard pre-filled.
-  - **Phase 2 deferrals locked:** Native mobile app, RMA workflow for returns-to-customer, recommendation engine for stocktake frequency, vendor portal for PO acknowledgment, equipment-specific firmware tracking integration.
+- **Major architectural decisions from Session J:**
+  - **Vendors vs Subcontractors as separate entities** with cross-link flag (is_also_contractor). Banking, onboarding, workflows differ enough to warrant separation.
+  - **T5018 YTD tracking** — Canada compliance for sub-contractor payments. Accumulated from vendor payments throughout year. Annual T5018 report batch generation (A/Acc only, eight-layer protected PDFs).
+  - **W9/W8-BEN tracking** for US vendors. W8-BEN for foreign US vendors.
+  - **Vendor onboarding gate framework** mirrors client onboarding from Module 1. Vendor-side T&C clause-per-gate composition for MSA, NDA, Anti-Corruption, Privacy Compliance.
+  - **Insurance certificate expiry tracking** — 30/60/90-day alerts. Expired cert auto-blocks PO creation.
+  - **WSIB clearance tracking** (Ontario regulatory). Expired clearance auto-blocks PO if vendor provides labor.
+  - **Vendor performance scoring** — on-time delivery %, price accuracy %, damage rate %. Computed quarterly. Grade A-D.
+  - **Auto-degrade-of-preferred-status** — when grade drops to C/D, preferred-for-category flag auto-removed. Manual re-grant requires A approval with reason captured.
+  - **Eight-layer print protection** extended to remittance advice + T5018 PDFs (tax-sensitive documents).
+  - **Vendor banking encrypted at rest with audit-on-read** — mirrors client banking pattern from M1. Account # masked except on explicit reveal action.
+  - **Per-vendor lead time + minimum order qty + volume discount tiers** used by M7 PO suggestions.
+  - **Multi-warehouse vendors** — multiple ship-to addresses supported.
+  - **Vendor consolidated billing** — multiple POs on one vendor invoice supported at v1 via invoice line items linking back to PO lines.
+  - **Vendor-side T&C versioning** extending §0.4 #8 commitment.
+  - **Phase 2 deferrals locked:** vendor portal full version, VMI (vendor-managed inventory), 1099 US tax form generation, dedicated diversity-spend reporting (custom field at v1).
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session I produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session J produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
