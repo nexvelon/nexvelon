@@ -10,8 +10,8 @@
 >   4. `NEXVELON_ROADMAP.md`.
 >   5. **This file** — feature audit + sidebar expansion.
 >
-> **Status:** v0.9 — Modules 1-8 fully scoped through Sessions C-J.
-> Modules 9-13 pending. M1-M7 condensed to headline stats per
+> **Status:** v0.10 — Modules 1-9 fully scoped through Sessions C-K.
+> Modules 10-13 pending. M1-M8 condensed to headline stats per
 > file-size management pattern; current module gets full content.
 
 ---
@@ -20,11 +20,11 @@
 
 ### 0.1-0.7
 
-Per v0.8 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C. Sidebar architecture locked Session D. Walk order updated to mark M8 complete.
+Per v0.9 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C.
 
 ### 0.4 Permissions model — locked commitments
 
-Through Sessions B + C + D + E + F + G + H + I + J:
+Through Sessions B + C + D + E + F + G + H + I + J + K:
 
 1. **Role default + bidirectional per-user override.**
 2. **Three UI states per gated control:** hidden / disabled / interactive.
@@ -33,9 +33,10 @@ Through Sessions B + C + D + E + F + G + H + I + J:
 5. **Guided creation, never lazy creation.**
 6. **Ten dimensions of permission control.**
 7. **Contractual integrity exception:** `clients:overrideSlaResponseTime` Admin-only.
-8. **Versioned T&C clauses + workflow rules + dashboard widget definitions + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses.**
-9. **Eight-layer print protection** for sensitive PDFs (quotes, contracts, payroll, HR docs, commissioning certificates, handover packages, PO PDFs to vendors, remittance advice, T5018 forms).
-10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor performance scoring.
+8. **Versioned T&C clauses + workflow rules + dashboard widgets + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses + invoice send snapshots.**
+9. **Eight-layer print protection** for sensitive PDFs (quotes, contracts, payroll, HR docs, commissioning certificates, handover packages, PO PDFs, remittance advice, T5018 forms, invoices, credit notes, statements).
+10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor performance scoring, GL postings.
+11. **Separation of duties** enforcement (AP bill creator ≠ approver; payment run creator ≠ approver).
 
 ### 0.6 Walk order
 
@@ -46,14 +47,14 @@ Through Sessions B + C + D + E + F + G + H + I + J:
 5. Quotes *(complete §5)*
 6. Projects *(complete §6)*
 7. Inventory *(complete §7)*
-8. **Vendors** *(complete §8)*
-9. Invoices
-10. Subcontractors
+8. Vendors *(complete §8)*
+9. **Invoices** *(complete §9)*
+10. Subcontractors (also "Contractors")
 11. Financials
 12. Scheduling
 13. Reports
 
-### 0.7 Sidebar architecture *(Session D — unchanged)*
+### 0.7 Sidebar architecture *(refined Session K)*
 
 ```
 🧭 Sidebar (top-level)
@@ -64,7 +65,19 @@ Through Sessions B + C + D + E + F + G + H + I + J:
 📋 Projects
 📦 Inventory
 📅 Scheduling
-💵 Financials
+💵 Financials (parent — refined Session K)
+   ├── Invoices              ← M9
+   ├── Payments              ← M9
+   ├── Credit Notes          ← M9
+   ├── AP Bills              ← M9
+   ├── Payment Runs          ← M9
+   ├── Statements            ← M9
+   ├── Recurring Invoices    ← M9
+   ├── AR Aging              ← M9
+   ├── Chart of Accounts     ← M11
+   ├── Bank Reconciliation   ← M11
+   ├── GL Journal Entries    ← M11
+   └── Tax Filing            ← M11
 📈 Reports
 ⚙️ Settings
 ```
@@ -72,396 +85,440 @@ Through Sessions B + C + D + E + F + G + H + I + J:
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 1. Module: Clients + Sites + Contacts
+# 1-8. Modules 1-8 — condensed headline stats
 ═══════════════════════════════════════════════════════════════════
 
-23 routes, ~110 actions, 15 lookup tables, 14 field visibilities. Per-site SLAs with precedence. Contractual integrity exception. 16 customer types. Holdback (10%/Excl/45 Ontario Construction Act). Communication log first-class. 54 acceptance criteria. Permissions design implications: items 1-14.
+## §1. Clients + Sites + Contacts
 
-(Full content preserved in v0.2 commit history at `073b393`.)
+23 routes, ~110 actions, 15 lookup tables, 14 field visibilities. Per-site SLAs with precedence. Contractual integrity exception. 16 customer types. Holdback (10%/Excl/45 Ontario Construction Act). Communication log first-class. 54 acceptance criteria. Permissions design implications: items 1-14. (Full content preserved at commit `073b393`.)
+
+## §2. Employees + Permissions
+
+25 routes, ~80 actions, 11 lookup tables, 14 field visibilities. Six-tab permissions editor. 25+ seeded certification types. Multi-territory model. Resource Absences. Request-admin-access workflow. Effective-permissions caching. Field-level encryption on banking/SIN/access codes. 55 acceptance criteria. Permissions design implications: items 15-22. (Full content preserved at commit `4dc0cc2`.)
+
+## §3. Settings
+
+~70 sub-pages, ~270 actions, 16 Settings-specific tables, 4 status surfaces. 29 operator-editable lookups with uniform guided-creation wizard. 12 custom-field-definition entity managers. Workflow Rules condition-action table at v1. Email/PDF templates with Handlebars + live preview + per-language versioning. Settings change preview. 42 acceptance criteria. Permissions design implications: items 23-27. (Full content preserved at commit `87a9fc8`.)
+
+## §4. Dashboard
+
+3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets across 6 role default layouts. Three-way widget visibility gate. UI presentation locked as 10th dimension of permission control. 25 acceptance criteria. Permissions design implications: items 28-30. (Full content preserved at commit `6283d0f`.)
+
+## §5. Quotes
+
+18 routes + 1 signed-URL portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types (Service / Project / Service Contract). Online portal acceptance (signed URL, no login, e-signature). Immutable send snapshots. Eight-layer print protection on revenue PDFs. T&C auto-composition from M1 onboarding gates. Value + discount threshold approval routing. Per-cost-centre tax codes. Holdback in totals. Field-level margin visibility. 52 acceptance criteria. Permissions design implications: items 31-37. (Full content preserved at commit `5633e25`.)
+
+## §6. Projects
+
+24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing (Estimated/Committed/Actual). Change order workflow with customer signature. Commissioning workflow with per-equipment test results + ULC fire-alarm verification auto-attachment. Handover package auto-assembly triggering warranty clock. Progress invoicing (Canadian Construction Act compliance). Trade Contractor lien deadline tracking (Ontario 60-day). Eight-layer print on commissioning certs + handover packages. Append-only commissioning + acceptance records. 58 acceptance criteria. Permissions design implications: items 38-44. (Full content preserved at commit `bafb708`.)
+
+## §7. Inventory
+
+26 routes, ~95 actions, 15 owned tables, 6 status surfaces. Multi-location stock (Warehouse, Branch, Vehicle, Project Site, Consignment, Transit Buffer, Quarantine). FIFO valuation. Append-only inventory_movements ledger. Serial number lifecycle tracking. Photo capture on receive. Project-reserved stock locking. Eight-layer print on PO PDFs. Mobile barcode scan-and-go. Vendor catalog sync from major security distributors. Vendor performance scoring. 48 acceptance criteria. Permissions design implications: items 45-49. (Full content preserved at commit `f7cee0d`.)
+
+## §8. Vendors
+
+18 routes, ~65 actions, 8 owned tables, 4 status surfaces. T5018 YTD tracking + annual report generation (Canada compliance). W9/W8-BEN for US. Vendor onboarding gate framework mirroring client onboarding. Insurance + WSIB expiry tracking with auto-PO-block. Vendor performance scoring with auto-degrade-of-preferred-status. Eight-layer print on remittance advice + T5018 PDFs. Banking encrypted at rest with audit-on-read. Multi-warehouse vendors. Vendor consolidated billing. 35 acceptance criteria. Permissions design implications: items 50-53. (Full content preserved at commit `f3a763a`.)
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 2. Module: Employees + Permissions
+# 9. Module: Invoices
 ═══════════════════════════════════════════════════════════════════
 
-25 routes, ~80 actions, 11 lookup tables, 14 field visibilities. Six-tab permissions editor. 25+ seeded certification types. Multi-territory model. Resource Absences. Request-admin-access workflow. Effective-permissions caching. Field-level encryption on banking/SIN/access codes. 55 acceptance criteria. Permissions design implications: items 15-22.
+## 9.1 Purpose
 
-(Full content preserved in v0.3 commit history at `4dc0cc2`.)
+Cash collection spine. Two parallel flows:
 
----
+1. **Accounts Receivable (AR)** — customer invoices we send: generated from quote acceptance (deposit), project progress claims, change order amendments, final claims, retention release (Canadian Construction Act 45-day timing), service contract recurring billing. Plus credit notes for adjustments and customer payment recording.
 
-═══════════════════════════════════════════════════════════════════
-# 3. Module: Settings
-═══════════════════════════════════════════════════════════════════
+2. **Accounts Payable (AP)** — vendor bills we receive: matched against M7 POs via 3-way match (PO + Receipt + Bill). Approval workflow with separation of duties. Payment runs (batch payments to vendors).
 
-~70 sub-pages, ~270 actions, 16 Settings-specific tables, 4 status surfaces. 29 operator-editable lookups with uniform guided-creation wizard. 12 custom-field-definition entity managers. Workflow Rules condition-action table at v1. Email/PDF templates with Handlebars + live preview + per-language versioning. Settings change preview. API keys as scoped permissions. OAuth tokens encrypted in Supabase Vault. 42 acceptance criteria. Permissions design implications: items 23-27.
+For security integrators specifically:
+- **Progress invoicing per Canadian Construction Act** — timing rules with Ontario default 45-day holdback release
+- **T5018 YTD auto-update on AP bill payment** to T5018-required vendors (Canada compliance — feeds M8 vendor tax records)
+- **Multi-jurisdiction Canadian tax handling** (HST/GST/PST splits per line per cost-centre, consistent with M5 quote pattern)
+- **Customer payment portal** with multiple payment methods (Stripe integration: CC, EFT, ACH, wire instructions)
+- **3-way match (PO + Receipt + Bill)** automated with discrepancy flagging
 
-(Full content preserved in v0.4 commit history at `87a9fc8`.)
+## 9.2 Sidebar surface
 
----
+Under 💵 **Financials** parent menu (refined Session K — Financials becomes parent like People). Sub-items: Invoices / Payments / Credit Notes / AP Bills / Payment Runs / Statements / Recurring / AR Aging. Module 11 adds GL/CoA/Bank Reconciliation sub-items to same parent.
 
-═══════════════════════════════════════════════════════════════════
-# 4. Module: Dashboard
-═══════════════════════════════════════════════════════════════════
+Badge logic on Financials parent: aggregated count of overdue invoices + invoices pending send + AP bills pending approval + payment runs pending approval. Operator-configurable in Settings.
 
-3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets across 6 role default layouts. Three-way widget visibility gate. UI presentation locked as 10th dimension of permission control. 25 acceptance criteria. Permissions design implications: items 28-30.
-
-(Full content preserved in v0.5 commit history at `6283d0f`.)
-
----
-
-═══════════════════════════════════════════════════════════════════
-# 5. Module: Quotes
-═══════════════════════════════════════════════════════════════════
-
-18 routes + 1 signed-URL portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types (Service / Project / Service Contract). Online portal acceptance (signed URL, no login, 90d expiry, e-signature). Immutable send snapshots. Eight-layer print protection on revenue PDFs. T&C auto-composition from M1 onboarding gates. Value + discount threshold approval routing. Per-cost-centre tax codes (Canadian). Holdback in totals. Field-level margin visibility. 52 acceptance criteria. Permissions design implications: items 31-37.
-
-(Full content preserved in v0.6 commit history at `5633e25`.)
-
----
-
-═══════════════════════════════════════════════════════════════════
-# 6. Module: Projects
-═══════════════════════════════════════════════════════════════════
-
-24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing (Estimated/Committed/Actual) with real-time forecast-at-completion. Change order workflow with customer signature. Commissioning workflow with per-equipment test results + ULC fire-alarm verification auto-attachment. Handover package auto-assembly triggering warranty clock. Progress invoicing (Canadian Construction Act compliance). Trade Contractor lien deadline tracking (Ontario 60-day). Eight-layer print on commissioning certs + handover packages. Append-only commissioning + acceptance records. 58 acceptance criteria. Permissions design implications: items 38-44.
-
-(Full content preserved in v0.7 commit history at `bafb708`.)
-
----
-
-═══════════════════════════════════════════════════════════════════
-# 7. Module: Inventory
-═══════════════════════════════════════════════════════════════════
-
-26 routes, ~95 actions, 15 owned tables, 6 status surfaces. Multi-location stock (Warehouse, Branch, Vehicle, Project Site, Consignment, Transit Buffer, Quarantine). FIFO valuation. Append-only inventory_movements ledger. Serial number lifecycle tracking. Photo capture on receive. Project-reserved stock locking. Eight-layer print on PO PDFs. Mobile barcode scan-and-go. Vendor catalog sync from major security distributors. Vendor performance scoring + price discrepancy auto-flagging. 48 acceptance criteria. Permissions design implications: items 45-49.
-
-(Full content preserved in v0.8 commit history at `f7cee0d`.)
-
----
-
-═══════════════════════════════════════════════════════════════════
-# 8. Module: Vendors
-═══════════════════════════════════════════════════════════════════
-
-## 8.1 Purpose
-
-Master entity for suppliers/vendors. Three primary vendor categories:
-
-1. **Equipment Distributors** — security equipment manufacturers and their distributors (Avigilon, Genetec, Bosch, Honeywell, Lenel, Paxton, DSC, Software House distributors)
-2. **Material Suppliers** — local supply houses for cable, racks, conduits, fasteners, tools
-3. **Service Vendors** — software/SaaS subscriptions, monitoring services, technology partners (non-labor)
-
-**Key difference from Subcontractors (Module 10):** Vendors sell us *stuff*; Subcontractors sell us *labor*. Some entities are both — handled by cross-linking flag (`is_also_contractor`) but separate tables because banking, onboarding gates, tax forms, and workflows differ.
-
-**Key difference from Clients (M1):** Banking is for AP (we pay them), not AR. Tax forms reversed (we issue T5018 to them; they provide W9/W8-BEN to us). Performance scoring instead of credit limit. No SLAs or holdback.
-
-Much pre-established by M7: PO flow references `vendor_id`; `vendor_catalog_sync_state` lives in M7; vendor performance scoring conceptualized in M7. Module 8 fleshes out the vendor master entity, onboarding compliance, banking AP setup, T5018 tax tracking, and consolidated history views.
-
-## 8.2 Sidebar surface
-
-Under 👥 People parent → Vendors sub-item per §0.7.
-
-## 8.3 Routes & sub-routes
+## 9.3 Routes & sub-routes
 
 | Route | Renders | Primary gate |
 |---|---|---|
-| `/people/vendors` | Vendor list | `vendors:viewList` |
-| `/people/vendors/new` | Sectioned create drawer | `vendors:create` |
-| `/people/vendors/[id]` | Vendor detail (Overview tab) | `vendors:viewDetail` |
-| `/people/vendors/[id]/contacts` | Vendor contacts | `vendors:viewContacts` |
-| `/people/vendors/[id]/banking` | Banking + AP config | `vendors:viewBankingDetails` |
-| `/people/vendors/[id]/pricing` | Per-item pricing | `vendors:viewPricing` |
-| `/people/vendors/[id]/performance` | Performance scorecard | `vendors:viewPerformance` |
-| `/people/vendors/[id]/po-history` | All POs from this vendor | `vendors:viewPoHistory` |
-| `/people/vendors/[id]/invoice-history` | Invoices received from vendor | `vendors:viewInvoiceHistory` |
-| `/people/vendors/[id]/payment-history` | Payments made to vendor | `vendors:viewPaymentHistory` |
-| `/people/vendors/[id]/onboarding` | Gate fulfillment | `vendors:viewOnboardingRequirements` |
-| `/people/vendors/[id]/insurance` | Insurance certs with expiry | `vendors:viewInsurance` |
-| `/people/vendors/[id]/tax-forms` | T5018/W9/W8-BEN | `vendors:viewTaxForms` |
-| `/people/vendors/[id]/documents` | All vendor documents | `vendors:viewDocuments` |
-| `/people/vendors/[id]/communication-log` | Email/call/SMS | `vendors:viewCommunicationLog` |
-| `/people/vendors/[id]/custom-fields` | Operator fields | inherits view |
-| `/people/vendors/[id]/audit-log` | Module audit | `vendors:viewAuditLog` |
-| `/people/vendors/t5018-report` | Annual T5018 generation (Canada) | `vendors:generateT5018` |
+| `/financials/invoices` | AR invoice list with aging | `invoices:viewList` |
+| `/financials/invoices/new` | Manual create wizard | `invoices:create` |
+| `/financials/invoices/[id]` | Detail (Overview tab) | `invoices:viewDetail` |
+| `/financials/invoices/[id]/edit` | Edit (Draft state only) | `invoices:editDraft` |
+| `/financials/invoices/[id]/send` | Send modal | `invoices:send` |
+| `/financials/invoices/[id]/payments` | Payments applied | `invoices:viewPayments` |
+| `/financials/invoices/[id]/credit-notes` | Credit notes against this invoice | `credit_notes:viewByInvoice` |
+| `/financials/payments` | All payments | `payments:viewList` |
+| `/financials/payments/new` | Record payment | `payments:create` |
+| `/financials/payments/[id]` | Payment detail with applications | `payments:viewDetail` |
+| `/financials/credit-notes` | Credit note list | `credit_notes:viewList` |
+| `/financials/credit-notes/new` | Create credit note | `credit_notes:create` |
+| `/financials/credit-notes/[id]` | Detail | `credit_notes:viewDetail` |
+| `/financials/ap-bills` | Vendor bill list | `ap_bills:viewList` |
+| `/financials/ap-bills/new` | Manual create or from PO | `ap_bills:create` |
+| `/financials/ap-bills/[id]` | Detail with 3-way match | `ap_bills:viewDetail` |
+| `/financials/payment-runs` | AP payment batch list | `payment_runs:viewList` |
+| `/financials/payment-runs/new` | Create batch | `payment_runs:create` |
+| `/financials/payment-runs/[id]` | Execute batch | `payment_runs:viewDetail` |
+| `/financials/statements` | Customer statement generation | `statements:view` |
+| `/financials/recurring` | Recurring invoice templates | `recurring_invoices:viewList` |
+| `/financials/ar-aging` | AR aging report with drill-through | `invoices:viewAging` |
 
-## 8.4 Resources
+Public-facing:
+| `/pay/[token]` | Customer payment portal (signed URL) | signed URL validation |
 
-### Owned tables (8)
+## 9.4 Resources
 
-- `vendors` — header: entity_type (Company/Individual), legal_name, common_name, vendor_code (auto), category_id, status_id, currency_id, language_id, time_zone, business_phone, alt_phone, fax, general_email, website, cra_business_number, hst_gst_number, addr fields, ship_to_addr fields (multiple supported via separate table for multi-warehouse), banking_account_name (encrypted), routing_number (encrypted), bank_account_number (encrypted), payment_method_id, payment_terms_days, payment_terms_basis, default_tax_code_id, t5018_required (Canada flag), t5018_ytd_amount, w9_on_file (US), w8_ben_on_file (US foreign), wsib_clearance_expiry, insurance_cert_expiry, msa_signed_at, account_manager_user_id, preferred_for_categories[], is_also_contractor (link flag), internal_notes, archived_at, custom_fields jsonb
-- `vendor_contacts` — many contacts per vendor: vendor_id, first_name, last_name, role_id (Sales/AR/Technical/Logistics/Executive), email, phone, preferred_channel, is_primary
-- `vendor_pricing` — vendor's price for each item: vendor_id, pricebook_item_id, unit_cost, minimum_order_qty, lead_time_days, volume_discount_tiers jsonb, last_updated_at, source (manual / catalog_sync)
-- `vendor_performance_scores` — append-only metrics: vendor_id, period_start, period_end, on_time_delivery_pct, price_accuracy_pct, damage_rate_pct, total_po_value, total_pos, performance_grade (A/B/C/D), computed_at
-- `vendor_onboarding_requirements` — per-vendor gate config: vendor_id, gate_type_id, required, fulfilled, due_date, expiry_date
-- `vendor_onboarding_gate_fulfillments` — fulfillment records: requirement_id, attached_doc_url, fulfilled_at, fulfilled_by, expiry_date, status
-- `vendor_insurance_certs` — versioned cert tracking: vendor_id, cert_type (Liability/WSIB/Auto/Workers Comp), policy_number, carrier, coverage_amount, expiry_date, attached_doc_url, status (Current/Expiring Soon/Expired/Pending Renewal)
-- `vendor_t5018_records` — annual T5018 records (Canada compliance): vendor_id, tax_year, total_paid, t5018_issued_at, t5018_pdf_url
+### Owned tables (14)
 
-### Status lookup tables (4)
+**AR side:**
+- `invoices` — AR header: invoice_number (auto), client_id, billing_addr_snapshot jsonb (immutable at send), originating_quote_id (nullable), source_project_id (nullable), source_change_order_id (nullable), recurring_template_id (nullable), invoice_type_id, status_id, currency_id, language_id, invoice_date, due_date, total_subtotal, total_tax, total_holdback, total_amount, paid_to_date, balance, late_fee_applied, late_fee_pct, snapshot_terms jsonb (legal durability per §0.4 #8), created_by, sent_at, sent_to_addresses
+- `invoice_lines` — line items: invoice_id, pricebook_item_id (nullable), description, qty, unit_price, tax_code_id, cost_center_id, line_subtotal, source_project_phase_id (nullable for progress claims), source_quote_line_id (nullable)
+- `invoice_taxes` — tax application per line per code (Canadian split-tax handling)
+- `invoice_payments` — junction table: invoice_id, payment_id, amount_applied, applied_at
+- `payments` — payment record (may apply to multiple invoices): payment_number (auto), client_id, method_id, amount, currency_id, received_at, reference (cheque #, transaction ID), status_id, fee_amount (gateway fee), notes, recorded_by
+- `credit_notes` — header: credit_note_number, client_id, related_invoice_id (nullable), reason_id, amount, status_id, issued_at, applied_at
+- `credit_note_lines` — line items
+- `customer_statements` — generated statement records: client_id, period_start, period_end, opening_balance, charges, payments, closing_balance, statement_pdf_url, generated_at, sent_at
+
+**AP side:**
+- `ap_bills` — vendor invoice header: bill_number (vendor's), our_bill_id (auto), vendor_id, source_po_id (nullable), bill_date, due_date, total_amount, status_id, three_way_match_status (Pending/Matched/Discrepancy/Manual Override), discrepancy_notes, approved_by, approved_at, paid_via_payment_run_id (nullable)
+- `ap_bill_lines` — bill line items with PO line matching
+- `ap_bill_payments` — payments to vendors
+- `ap_payment_runs` — batch payment runs: run_number, scheduled_date, total_amount, status_id, executed_at, executed_by, payment_method_id
+- `ap_payment_run_lines` — bills in run
+
+**Recurring:**
+- `recurring_invoice_templates` — recurring config: client_id, source_service_contract_id (nullable from M1), template_lines jsonb, billing_cycle (Monthly/Quarterly/Annual), next_generation_date, last_generated_at, status_id, auto_send flag
+
+### Status lookup tables (5)
 
 | Table | Seeded values | Behavior bindings |
 |---|---|---|
-| `vendor_categories` | Equipment Distributor, Material Supplier, Software/SaaS Vendor, Service Vendor, IT/Tech Partner, Logistics/Shipping, Office Supplies, Professional Services, Other | default payment terms, T5018 required default, accounting category |
-| `vendor_statuses` | Lead, Active, Inactive, On Hold (PO blocked), Archived | allows-po, allows-payment, terminal flag |
-| `vendor_onboarding_gate_types` | Insurance Cert, Business License, Banking Info, T5018 Registration, W9 Form, W8-BEN, WSIB Clearance, Anti-Corruption Declaration, NDA, MSA, Privacy Compliance | clause text for vendor-side T&C composition, default-required-at-category, expiry-tracking |
-| `vendor_payment_term_basis` | from_invoice (Net X), after_eom (X days post end-of-month), cod, prepay, milestone-based | calculation rule (mirrors client model) |
+| `invoice_statuses` | Draft, Pending Approval, Approved, Sent, Viewed (auto), Partially Paid, Paid, Overdue, Void, Cancelled, Refunded | allows-edit, allows-send, allows-payment, triggers-late-fee, terminal flag |
+| `invoice_types` | Standard, Deposit, Progress Claim, Phase Completion, Final Claim, Retention/Holdback Release, Recurring (Service Contract), Credit Memo, Manual | template variant, holdback handling, late fee applicability |
+| `payment_statuses` | Pending, Cleared, Bounced, Refunded, Disputed | accounting flag, AR impact |
+| `ap_bill_statuses` | Received, Pending Approval, Approved for Payment, Scheduled, Paid, Disputed, Void | allows-edit, triggers-payment-run-eligibility |
+| `credit_note_statuses` | Draft, Approved, Issued, Applied to Invoice, Applied as Refund, Void | accounting flag |
 
-## 8.5 Actions (~65 actions across 11 categories)
+## 9.5 Actions (~115 actions across 12 categories)
 
-**Vendor lifecycle (15):** viewList, viewDetail, viewMy (AM-assigned), create, editBasic, promoteStatus, editAddress, editBilling, viewBankingDetails, editBankingDetails, editPaymentTerms, putOnHold (blocks PO creation), releaseHold, archive, unarchive, hardDelete (A only), merge, exportCsv, importCsv.
+**AR Invoice lifecycle (25):** viewList, viewMy, viewDetail, create (manual; rare), createFromQuote (auto on acceptance), createFromProject (progress claim), createFromChangeOrder, createFromServiceContract (recurring), createDepositInvoice, createFinalClaim, createRetentionRelease, editDraft, addLine, removeLine, applyDiscount, applyTax, submit (for approval if exceeds threshold), approve, reject, send, resend, sendReminder, void, reopen (Void → Draft, A only), hardDelete (Void only, A only), markPaid, recordPartialPayment, exportPdf, printProtected.
 
-**Contacts (5):** viewList, create, edit, delete, setPrimary.
+**Late fees (4):** applyLateFee (auto-trigger; manual override), waiveLateFee (A/Acc only), viewLateFeeHistory, configureLateFeePolicy (Settings link).
 
-**Banking (4, heavily gated):** viewBankingDetails (A/Acc; audit-on-read), editBankingDetails (A/Acc), addPaymentMethod, archivePaymentMethod.
+**Payments (12):** viewList, viewDetail, recordPayment, applyToInvoice, splitAcrossInvoices, recordOverpayment, recordRefund, recordBounce, reverseBounce, viewPaymentReceipt, sendReceipt, exportToAccounting.
 
-**Pricing (8):** viewList, editPricing (manual override), viewPricingHistory, importFromCatalogSync (triggers M7 sync flow), exportPricing, applyVolumeDiscount, setLeadTime, setMinOrderQty.
+**Credit notes (8):** viewList, viewDetail, create, applyToInvoice, applyAsCustomerCredit, applyAsRefund, void, exportPdf.
 
-**Performance (5):** viewScorecard, viewPerformanceHistory, exportPerformanceReport, triggerRescoring (recompute on demand), viewVendorComparison.
+**Customer payment portal (3, public via signed URL):** viewInvoiceOnline, payOnline (Stripe), downloadInvoicePdf.
 
-**PO history (3):** viewPoHistory, viewOpenPOs, viewBackorderedItems.
+**Recurring invoices (8):** viewList, viewDetail, create, edit, pauseRecurring, resumeRecurring, cancelRecurring, generateNext (manual trigger).
 
-**Invoice/Payment history (4):** viewInvoiceHistory, viewPaymentHistory, viewAccountsPayableBalance, sendRemittanceAdvice (eight-layer protected PDF).
+**AP bills (15):** viewList, viewDetail, create (manual), createFromPO (with 3-way match), edit, performThreeWayMatch, recordDiscrepancy, approve, reject, dispute, addToPaymentRun, payManually, viewPaymentHistory, void, exportToAccounting.
 
-**Onboarding & compliance (10):** viewOnboardingRequirements, editOnboardingRequirements, viewInsurance, uploadInsurance, recordInsuranceExpiry, viewTaxForms, uploadTaxForm (W9/W8-BEN), recordT5018, generateT5018Report (A/Acc annual; eight-layer protected), viewWsibClearance.
+**AP payment runs (8):** viewList, viewDetail, create, addBills, removeBill, approve, executePaymentRun, cancelRun.
 
-**Documents (4):** viewList, upload, download, archive.
+**Statements (5):** generatePerCustomer, bulkGenerateForPeriod, sendStatement, sendStatementBatch, viewStatementHistory.
 
-**Communication (4):** viewLog, logCommunication, sendEmail, generateLetter.
+**AR aging (4):** viewAging, viewByBucket, viewByClient, exportAgingReport.
 
-**Reports (5):** vendorSpendByPeriod, vendorByCategory, openPoByVendor, priceTrendByVendor, performanceComparisonReport.
+**Communication (4):** viewLog, sendInternalNote, sendCustomerCommunication, mentionTeam.
+
+**Reports (5):** viewARTrend, viewCashFlow, viewLateFeeRevenue, viewPaymentMethodMix, viewTaxLiability.
 
 **Default grants:**
-- **A:** full access including hardDelete
-- **PM:** viewList, viewDetail, viewPricing, viewPerformance, create POs from vendor (via M7); cannot edit banking
-- **Acc:** viewList, viewDetail, viewBankingDetails (audit-on-read), viewTaxForms, viewPaymentHistory, generate T5018, send remittance, viewAccountsPayableBalance
-- **SR:** viewList, viewDetail (no pricing, no banking, no performance) — for sourcing material info during quoting
-- **Tech:** viewList minimal — contact info for shipments coordination
-- **VO:** viewList only
+- **A:** full access including hardDelete, override approvals
+- **Acc:** full invoice creation, send, payment recording, credit note creation, AP bill approval, payment run execution, late fee waiver
+- **PM:** viewList (team-scoped), createFromProject (project they manage), viewPayments, cannot send (Acc gate)
+- **SR:** viewMy (own clients' invoices only), no edit
+- **Tech:** view-none default
+- **VO:** viewList without amounts
 
-## 8.6 Views
+## 9.6 Views
 
-### Vendor list (`/people/vendors`)
+### Invoice list (`/financials/invoices`)
 
-Filter chips: category, status, payment terms, currency, country, insurance-expiring-soon, T5018-required, preferred-for-category. Sortable columns: vendor name, category, status, last PO date, total spend YTD, performance grade.
+Filter chips: status, type, client, project, date range, value range, overdue-only, expiring-soon. View toggle: List / Kanban (by status). Bulk actions: send, send-reminder, mark-paid, export-aging. Inline aging bucket per row.
 
-### Vendor create drawer
+### Invoice detail page — 8 tabs
 
-Sectioned wizard:
-1. Identity — entity type (Company/Individual), legal name, common name, vendor code (auto-generated)
-2. Classification — category, currency, language, time zone
-3. Contact — phones, email, website
-4. Tax & Registration — CRA/HST/GST numbers, T5018 required flag, W9 if US vendor
-5. Location — primary address
-6. Shipping — ship-to addresses (multiple)
-7. Banking & AP (gated to A/Acc creator) — account info encrypted at rest
-8. Payment Terms — terms days, basis, default tax code
-9. Onboarding gates — required gates auto-suggested by category
-10. Account Manager assignment
-11. Internal notes
+1. **Overview** — header card (status, total, balance, client, type, dates), quick actions
+2. **Line Items** — editable in Draft; read-only after send (snapshot retained)
+3. **Pricing & Tax** — full breakdown matching quote pattern
+4. **Payments Applied** — list of payments with amounts, dates, methods
+5. **Credit Notes** — credit notes affecting this invoice
+6. **Communication** — log of sends, reminders, customer responses
+7. **Activity** — chronological state changes
+8. **Audit Log** — full audit drilldown
 
-### Vendor detail page — 13 tabs
+### Customer payment portal (`/pay/[token]`)
 
-1. **Overview** — header card (status, category, AM, key metrics: total spend YTD, open POs, last activity), quick actions
-2. **Contacts** — vendor contacts table with role chips
-3. **Banking & AP** — banking details (gated, audit-on-read), payment methods, AP balance, payment terms
-4. **Pricing** — per-item pricing inherited from catalog sync + manual overrides, volume discount tiers, lead times, min order quantities
-5. **Performance** — scorecard with on-time delivery %, price accuracy %, damage rate %, grade A-D, trend chart
-6. **PO History** — all POs from this vendor with status, value, receive date variance
-7. **Invoice History** — vendor invoices received with payment status
-8. **Payment History** — payments made with method, date, reference
-9. **Onboarding** — gate fulfillment status with attached docs
-10. **Insurance & Compliance** — insurance certs with expiry tracking + alert badges; WSIB clearance; tax forms
-11. **Documents** — all vendor documents (MSA, NDA, certs, contracts)
-12. **Communication Log** — emails, calls, letters
-13. **Audit Log** — module audit drilldown
+- Public, no login required
+- Signed URL scoped to single invoice, expires on payment or 90 days
+- Branded invoice display
+- Multiple payment methods (Stripe integration):
+  - Credit Card (Visa/MC/Amex)
+  - EFT (Canadian bank transfer)
+  - ACH (US)
+  - Wire instructions display
+- Operator-configurable CC surcharge per client (offsetting Stripe fees, disclosed)
+- Payment confirmation + receipt emailed
+- Records to `invoice_payments` + `payments` tables
 
-### Performance scorecard
+### Recording payment manually
 
-KPI tiles: Performance Grade (A/B/C/D with color), On-Time Delivery %, Price Accuracy %, Damage Rate %. Trend charts over last 12 months. Compare-to-category-average. Auto-degrade alert if grade drops C/D → preferred status removed → notification to A.
+Modal-based flow:
+1. Select client
+2. Select payment method (Cheque, EFT, Wire, Cash, etc.)
+3. Amount + currency
+4. Reference (cheque #, transaction ID)
+5. Apply-to-invoices selector (split one payment across multiple invoices, oldest-first auto-suggest)
+6. Overpayment goes to customer credit balance
+7. Records to `payments` + creates `invoice_payments` links
 
-### T5018 annual report (`/people/vendors/t5018-report`)
+### AR Aging report
 
-A/Acc only. Annual tax year selector. Lists all T5018-required vendors with YTD totals. Generate batch T5018 PDFs (eight-layer protected). Submit-to-CRA export format. Audit trail of generation.
+Buckets: Current / 0-30 / 31-60 / 61-90 / 91+. Drill-through to individual invoices. Filter by client, project, customer tier. Export PDF + CSV.
 
-### Insurance expiry dashboard
+### AP bill detail with 3-way match
 
-Cross-vendor view of expiring certs. Color-coded: red (expired), orange (within 30 days), yellow (within 60 days), green (current). One-click email vendor to request renewal.
+Side-by-side view:
+- PO (from M7): expected quantities + prices
+- Receipt (from M7 po_receipts): received quantities + dates
+- Bill (this entity): vendor's claimed quantities + prices
 
-## 8.7 Field-level treatment
+Auto-match status:
+- ✅ Matched: all three align
+- ⚠️ Discrepancy: variances flagged
+- ❌ No PO: manual override required with reason captured
 
-7 visibility flags:
+### AP payment run interface
 
-- `visibility.vendors.bankingDetails` — A, Acc only (encrypted at rest, audit-on-read; account # masked)
-- `visibility.vendors.taxFormCopies` — A, Acc only
-- `visibility.vendors.unitPricing` — A, PM, Acc (SR sees availability not cost)
-- `visibility.vendors.performanceScores` — A, PM, Acc
-- `visibility.vendors.creditTerms` — A, Acc, PM
-- `visibility.vendors.internalNotes` — A only (vendor relationship sensitive)
-- `visibility.vendors.t5018YtdAmount` — A, Acc only (tax-sensitive)
+Batch workflow:
+1. Select bills to pay (Approved-for-Payment status)
+2. Choose payment method per vendor
+3. Review totals + EFT export file
+4. Approve (separation-of-duties: creator ≠ approver)
+5. Execute → generates payment file + updates bill statuses + writes payment records
+6. Audit trail
 
-## 8.8 Custom-field surfaces
+### Statement generator
 
-Per-vendor custom fields managed in Settings → Custom Fields → Vendors. Common examples:
-- Preferred Distributor (Y/N)
-- Direct Manufacturer Account (Y/N)
-- Account Manager Email
-- Spending Tier (computed)
-- Strategic Partner flag
-- Rebate Program Eligible
-- Net Terms Negotiated Date
-- Annual Volume Commitment
-- ULC-Listed Equipment Supplier (Y/N)
-- Diversity-Owned Business (M/W/Indigenous)
+- Per-customer or bulk
+- Period selection
+- Show: opening balance, charges, payments, closing balance
+- Generate PDF (eight-layer protected)
+- Email batch send
 
-## 8.9 Status surfaces
+## 9.7 Field-level visibility
 
-4 lookup tables (see §8.4). Each with behavior bindings:
+8 flags:
 
-- `vendor_categories` drives default payment terms + T5018 required default + accounting category
-- `vendor_statuses` drives PO/payment eligibility (On Hold blocks PO creation; Archived terminal)
-- `vendor_onboarding_gate_types` provides clause text for vendor-side T&C composition
-- `vendor_payment_term_basis` calculation rules mirror client model from M1
+- `visibility.invoices.profit` — A, PM, Acc (gross profit on invoice vs project cost — gated)
+- `visibility.invoices.discountReason` — A, PM
+- `visibility.invoices.internalNotes` — A, PM, Acc, creator
+- `visibility.invoices.lineCost` — A, Acc
+- `visibility.payments.fullCardNumber` — never (PCI compliance; only last 4)
+- `visibility.payments.bankAccountInfo` — A, Acc only
+- `visibility.ap_bills.unitCost` — A, Acc, PM
+- `visibility.statements.fullHistory` — A, Acc, AM-assigned
 
-## 8.10 Cross-module relationships
+## 9.8 Custom-field surfaces
+
+Per-invoice custom fields managed in Settings → Custom Fields → Invoices. Common examples: PO Reference (customer's PO number for this invoice), Job Number (customer's job number), Project Code, Cost Center Reference, Tax Exempt Status, Discount Authorization, Special Handling Notes.
+
+## 9.9 Status surfaces
+
+5 lookup tables (see §9.4). Plus reuse of payment_methods from M1.
+
+## 9.10 Cross-module relationships
 
 ### Reads
 
-- **Settings (M3):** vendor_categories, vendor_statuses, onboarding gate types, payment terms, tax codes, T&C clauses
-- **Employees (M2):** account manager assignment
-- **Settings (M3):** vendor-side T&C clauses for MSA/NDA/Anti-Corruption composition
-
-### Read by
-
-- **Inventory (M7):** POs reference vendor_id; vendor_catalog_sync_state owned by M7 but vendor master from M8; vendor_performance_scores derived from M7 movements + PO accuracy
-- **Invoices (M9):** vendor bills are inbound invoices linked to vendor
-- **Financials (M11):** AP aging, payment runs, T5018 reporting
-- **Settings (M3):** vendor lookups managed here
+- **Quotes (M5):** quote acceptance triggers initial invoice creation
+- **Projects (M6):** progress claims, change order amendments, final claim, retention release timing
+- **Inventory (M7):** POs feed AP bill 3-way match; vendor catalog for AP bill line items
+- **Vendors (M8):** vendor master for AP, T5018 YTD updates on AP bill payment
+- **Clients (M1):** billing config, holdback, payment terms, on_stop blocks send, late fee policy
+- **Settings (M3):** invoice templates per type per language, tax codes, currencies, approval workflows, late fee policy
+- **Employees (M2):** assigned PM and AM for routing
 
 ### Writes
 
-- **Communication log (M1):** all vendor communications
-- **Audit events on every state change**
+- **Financials (M11):** GL postings on every state change
+- **Communication log (M1):** all customer communications about invoices
+- **Service contracts (M1):** recurring billing schedule updates
+- **Vendors (M8):** T5018 YTD update on AP bill payment to T5018-required vendor
+- **Audit on every state change**
 
 ### Events emitted
 
-`vendor.created`, `vendor.updated`, `vendor.status_changed`, `vendor.on_hold`, `vendor.released`, `vendor.banking_updated` (Acc audit), `vendor.insurance_uploaded`, `vendor.insurance_expiring` (30/60/90 day alerts), `vendor.insurance_expired`, `vendor.wsib_expiring`, `vendor.wsib_expired`, `vendor.t5018_issued`, `vendor.performance_score_calculated`, `vendor.performance_degraded` (auto-removes preferred status if grade drops to C/D), `vendor.tax_form_uploaded`, `vendor.merge_completed`.
+`invoice.created`, `invoice.updated`, `invoice.sent`, `invoice.viewed_by_client`, `invoice.payment_recorded`, `invoice.paid_in_full`, `invoice.overdue`, `invoice.late_fee_applied`, `invoice.void`, `payment.received`, `payment.applied`, `payment.bounced`, `payment.refunded`, `credit_note.issued`, `credit_note.applied`, `ap_bill.received`, `ap_bill.approved`, `ap_bill.three_way_match_failed`, `ap_bill.paid`, `payment_run.executed`, `recurring_invoice.generated`, `statement.generated`, `statement.sent`.
 
-## 8.11 Competitive floor delta
+## 9.11 Competitive floor delta
 
 Combines best of:
-- **simPRO suppliers:** vendor master, multiple contacts, catalog sync, supplier performance, supplier quotes
-- **ServiceTitan vendors:** vendor master, vendor pricing, vendor invoicing
-- **Sedona Office:** basic AP vendor master
+- **simPRO:** Progress claims with retention, recurring invoices, accounting integration (MYOB/Xero/QBO), supplier invoice import, customer payment recording, AP payment runs
+- **ServiceTitan:** Online payment portal with multiple methods, payment plans, financing integration, automated reminders
+- **QuickBooks Online:** AR aging, statements, automated late fees, multi-currency
+- **Wave Accounting:** Free customer payment portal
 
 **Nexvelon-unique:**
-- **T5018 YTD tracking + annual report generation** (Canada compliance for sub-contractor payments — distinct from W9/W8-BEN for US vendors). No competitor in field service space handles Canadian T5018 natively.
-- **Vendor onboarding gate framework** mirroring client onboarding gates from Module 1 (extends clause-per-gate pattern to vendor-side T&C: MSA, NDA, Anti-Corruption, Privacy Compliance)
-- **Insurance certificate expiry tracking** with 30/60/90-day alerts (auto-blocks PO creation if cert expired)
-- **WSIB clearance tracking** (Ontario regulatory — required for vendors providing labor; auto-blocks PO if expired)
-- **Vendor performance scoring with auto-degrade-of-preferred-status** — when grade drops to C/D, preferred-for-category flag auto-removed; SR/PM see warning when selecting this vendor for new POs
-- **Eight-layer print protection** on remittance advice PDFs + T5018 forms
-- **Vendor banking encrypted at rest with audit-on-read** (mirrors client banking pattern from M1)
-- **Per-vendor lead time + minimum order qty + volume discount tiers** used by M7 PO suggestions
-- **Vendor-side T&C versioning** (extends §0.4 #8 versioning commitment to vendor-side legal docs)
-- **Cross-link flag** with Subcontractors (Module 10) so entity master is unified at the operational level despite separate tables
+- **Eight-layer print protection** on invoice PDFs, credit notes, statements (sensitive financial documents)
+- **Signed URL customer payment portal** (no login required, scoped to single invoice — faster than competitors requiring customer registration)
+- **Canadian Construction Act compliance** — holdback release auto-generated at 45-day mark (Ontario default); manual approval before send
+- **T5018 YTD auto-update on AP bill payment** to T5018-required vendors (Canada compliance)
+- **3-way match (PO + Receipt + Bill) automated** with discrepancy flagging
+- **Separation of duties on AP payment runs** (creator ≠ approver enforced)
+- **Per-cost-centre tax codes on invoices** (Canadian split-tax compliance — inherited from M5 quote pattern)
+- **Immutable invoice snapshot at send** (line items, pricing, T&C, billing address captured for legal durability per §0.4 #8)
+- **Late fee auto-application** per client config with compounding flag (per M1)
+- **Customer credit balance tracking** (overpayments + credit notes accumulate)
+- **Recurring invoice templates linked to Service Contracts** from M1
+- **AR aging with project-scoped view** for PMs
+- **Multi-currency invoices** with exchange rate snapshot
 
-## 8.12 Permissions design implications (items 50-53)
+## 9.12 Permissions design implications (items 54-58)
 
-50. **Vendor banking encrypted at rest with audit-on-read.** Same pattern as client banking from M1. Account # masked except on explicit reveal action; audit row written on every reveal. PRINCIPLES §4 alignment.
+54. **Invoice state machine with field-level lock per state.** Draft → editable; Pending Approval → restricted edits with audit; Approved → locked for line items; Sent → fully locked (snapshot retained); Paid → terminal.
 
-51. **Vendor T5018 YTD as gated field.** A/Acc only. Tax-sensitive. Mirrors employee SIN and client banking patterns.
+55. **Customer payment portal signed URL scoped to single invoice.** Not general access tokens. Revoked on payment. Maximum 90-day life.
 
-52. **Vendor performance auto-degrade workflow.** Preferred-for-category flag auto-removed when performance grade drops to C/D. Manual re-grant requires A approval with reason captured. Audit trail.
+56. **Late fee auto-application gated to A/Acc.** SR/PM cannot waive late fees. Late fee waiver requires reason captured in audit.
 
-53. **Vendor onboarding gate composition** generates vendor-side T&C for MSA + NDA + Anti-Corruption + Privacy. Mirrors client-side T&C clause-per-gate pattern from Module 1.
+57. **AR aging visibility per role.** A/Acc see all; PM sees own projects' invoices only; SR sees own clients' aging only.
 
-## 8.13 Open questions — RESOLVED IN SESSION J
+58. **AP bill approval workflow with separation of duties.** Bill creator (who entered the bill) cannot also approve it for payment. Enforced at action level. Audit captures both creator and approver.
 
-1. ✅ **Vendors vs Subcontractors as separate entities:** YES, with cross-linking via `is_also_contractor` flag (and reverse on Module 10). Banking, onboarding, workflows differ enough to warrant separation.
-2. ✅ **Multi-warehouse vendors:** YES — vendor can have multiple ship-to addresses.
-3. ✅ **Vendor portal:** Phase 2 (consistent with M7 decision).
-4. ✅ **Vendor-managed inventory (VMI):** Phase 2.
-5. ✅ **Vendor scorecard visibility to vendor:** Phase 2 (portal feature).
-6. ✅ **Vendor consolidated billing (multiple POs on one invoice):** YES — supported at v1 via invoice line items linking back to PO lines.
-7. ✅ **Vendor catalog sync conflict resolution UI:** scoped here in M8; M7 owns the underlying sync state.
-8. ✅ **Vendor-side T&C versioning** consistent with client-side: YES per §0.4 #8.
-9. ✅ **Vendor anti-corruption attestation annual renewal:** YES — operator-configurable per gate; auto-expiry tracking with renewal reminder.
+## 9.13 Open questions — RESOLVED IN SESSION K
+
+1. ✅ **Payment gateway:** Stripe at v1 (Canadian-supportive, CC + EFT + ACH + wire reconciliation).
+2. ✅ **Email payment reminders:** auto schedule at 7/14/30 days overdue; operator-configurable per client.
+3. ✅ **Customer portal:** signed URL only (consistent with quote portal pattern).
+4. ✅ **Recurring invoice generation timing:** configurable per template; default start-of-period.
+5. ✅ **Multi-currency invoices:** YES — invoice in client's currency from client config.
+6. ✅ **Holdback release invoice:** auto-generated at 45-day mark; manual approval before send (Canadian Construction Act compliance).
+7. ✅ **Credit note application:** both — apply to specific invoice OR record as customer credit balance.
+8. ✅ **Tax-by-line vs tax-by-invoice:** both supported (per-line preferred; per-invoice for simple).
+9. ✅ **AP bill matching to PO:** 3-way match (PO + Receipt + Bill) at v1.
+10. ✅ **AR aging buckets:** standard 0-30 / 31-60 / 61-90 / 91+.
+11. ✅ **Late fees:** compound or simple per Module 1 client config (compounding flag exists).
+12. ✅ **CC surcharge to customer:** YES operator-configurable per client; disclosed on portal.
+13. ✅ **Partial refunds:** YES via Stripe API at v1; manual cheque refunds for non-card.
+14. ✅ **Invoice approval workflow:** simpler than quotes — A/Acc always required to send; no per-tier approval thresholds at v1.
 
 Remaining:
 
-10. **Vendor diversity tracking** for diversity-spend reporting (M/W/Indigenous-owned businesses)? *Recommendation: YES via custom field at v1; dedicated reporting Phase 2.*
-11. **Vendor 1099 (US equivalent of T5018):** *Recommendation: NO at v1; Canadian-first; expand to US Phase 2.*
+15. **Customer payment plans** (installment agreements): *Recommendation: Phase 2; manual scheduling at v1.*
+16. **Multi-entity invoicing** (single client billed across multiple of our entities): *Recommendation: Phase 2.*
 
-## 8.14 Acceptance criteria (~35 scenarios)
+## 9.14 Acceptance criteria (~55 scenarios)
 
-### Functional — Vendor lifecycle (1-6)
+### Functional — AR invoice lifecycle (1-12)
 
-1. Create new vendor via sectioned wizard. All required gates pre-suggest per category.
-2. Set category Equipment Distributor → default payment terms Net 30 applied; T5018 required defaults FALSE; tax category set.
-3. Promote vendor Lead → Active. PO creation now allowed.
-4. Banking info encrypted at rest. Acc reveals → audit row written. PM cannot reveal.
-5. On Hold blocks PO creation. PM attempts new PO → blocked with reason.
-6. Archive vendor with no open POs succeeds. Archive vendor with open POs blocked with warning.
+1. Create deposit invoice from accepted quote → Draft → Acc reviews → Acc sends → status Sent.
+2. Progress claim auto-generated from project phase completion.
+3. Change order amendment generates amended invoice.
+4. Final claim invoice generated on project completion sign-off.
+5. Retention release invoice auto-generated at 45-day mark; manual approval before send.
+6. Service contract recurring invoice generated per cycle.
+7. Immutable snapshot at send (line items, T&C, billing address captured).
+8. Late fee auto-applied at 30 days overdue per client config.
+9. Void invoice → status Void → reverses GL postings → audit trail.
+10. Invoice with client On Stop → send blocked.
+11. Invoice partial payment → status Partially Paid; balance shown.
+12. Invoice full payment → status Paid; closes GL receivable.
 
-### Functional — Banking & AP (7-10)
+### Functional — Payment recording (13-18)
 
-7. Banking visible to Acc only. SR/Tech/VO see masked.
-8. Audit-on-read writes row when Acc reveals account #.
-9. Payment method management: add bank transfer, archive old method.
-10. Remittance advice generation. PDF eight-layer protected. Email to vendor.
+13. Record cheque payment → applies to oldest invoice automatically (operator override).
+14. Split one payment across 3 invoices.
+15. Record overpayment → goes to customer credit balance.
+16. Record bounce → reverses application; alert generated.
+17. Refund via Stripe → reverses payment.
+18. Payment receipt emailed automatically on record.
 
-### Functional — Pricing (11-14)
+### Functional — Customer payment portal (19-23)
 
-11. Vendor-specific pricing per item. Item X $50 from Vendor A, $48 from Vendor B.
-12. Volume discount tiers (1-9 units $50, 10-49 units $45, 50+ $40).
-13. Lead time + min order qty captured; used by M7 PO suggestions.
-14. Catalog sync vs manual override. Manual override persists; next sync flags conflict.
+19. Client clicks tracking link → portal loads → invoice displayed.
+20. Client pays via CC (Stripe) → payment recorded → status updated → receipt emailed.
+21. Client pays via EFT → ACH instructions displayed; manual reconciliation later.
+22. Signed URL expires after payment.
+23. Signed URL revoked manually by Acc → access blocked.
 
-### Functional — Performance (15-18)
+### Functional — Credit notes (24-27)
 
-15. Performance scoring computed quarterly: on-time delivery, accuracy, damage rate.
-16. Vendor grade drops C → preferred-for-category flag auto-removed → A notified.
-17. Manual re-grant of preferred status by A with reason captured.
-18. Scorecard view per role: PM sees own-experience POs only; A sees all.
+24. Create credit note applied to specific invoice → reduces invoice balance.
+25. Create credit note as customer credit balance → available for future invoices.
+26. Apply credit balance to new invoice on send.
+27. Credit note PDF eight-layer protected.
 
-### Functional — Compliance (19-24)
+### Functional — Recurring invoices (28-31)
 
-19. Insurance certificate uploaded with expiry. 30/60/90-day alerts triggered.
-20. Insurance expired → PO creation auto-blocked.
-21. WSIB clearance tracking. Expiry triggers alert + PO block.
-22. T5018 YTD accumulated from vendor payments throughout year.
-23. Annual T5018 report generation (Canada). PDF batch generated. Eight-layer protected. Audit row written.
-24. W9 upload (US vendor). W8-BEN for foreign US vendor.
+28. Create recurring template from accepted Service Contract Quote → linked to service_contract.
+29. Monthly recurring auto-generates next invoice on schedule.
+30. Pause recurring → skips generation until resumed.
+31. Cancel recurring → marks template Cancelled.
 
-### Functional — Onboarding gates (25-27)
+### Functional — AP bills (32-39)
 
-25. Vendor onboarding gate config: select required gates per vendor.
-26. Gate fulfillment with attached doc. Status updates to Fulfilled.
-27. Vendor-side T&C auto-composition for MSA from gates + Vendor T&C clause library.
+32. Create AP bill from PO → 3-way match performed automatically.
+33. 3-way match all align → status Approved-for-Payment.
+34. 3-way match price discrepancy → flag → manual review → override with reason.
+35. 3-way match qty discrepancy → flag → return to vendor process.
+36. AP bill without matching PO → manual override required (A/Acc) + reason.
+37. AP bill approval: bill creator cannot approve (separation of duties).
+38. AP bill payment via payment run.
+39. T5018 YTD updated on AP bill payment to T5018-required vendor.
 
-### Functional — Permissions (28-33)
+### Functional — AP payment runs (40-43)
 
-28. SR sees no pricing.
-29. Acc sees banking only with audit.
-30. Banking edit gated to A.
-31. T5018 YTD gated to A/Acc.
-32. Insurance certificate uploadable by AM only.
-33. Vendor On Hold blocks PO creation.
+40. Create payment run; add eligible bills.
+41. Approve payment run (separation of duties: run creator ≠ approver).
+42. Execute payment run → EFT file generated → bills marked Paid.
+43. Cancel payment run before execution → bills returned to eligible state.
 
-### Functional — Performance & security (34-35)
+### Functional — Statements (44-46)
 
-34. List 1000 vendors with filter applied → <2s.
-35. RLS blocks unauthorized banking detail read. API attempt returns 403 + audit row.
+44. Generate statement for one customer.
+45. Bulk generate statements for all customers with activity.
+46. Statement PDF eight-layer protected.
+
+### Functional — AR aging & late fees (47-50)
+
+47. AR aging buckets calculated correctly (0-30 / 31-60 / 61-90 / 91+).
+48. Late fee applied at 30 days per client config (compounding tested).
+49. Late fee waived by Acc with reason captured.
+50. SR cannot waive late fee.
+
+### Functional — Permissions (51-53)
+
+51. PM sees only own-project invoices in aging.
+52. SR sees only own-client invoices.
+53. AP bill creator blocked from approving same bill.
+
+### Functional — Performance & security (54-55)
+
+54. AR aging across 5000 invoices loads <3s.
+55. RLS blocks unauthorized invoice view.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Modules 9-13: pending walk
+# Modules 10-13: pending walk
 ═══════════════════════════════════════════════════════════════════
 
-- §9 — Invoices
 - §10 — Subcontractors (also "Contractors")
 - §11 — Financials
 - §12 — Scheduling
@@ -475,11 +532,11 @@ Remaining:
 
 ## 99. Consolidated action vocabulary
 
-*Running count: ~850 actions across 8 modules (~110 M1 + ~80 M2 + ~270 M3 + ~35 M4 + ~85 M5 + ~110 M6 + ~95 M7 + ~65 M8).*
+*Running count: ~965 actions across 9 modules (~110 M1 + ~80 M2 + ~270 M3 + ~35 M4 + ~85 M5 + ~110 M6 + ~95 M7 + ~65 M8 + ~115 M9).*
 
 ## 100. Final sidebar tree
 
-*Locked through Session D — see §0.7.*
+*Refined Session K — see §0.7. Financials parent with 12 sub-items spanning M9 + M11.*
 
 ## 101. Module dependency graph
 
@@ -487,12 +544,12 @@ Remaining:
 
 ## 102. Cumulative permissions design implications
 
-*53 items so far (1-14 M1, 15-22 M2, 23-27 M3, 28-30 M4, 31-37 M5, 38-44 M6, 45-49 M7, 50-53 M8).*
+*58 items so far (1-14 M1, 15-22 M2, 23-27 M3, 28-30 M4, 31-37 M5, 38-44 M6, 45-49 M7, 50-53 M8, 54-58 M9).*
 
 ## 103. Cumulative acceptance criteria
 
-*~371 scenarios so far (54 M1 + 55 M2 + 42 M3 + 25 M4 + ~52 M5 + ~58 M6 + ~48 M7 + ~35 M8).*
+*~426 scenarios so far (54 M1 + 55 M2 + 42 M3 + 25 M4 + ~52 M5 + ~58 M6 + ~48 M7 + ~35 M8 + ~55 M9).*
 
 ---
 
-**End of v0.9.** Modules 1-8 complete. Vendor module scoped with T5018 YTD tracking + annual report generation (Canada compliance), vendor onboarding gate framework mirroring client onboarding, insurance + WSIB expiry tracking with auto-PO-block, vendor performance scoring with auto-degrade-of-preferred-status, eight-layer print protection on remittance advice + T5018 PDFs, banking encrypted at rest with audit-on-read. Cross-cutting commitments from Sessions C-J propagate forward.
+**End of v0.10.** Modules 1-9 complete. Invoices module scoped with two parallel flows (AR + AP), customer payment portal with Stripe integration (CC + EFT + ACH + wire), 3-way match (PO + Receipt + Bill) with separation of duties, T5018 YTD auto-update on AP payments (Canada compliance), Canadian Construction Act holdback release timing, eight-layer print on invoice/credit note/statement PDFs, immutable send snapshots for legal durability, recurring invoice templates linked to Service Contracts, multi-currency with exchange rate snapshots. Sidebar architecture refined: Financials becomes parent menu with 12 sub-items spanning M9 + M11. Cross-cutting commitments from Sessions C-K propagate forward.

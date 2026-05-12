@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session J (2026-05-12):** Modules 1-8 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.9. Cumulative: ~850 actions, 53 permissions design implications, ~371 acceptance criteria. M8 (Vendors): ~65 actions, 8 new tables, 4 status surfaces, T5018 YTD tracking + annual report (Canada compliance), W9/W8-BEN for US, vendor onboarding gates mirroring client gates, insurance + WSIB expiry tracking with auto-PO-block, vendor performance scoring with auto-degrade-of-preferred-status, eight-layer print on remittance advice + T5018 PDFs, banking encrypted at rest with audit-on-read. Modules 9-13 pending: Invoices (next), Subcontractors, Financials, Scheduling, Reports. Audit file management: v0.9 condenses M1-M7 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d).
+**Progress as of Session K (2026-05-12):** Modules 1-9 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.10. Cumulative: ~965 actions, 58 permissions design implications, ~426 acceptance criteria. M9 (Invoices): ~115 actions, 14 new tables, 5 status surfaces, two parallel flows (AR + AP), customer payment portal with Stripe (CC + EFT + ACH + wire), 3-way match (PO + Receipt + Bill) automated, separation of duties on AP, T5018 YTD auto-update on AP payments, Canadian Construction Act holdback release timing, eight-layer print on invoice/credit note/statement PDFs, immutable send snapshots, multi-currency, late fee auto-application, customer credit balance, recurring invoice templates linked to Service Contracts. Sidebar refined: Financials becomes parent menu with 12 sub-items spanning M9 + M11. Modules 10-13 pending: Subcontractors (next), Financials, Scheduling, Reports. Audit file management: v0.10 condenses M1-M8 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a).
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -143,6 +143,17 @@ migration strategy for replacing the current static `lib/permissions
 - Cross-link flag pattern (is_also_contractor) for entities serving dual roles
 - Insurance/WSIB expiry auto-block-PO pattern (regulatory compliance enforcement)
 - Vendor consolidated billing pattern for AP
+
+**Inputs from Session K** (additions from Module 9 walk):
+- Separation of duties enforcement pattern (AP bill creator ≠ approver; payment run creator ≠ approver) — new cross-cutting commitment §0.4 #11
+- Invoice state machine with field-level lock per state (Draft / Pending Approval / Approved / Sent / Paid)
+- Customer payment portal signed URL pattern (scoped to single invoice, no login)
+- Late fee waiver gated to A/Acc with reason capture
+- AR aging role-scoped visibility (A/Acc all; PM project-scoped; SR client-scoped)
+- 3-way match manual override with reason capture pattern
+- Recurring invoice template linked to Service Contract pattern
+- Multi-currency invoice with exchange rate snapshot pattern
+- Customer credit balance accumulation pattern
 
 ---
 
