@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session H (2026-05-12):** Modules 1-6 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.7. Cumulative: ~690 actions, 44 permissions design implications, ~288 acceptance criteria. M1 (Clients + Sites + Contacts): ~110 actions, foundation with onboarding gates auto-T&C composition. M2 (Employees + Permissions): ~80 actions, six-tab permissions editor with ten dimensions. M3 (Settings): ~270 actions, configuration spine. M4 (Dashboard): ~35 actions, ~20 seeded widgets, three-way visibility gate. M5 (Quotes): ~85 actions, three quote types, online portal acceptance, immutable send snapshots. M6 (Projects): ~110 actions, three-state costing, change order workflow with customer signature, commissioning workflow with ULC auto-attachment, handover package with warranty clock, progress invoicing with Canadian Construction Act compliance, lien deadline tracking. The three foundational modules + Dashboard + first revenue module + first operations module are complete. Modules 7-13 pending: Inventory (next), Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Audit file management: v0.7 condenses M1-M5 sections to headline stats; full content preserved in git history at noted commit hashes.
+**Progress as of Session I (2026-05-12):** Modules 1-7 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.8. Cumulative: ~785 actions, 49 permissions design implications, ~336 acceptance criteria. M1 (Clients + Sites + Contacts): ~110 actions, foundation with onboarding gates auto-T&C composition. M2 (Employees + Permissions): ~80 actions, six-tab permissions editor with ten dimensions. M3 (Settings): ~270 actions, configuration spine. M4 (Dashboard): ~35 actions, ~20 seeded widgets, three-way visibility gate. M5 (Quotes): ~85 actions, three quote types, online portal acceptance, immutable send snapshots. M6 (Projects): ~110 actions, three-state costing, change order workflow, commissioning, handover, progress invoicing. M7 (Inventory): ~95 actions, 15 new tables, FIFO valuation, serial number lifecycle tracking, multi-location stock with vehicles, vendor catalog sync, append-only movement ledger, photo-on-receive, project-reserved stock locking, eight-layer print on PO PDFs. Modules 8-13 pending: Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports. Audit file management: v0.8 condenses M1-M6 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708).
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -124,6 +124,16 @@ migration strategy for replacing the current static `lib/permissions
 - Project document customer-facing visibility flag for portal access
 - Lien deadline tracking integration with AR/Financials
 - Project margin visibility field-level pattern (A/PM default; SR per-user override)
+
+**Inputs from Session I** (additions from Module 7 walk):
+- Append-only ledger pattern (no UPDATE/DELETE; reversals create new entries)
+- Serial number append-only history pattern
+- FIFO layer immutability for cost integrity
+- Multi-location stock visibility scoping (Tech sees own truck/van only)
+- Vendor catalog sync conflict resolution as permission-gated action
+- Photo evidence capture pattern for receive flows (extending commissioning pattern)
+- PO approval threshold separate from quote/CO thresholds
+- Project-reserved stock locking enforcement at quote acceptance
 
 ---
 

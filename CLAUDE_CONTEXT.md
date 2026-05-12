@@ -12,42 +12,47 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session H CLOSED.**
+**As of 2026-05-12. Session I CLOSED.**
 
-- **Session H focus:** Module 6 of the feature audit (Projects) — first operations module. Three-state costing (Estimated/Committed/Actual) with real-time forecast-at-completion. Change order workflow with customer signature via signed URL portal. Commissioning workflow with per-equipment test results + customer per-item sign-off + ULC fire-alarm verification auto-attachment. Handover package auto-assembly triggering warranty clock. Progress invoicing with Canadian Construction Act compliance. Seven in-session open questions resolved.
-- **Latest commit:** `docs: codify Session H — Module 6 (Projects) audit + handoff`. See `git log -1 --oneline`.
+- **Session I focus:** Module 7 of the feature audit (Inventory) — materials management. Multi-location stock (warehouses + vehicles + project sites + consignment + transit + quarantine). FIFO valuation with append-only fifo_layers. Append-only inventory_movements ledger. Serial number tracking with full lifecycle for security equipment. Vendor catalog sync from major security distributors. Photo capture on receive. Project-reserved stock locking. Eight-layer print protection extended to PO PDFs. Mobile barcode scan-and-go. Eight in-session open questions resolved.
+- **Latest commit:** `docs: codify Session I — Module 7 (Inventory) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 6 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes, Projects all complete). The three foundational modules + Dashboard (presentation) + Quotes (first revenue) + Projects (first operations) are now done. Modules 7-13 pending: Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
-- **File size management note:** Starting v0.7, M1-M5 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 at 073b393, M2 at 4dc0cc2, M3 at 87a9fc8, M4 at 6283d0f, M5 at 5633e25. Current session module always gets full content in the doc.
+- **Feature audit progress:** 7 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes, Projects, Inventory all complete). Modules 8-13 pending: Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports.
+- **File size management note:** Through v0.8, M1-M6 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 at 073b393, M2 at 4dc0cc2, M3 at 87a9fc8, M4 at 6283d0f, M5 at 5633e25, M6 at bafb708. Current session module always gets full content in the doc.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 7-13** — Inventory (next), Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~690 actions across 6 modules) + ten-dimensional model + Session C-H additions.
+  1. **Feature audit Modules 8-13** — Vendors (next), Invoices, Subcontractors, Financials, Scheduling, Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~785 actions across 7 modules) + ten-dimensional model + Session C-I additions.
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session H:**
-  - **Three-state costing (Estimated/Committed/Actual)** with real-time forecast-at-completion. PM sees margin erosion in real time as costs accumulate.
-  - **Change order workflow** — drafted → internal approval → sent to customer via signed URL portal → customer signature → implementation. Generates legally durable amendment tied to original quote_terms_snapshot. Triggers amended invoicing if billing has begun.
-  - **Commissioning workflow** with per-equipment test results, photo+GPS evidence (date-stamped from mobile capture), customer per-item sign-off. Conditional pass available with deficiency list capture. Final commissioning certificate generated as eight-layer-protected PDF. ULC fire-alarm verification documents auto-attach for fire alarm projects (Ontario ULC-S536 compliance).
-  - **Append-only commissioning + acceptance records** with one-way hash on signatures.
-  - **Handover workflow** — final customer sign-off triggers warranty clock; warranty terms versioned. Auto-assembled handover package PDF includes signed contract + COs + commissioning records + as-builts + manuals + warranty + service contact info. Service Contract Quote auto-generates from project for recurring revenue if applicable.
-  - **Progress invoicing** — Deposit / Progress Claims (% based or per-phase) / Final Claim / Retention Release. Respects holdback config from Module 1 (Canadian Construction Act 10%/Excl/45-day default).
-  - **Trade Contractor lien deadline tracking** (Ontario Construction Act 60-day rule) for AR/Financials integration.
-  - **Field-level margin visibility per project** — A/PM default; SR per-user override only. `projects:viewMargin` is visibility flag distinguishing who-sees from who-can-do.
-  - **Eight-layer print protection** extended to commissioning certificates + handover packages.
-  - **Change order thresholds separate from quote thresholds.** Defaults: <$2k self-approve, $2-10k → PM, >$10k → Admin. Scope thresholds: <5% self-approve, 5-15% → PM, >15% → Admin.
-  - **Project templates** with vertical-specific seeded templates (Camera install, Access control install, Fire alarm install, Intrusion alarm install, Integration project, Maintenance contract setup).
-  - **Read-only Gantt chart at v1**; edit-via-Gantt Phase 2.
-  - **Phase 2 deferrals locked:** Customer status portal (signed-URL view-only at v1; full portal Phase 2), multiple PMs per project (single primary at v1), daily logs mandatory enforcement, project meeting notes with scheduler, phase/task custom fields, sub-contractor portal full access.
+- **Major architectural decisions from Session I:**
+  - **Pricebook as master catalog** — pricebook_items from Module 5 IS the master item catalog; Module 7 adds is_inventoried flag. Non-inventoried items (subcontracted labor, travel) don't get stock tracking.
+  - **Multi-location stock model** — Warehouse, Branch Office, Vehicle (assigned to employee), Project Site, Customer Site (Consignment), Transit Buffer, Quarantine. Each location is a discrete stock-holding entity.
+  - **FIFO valuation** — Canadian GAAP standard. inventory_fifo_layers append-only table tracks each receive at its cost. Movements consume layers oldest-first.
+  - **Append-only inventory_movements ledger** — every stock change is a new row; reversals create offsetting entries; no UPDATE/DELETE on existing rows.
+  - **Serial number tracking with full lifecycle** — Available → Reserved → Issued → Installed → warranty period → Returned/Decommissioned. Essential for security equipment warranty + asset tracking. Append-only serial history.
+  - **Photo capture on receive** — packing slip + damage evidence stored with receipt record.
+  - **Project-reserved stock locking** — at quote acceptance, materials reserved; can't be allocated to another project. Released on quote cancellation or project completion.
+  - **Eight-layer print protection on PO PDFs** sent to vendors (consistent with M5/M6 pattern for external-facing documents).
+  - **Mobile barcode scan-and-go** — camera-based scanner for serial tracking, receive flows, stocktake counting.
+  - **Vendor catalog sync** — recurring sync from major security distributors (Avigilon, Genetec, Bosch, Honeywell, Lenel, Paxton, DSC, Software House). Mapping rules + conflict resolution interface.
+  - **Vendor performance scoring** — on-time delivery, price accuracy, damage rate tracked per vendor.
+  - **Price discrepancy auto-flagging** — PO unit cost vs invoice unit cost mismatch triggers alert.
+  - **PO approval workflow** — defaults: <$1k self-approve, $1-10k → PM, >$10k → Admin. Configurable in Settings.
+  - **Multi-currency POs** — vendor's currency converted to base at receive with exchange rate snapshot retained.
+  - **Field-level cost visibility** — SR/Tech see availability (on_hand, on_order, available) but not unit cost or valuation. A/PM/Acc see costs.
+  - **Stocktake workflow** — blind count (expected hidden), variance review, reason capture (Damage/Theft/Mis-Count/Found/Lost/Other), finalize posts adjustments to ledger + accounting.
+  - **Stock alerts** — min/restock levels per item per location; one-click reorder opens PO wizard pre-filled.
+  - **Phase 2 deferrals locked:** Native mobile app, RMA workflow for returns-to-customer, recommendation engine for stocktake frequency, vendor portal for PO acknowledgment, equipment-specific firmware tracking integration.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session H produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session I produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
