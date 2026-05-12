@@ -10,10 +10,10 @@
 >   4. `NEXVELON_ROADMAP.md`.
 >   5. **This file** — feature audit + sidebar expansion.
 >
-> **Status:** v0.3 — Modules 1 (Clients + Sites + Contacts) and 2
-> (Employees + Permissions) fully scoped through Sessions C + D.
-> Modules 3-13 pending. Cross-cutting decisions from Sessions C + D
-> propagate forward.
+> **Status:** v0.4 — Modules 1 (Clients + Sites + Contacts),
+> 2 (Employees + Permissions), and 3 (Settings) fully scoped
+> through Sessions C + D + E. Modules 4-13 pending. Cross-cutting
+> decisions from Sessions C + D + E propagate forward.
 
 ---
 
@@ -52,7 +52,7 @@ ID · Description · Default grants · F? (field-scope) · Audit event
 
 ### 0.4 Permissions model — locked commitments
 
-Through Sessions B + C + D:
+Through Sessions B + C + D + E:
 
 1. **Role default + bidirectional per-user override.** Effective
    permission = role default ∪ user-added − user-subtracted.
@@ -64,15 +64,17 @@ Through Sessions B + C + D:
    flow is a wizard: identity → smart defaults inherited from
    closest existing → behavior bindings → workflow inheritance →
    preview → save.
-6. **Ten dimensions of permission control** per §1.12 + §2.12 —
-   role definition, per-user override, data scope, field-level
-   visibility, action gates, approval workflows, system policy,
-   UI presentation, audit visibility, lookup/template management.
+6. **Ten dimensions of permission control** per §1.12 + §2.12 +
+   §3.12 — role definition, per-user override, data scope,
+   field-level visibility, action gates, approval workflows,
+   system policy, UI presentation, audit visibility, lookup/template
+   management.
 7. **Contractual integrity exception to bidirectional override:**
    `clients:overrideSlaResponseTime` is Admin-only and cannot be
    granted via per-user override.
-8. **Versioned T&C clauses.** Already-sent quotes retain their
-   clause version.
+8. **Versioned T&C clauses + workflow rules.** Already-sent quotes
+   retain their clause version; already-running workflow executions
+   carry the rule version they started with.
 9. **Eight-layer print protection** for sensitive PDFs (quotes,
    contracts, payroll, HR docs).
 10. **Comprehensive logging visibility** per PRINCIPLES §4 — every
@@ -95,7 +97,7 @@ role-based today.
 
 1. **Clients + Sites + Contacts** *(complete §1)*
 2. **Employees + Permissions** *(complete §2)*
-3. Settings
+3. **Settings** *(complete §3)*
 4. Dashboard
 5. Quotes
 6. Projects
@@ -107,7 +109,7 @@ role-based today.
 12. Scheduling
 13. Reports
 
-### 0.7 Sidebar architecture — People parent menu *(NEW — Session D)*
+### 0.7 Sidebar architecture — People parent menu *(Session D)*
 
 The top-level sidebar restructures around a unified **People** menu
 that hover-expands to all entity-management sub-items. This
@@ -134,7 +136,7 @@ add/find a person or company"* → People → pick the type.
 📅 Scheduling
 💵 Financials
 📈 Reports
-⚙️ Settings
+⚙️ Settings              ← Module 3 surface (bottom of sidebar)
 ```
 
 **Sub-item behavior:**
@@ -151,9 +153,7 @@ add/find a person or company"* → People → pick the type.
 table from Module 1 — adds nullable `client_id`, plus
 `misc_category` FK to a `misc_contact_categories` lookup (seeded:
 Inspector, Insurance Broker, Lawyer, Banker, ULC Certifier, City
-Official, Real Estate Agent, Other). Does not warrant a separate
-table; the same contact entity covers both client-attached and
-unaffiliated contacts.
+Official, Real Estate Agent, Other).
 
 **Terminology lock-in:** "Employees" replaces "Users" throughout
 the system. Action prefixes use `employees:*`, not `users:*`. UI
@@ -318,7 +318,7 @@ site SLA + no site response time).
 | `sla_statuses` | Draft, Active, Expired, Terminated | enforce flag |
 | `service_contract_statuses` | Draft, Active, Expired, Cancelled, Renewed | billing trigger |
 | `onboarding_gate_types` | Insurance Cert, MSA, Deposit, Credit App, T5018, W9, Bond Letter, NDA, BG Check | clause text, default-required-at-tier, expiry |
-| `misc_contact_categories` *(new)* | Inspector, Insurance Broker, Lawyer, Banker, ULC Certifier, City Official, Real Estate Agent, Other | label only |
+| `misc_contact_categories` | Inspector, Insurance Broker, Lawyer, Banker, ULC Certifier, City Official, Real Estate Agent, Other | label only |
 
 ## 1.5 Actions (~110 actions)
 
@@ -502,750 +502,753 @@ Custom roles with zero employee permissions hide it entirely.
 
 ## 2.4 Resources
 
-### Owned tables — new for Module 2
+(Per v0.3 spec — see Session D handoff for full schema.)
 
-**Identity & access:**
-- `employees` — Nexvelon employee record (extends/replaces
-  `profiles`)
-- `roles` — role definitions (custom + 7 seeded)
-- `permissions` — action catalog (populated by audit §99)
-- `role_permissions` — role × permission junction
-- `user_permission_overrides` — additive/subtractive grants
-- `user_field_visibility_overrides` — field hide/show per employee
-- `user_data_scopes` — scope rules per employee
+Key tables: `employees`, `roles`, `permissions`, `role_permissions`,
+`user_permission_overrides`, `user_field_visibility_overrides`,
+`user_data_scopes`, `employee_certifications`, `certification_types`
+(25+ seeded), `employee_certification_records`, `employee_territories`,
+`territories`, `employee_availability`, `employee_absences`,
+`employee_equipment_assignments`, `equipment`, `approval_workflows`,
+`approval_workflow_steps`, `user_approval_delegations`,
+`security_policies`, `access_requests` (per FieldWire pattern),
+`user_sessions`, `permission_grant_audit`.
 
-**Workforce-specific (security integrator additions):**
-- `employee_certifications` — M:N junction
-- `certification_types` — lookup (25+ seeded)
-- `employee_certification_records` — per-employee per-cert with
-  cert#, issued/expiry dates, document URL, status, critical flag
-- `employee_territories` — M:N to `territories`; type field
-  (Primary/Secondary/Relocation per Salesforce pattern)
-- `territories` — geographic zones (postal prefix / region / city
-  / map polygon)
-- `employee_availability` — weekly recurring hours
-- `employee_absences` — vacation / sick / training / personal
-  blocks with start/end + approval state
-- `employee_equipment_assignments` — vehicle / tools / devices
-- `equipment` — master inventory of company-owned equipment
-
-**Approval & policy:**
-- `approval_workflows` — per-action workflow definitions
-- `approval_workflow_steps` — ordered steps with approver +
-  value-threshold + time bound
-- `user_approval_delegations` — temporary delegation grants
-- `security_policies` — per role: 2FA req, session timeout, IP
-  allowlist, device limit, force_reauth_actions[]
-- `access_requests` — request-admin-access workflow queue (per
-  FieldWire pattern)
-
-**Session & audit:**
-- `user_sessions` — active sessions with device fingerprint, IP,
-  last_active
-- `permission_grant_audit` — every grant/revoke event captured
-
-### Employee schema
-
-**Identity:** `entity_type` (Internal Employee / Contractor-with-login),
-`legal_first_name`, `legal_last_name`, `preferred_name`,
-`employee_code` (auto-generated; UI label "Employee ID"),
-`avatar_url`, `email`, `personal_phone`, `office_phone`.
-
-**Address:** standard fields + `time_zone` + `preferred_language`.
-
-**Emergency contact:** `emergency_contact_name`,
-`emergency_contact_phone`, `emergency_contact_relationship`.
-
-**Employment:** `hire_date`, `termination_date`, `employee_type_id`,
-`employee_status_id`, `manager_user_id` (reports-to), `department`,
-`cost_center_id`.
-
-**Authentication:** `auth_user_id` (FK to Supabase Auth), `email_verified_at`,
-`last_login_at`, `last_login_ip`, `failed_login_count`,
-`account_locked_at`, `password_reset_required`, `mfa_enrolled`,
-`mfa_method` (TOTP/SMS/Email/HardwareKey).
-
-**Permissions:** `role_id` (FK), `effective_permissions_cache`
-(jsonb, computed on grant/revoke events).
-
-**Payroll/rates** (highly gated):
-- `hourly_cost_rate` — internal cost for margin (A, Acc only)
-- `hourly_bill_rate` — external billing rate (A, Acc, PM-with-perm)
-- `salary_amount`, `salary_frequency` (annual/monthly/biweekly)
-- `commission_pct`, `commission_basis`
-- `payroll_provider_id` (for export integration Phase 2)
-
-**Banking (encrypted at rest):**
-- `bank_account_name`, `routing_number`, `bank_account_number`
-- `sin_number` (for T4 reporting; null for non-Canadian)
-
-**Identification/regulatory:**
-- `government_id_number` (driver's licence or equivalent)
-- `government_id_document_url`
-- `wsib_number` (Workplace Safety Insurance — Ontario specific;
-  similar in other provinces with different field name)
-- `personal_insurance_certificate_url`
-
-**Scheduling-relevant:**
-- `default_territory_id`
-- `truck_id` (FK to equipment)
-- `working_hours_pattern` (jsonb — weekly schedule)
-- `available_for_emergency_call` (boolean)
-- `service_radius_km` (optional override)
-
-**Internal:**
-- `internal_notes` (HR-gated)
-- `custom_fields` (jsonb or join to definitions/values per §6
-  decision)
-
-**Standard:** `created_at`, `created_by`, `updated_at`, `updated_by`,
-`deleted_at`.
-
-### Status lookup tables (with behavior bindings)
-
-| Table | Seeded values | Behavior bindings |
-|---|---|---|
-| `employee_statuses` | Active, Pending Invite, Suspended, On Leave, Terminated, Archived | scheduling eligibility, login allowed, billing implications |
-| `employee_types` | Office Staff, Field Technician, Hybrid (Office+Field), Apprentice, Contractor-with-login | default permission set, default scheduling visibility |
-| `certification_types` | 25+ seeded — Kantech KT-300, KT-400; Genetec Synergis, Mission Control; Software House C-CURE 9000; DSC PowerSeries, MaxSys; Honeywell ProWatch, Galaxy; Bosch B-series, G-series; Avigilon Control Center, ACM; Lenel OnGuard; Paxton Net2; ESA (Ontario electrical); ULC fire alarm installer/verifier; CFAA fire alarm tech; CSA fire alarm; CCTV technician; Forklift; Working at Heights; Confined Space; OSHA-30; WHMIS 2015; First Aid + CPR; ASP/CSP; LEED AP | critical flag (blocks scheduling when expired), expiry tracking, renewal cadence, regulatory authority |
-| `territory_types` | By City, By Region, By Postal Prefix, By Map Polygon, By Province | scope calculation method |
-| `absence_types` | Vacation, Sick, Personal, Training, Bereavement, Parental, Jury Duty, WSIB Claim, Unpaid Leave | paid flag, requires_approval flag, deducts_from_balance flag, max_consecutive_days |
-| `mfa_methods` | TOTP, SMS, Email, Hardware Key (YubiKey/Titan) | strength rating, audit flag |
-| `session_duration_options` | 8h, 24h, 7d, 30d, Custom | security strength rating |
-| `data_scope_types` | All / Own / Assigned / User Mirror / Attribute Filter / Specific Records | computation pattern |
-| `approval_workflow_step_types` | Single approver, Parallel (any-of), Sequential, Value-threshold, Conditional | execution semantics |
-| `equipment_types` | Service Truck, Cargo Van, Test Kit, Laptop, Mobile Device, Programmer Cable, Other | tracking template |
-| `access_request_statuses` | Pending, Approved, Denied, Auto-Expired | TTL, notification rules |
+11 lookup tables with behavior bindings: `employee_statuses`,
+`employee_types`, `certification_types`, `territory_types`,
+`absence_types`, `mfa_methods`, `session_duration_options`,
+`data_scope_types`, `approval_workflow_step_types`, `equipment_types`,
+`access_request_statuses`.
 
 ## 2.5 Actions
 
-**~75 actions across the module.** Organized by category:
+~80 actions across 14 categories: Employee management (15),
+Role management (10), Per-employee permission overrides (8),
+Data scope (8), Field visibility (6), Certifications (10),
+Territories (5), Availability/absences (7), Equipment assignments
+(5), Payroll/rates (5, heavily gated), Approval workflows (7),
+Security policy (7), Audit (6), Sessions (3), Access requests (4),
+Bulk operations (4).
 
-### Employee management (15 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employees:viewList` | See employee directory | A, PM | — | — | Not yet |
-| `employees:viewDetail` | Open employee profile | A, PM | — | — | Not yet |
-| `employees:viewMy` | View self profile | All employees | — | — | Not yet |
-| `employees:invite` | Send invitation email | A | — | `employee_invited` | Not yet |
-| `employees:resendInvite` | Re-send pending invite | A | — | `employee_invite_resent` | Not yet |
-| `employees:cancelInvite` | Cancel pending invite | A | — | `employee_invite_cancelled` | Not yet |
-| `employees:editProfile` | Edit basic profile (others) | A | — | `employee_updated` | Not yet |
-| `employees:editMyProfile` | Edit self profile | All employees | — | `employee_self_updated` | Not yet |
-| `employees:editEmail` | Change email (triggers re-verification) | A | Y | `employee_email_changed` | Not yet |
-| `employees:adminResetPassword` | Force password reset | A | — | `employee_password_force_reset` | Not yet |
-| `employees:suspend` | Block login without deletion | A | — | `employee_suspended` | Not yet |
-| `employees:unsuspend` | Restore login | A | — | `employee_unsuspended` | Not yet |
-| `employees:putOnLeave` | Move to On Leave status | A | — | `employee_on_leave` | Not yet |
-| `employees:returnFromLeave` | Return to Active | A | — | `employee_returned_from_leave` | Not yet |
-| `employees:terminate` | Process termination (workflow) | A | — | `employee_terminated` | Not yet |
-| `employees:archive` | Soft-delete | A | — | `employee_archived` | Not yet |
-| `employees:hardDelete` | Permanent delete (Admin only, heavily audited) | A | — | `employee_hard_deleted` | Not yet |
-| `employees:exportCsv` | Export employee list | A | — | `employees_exported` | Not yet |
-| `employees:importCsv` | Bulk import from CSV | A | — | `employees_imported` | Not yet |
-
-### Role management (10 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `roles:viewList` | See role catalog | A, PM | — | — | Not yet |
-| `roles:viewDetail` | Open role permission matrix | A | — | — | Not yet |
-| `roles:create` | Create custom role (guided wizard) | A | — | `role_created` | Not yet |
-| `roles:editBasic` | Edit role name, description, color | A | — | `role_updated` | Not yet |
-| `roles:editPermissions` | Add/remove permissions from role | A | — | `role_permissions_updated` | Not yet |
-| `roles:editHierarchy` | Set role inheritance (Phase 2) | A | — | `role_hierarchy_updated` | Not yet |
-| `roles:clone` | Clone existing role as template | A | — | `role_cloned` | Not yet |
-| `roles:archive` | Archive role (warns affected users) | A | — | `role_archived` | Not yet |
-| `roles:unarchive` | Restore archived role | A | — | `role_unarchived` | Not yet |
-| `roles:applyToUser` | Assign role to employee | A | — | `employee_role_assigned` | Not yet |
-
-### Per-employee permission overrides (8 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_permissions:viewEffective` | Show computed effective permissions | A | — | — | Not yet |
-| `employee_permissions:grantAdditive` | Give employee a permission their role doesn't have | A | — | `permission_grant_additive` | Not yet |
-| `employee_permissions:grantSubtractive` | Remove a permission their role does have | A | — | `permission_grant_subtractive` | Not yet |
-| `employee_permissions:setTimeBounded` | Add expires_at to a grant | A | — | `permission_grant_time_bounded` | Not yet |
-| `employee_permissions:revokeOverride` | Remove an override | A | — | `permission_override_revoked` | Not yet |
-| `employee_permissions:bulkApplyTemplate` | Apply override template to multiple users | A | — | `permission_template_applied` | Not yet |
-| `employee_permissions:viewGrantHistory` | See all past overrides | A | — | — | Not yet |
-| `employee_permissions:resetToRoleDefault` | Wipe all overrides for an employee | A | — | `permissions_reset_to_role` | Not yet |
-
-### Data scope (8 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_data_scope:view` | See an employee's scope rules | A | — | — | Not yet |
-| `employee_data_scope:setAll` | Grant full visibility | A | — | `data_scope_all` | Not yet |
-| `employee_data_scope:setOwn` | Restrict to own records | A | — | `data_scope_own` | Not yet |
-| `employee_data_scope:setAssigned` | Restrict to assigned records | A | — | `data_scope_assigned` | Not yet |
-| `employee_data_scope:setMirror` | Mirror another user's scope | A | — | `data_scope_mirror` | Not yet |
-| `employee_data_scope:setAttribute` | Scope by attribute (territory, client, etc.) | A | — | `data_scope_attribute` | Not yet |
-| `employee_data_scope:setRecordGrant` | Grant access to specific record | A | — | `data_scope_record` | Not yet |
-| `employee_data_scope:revokeAll` | Wipe all scope grants | A | — | `data_scope_revoked` | Not yet |
-
-### Field visibility (6 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_field_visibility:view` | See per-user field overrides | A | — | — | Not yet |
-| `employee_field_visibility:hideField` | Hide field from employee | A | — | `field_hidden` | Not yet |
-| `employee_field_visibility:showField` | Override to show field | A | — | `field_shown` | Not yet |
-| `employee_field_visibility:resetToRoleDefault` | Reset visibility to role default | A | — | `field_visibility_reset` | Not yet |
-| `employee_field_visibility:applyTemplate` | Apply visibility template | A | — | `field_visibility_template_applied` | Not yet |
-
-### Certifications (10 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_certifications:view` | See an employee's certs | A, PM, self | — | — | Not yet |
-| `employee_certifications:viewList` | See cert inventory across all employees | A, PM | — | — | Not yet |
-| `employee_certifications:add` | Add cert to employee | A, PM | — | `certification_added` | Not yet |
-| `employee_certifications:edit` | Edit cert details | A, PM | — | `certification_updated` | Not yet |
-| `employee_certifications:uploadDoc` | Attach certificate PDF | A, PM, self | — | `certification_doc_uploaded` | Not yet |
-| `employee_certifications:markRenewed` | Update expiry on renewal | A, PM | — | `certification_renewed` | Not yet |
-| `employee_certifications:archive` | Soft-delete cert | A | — | `certification_archived` | Not yet |
-| `employee_certifications:setCriticalFlag` | Toggle blocks-scheduling-on-expiry | A | — | `certification_critical_toggled` | Not yet |
-| `employee_certifications:viewExpiryReport` | Licence Matrix expiry view | A, PM | — | — | Not yet |
-| `employee_certifications:sendRenewalReminder` | Manual reminder push | A, PM | — | `certification_reminder_sent` | Not yet |
-| `employee_certifications:bulkImport` | Import certs from CSV | A | — | `certifications_imported` | Not yet |
-
-### Territories (5 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_territories:view` | See territory assignments | A, PM, self | — | — | Not yet |
-| `employee_territories:assign` | Add territory | A, PM | — | `territory_assigned` | Not yet |
-| `employee_territories:removeAssignment` | Remove territory | A, PM | — | `territory_removed` | Not yet |
-| `employee_territories:setPrimary` | Set primary territory | A, PM | — | `territory_primary_set` | Not yet |
-| `employee_territories:setRelocationDates` | Set temporary relocation window | A, PM | — | `territory_relocation_set` | Not yet |
-
-### Availability & absences (7 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_availability:view` | See availability calendar | A, PM, self | — | — | Not yet |
-| `employee_availability:edit` | Edit weekly hours pattern | A, PM | — | `availability_updated` | Not yet |
-| `employee_absences:request` | Request absence (self) | All employees | — | `absence_requested` | Not yet |
-| `employee_absences:approve` | Approve absence request | A, PM | — | `absence_approved` | Not yet |
-| `employee_absences:deny` | Deny absence request | A, PM | — | `absence_denied` | Not yet |
-| `employee_absences:cancel` | Cancel approved absence | A, PM, self | — | `absence_cancelled` | Not yet |
-| `employee_absences:viewCalendar` | See absence calendar | A, PM | — | — | Not yet |
-
-### Equipment assignments (5 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_equipment:view` | See assigned equipment | A, PM, self | — | — | Not yet |
-| `employee_equipment:assignVehicle` | Assign truck/van | A, PM | — | `equipment_vehicle_assigned` | Not yet |
-| `employee_equipment:assignTool` | Assign test kit / device | A, PM | — | `equipment_tool_assigned` | Not yet |
-| `employee_equipment:unassign` | Remove assignment | A, PM | — | `equipment_unassigned` | Not yet |
-| `employee_equipment:viewAssetHistory` | See historical assignments | A, PM | — | — | Not yet |
-
-### Payroll/rates (5 actions, heavily gated)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employee_payroll:viewRates` | See cost + bill rates | A, Acc | Y | — | Not yet |
-| `employee_payroll:editRates` | Edit rates | A, Acc | Y | `employee_rates_updated` | Not yet |
-| `employee_payroll:viewBankingDetails` | See banking info (masked) | A, Acc | Y | `employee_banking_viewed` | Not yet |
-| `employee_payroll:editBankingDetails` | Edit banking info | A, Acc | Y | `employee_banking_updated` | Not yet |
-| `employee_payroll:viewPayHistory` | See historical payroll runs | A, Acc | Y | — | Not yet |
-
-### Approval workflows (7 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `approval_workflows:viewList` | See all workflows | A | — | — | Not yet |
-| `approval_workflows:create` | Define new workflow | A | — | `approval_workflow_created` | Not yet |
-| `approval_workflows:edit` | Edit existing workflow | A | — | `approval_workflow_updated` | Not yet |
-| `approval_workflows:addStep` | Add step to workflow | A | — | `approval_workflow_step_added` | Not yet |
-| `approval_workflows:setDelegation` | Configure temporary delegations | A | — | `approval_delegation_set` | Not yet |
-| `approval_workflows:viewMyDelegations` | See delegations active for self | All employees | — | — | Not yet |
-| `approval_workflows:claimDelegation` | Accept/decline delegation | All employees | — | `approval_delegation_claimed` | Not yet |
-
-### Security policy (7 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `security_policy:view` | See policy config | A | — | — | Not yet |
-| `security_policy:setRoleSession` | Set session timeout per role | A | — | `security_session_set` | Not yet |
-| `security_policy:setRole2FA` | 2FA requirement per role | A | — | `security_2fa_set` | Not yet |
-| `security_policy:setIpAllowlist` | IP allowlist (per role or user) | A | — | `security_ip_allowlist_set` | Not yet |
-| `security_policy:setDeviceLimit` | Max concurrent sessions per user | A | — | `security_device_limit_set` | Not yet |
-| `security_policy:setForceReauth` | Force re-auth for specific actions | A | — | `security_force_reauth_set` | Not yet |
-| `security_policy:viewLoginAttempts` | Failed login audit | A | — | — | Not yet |
-
-### Audit (6 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `audit:viewSystemWide` | System-wide audit log | A | — | — | Not yet |
-| `audit:viewModule` | Per-module audit | A, PM | — | — | Not yet |
-| `audit:viewMyActivity` | Own activity (self) | All employees | — | — | Not yet |
-| `audit:viewOtherUserActivity` | Another employee's activity | A | — | — | Not yet |
-| `audit:exportCsv` | Export audit log | A | — | `audit_exported` | Not yet |
-| `audit:createNotificationRule` | Set audit-driven alerts | A | — | `audit_notification_rule_created` | Not yet |
-
-### Sessions (3 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `sessions:viewMy` | See own active sessions | All employees | — | — | Not yet |
-| `sessions:viewEmployeeSessions` | See another employee's sessions | A | — | — | Not yet |
-| `sessions:forceSignOut` | Force-logout a session | A, self (own only) | — | `session_force_signed_out` | Not yet |
-
-### Access requests (4 actions — per FieldWire pattern)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `access_requests:request` | Request access to an action | All employees | — | `access_request_submitted` | Not yet |
-| `access_requests:viewQueue` | See pending requests | A | — | — | Not yet |
-| `access_requests:approve` | Approve request | A | — | `access_request_approved` | Not yet |
-| `access_requests:deny` | Deny request | A | — | `access_request_denied` | Not yet |
-
-### Bulk operations (4 actions)
-
-| ID | Description | Default | F? | Audit | Status |
-|---|---|---|---|---|---|
-| `employees:bulkAssignRole` | Assign role to N employees | A | — | `employees_bulk_role_assigned` | Not yet |
-| `employees:bulkSuspend` | Suspend N employees | A | — | `employees_bulk_suspended` | Not yet |
-| `employees:bulkExport` | Export selected employees | A | — | `employees_bulk_exported` | Not yet |
-| `employees:bulkImport` | Import N employees from CSV | A | — | `employees_bulk_imported` | Not yet |
-
-**Module 2 total: ~80 actions.** Almost all Admin-only by default
-(this is the meta-module). Self-service exceptions: `*:viewMy`,
-`employee_absences:request`, `audit:viewMyActivity`,
-`sessions:viewMy`, `access_requests:request`,
-`employees:editMyProfile`.
+(Full action tables retained as committed in v0.3.)
 
 ## 2.6 Views
 
-### Permissions editor — six tabs at `/employees/[id]/permissions`
+Six-tab permissions editor at `/employees/[id]/permissions`:
+Role & Overrides / Data & Field Access / Workflows & Delegations /
+Security & Sessions / UI & Audit / API & SSO.
 
-1. **Role & Overrides** — current role + table of bidirectional
-   overrides (permission, direction, expires_at, reason,
-   granted_by). Search box, group-by-module filter, "compare to
-   role default" toggle. Add Override button opens a drawer.
-2. **Data & Field Access** — data scope rules + field visibility
-   overrides per resource. Visualization of "what records this
-   employee can see" with sample preview.
-3. **Workflows & Delegations** — approval authority + temporary
-   delegations they hold.
-4. **Security & Sessions** — 2FA enrollment status, current
-   sessions list with sign-out buttons, security policy applied,
-   force-reauth event log, recent login attempts.
-5. **UI & Audit** — landing page selection, dashboard widget
-   selection, audit visibility scope, sidebar visibility per
-   module.
-6. **API & SSO** — personal API tokens (rare — Phase 2 default
-   off), SSO link (Phase 2).
-
-Each tab shows **role default alongside effective value**. "Reset
-to role default" button per section. Audit row on every change.
-
-### Other key views
-
-- **Employee list** with filter chips (role, status, last active,
-  has-overrides, locked, certifications-expiring, territory,
-  employee-type, manager). Bulk action toolbar appears on
-  selection.
-- **Color-coded technician profiles** (per ServiceTrade) — name
-  + role badge + active-cert badges in lists.
-- **Map view** at `/employees/map` (per simPRO) — see field staff
-  geographically; useful for dispatcher mental model. Pin per
-  employee colored by status.
-- **Licence Matrix Report** at `/employees/licence-matrix` (per
-  simPRO) — table view of all employees × all certification types,
-  color-coded (Active green / Expiring 30d yellow / Expiring 60d
-  amber / Expired red / Missing gray). Drilldown to cert detail.
-- **Role catalog page** with create-role wizard (guided creation
-  per §0.4 #5; inherit from closest existing role; behavior
-  binding step where operator picks default permissions in groups
-  rather than one-by-one).
-- **Approval workflow builder UI** — drag-drop step builder with
-  branching for value-threshold + conditional rules. Visual flow
-  preview.
-- **Security policy editor** per role with audit on every change.
-- **System-wide audit log** with filters: user, date range,
-  entity type, action type, IP.
-- **Employee availability calendar** — month/week/day views.
-- **Bulk operations modals** for role assignment, suspend,
-  export, import.
-
-### Invite flow
-
-1. Admin clicks "+ Invite Employee" from `/employees` list.
-2. Drawer opens — fields: email (required), first name, last name,
-   choose role (dropdown of available roles), choose employee
-   type (Office Staff / Field Tech / Hybrid / Apprentice /
-   Contractor-with-login), optional welcome message.
-3. System sends invitation email with unique signup link (24-hour
-   expiry, refresh-able).
-4. Invitee clicks link → password setup + 2FA enrollment (if
-   required by role policy) → fills remaining profile (phone,
-   address, emergency contact) → submits.
-5. Account becomes Active; first login welcomed with
-   role-appropriate landing page.
-
-### Request-admin-access workflow (per FieldWire pattern)
-
-When a non-Admin tries an action they don't have permission for,
-instead of just "Access denied", they see a "Request access" button
-that opens a modal:
-- Pre-filled context (action attempted, on which record)
-- Required reasoning field
-- Optional urgency selector (Routine / Urgent / Critical)
-- Submit creates `access_requests` row + emails all Admins
-
-Admins see queue at `/employees/access-requests`. Each row shows
-employee + action + record + reason + age. One-click Approve/Deny
-buttons; approve creates the appropriate per-user override
-automatically with optional `expires_at`.
+Other key views: employee list with filter chips, color-coded
+technician profiles (per ServiceTrade), map view at `/employees/map`
+(per simPRO), Licence Matrix Report (per simPRO), role catalog
+with create-role wizard, approval workflow builder UI, security
+policy editor, system-wide audit log, employee availability
+calendar, bulk operations modals, invite drawer flow,
+request-admin-access workflow (per FieldWire pattern, extended).
 
 ## 2.7 Field-level treatment
 
-14 visibility flags for employee records:
-
-- `visibility.employees.email` — non-admins see partial
-- `visibility.employees.personalPhone` — Admin + self only
-- `visibility.employees.address` — Admin only
-- `visibility.employees.emergencyContact` — Admin only
-- `visibility.employees.lastIp` — Admin only
-- `visibility.employees.lastDeviceFingerprint` — Admin only
-- `visibility.employees.failedLoginCount` — Admin/Acc
-- `visibility.employees.passwordResetHistory` — Admin only
-- `visibility.employees.hourlyBillRate` — A, Acc, PM-with-perm
-- `visibility.employees.hourlyCostRate` — A, Acc only (most sensitive)
-- `visibility.employees.payHistory` — A, Acc
-- `visibility.employees.bankingDetails` — A, Acc only; account#
-  always masked
-- `visibility.employees.sinNumber` — A, Acc only
-- `visibility.employees.dob` — A, HR-role only
+14 visibility flags for employee records (email, personalPhone,
+address, emergencyContact, lastIp, lastDeviceFingerprint,
+failedLoginCount, passwordResetHistory, hourlyBillRate,
+hourlyCostRate, payHistory, bankingDetails, sinNumber, dob).
 
 ## 2.8 Custom-field surfaces
 
-Custom fields on Employees appear in:
-- Create/invite drawer
-- Profile detail page (KPI badges if `show_in_header`)
-- List view (optional columns if `show_in_list`)
-- Filters
-- HR/payroll exports
-- Reports
-- Per-employee CSV exports
-
-Definitions managed in Settings → Custom Fields → Employees.
+Employees support operator-defined custom fields (managed in
+Settings → Custom Fields → Employees per §3.3 C).
 
 ## 2.9 Status surfaces
 
 11 lookup tables (see §2.4). Each with behavior bindings per §6.
-Each "+ Add" uses guided-creation wizard per §0.4 #5.
-
-**Operationally critical:**
-- `certification_types` — drives scheduling auto-match. Site
-  requires Kantech-cert tech → only employees with active Kantech
-  cert appear as candidates. Operator can add new cert type with
-  one form (e.g., "Genetec Mission Control 6.0 specialist").
-- `absence_types` — carries `paid`, `requires_approval`,
-  `deducts_from_balance`, `max_consecutive_days` flags. Different
-  from "label only" lookup.
 
 ## 2.10 Cross-module relationships
 
-**Read by every other module.** Every page render, every server
-action, every data query goes through permissions.
+Read by every other module — permission checks happen on every
+page render, server action, data query.
 
-**Specifically:**
-- **Clients** — `account_manager_user_id` FK; data scope filters
-- **Quotes** — `assigned_to_user_id`; approval workflow + delegation
-- **Projects** — `pm_user_id`, `tech_assignments[]`; cert matching
-- **Scheduling** — major reader — territory, cert, availability,
-  absence, capacity
-- **Financials** — payroll integration (Phase 2); rates for labor
-  cost; commission tracking
-- **Inventory** — equipment assignments link employees to trucks
-- **Vendors/Contractors** — AM assignment
+Specifically: Clients (account_manager_user_id), Quotes
+(assigned_to_user_id), Projects (pm_user_id, tech_assignments[]),
+Scheduling (major reader — territory, cert, availability, absence,
+capacity), Financials (payroll Phase 2, rates, commission),
+Inventory (truck assignments), Vendors/Contractors (AM assignment).
 
-**Events emitted:**
-- `employee.*` — 15+ events (invited, joined, profile_updated,
-  role_changed, suspended, on_leave, terminated, etc.)
-- `permission_override.*` — granted, revoked, expired,
-  auto_expired
-- `certification.*` — added, renewed, expired, expiring_soon
-  (30/60/90 day alerts)
-- `absence.*` — requested, approved, denied, started, ended,
-  cancelled
-- `session.*` — created, signed_out, expired, force_signed_out
-- `security_policy.*` — changed (per role)
-- `access_request.*` — submitted, approved, denied,
-  auto_expired
+Events: employee.*, permission_override.*, certification.*,
+absence.*, session.*, security_policy.*, access_request.*.
 
 ## 2.11 Competitive floor delta
 
-Module 2 beats every named competitor materially:
-
-- **Ten-dimensional permission control** — Salesforce has profiles
-  + permission sets (single-direction override); ServiceTitan flat
-  role-based; simPRO Security Groups with limited dimensions;
-  FieldWire two-tier but project+account only. Nexvelon's ten
-  dimensions with bidirectional overrides + time-bounded grants +
-  audit-on-every-change is category-leading.
-- **Contractual integrity exception** — none have a "this action
-  cannot be delegated even by Admin" enforcement.
-- **Certification tracking with scheduling auto-match + critical
-  flag + 30/60/90 day renewal alerts** — simPRO has parts;
-  ServiceTrade has parts; Salesforce has skills+levels. Nexvelon
-  combines all and adds operator-editable cert types with
-  guided-creation wizard.
-- **Request-admin-access workflow** for any gated action — FieldWire
-  has this for projects only; we extend to every action.
-- **Color-coded employee profiles + map view + Licence Matrix
-  Report** — ServiceTrade has color; simPRO has map + matrix.
-  Nexvelon combines all three; map applies to all employees not
-  just techs.
-- **Resource Absences with approval workflow + scheduling impact
-  + balance tracking per absence type** — Salesforce has absences;
-  Nexvelon adds approval flow + balance per type + auto-block on
-  scheduling assignments during absence windows.
-- **Eight-layer print protection on employee payroll/HR docs** —
-  beyond any competitor.
-- **Field-level encryption-at-rest** on banking + SIN + access
-  codes — unique.
+Beats every named competitor: ten-dimensional permission control,
+contractual integrity exception, certification tracking with
+scheduling auto-match + critical flag + 30/60/90 day alerts,
+request-admin-access workflow for any gated action, color-coded
+profiles + map view + Licence Matrix Report, Resource Absences
+with approval + scheduling impact + balance tracking,
+eight-layer print protection on payroll/HR docs, field-level
+encryption-at-rest on banking + SIN + access codes.
 
 ## 2.12 Permissions design implications
 
-Adding to Module 1's 14 items (§1.12):
-
-15. **Effective-permissions computation must be fast** — sub-10ms
-    per check. Cache pattern: compute on permission change →
-    store in `effective_permissions_cache` per user (jsonb) →
-    invalidate on relevant events.
-16. **Permission catalog is code-defined**, not operator-defined.
-    Operators configure WHO gets WHAT; they don't add new
-    permission types. Catalog exposed read-only.
-17. **Role hierarchy is Phase 2.** v1 flat roles; hierarchy adds
-    UI complexity and complicates effective-perm computation.
-18. **SSO/SAML is Phase 2.** v1 ships email+password+2FA; add SSO
-    when first enterprise customer demands.
-19. **Personal API tokens are Phase 2.** No current use case;
-    integrations via Admin-issued keys.
-20. **Certifications drive scheduling.** `cert_match` work rule
-    reads `employee_certification_records` +
-    `certification_types.critical` to block/allow assignments.
-    Ships seeded in v1.
-21. **Absences drive scheduling.** Approved absences block
-    assignments. Pending absences show as tentative blocks
-    visually distinct.
-22. **Two-tier permission model (account + project)** Phase 2.
-    Per FieldWire pattern. v1 system-wide roles only.
+Items 15-22: effective-permissions caching (sub-10ms), code-defined
+permission catalog, role hierarchy Phase 2, SSO Phase 2, personal
+API tokens Phase 2, certifications drive scheduling, absences drive
+scheduling, two-tier permission model Phase 2.
 
 ## 2.13 Open questions
 
-1. **Multi-company / departments concept** (per simPRO) — single-
-   tenant today, multi-company maybe later. *(Recommendation:
-   single-company at v1; schema includes `company_id` placeholder
-   column for future migration.)*
-2. **Crew assignments** (per Salesforce) — team of techs on one
-   job? *(Recommendation: Phase 2 with Scheduling; v1 lists
-   multiple individuals per job.)*
-3. **Service Resource vs Employee** distinction (per Salesforce) —
-   should subcontractors be in Employees or separate?
-   *(Recommendation: Contractors module owns subs; Employees
-   module owns internal. Both assignable via uniform interface.)*
-4. **Employee Portal pattern** (per simPRO) — stripped-down "no
-   license" portal for techs needing only schedule + time logging?
-   *(Recommendation: full app for everyone at v1; licensing-driven
-   portal optimization Phase 2.)*
+4 items: multi-company/departments (Phase 2 placeholder column),
+crew assignments (Phase 2), Service Resource vs Employee distinction
+(separate), Employee Portal pattern (full app for everyone at v1).
 
 ## 2.14 Acceptance criteria
 
-55 test scenarios for Module 2 build phase QA bar:
-
-### Functional — Employee CRUD (1-8)
-1. **Invite employee end-to-end.** Admin sends invite; recipient
-   gets email; clicks link; sets password + 2FA; completes profile;
-   account Active; first login lands on role-appropriate page.
-2. **Invite expiry.** Unused invite expires at 24h. Admin can
-   refresh expiry.
-3. **Cancel pending invite.** Admin cancels; recipient's link no
-   longer works; audit row written.
-4. **Edit profile (self).** Employee edits own phone + emergency
-   contact. Cannot edit own role, rates, or banking.
-5. **Edit profile (admin).** Admin edits another employee's name,
-   email (triggers re-verify), role.
-6. **Suspend employee.** Admin suspends; login blocked
-   immediately; existing sessions force-signed-out; audit row.
-7. **Terminate employee.** Admin runs termination workflow;
-   status changes; all active assignments offboarded; audit row;
-   data retained for compliance.
-8. **Hard delete (Admin only).** Triple-confirmation modal;
-   audit row preserved; FK references nulled; employee disappears.
-
-### Functional — Certifications (9-14)
-9. **Add certification.** Admin adds Kantech cert to John (Tech)
-   with issue/expiry dates + uploaded PDF. Appears in his profile.
-10. **Critical flag blocks scheduling.** John's Kantech cert
-    expires. Scheduler tries to assign him to Kantech site → blocked
-    with "Required cert expired" message.
-11. **30/60/90 day renewal alerts.** Cert expires in 90 days →
-    employee + AM notified; 60 days → escalated to Admin; 30 days
-    → daily reminder until renewed or marked critical.
-12. **Licence Matrix Report.** Loads all employees × all cert types
-    with color-coded status. Filter by expiring-in-X-days. Export
-    to CSV.
-13. **Mark renewed.** Admin clicks Mark Renewed; new expiry date
-    captured; old cert record archived with history preserved.
-14. **Bulk import certs.** CSV upload with employee email + cert
-    type + issue + expiry; system validates + creates records;
-    errors reported per row.
-
-### Functional — Territories & availability (15-18)
-15. **Multi-territory assignment.** John has Primary = GTA, Secondary
-    = Hamilton, Relocation = Ottawa (with end date). Scheduler shows
-    him in GTA queue prominently; Hamilton secondary; Ottawa only
-    until relocation end.
-16. **Availability pattern.** John works Mon-Fri 8-4. Scheduling
-    blocks assignments outside this window unless `available_for_emergency_call`
-    is true.
-17. **Absence request.** John requests vacation 2026-08-01 to 08-05.
-    PM gets notification; approves. Scheduling blocks assignments
-    in that window. John's absence balance decremented.
-18. **Pending absence visual.** Pending request shows as tentative
-    block in calendar with distinct hatched pattern.
-
-### Functional — Permissions (the 10 dimensions) (19-37)
-19. **Role default.** Fresh SR: views Clients, creates quotes, edits
-    drafts. Cannot view financials, set On Stop, override SLA.
-20. **Custom role creation.** Admin clicks New Role wizard; inherits
-    from SalesRep; renames "Senior SR"; adds `quotes:viewMargin`,
-    `quotes:approve` (under $25k); saves; appears in dropdown.
-21. **Additive override.** Admin grants John (SR) `clients:viewCreditInfo`;
-    John sees credit info; other SRs don't.
-22. **Subtractive override.** Admin removes `clients:editBasic` from
-    Jane (SR); Jane views but can't edit; other SRs can.
-23. **Time-bounded grant.** John granted bank visibility until
-    2026-06-30. On 2026-07-01, system auto-revokes; audit row;
-    notification to John + grantor.
-24. **Data scope: own records.** Sarah (SR) sees only her own clients.
-    Admin grants her one specific client of John's → appears in her
-    list with "shared" tag. Others invisible.
-25. **Data scope: user mirror.** Sarah mirrors John → sees all of
-    John's records.
-26. **Data scope: attribute filter.** Sarah scoped to "Manufacturing
-    tier" clients only → sees only those.
-27. **Data scope: territory.** John (Tech) scoped to GTA only →
-    schedule shows only GTA jobs.
-28. **Field visibility: hide.** PM sees inventory cost. SR doesn't.
-    PM denied `visibility.cost` via override → PM loses cost column.
-29. **Approval workflow.** SR submits quote $30k for approval. PM
-    queued (because under $50k); approves; audit captures both
-    submit + approve events.
-30. **Approval delegation.** Admin out for week; delegates
-    `quotes:approve` to PM Sarah until [date]; Sarah's queue
-    receives the SR's submission; approval audit shows delegation
-    chain.
-31. **2FA enforcement.** Admin sets Acc role 2FA required. Existing
-    Accs forced enrollment on next login.
-32. **Session timeout.** SR role = 8h. SR logs in, idles 8h+1min →
-    redirect to login. PM role = 7d.
-33. **IP allowlist.** SR account allowlisted to office IPs. SR tries
-    login from home → blocked with helpful error message.
-34. **Force re-auth on print.** Quote PDF download re-prompts
-    password even when logged in.
-35. **Hidden vs disabled sidebar.** SR no `financials:view`: item
-    completely absent. SR has view but no `financials:viewPL`:
-    item present; P&L tab hidden inside.
-36. **Audit visibility scope.** Admin reads system-wide. PM reads
-    Clients + Projects audit only. SR cannot read at all.
-37. **Lookup management — new role.** Admin creates new role
-    "Junior PM" via wizard inheriting from PM. Behavior bindings
-    pre-filled from PM. Operator adjusts down. Save → appears in
-    role dropdowns immediately. Audit row written.
-
-### Functional — Request-admin-access (38-39)
-38. **Request access workflow.** SR tries to set On Stop on a
-    client (no perm). Modal prompts: "Request access?" SR fills
-    reason "Customer hasn't paid in 90 days, need to hold." Submit
-    → Admin gets email + system inbox row. Admin clicks Approve →
-    grant created with `expires_at = +30 days`; SR re-tries action,
-    succeeds.
-39. **Auto-expire access request.** Admin doesn't action within 72h;
-    request auto-expires; SR notified.
-
-### Functional — Logging visibility (40-43)
-40. **Per-employee activity tab.** Admin opens John's profile →
-    Activity tab → reverse-chronological feed of everything John
-    has done; expand each to before/after snapshot.
-41. **System-wide audit feed.** Admin loads `/employees/audit-log`;
-    filters by user=John AND date_range=last week; sees all his
-    actions; exports to CSV.
-42. **Audit-driven notification rule.** Admin creates rule:
-    "Alert me when any employee is terminated." John gets terminated
-    → Admin receives email + Slack within 30s.
-43. **Audit immutability.** DB admin attempts UPDATE on `auth_audit_log`
-    row → RLS rejects.
-
-### Functional — Sessions (44-46)
-44. **View own sessions.** Tech views `/employees/[self]/sessions`
-    → sees current desktop + mobile sessions with last_active.
-45. **Force sign-out self.** Tech signs out remote browser session
-    from his mobile. Browser tab loses access within 5s.
-46. **Force sign-out other.** Admin force-signs-out compromised
-    employee account. All sessions invalidated within 5s. Employee
-    receives email notification.
-
-### Functional — Eight-layer print protection (47-49)
-47. **Payroll report PDF gated.** Acc downloads payroll PDF;
-    server-generated; audit row written. SR cannot access endpoint
-    (403).
-48. **HR doc watermark.** Draft employment contract has diagonal
-    watermark with operator name + timestamp on every print.
-49. **Banking print blocked.** Banking details PDF generation
-    blocked for any non-A/Acc user even if URL guessed.
-
-### Performance (50-52)
-50. **Permission check latency.** Sub-10ms per gate check at p95
-    (cached path); sub-100ms at p99 (cache miss + recompute).
-51. **Employee list with 500 employees.** Loads <2s with all
-    filters applied.
-52. **Licence Matrix Report.** 500 employees × 20 cert types =
-    10k cells. Loads <3s.
-
-### Security (53-55)
-53. **Privilege escalation via override API.** SR crafts API call
-    granting himself `clients:hardDelete` → blocked at perms check
-    (Admin-only action).
-54. **Banking data leakage.** Network tab during SR session never
-    shows full bank_account_number — backend masks before sending.
-55. **SLA override impersonation (cross-Module 1 reference).** SR
-    crafts API call → blocked even if granted via override
-    (contractual integrity exception).
+55 test scenarios captured in v0.3 covering Employee CRUD (1-8),
+Certifications (9-14), Territories & availability (15-18),
+Permissions / 10 dimensions (19-37), Request-admin-access (38-39),
+Logging visibility (40-43), Sessions (44-46), Print protection
+(47-49), Performance (50-52), Security (53-55).
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Modules 3-13: pending walk
+# 3. Module: Settings
+═══════════════════════════════════════════════════════════════════
+
+## 3.1 Purpose
+
+Settings is the **configuration surface** that controls how the
+other 12 modules behave. Not a feature module — the operator's
+control panel for bending the platform to your workflow without
+touching code.
+
+Every operator-editable thing in the system lives here: lookup
+table management (the ~30 status/type/tier/role lookups named
+across M1+M2), custom field definitions per entity, workflow
+rules editor, approval workflow templates, security policy per
+role, email/PDF/SMS templates, notification rules, integration
+connections, company profile, branding, audit retention, backups,
+and the Nexvelon-self subscription/billing.
+
+## 3.2 Sidebar surface
+
+**Bottom of sidebar** per §0.7 layout. Top-level item: ⚙️ Settings.
+Single entry; drilldown to sub-pages organized in categories.
+
+## 3.3 Routes & sub-routes (~70 sub-pages, organized in categories)
+
+### A. Company identity & branding (3 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/company-profile` | Legal name, BIN, GST/HST, addresses, logo, signing authority, default currency, default language, time zone, fiscal year end, default holdback | `company_profile:view` |
+| `/settings/branding` | Brand colors, theme (light/dark/system), PDF letterhead per language, email signature defaults | `branding:view` |
+| `/settings/formats` | Number format, date format, time format, default currency display | `formats:view` |
+
+### B. Lookup management (29 sub-pages — uniform pattern, each with guided-creation wizard per §0.4 #5)
+
+| Route | Manages lookup |
+|---|---|
+| `/settings/lookups` | Index of all lookups with row count + last modified |
+| `/settings/lookups/client-statuses` | client_statuses |
+| `/settings/lookups/customer-types` | customer_types (16 seeded) |
+| `/settings/lookups/client-tiers` | client_tiers (5 seeded with behavior bindings) |
+| `/settings/lookups/site-statuses` | site_statuses |
+| `/settings/lookups/site-types` | site_types |
+| `/settings/lookups/contact-roles` | contact_roles |
+| `/settings/lookups/response-time-types` | response_time_types |
+| `/settings/lookups/payment-methods` | payment_methods |
+| `/settings/lookups/lead-sources` | lead_sources |
+| `/settings/lookups/currencies` | currencies |
+| `/settings/lookups/languages` | languages |
+| `/settings/lookups/onboarding-gate-types` | onboarding_gate_types (includes T&C clause text editor) |
+| `/settings/lookups/misc-contact-categories` | misc_contact_categories (8 seeded) |
+| `/settings/lookups/sla-statuses` | sla_statuses |
+| `/settings/lookups/service-contract-statuses` | service_contract_statuses |
+| `/settings/lookups/service-contract-billing-cycles` | service_contract_billing_cycles |
+| `/settings/lookups/quote-statuses` | quote_statuses |
+| `/settings/lookups/project-statuses` | project_statuses |
+| `/settings/lookups/invoice-statuses` | invoice_statuses |
+| `/settings/lookups/vendor-statuses` | vendor_statuses |
+| `/settings/lookups/contractor-statuses` | contractor_statuses |
+| `/settings/lookups/certification-types` | certification_types (25+ seeded) |
+| `/settings/lookups/territories` | territories (geographic zones) |
+| `/settings/lookups/territory-types` | territory_types |
+| `/settings/lookups/absence-types` | absence_types |
+| `/settings/lookups/equipment-types` | equipment_types |
+| `/settings/lookups/tax-codes` | tax_codes (HST/GST/PST/state) |
+| `/settings/lookups/labor-rate-types` | labor_rate_types |
+| `/settings/lookups/employee-statuses` | employee_statuses |
+| `/settings/lookups/employee-types` | employee_types |
+
+### C. Custom field definitions per entity (12 sub-pages)
+
+| Route | Manages |
+|---|---|
+| `/settings/custom-fields/clients` | Client custom fields |
+| `/settings/custom-fields/sites` | Site custom fields |
+| `/settings/custom-fields/contacts` | Contact custom fields |
+| `/settings/custom-fields/quotes` | Quote custom fields |
+| `/settings/custom-fields/projects` | Project custom fields |
+| `/settings/custom-fields/inventory-items` | Inventory item custom fields |
+| `/settings/custom-fields/vendors` | Vendor custom fields |
+| `/settings/custom-fields/contractors` | Contractor custom fields |
+| `/settings/custom-fields/employees` | Employee custom fields |
+| `/settings/custom-fields/service-contracts` | Service contract custom fields |
+| `/settings/custom-fields/slas` | SLA custom fields |
+| `/settings/custom-fields/misc-contacts` | Misc contact custom fields |
+
+Each: list of defined fields + "+ Add Field" wizard (name, type
+[text/number/dropdown/date/boolean/multi-select/file], required,
+default value, show_in_list, show_in_header, show_on_pdf, sensitive
+flag, sort order, archived).
+
+### D. Workflow & automation (4 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/workflow-rules` | Data-driven rules editor (condition-action table at v1; visual flowchart Phase 2). Operator can view, clone, edit, disable seeded rules. | `workflow_rules:view` |
+| `/settings/approval-workflows` | Per-action approval flow templates (quotes:approve, invoices:approve, etc.). Sequence of approver steps with value thresholds + time bounds. | `approval_workflow_templates:view` |
+| `/settings/notifications` | Audit-driven alert rules. "When [event] AND [condition], notify [recipient] via [channel]." | `notification_rules:view` |
+| `/settings/sidebar-badges` | Which flags drive badge counts on each sidebar item (slow-pay, SLA expiring, overdue invoices, etc.) | `sidebar_badges:view` |
+
+### E. Templates (3 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/email-templates` | Per-language editor for ~25 seeded email types (welcome, password-reset, 2FA-enrollment, invite, quote-sent, quote-approved, invoice-sent, invoice-overdue, payment-received, cert-expiring-90d/60d/30d, sla-expiring-90d, absence-approved, etc.). Split-pane Handlebars editor with live preview + merge-tag autocomplete. | `email_templates:view` |
+| `/settings/pdf-templates` | Per-language editor for quote/invoice/work-order/commissioning/sla PDFs. Letterhead, body, footer; merge tags. | `pdf_templates:view` |
+| `/settings/sms-templates` | Phase 2 (Twilio integration deferred per §2.13) | Phase 2 |
+
+### F. Security policy (4 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/security/role-policies` | Per-role: 2FA requirement (Required/Optional/Exempt + which methods), session timeout, IP allowlist, device limit, force-reauth actions | `security:view` |
+| `/settings/security/password-policy` | Complexity rules, expiry, history, minimum length | `security:view` |
+| `/settings/security/api-keys` | Admin-issued integration keys (scoped, with expiry, audit on every use) | `api_keys:view` |
+| `/settings/security/sso` | Phase 2 placeholder | Phase 2 |
+
+### G. Audit & compliance (2 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/audit/retention` | Retention period (7-year default per PRINCIPLES §4), cold storage rotation config, manual rotation with reason | `audit_retention:view` |
+| `/settings/audit/notification-rules` | Cross-link to `/settings/notifications` (audit-driven alerts) | `notification_rules:view` |
+
+### H. Integrations (single page with tabs)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/integrations` | Tabbed layout: QuickBooks Online / Slack / Twilio (Phase 2) / Email Provider / Mapping API / Calendar / File Storage / Accounting Export / BIM/CAD (Phase 2). Each tab shows connection status, last sync, mapping config, manual sync, disconnect. | `integrations:view` |
+
+### I. System (3 pages)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/holdback-defaults` | Default holdback %, tax basis, release days (seeded with Ontario Construction Act standard 10%/Excl/45) | `holdback_defaults:view` |
+| `/settings/backups` | Automated DB backup schedule, retention, restore-test status | `backups:view` |
+| `/settings/multi-company` | Phase 2 placeholder; schema includes `company_id` column for future migration per §2.13 | Phase 2 |
+
+### J. Subscription/billing (1 page)
+
+| Route | Renders | Primary gate |
+|---|---|---|
+| `/settings/subscription` | Your Nexvelon subscription, billing history, license count, plan tier. Phase 2 placeholder until productized for external customers. | Phase 2 |
+
+**Total: ~70 sub-pages.** Sounds substantial but ~30 wrap lookup
+CRUD and ~12 wrap custom-field-definition CRUD via shared components.
+
+## 3.4 Resources
+
+**No new entity tables.** Module 3 surfaces existing tables from
+M1+M2 plus configuration-specific tables.
+
+### New owned tables specific to Settings
+
+- `company_profile` — single row (check constraint enforces one
+  company per install)
+- `branding_settings` — single row
+- `display_format_settings` — single row
+- `email_templates` — per language + event type (~50 rows seeded)
+- `pdf_templates` — per language + document type (~20 rows seeded)
+- `notification_rules` — operator-defined audit-driven alerts
+- `sidebar_badge_config` — per role + sub-item: which flags drive count
+- `api_keys` — Admin-issued integration keys with scopes + expiry
+- `integration_connections` — OAuth tokens (encrypted in Supabase
+  Vault) + sync state per integration
+- `password_policy` — single row
+- `audit_retention_settings` — single row
+- `backup_settings` — single row
+- `holdback_defaults` — single row
+- `workflow_rules` — Phase 2 data-driven rule store; v1 ships
+  seeded rules with read access + clone capability
+- `workflow_rule_executions` — audit of every rule firing
+- `approval_workflow_templates` — per-action approval flow
+  definitions (consumed by `approval_workflows` runtime in M2)
+
+### Existing tables this module manages CRUD on
+
+All status/type/lookup tables enumerated in §3.3 B (29 lookups),
+plus custom field definition tables per entity (12 entities ×
+`*_custom_field_definitions` + `*_custom_field_values`).
+
+## 3.5 Actions
+
+**~270 actions** in Module 3. Heavily templated — most are
+CRUD-on-lookup variants. Pattern per lookup × 29 lookups + per
+custom-field-entity × 12 entities + module-specific actions.
+
+### Lookup CRUD pattern (uniform across 29 lookups)
+
+| Pattern | Default | F? | Audit |
+|---|---|---|---|
+| `lookups:view` | A, PM | — | — |
+| `<lookup>:view` | A, PM (some Acc) | — | — |
+| `<lookup>:create` (guided wizard) | A | — | `<lookup>_created` |
+| `<lookup>:edit` | A | — | `<lookup>_updated` |
+| `<lookup>:archive` | A | — | `<lookup>_archived` |
+| `<lookup>:reorder` | A | — | `<lookup>_reordered` |
+| `<lookup>:hardDelete` | A | — | `<lookup>_hard_deleted` (only when unused; protected if referenced) |
+
+### Custom field definition pattern (uniform across 12 entities)
+
+| Pattern | Default | F? | Audit |
+|---|---|---|---|
+| `custom_fields:view` | A, PM | — | — |
+| `<entity>_custom_fields:view` | A, PM | — | — |
+| `<entity>_custom_fields:create` | A | — | `<entity>_custom_field_created` |
+| `<entity>_custom_fields:edit` | A | — | `<entity>_custom_field_updated` |
+| `<entity>_custom_fields:archive` | A | — | `<entity>_custom_field_archived` |
+| `<entity>_custom_fields:reorder` | A | — | `<entity>_custom_field_reordered` |
+
+### Module-specific Settings actions (~30 unique)
+
+| ID | Description | Default | Audit |
+|---|---|---|---|
+| `company_profile:view` | View company info | A, PM, Acc, VO | — |
+| `company_profile:edit` | Edit company info | A | `company_profile_updated` |
+| `branding:view` | View branding | A, PM, Acc, VO | — |
+| `branding:edit` | Edit colors/themes/letterhead | A | `branding_updated` |
+| `formats:view` | View display formats | All employees | — |
+| `formats:edit` | Edit company-wide formats | A | `display_formats_updated` |
+| `formats:editUserOverride` | Override format for self | All employees | `display_formats_user_override` |
+| `email_templates:view` | View templates | A, PM | — |
+| `email_templates:edit` | Edit templates | A | `email_template_updated` |
+| `email_templates:preview` | Send test email | A | `email_template_preview_sent` |
+| `pdf_templates:view` | View PDF templates | A, PM | — |
+| `pdf_templates:edit` | Edit PDF templates | A | `pdf_template_updated` |
+| `pdf_templates:preview` | Render preview | A | `pdf_template_preview_rendered` |
+| `notification_rules:view` | View rules | A | — |
+| `notification_rules:create` | Create rule | A | `notification_rule_created` |
+| `notification_rules:edit` | Edit rule | A | `notification_rule_updated` |
+| `notification_rules:disable` | Disable rule | A | `notification_rule_disabled` |
+| `sidebar_badges:view` | View badge config | A | — |
+| `sidebar_badges:edit` | Configure badge logic per role | A | `sidebar_badges_updated` |
+| `workflow_rules:view` | View rules (read-only at v1) | A | — |
+| `workflow_rules:clone` | Clone seeded rule for customization | A | `workflow_rule_cloned` |
+| `workflow_rules:edit` | Edit custom rule (Phase 2) | A | `workflow_rule_updated` |
+| `workflow_rules:disable` | Disable a rule | A | `workflow_rule_disabled` |
+| `workflow_rules:viewExecutionLog` | See execution history | A | — |
+| `approval_workflow_templates:view` | View templates | A | — |
+| `approval_workflow_templates:edit` | Edit template | A | `approval_workflow_template_updated` |
+| `security:view` | View security policy | A | — |
+| `security:editRolePolicy` | Edit per-role 2FA/session/etc. | A | `security_role_policy_updated` |
+| `security:editPasswordPolicy` | Edit complexity rules | A | `password_policy_updated` |
+| `api_keys:view` | View issued keys (masked) | A | — |
+| `api_keys:create` | Issue new API key (one-time display) | A | `api_key_created` |
+| `api_keys:revoke` | Revoke key | A | `api_key_revoked` |
+| `api_keys:viewUsageLog` | See usage history | A | — |
+| `integrations:view` | View integration status | A | — |
+| `integrations:connect` | OAuth connect | A | `integration_connected` |
+| `integrations:disconnect` | Revoke connection | A | `integration_disconnected` |
+| `integrations:editMapping` | Edit field mapping | A | `integration_mapping_updated` |
+| `integrations:triggerSync` | Manual sync | A | `integration_sync_triggered` |
+| `integrations:viewSyncLog` | See sync history | A | — |
+| `audit_retention:view` | View settings | A | — |
+| `audit_retention:edit` | Edit retention | A | `audit_retention_updated` |
+| `audit_retention:rotate` | Manual rotate to cold storage | A | `audit_rotated` |
+| `backups:view` | View backup status | A | — |
+| `backups:editSchedule` | Edit schedule | A | `backup_schedule_updated` |
+| `backups:trigger` | Manual backup | A | `backup_triggered` |
+| `backups:restoreTest` | Test restore | A | `backup_restore_tested` |
+| `holdback_defaults:view` | View defaults | A, PM, Acc | — |
+| `holdback_defaults:edit` | Edit construction-act defaults | A | `holdback_defaults_updated` |
+| `subscription:view` | View Nexvelon subscription | A | — |
+| `subscription:edit` | Edit subscription (Phase 2) | A | `subscription_updated` |
+| `settings:viewChangePreview` | Preview impact before save | A | — |
+
+**Default grants pattern:** Settings is heavily Admin-gated. PM
+can view a subset (lookups for entities they manage, templates,
+holdback defaults). Acc can view financial-relevant settings
+(payment methods, tax codes, holdback defaults). VO can view
+company profile + branding only.
+
+## 3.6 Views
+
+### Settings hub page (`/settings`)
+
+Categorized index with search box. Each category (A-J from §3.3)
+is a section with sub-page tiles showing icon + name + brief
+description + "last modified" timestamp. Mobile-friendly.
+
+### Uniform lookup sub-page pattern
+
+- Header: lookup name + count + "+ Add" button + filter chips
+- Table view with sort, filter, search, archive toggle
+- Click row → drawer with full edit (same form as guided-creation
+  wizard, pre-filled)
+- Archive vs hard-delete (hard-delete only for unused rows;
+  blocked if referenced with link to references)
+- Audit log link per row
+
+### Uniform custom-field-definition sub-page pattern
+
+Same as lookup pattern, but form differs (field name, type,
+options for dropdowns, default, visibility flags, sort).
+
+### Bespoke editors
+
+- **Workflow Rules editor** (`/settings/workflow-rules`) —
+  condition-action table at v1 (per §3.13 #1 decision). Each row:
+  WHEN [trigger event] WHERE [conditions joined by AND] THEN
+  [action]. Drag-reorder. Disable toggle per row. Clone button
+  duplicates with "(copy)" suffix. Visual flowchart Phase 2.
+- **Approval Workflow Template editor** — drag-drop step builder
+  showing sequential / parallel / value-threshold / conditional
+  steps. Visual flow preview.
+- **Email/PDF template editor** — split-pane: Handlebars editor
+  on left, live preview on right. Merge-tag autocomplete dropdown
+  shows available variables for that template type ({{client.*}},
+  {{quote.*}}, {{site.*}}, etc.). "Send test" button uses
+  current logged-in employee's email.
+- **Integrations page** — tabbed layout. Each tab: connection
+  status badge, last sync timestamp, mapping config table,
+  "Sync now" button, "Disconnect" button, sync log link.
+- **Notification rules builder** — form: WHEN [event] AND [conditions]
+  → recipients (specific users / role / dynamic from record),
+  channel (email / Slack / in-app), template selector. Test fire
+  with sample event payload.
+
+### Settings change preview (per §3.13 #6)
+
+For behavior-binding changes (e.g., editing tier SLA hours), the
+"Save" button is preceded by a preview modal: "This affects N
+records. Apply to new only / apply to all existing." Operator
+chooses scope; audit captures the choice + the count snapshot.
+
+## 3.7 Field-level treatment
+
+Mostly Admin-only access — field-level less relevant. Exceptions:
+
+- `visibility.api_keys.fullKey` — full key visible **only once
+  at creation** (one-time display modal); after that, masked
+  everywhere with last 4 chars visible
+- `visibility.integrations.credentials` — OAuth tokens never
+  displayed in UI; only "Connected" indicator + last sync time
+- `visibility.email_templates.testRecipientAddress` — masked in
+  audit log for privacy
+
+## 3.8 Custom-field surfaces
+
+Settings entities don't have their own custom fields (they're
+config, not business records). But Settings is **where the custom
+field definitions for all M1+M2+M4-13 entities ARE managed** —
+see §3.3 C.
+
+## 3.9 Status surfaces (Settings-specific)
+
+| Table | Seeded values | Behavior bindings |
+|---|---|---|
+| `api_key_statuses` | Active, Revoked, Expired | usable flag, rate limit applied |
+| `integration_connection_statuses` | Connected, Disconnected, Auth Error, Syncing, Sync Failed | sync trigger, alert rules |
+| `notification_rule_statuses` | Enabled, Disabled, Auto-disabled-after-failures | execution flag, alert escalation |
+| `workflow_rule_statuses` | Enabled, Disabled, Auto-disabled-after-failures | execution flag |
+
+## 3.10 Cross-module relationships
+
+**Every module reads from Settings.** This is the configuration
+spine.
+
+- **Clients/Sites/Contacts** (M1) reads: tier defaults, status
+  behaviors, response time bindings, onboarding gate clauses, T&C
+  templates, payment methods, currencies, languages, customer types
+- **Employees** (M2) reads: role definitions, security policies,
+  certification types, territory definitions, MFA methods,
+  session duration options, absence types
+- **All future modules** (M4-M13) read their respective status
+  surfaces from Settings lookups
+
+**Events emitted:** `settings.*` — every config change. High
+volume; subscription rules filter to relevant subsets.
+
+**Critical cross-module impact:** Changes to behavior-bound lookup
+rows immediately affect every consuming module on next read.
+**Versioning critical per §0.4 #8** — when tier SLA defaults
+change, already-sent quotes carry the version they were sent with.
+Settings change preview (§3.6) lets operator opt to apply to new
+records only when appropriate.
+
+## 3.11 Competitive floor delta
+
+Beats every competitor on **breadth of operator-editability**:
+
+- **simPRO** — lookup management partial; some lookups require
+  support tickets; templates editable but limited
+- **ServiceTitan** — lookups partially editable; many hardcoded
+- **FieldWire** — construction-project focused; configuration
+  depth limited
+- **ServiceTrade** — lookups limited; templates limited
+- **Salesforce Field Service** — powerful but requires Setup-page
+  navigation; complex UI; partner consultancy often needed
+- **Sedona Office** — rigid; many lookups admin-tier paid feature
+
+**Nexvelon:** every status, type, tier, role, template, and
+workflow rule editable by Admin from within the app. No support
+tickets. No code updates needed. Guided-creation wizards make every
+"+ Add" approachable. Plus: **email + PDF template editor with
+live preview + merge-tag autocomplete + per-language versioning**.
+Plus: **Settings change preview** showing impact count before save
+(competitive-unique).
+
+## 3.12 Permissions design implications
+
+Items 23-27:
+
+23. **Settings is heavily Admin-gated by default.** PM can be
+    granted specific views via per-user override; Acc can view
+    financial-relevant settings. The per-user override pattern
+    (§1.12) handles edge cases without role proliferation.
+
+24. **Lookup table CRUD audit must capture before/after state.**
+    Especially for behavior-binding fields — changing a tier's
+    SLA default is operationally significant and must be reversible.
+    Audit row includes the row state snapshot pre + post.
+
+25. **API keys are scoped permissions, not full access.** Each
+    API key carries a list of allowed actions from the standard
+    catalog. Integration key for QBO gets `invoices:read`,
+    `payments:write`, `customers:sync` — not full access.
+
+26. **Integration OAuth tokens are encrypted at rest** in Supabase
+    Vault. Never displayed in UI. Rotated on disconnect.
+
+27. **Workflow rule edits ship versioned.** Already-running
+    executions carry the rule version they started with. New
+    triggers use latest. Same versioning pattern as T&C clauses
+    (§0.4 #8).
+
+## 3.13 Open questions — RESOLVED IN SESSION E
+
+1. **Workflow Rules editor UX:** ✅ Condition-action table at v1.
+   Visual flowchart Phase 2.
+2. **Email template merge-tag library scope:** ✅ Handlebars-syntax
+   with safe subset; simple conditionals + basic arithmetic;
+   no loops in v1.
+3. **Per-user vs per-company display formats:** ✅ Company-wide
+   default with per-user override allowed (stored on employee
+   record).
+4. **Workflow rule sandboxing:** ✅ Rule execution timeout 30s,
+   max 100 actions per firing, audit + alert on rule failures,
+   auto-disable after 3 consecutive failures.
+5. **Settings backup/restore as JSON export:** ✅ Phase 2; useful
+   for multi-company expansion later.
+6. **Settings change preview** (impact count before save): ✅ Yes
+   for behavior-binding changes. Modal shows "This affects N
+   records" + apply scope choice.
+
+Remaining open questions:
+
+7. **API key rate limiting:** per-key requests/minute cap?
+   *Recommendation: Phase 2; ship with global rate limit at v1.*
+8. **Multi-language template translation flow:** if Admin edits
+   the English `quote.sent` template, does the system flag the
+   French version as "stale"? *Recommendation: yes — flag stale
+   translations with visual indicator + Admin notification.*
+9. **Workflow rule library seeding:** how many seeded rules ship
+   at v1? *Recommendation: ~15 essential rules covering
+   cert-expiry alerts, SLA breach alerts, On Stop holds,
+   approval routing, onboarding gate enforcement.*
+
+## 3.14 Acceptance criteria
+
+40+ test scenarios:
+
+### Functional — Lookup management (1-6)
+
+1. **Add new customer type via guided wizard.** Admin clicks
+   "+ Add" on customer-types. Wizard steps: name → smart
+   defaults (inherited from closest existing) → behavior bindings
+   (quote template, form variant, panel-cert requirement) → preview
+   → save. Appears in client-create dropdown immediately.
+2. **Edit tier's SLA default with change preview.** Admin changes
+   Platinum SLA from 2hr to 1hr. Preview modal shows: "This
+   affects 23 Platinum clients with auto-generated SLAs." Operator
+   selects "Apply to new only." Audit captures choice + 23-count
+   snapshot.
+3. **Archive unused lookup row.** Admin archives "Test Vendor
+   Type" (zero references). Row disappears from dropdowns but
+   retained in DB.
+4. **Block archive of referenced lookup row.** Admin tries to
+   archive "Active" client_status (used by 200 clients). System
+   blocks with "Reassign 200 clients before archiving."
+5. **Reorder lookup rows.** Admin drag-reorders client_tiers.
+   New order persists; dropdown reflects in next render.
+6. **Hard delete only when unreferenced.** Admin tries hard-delete
+   a referenced row → blocked. Tries hard-delete an unreferenced
+   row → confirms; row gone; audit retained.
+
+### Functional — Custom field definitions (7-9)
+
+7. **Add custom field to Clients.** Admin defines "Account
+   Manager Backup" as dropdown (employees). Field appears in
+   client create/edit drawer, list column toggle, filters, PDF.
+8. **Hide custom field on PDF.** Admin toggles `show_on_pdf=off`
+   on existing custom field. Field appears in app UI but absent
+   from generated quote PDFs immediately.
+9. **Sensitive custom field gated.** Admin marks custom field
+   "SSN" as sensitive → automatically gets field visibility
+   wired to Admin+Acc only.
+
+### Functional — Templates (10-14)
+
+10. **Edit email template with live preview.** Admin opens
+    `quote.sent` template (en). Edits subject. Live preview
+    re-renders with current merge-tag autocomplete.
+11. **Send test email.** Admin clicks "Send test" → email
+    delivers to logged-in employee's address with sample
+    rendered content + audit row.
+12. **Per-language version snapshot.** Admin sends a quote in
+    English. Two weeks later edits English template. Re-sent
+    quote uses NEW template; original quote retains the version
+    sent.
+13. **Stale translation flag.** Admin edits English `quote.sent`.
+    System flags French version with visual indicator + sends
+    notification to Admin to update fr template.
+14. **PDF template preview renders.** Admin edits letterhead
+    block in quote PDF template. Preview button renders sample
+    PDF with current branding settings + sample quote.
+
+### Functional — Workflow rules & automation (15-19)
+
+15. **Workflow rule fires on event.** Seeded rule "cert-expiring-30d"
+    triggers when certification.expiring_30d event fires.
+    Execution log captures the firing + actions taken.
+16. **Auto-disable after 3 failures.** Notification rule fails 3
+    consecutive times (email provider unreachable). Auto-disabled.
+    Admin notified.
+17. **Clone seeded rule for customization.** Admin clones
+    cert-expiring-30d. Customizes recipient list. Saves. Original
+    seeded rule preserved.
+18. **Workflow rule sandbox limits.** Custom rule attempts 200
+    actions in one firing → blocked at 100 + alert + audit row.
+19. **Approval workflow with value threshold.** Quote $30k
+    submitted. Workflow template `quotes:approve` routes to PM
+    (under $50k threshold). PM approves; audit captures full chain.
+
+### Functional — Notifications (20-22)
+
+20. **Notification rule create + fire.** Admin creates rule:
+    "When any employee terminated, email me." Employee terminated
+    → email arrives within 30s + audit row of rule firing.
+21. **Rule with condition filter.** Rule "When quote over $50k
+    sent, alert Admin." $30k quote sent → no fire. $60k quote
+    sent → alert fires.
+22. **Multi-channel notification.** Rule with email + Slack
+    channels. Both deliver. Each delivery audited separately.
+
+### Functional — Security & API keys (23-27)
+
+23. **Per-role 2FA enforcement.** Admin sets Acc role 2FA Required.
+    Existing Acc forced enrollment on next login.
+24. **Password policy edit.** Admin sets min length 12. Existing
+    accounts grandfathered; new passwords must meet new rule.
+25. **API key scoped enforcement.** Admin issues key with
+    `invoices:read` only. Key tries `clients:create` → blocked
+    with 403 + audit row.
+26. **API key revocation.** Admin revokes key. Next API call
+    using that key → 401 + audit row.
+27. **API key one-time display.** New key shown in modal once.
+    User dismisses. Key never re-displayable; only masked last-4
+    visible thereafter.
+
+### Functional — Integrations (28-30)
+
+28. **OAuth connect QuickBooks.** Admin clicks Connect → OAuth
+    flow → returns to integrations page with "Connected" + last
+    sync timestamp.
+29. **Manual sync trigger.** Admin clicks "Sync now" on QBO tab.
+    Sync runs, log updates, audit row written.
+30. **Disconnect revokes tokens.** Admin clicks Disconnect.
+    OAuth tokens deleted from Supabase Vault. Subsequent sync
+    attempts fail gracefully with "Reconnect required."
+
+### Functional — Company profile & branding (31-33)
+
+31. **Edit company logo.** Admin uploads new logo. Appears on
+    next-generated PDFs + sidebar header + email templates that
+    reference {{company.logo}}.
+32. **Branding color change.** Admin updates primary brand color.
+    Next page render reflects new color. Existing PDFs unchanged.
+33. **Display format per-user override.** Employee sets personal
+    date format MM/DD/YYYY (overriding company default
+    YYYY-MM-DD). Their views show MM/DD/YYYY; others unchanged.
+
+### Functional — Audit & backups (34-36)
+
+34. **Manual audit rotation.** Admin clicks "Rotate to cold
+    storage" → enters reason → confirms → rotation runs +
+    audit row with reason captured.
+35. **Backup trigger + restore test.** Admin triggers backup +
+    restore test. Restore-test status updates with timestamp.
+36. **Audit retention edit.** Admin extends retention from 7 to
+    10 years. Existing audit rows retained per new policy.
+
+### Permissions & access (37-40)
+
+37. **Settings hidden from non-Admin.** SR loads `/settings` →
+    redirected to dashboard with toast. Direct nav to
+    `/settings/lookups/client-tiers` → 403.
+38. **PM granular grant.** Admin grants PM `email_templates:view`
+    + `pdf_templates:view` only. PM sees Templates section in
+    Settings hub; other sections absent.
+39. **Three-state Settings sub-pages.** PM with no settings
+    permissions: Settings item completely absent from sidebar.
+    PM with partial: Settings present; un-permitted sub-pages
+    absent.
+40. **Per-user format override does not require Settings
+    permission.** Tech edits own date format from profile page;
+    no Settings access needed.
+
+### Performance & integrity (41-42)
+
+41. **Lookup load with 500 rows.** Lookup list with 500 entries
+    loads <2s with filters.
+42. **Settings change preview accuracy.** Tier SLA change
+    preview count matches actual affected records (verified by
+    direct query).
+
+---
+
+═══════════════════════════════════════════════════════════════════
+# Modules 4-13: pending walk
 ═══════════════════════════════════════════════════════════════════
 
 Walked in subsequent sessions. Same 14-subsection rubric. Each
 will be substantial but cross-cutting commitments from Modules
-1 + 2 (ten dimensions, behavior-bound lookups, guided creation,
+1 + 2 + 3 (ten dimensions, behavior-bound lookups, guided creation,
 SLA precedence, T&C composition, eight-layer print, request-admin-
-access, certification-driven scheduling, People menu structure)
-propagate forward.
+access, certification-driven scheduling, People menu structure,
+Settings as config spine) propagate forward.
 
-- §3 — Settings
-- §4 — Dashboard
-- §5 — Quotes
+- §4 — Dashboard (light)
+- §5 — Quotes (revenue module — major)
 - §6 — Projects
 - §7 — Inventory
 - §8 — Vendors
 - §9 — Invoices
 - §10 — Subcontractors (also "Contractors")
 - §11 — Financials
-- §12 — Scheduling
+- §12 — Scheduling (major reader of M1+M2+M3 surfaces)
 - §13 — Reports
 
 ---
@@ -1264,14 +1267,14 @@ propagate forward.
 *Populated after all 13 modules walked.*
 
 ## 102. Cumulative permissions design implications
-*Populated after all 13 modules walked.*
+*27 items so far. Populated fully after all 13 modules walked.*
 
 ## 103. Cumulative acceptance criteria
-*Populated after all 13 modules walked.*
+*~150 scenarios so far. Populated fully after all 13 modules walked.*
 
 ---
 
-**End of v0.3.** Modules 1 + 2 complete and operator-validated.
-Modules 3-13 pending. People menu sidebar architecture locked in
-§0.7. Cross-cutting commitments from Sessions C + D propagate
-forward into every subsequent module.
+**End of v0.4.** Modules 1 + 2 + 3 complete and operator-validated.
+Modules 4-13 pending. Settings as the configuration spine locked
+in §3. Cross-cutting commitments from Sessions C + D + E propagate
+forward.

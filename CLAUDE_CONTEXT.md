@@ -12,38 +12,37 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session D CLOSED.**
+**As of 2026-05-12. Session E CLOSED.**
 
-- **Session D focus:** Module 2 of the feature audit (Employees + Permissions) — operator design pass with comprehensive competitor research. Also locked in the People parent menu sidebar architecture (§0.7 of audit doc) and the "Employees" terminology replacement for "Users."
-- **Latest commit:** `docs: codify Session D — Module 2 audit + People menu architecture + handoff`. See `git log -1 --oneline`.
+- **Session E focus:** Module 3 of the feature audit (Settings) — operator design pass enumerating ~70 Settings sub-pages organized into 10 categories: company identity & branding, lookup management (29 lookups with guided-creation wizards), custom field definitions per entity (12 entities), workflow & automation, templates, security policy, audit & compliance, integrations, system, subscription/billing. Six open questions resolved in-session.
+- **Latest commit:** `docs: codify Session E — Module 3 (Settings) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 2 of 13 modules walked (Clients + Sites + Contacts complete; Employees + Permissions complete). Module 2's spec captures ~80 actions, 11 lookup tables, 55 acceptance criteria, and synthesizes competitor research from simPRO, ServiceTitan, FieldWire, ServiceTrade, Salesforce Field Service. Modules 3-13 pending.
+- **Feature audit progress:** 3 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings all complete). The three foundational modules are now done. Modules 4-13 pending: Dashboard (light), Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 3-13** — Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D propagate.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session D additions (effective-perms caching, request-admin-access workflow, certification-driven scheduling, etc.).
+  1. **Feature audit Modules 4-13** — Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D + E propagate.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session C + D + E additions.
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session D:**
-  - **People parent menu sidebar architecture** — top-level "People" item hover-expands to Clients, Sites, Employees, Vendors, Contractors, Misc Contacts. Each sub-item has its own list view + create flow.
-  - **"Employees" replaces "Users"** as terminology throughout the system. Action prefixes use `employees:*`. UI labels say "Employees." Database column `user_id` stays as technical naming.
-  - **Misc Contacts as extension of existing Contacts entity** — nullable `client_id` + new `misc_category` FK to `misc_contact_categories` lookup (8 seeded values). Not a separate table.
-  - **Ten-dimensional permission model fully scoped** — six tabs in `/employees/[id]/permissions`: Role & Overrides / Data & Field Access / Workflows & Delegations / Security & Sessions / UI & Audit / API & SSO.
-  - **Certification tracking with scheduling auto-match + critical flag** — operator-editable cert types (25+ seeded: Kantech, Genetec, C-CURE, DSC, Honeywell, Bosch, Avigilon, Lenel, Paxton, ESA, ULC, CFAA, OSHA-30, WHMIS, etc.), 30/60/90 day renewal alerts, hard-block on scheduling when critical cert expired.
-  - **Multi-territory model** (per Salesforce pattern) — Primary / Secondary / Relocation with date bounds.
-  - **Resource Absences with approval workflow** + scheduling impact + balance tracking per absence type.
-  - **Request-admin-access workflow** (per FieldWire pattern, extended) — when permission denied, "Request access" button submits reasoned request to Admin queue with one-click Approve/Deny.
-  - **Effective-permissions caching** — sub-10ms permission checks via `effective_permissions_cache` jsonb column, invalidated on grant/revoke events.
-  - **Phase 2 deferrals** locked in: SSO/SAML, personal API tokens, role hierarchy, multi-company, crew assignments, two-tier (account+project) permissions, Employee Portal pattern.
+- **Major architectural decisions from Session E:**
+  - **Settings as configuration spine** — every module reads from Settings; ~70 sub-pages organized in 10 categories (A-J).
+  - **29 operator-editable lookups** with uniform guided-creation wizard pattern per §0.4 #5.
+  - **12 custom-field-definition entities** with uniform CRUD pattern.
+  - **Workflow Rules editor: condition-action table at v1** (visual flowchart Phase 2). Operator views, clones, edits, disables seeded rules.
+  - **Workflow rule sandboxing:** 30s execution timeout, max 100 actions per firing, auto-disable after 3 consecutive failures, audit + alert on every failure.
+  - **Email/PDF templates** with Handlebars safe-subset merge tags + split-pane live preview + per-language versioning + stale-translation flagging.
+  - **Settings change preview** — for behavior-binding changes (e.g., editing tier SLA hours), modal shows "This affects N records" + apply-scope choice (new only / all existing). Audit captures choice + count snapshot.
+  - **Display formats:** company-wide default + per-user override allowed on employee record.
+  - **Phase 2 deferrals locked:** SMS templates, SSO config, multi-company, subscription billing (until productized externally), Settings JSON export/restore, API key per-key rate limiting, visual flowchart workflow editor.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session D produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.3, the updated ROADMAP, and `NEXVELON_SESSION_D_HANDOFF.md`. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session E produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.4, the updated ROADMAP, and `NEXVELON_SESSION_E_HANDOFF.md`. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 

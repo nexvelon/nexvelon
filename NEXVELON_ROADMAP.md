@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session D (2026-05-12):** Modules 1 and 2 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.3. Module 1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. Module 2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. Module 2's spec synthesizes competitor research from simPRO, ServiceTitan, FieldWire, ServiceTrade, Salesforce Field Service. Sessions C + D also locked the People parent menu sidebar architecture (§0.7) and the "Employees" terminology replacement. Modules 3-13 pending in subsequent sessions: Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+**Progress as of Session E (2026-05-12):** Modules 1, 2, and 3 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.4. Module 1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. Module 2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. Module 3 (Settings): ~270 actions (heavily templated), 16 Settings-specific tables, 4 status surfaces, 42 acceptance criteria. Settings is now the configuration spine that every other module reads from. The three foundational modules are complete. Modules 4-13 pending: Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -89,6 +89,15 @@ migration strategy for replacing the current static `lib/permissions
 - Multi-territory model (Primary/Secondary/Relocation per Salesforce pattern)
 - Resource Absences with approval workflow + scheduling block
 - Phase 2 deferrals locked: SSO/SAML, API tokens, role hierarchy, multi-company, crews, two-tier permissions
+
+**Inputs from Session E** (additions from Module 3 walk):
+- Settings as configuration spine (Module 3) — defines which lookups, templates, workflow rules, security policies are operator-editable
+- 27 cumulative permissions design implications
+- Settings change preview pattern for behavior-binding changes
+- API key scoped permissions model (each key carries action allowlist)
+- OAuth token encryption-at-rest pattern in Supabase Vault
+- Workflow rule versioning (already-running executions carry rule version)
+- Per-user display format override pattern
 
 ---
 
