@@ -12,44 +12,44 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session M CLOSED.**
+**As of 2026-05-12. Session N CLOSED.**
 
-- **Session M focus:** Module 11 of the feature audit (Financials) — GL backbone. Built-in GL with source-back traceability from any GL line to originating module event. Canadian-first tax compliance (HST/GST/PST + T4 + T5018). Period close with separation of duties (soft close Acc → hard close A + Acc co-sign). Period-end FX revaluation. Bank reconciliation. QBO/Xero/Sage 50 export. Project P&L drilling. Recurring journal entries. Holdback payable as separate liability. Nine in-session open questions resolved.
-- **Latest commit:** `docs: codify Session M — Module 11 (Financials) audit + handoff`. See `git log -1 --oneline`.
+- **Session N focus:** Module 12 of the feature audit (Scheduling) — operational scheduling layer. Heaviest cross-module reader (M1+M2+M3+M6+M10). Skill+cert+territory+availability+SLA-aware auto-suggest engine. Certification expiry auto-block extends §0.4 #12 to scheduling. SLA response time auto-enforcement with 75%/90%/breach alerts. Cross-resource scheduling (employees + contractors + vehicles + equipment). Mobile clock-in geolocation linked to project + phase + cost-centre driving M6 timesheets. Emergency dispatch override workflow. Append-only schedule change log. Travel time estimates via Google Distance Matrix API. Ten in-session open questions resolved.
+- **Latest commit:** `docs: codify Session N — Module 12 (Scheduling) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 11 of 13 modules walked. Modules 12-13 pending: Scheduling (next; major reader of M1+M2+M3+M6+M10 surfaces), Reports.
-- **File size management note:** Through v0.12, M1-M10 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b. Current session module always gets full content.
+- **Feature audit progress:** 12 of 13 modules walked. **Only M13 (Reports) remaining**.
+- **File size management note:** Through v0.13, M1-M11 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b, M11 b60caf7. Current session module always gets full content.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 12-13** — Scheduling (next), Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1130 actions across 11 modules).
+  1. **Feature audit Module 13 (Reports)** — broader reporting layer beyond M4 Dashboard and M11 Financials. Operator-defined reports. Standard library per role. Scheduled report delivery.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1205 actions across 12 modules).
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session M:**
-  - **Built-in GL** — Nexvelon ships with full GL so operators don't need separate accounting software at v1. But also exports to QBO/Xero/Sage 50 for operators who keep external accounting.
-  - **Source-back traceability** — every GL entry shows its origin module + entity + event. Click GL line → opens source quote/project/invoice/PO. Permission-aware drill-back.
-  - **Canadian-first tax compliance** — HST/GST/PST collected and remitted, T4 (year-end payroll consuming M2), T5018 (annual contractor + vendor reporting consuming M8 + M10).
-  - **Period close with separation of duties** — soft close (Acc) → hard close (A + Acc co-sign per §0.4 #11). Reopen requires A + reason + audit.
-  - **Period-end FX revaluation** for foreign currency balances. Single CAD functional currency; foreign revalued.
-  - **Bank reconciliation** with CSV/OFX import at v1; Plaid bank feed integration Phase 2.
-  - **QBO/Xero/Sage 50 export at v1** — operator can choose internal GL OR external accounting. Bidirectional sync Phase 2.
-  - **Project P&L drilling into M6 costing** — every project shows real revenue/cost flow.
-  - **Cost-centre allocation** consistent with M5 cost-centre framework for departmental P&L.
-  - **Recurring journal entries** for depreciation + monthly accruals.
-  - **Holdback payable as separate liability** (Canadian Construction Act compliance; reverses on holdback release invoice payment from M9).
-  - **Eight-layer print protection** extended to tax filings + financial reports.
-  - **Versioning commitment §0.4 #8 extended** to include GL period locking (GL entries within locked period cannot be edited).
-  - **Separation of duties §0.4 #11 extended** to include GL manual entries (creator ≠ poster) + hard close (A + Acc co-sign).
-  - **Phase 2 deferrals locked:** Plaid live bank feed, bidirectional QBO/Xero sync, multi-entity / multi-company, full report builder, advanced budgeting (rolling forecasts), automated audit-trail report for external auditor review.
+- **Major architectural decisions from Session N:**
+  - **Five-dimensional auto-suggest engine** — skill match + certification match + territory match + availability match + SLA-aware. Performance grade weighted in ranking.
+  - **Certification expiry auto-block on scheduling** — extends §0.4 #12 regulatory expiry pattern. Worker can't be scheduled to appointment requiring expired cert. Manual override (A) with reason captured.
+  - **SLA response time auto-enforcement** — per-site response time from M1 client config (site SLA > site response > client response > tier default precedence). Alerts at 75% (Approaching), 90% (Imminent), 100% (Breached). SLA waiver requires Admin + reason.
+  - **Cross-resource scheduling** — employees + contractors + vehicles + equipment in one unified calendar. Polymorphic resource_type field on appointment_resources junction.
+  - **Mobile clock-in geolocation** — linked to project + phase + cost-centre at clock-in/out. Drives M6 timesheets with proper cost allocation. Geolocation captured only on clock events at v1 (privacy + battery).
+  - **Emergency dispatch override workflow** — overrides normal scheduling availability with reason captured + audit row.
+  - **Multi-day project phase scheduling** with phase-level Gantt.
+  - **Schedule change auto-notifies customer + tech** with operator-configurable templates respecting client communication preferences from M1.
+  - **Append-only schedule change log** (extends §0.4 #10) — every reschedule, reassign, status change captures before/after snapshots.
+  - **Travel time estimates** between consecutive site appointments via Google Distance Matrix API.
+  - **External calendar one-way export at v1** (Google/Outlook iCS); bidirectional sync Phase 2.
+  - **Geolocation privacy retention** — 30-day default operator-configurable; locked as §0.4 #13.
+  - **Conflict detection visual indicators** on calendar: double-booking (red), cert expired (orange), outside territory (yellow), absence overlap (purple), SLA approaching (blue).
+  - **Capacity heatmap** — calendar grid showing utilization per day across teams; under-utilized days flagged for proactive outreach.
+  - **Phase 2 deferrals locked:** route optimization, AI scheduling recommendations, customer self-service scheduling portal, continuous geolocation tracking, in-app dispatcher-tech chat, customer photo upload from confirmation email.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session M produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session N produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 

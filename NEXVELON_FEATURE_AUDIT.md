@@ -10,9 +10,9 @@
 >   4. `NEXVELON_ROADMAP.md`.
 >   5. **This file** — feature audit + sidebar expansion.
 >
-> **Status:** v0.12 — Modules 1-11 fully scoped through Sessions C-M.
-> Modules 12-13 pending. M1-M10 condensed to headline stats per
-> file-size management pattern; current module gets full content.
+> **Status:** v0.13 — Modules 1-12 fully scoped through Sessions C-N.
+> Module 13 (Reports) pending. M1-M11 condensed to headline stats
+> per file-size management pattern; current module gets full content.
 
 ---
 
@@ -20,11 +20,11 @@
 
 ### 0.1-0.7
 
-Per v0.11 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C.
+Per v0.12 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C.
 
 ### 0.4 Permissions model — locked commitments
 
-Through Sessions B-M:
+Through Sessions B-N:
 
 1. **Role default + bidirectional per-user override.**
 2. **Three UI states per gated control:** hidden / disabled / interactive.
@@ -33,11 +33,12 @@ Through Sessions B-M:
 5. **Guided creation, never lazy creation.**
 6. **Ten dimensions of permission control.**
 7. **Contractual integrity exception:** `clients:overrideSlaResponseTime` Admin-only.
-8. **Versioned T&C clauses + workflow rules + dashboard widgets + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses + invoice send snapshots + contractor WO terms snapshots + labor rate snapshots + GL period locking.**
+8. **Versioned T&C clauses + workflow rules + dashboard widgets + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses + invoice send snapshots + contractor WO terms snapshots + labor rate snapshots + GL period locking + SLA response time snapshots on appointments.**
 9. **Eight-layer print protection** for sensitive PDFs (quotes, contracts, payroll, HR docs, commissioning certificates, handover packages, PO PDFs, remittance advice, T5018 forms, invoices, credit notes, statements, contractor WOs, MSA forms, tax filings, financial reports).
-10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor/contractor performance scoring, GL postings.
+10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor/contractor performance scoring, GL postings, schedule change log.
 11. **Separation of duties** enforcement (AP bill creator ≠ approver; payment run creator ≠ approver; GL manual entry creator ≠ poster; hard close requires A + Acc co-sign).
-12. **Regulatory expiry auto-block enforcement** (insurance + WSIB expired → PO/WO creation blocked; manual override requires A approval + reason).
+12. **Regulatory expiry auto-block enforcement** (insurance + WSIB + certification expired → PO/WO/appointment creation blocked; manual override requires A approval + reason).
+13. **Geolocation privacy retention** (mobile clock-in/out geolocation data retained 30 days default; operator-configurable).
 
 ### 0.6 Walk order
 
@@ -51,8 +52,8 @@ Through Sessions B-M:
 8. Vendors *(complete §8)*
 9. Invoices *(complete §9)*
 10. Subcontractors *(complete §10)*
-11. **Financials** *(complete §11)*
-12. Scheduling
+11. Financials *(complete §11)*
+12. **Scheduling** *(complete §12)*
 13. Reports
 
 ### 0.7 Sidebar architecture *(unchanged from Session K)*
@@ -61,12 +62,12 @@ Through Sessions B-M:
 🧭 Sidebar (top-level)
 ─────────────────────
 📊 Dashboard
-👥 People (parent — Clients, Sites, Employees, Vendors, Contractors, Misc Contacts)
+👥 People (parent)
 💰 Quotes
 📋 Projects
 📦 Inventory
-📅 Scheduling
-💵 Financials (parent — Invoices, Payments, Credit Notes, AP Bills, Payment Runs, Statements, Recurring, AR Aging from M9; Chart of Accounts, GL Journal Entries, Bank Reconciliation, Tax Filing, Period Close, Cash Flow, Financial Reports, Integrations from M11)
+📅 Scheduling             ← Module 12 surface
+💵 Financials (parent — 16 sub-items spanning M9 + M11)
 📈 Reports
 ⚙️ Settings
 ```
@@ -74,7 +75,7 @@ Through Sessions B-M:
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 1-10. Modules 1-10 — condensed headline stats
+# 1-11. Modules 1-11 — condensed headline stats
 ═══════════════════════════════════════════════════════════════════
 
 ## §1. Clients + Sites + Contacts
@@ -84,362 +85,380 @@ Through Sessions B-M:
 25 routes, ~80 actions, 11 lookup tables, 14 field visibilities. Six-tab permissions editor. 25+ seeded certifications. Multi-territory. Resource Absences. 55 acceptance criteria. Permissions: items 15-22. (Full content at `4dc0cc2`.)
 
 ## §3. Settings
-~70 sub-pages, ~270 actions, 16 tables, 4 status surfaces. 29 operator-editable lookups. 12 custom-field definition managers. Workflow Rules. Email/PDF templates. 42 acceptance criteria. Permissions: items 23-27. (Full content at `87a9fc8`.)
+~70 sub-pages, ~270 actions, 16 tables, 4 status surfaces. 29 operator-editable lookups. Workflow Rules. Email/PDF templates. 42 acceptance criteria. Permissions: items 23-27. (Full content at `87a9fc8`.)
 
 ## §4. Dashboard
 3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets, 6 role layouts. Three-way visibility gate. UI presentation as 10th dimension. 25 acceptance criteria. Permissions: items 28-30. (Full content at `6283d0f`.)
 
 ## §5. Quotes
-18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types. Online portal acceptance. Immutable send snapshots. Eight-layer print. T&C auto-composition. 52 acceptance criteria. Permissions: items 31-37. (Full content at `5633e25`.)
+18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types. Online portal acceptance. Immutable send snapshots. T&C auto-composition. 52 acceptance criteria. Permissions: items 31-37. (Full content at `5633e25`.)
 
 ## §6. Projects
-24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing. Change order workflow. Commissioning + ULC verification. Handover with warranty clock. Progress invoicing. Lien deadline tracking (Ontario 60-day). 58 acceptance criteria. Permissions: items 38-44. (Full content at `bafb708`.)
+24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing. Change order workflow. Commissioning + ULC verification. Handover with warranty clock. Progress invoicing. Lien deadline tracking. 58 acceptance criteria. Permissions: items 38-44. (Full content at `bafb708`.)
 
 ## §7. Inventory
 26 routes, ~95 actions, 15 owned tables, 6 status surfaces. Multi-location stock. FIFO valuation. Append-only movements ledger. Serial lifecycle. Photo on receive. Vendor catalog sync. 48 acceptance criteria. Permissions: items 45-49. (Full content at `f7cee0d`.)
 
 ## §8. Vendors
-18 routes, ~65 actions, 8 owned tables, 4 status surfaces. T5018 YTD + annual report (Canada). Vendor onboarding gates. Insurance/WSIB expiry tracking with auto-PO-block. Performance scoring with auto-degrade. Banking encrypted at rest. 35 acceptance criteria. Permissions: items 50-53. (Full content at `f3a763a`.)
+18 routes, ~65 actions, 8 owned tables, 4 status surfaces. T5018 YTD + annual report. Vendor onboarding gates. Insurance/WSIB expiry tracking with auto-PO-block. Performance scoring with auto-degrade. Banking encrypted at rest. 35 acceptance criteria. Permissions: items 50-53. (Full content at `f3a763a`.)
 
 ## §9. Invoices
-22 routes + 1 portal, ~115 actions, 14 owned tables, 5 status surfaces. AR + AP parallel flows. Customer payment portal with Stripe. 3-way match. Separation of duties on AP. T5018 auto-update. Canadian Construction Act holdback. Multi-currency. 55 acceptance criteria. Permissions: items 54-58. (Full content at `681b2ad`.)
+22 routes + 1 portal, ~115 actions, 14 owned tables, 5 status surfaces. AR + AP parallel flows. Customer payment portal with Stripe. 3-way match. Separation of duties on AP. T5018 auto-update. Canadian Construction Act holdback. 55 acceptance criteria. Permissions: items 54-58. (Full content at `681b2ad`.)
 
 ## §10. Subcontractors
 23 routes, ~75 actions, 13 owned tables, 5 status surfaces. WSIB auto-block (Ontario regulatory; §0.4 #12). T5018 mandatory. Lien deadline tracking. Worker manifest with cert verification. Skill + territory matching. Versioned labor rates. Cross-link with M8. 38 acceptance criteria. Permissions: items 59-62. (Full content at `4c0b33b`.)
 
+## §11. Financials
+26 routes, ~90 actions, 12 owned tables, 6 status surfaces. Built-in GL with source-back traceability. Canadian-first tax compliance (HST/GST/PST + T4 + T5018). Period close with separation of duties (soft Acc → hard A+Acc co-sign). FX revaluation. Bank reconciliation. QBO/Xero/Sage 50 export at v1. Project P&L drilling. Recurring journals. Holdback payable separate liability. 45 acceptance criteria. Permissions: items 63-67. (Full content at `b60caf7`.)
+
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 11. Module: Financials
+# 12. Module: Scheduling
 ═══════════════════════════════════════════════════════════════════
 
-## 11.1 Purpose
+## 12.1 Purpose
 
-General Ledger backbone. Every state change in every operational module posts to GL here:
-- M5 quote (no GL — quote is not yet revenue)
-- M6 project costs (timesheet approval, materials consumed, sub costs)
-- M7 inventory movements (receive, issue, write-off, FIFO consumption)
-- M8 vendor (none direct; feeds M7 POs + M9 AP bills)
-- M9 invoice (AR + AP cycles)
-- M10 contractor (none direct; feeds M9 AP bills)
-- M2 payroll (Payroll Expense DR, Cash CR, Tax Withholding CR)
-- M1 holdback (Holdback Payable accrual)
+Operational scheduling layer. Multi-resource calendar (employees + contractors + equipment + vehicles). Drag-drop appointment scheduling. SLA response time enforcement consuming M1 site-level SLAs. Capacity planning with heatmap. Skill + certification + territory + availability auto-suggest engine. Mobile schedule view for technicians with clock-in/out feeding M6 timesheets. Multi-day project phase scheduling. Recurring service appointments. Emergency dispatch with override workflow.
 
-Plus: Bank reconciliation. Canadian-first tax filing (HST/GST/PST + T4 + T5018). Period close (month-end + year-end). Cash flow management. Financial reports. QBO/Xero/Sage 50 integration (optional).
+For security integrators specifically:
+- **Certification expiry blocks scheduling** — worker can't be scheduled to fire alarm install if ULC expired (extends §0.4 #12 to scheduling)
+- **SLA response time auto-enforcement** — emergency response within 4 hours, Type A within 8 hours, etc. per M1 client config
+- **Per-site response time precedence** — emergency vs scheduled work routed differently
+- **Cross-resource scheduling** — employees + contractors + vehicles + equipment all schedulable
+- **Mobile clock-in geolocation** linked to project + phase + cost-centre (drives M6 timesheets)
 
-**Key design choice:** Nexvelon ships **with a built-in GL** so operators don't need separate accounting software at v1. But also exports to QBO/Xero/Sage 50 for operators who keep external accounting. v1: export + manual reconciliation. Bidirectional sync Phase 2.
+**Major reader of:** M1 (sites, response times, on-stop status), M2 (employees, certifications, territories, availability, absences), M3 (workflow rules, notification rules), M6 (project phases, tasks), M10 (contractor work orders).
 
-## 11.2 Sidebar surface
+## 12.2 Sidebar surface
 
-Under 💵 Financials parent per §0.7. M11 contributes 8 sub-items: Chart of Accounts / GL Journal Entries / Bank Reconciliation / Tax Filing / Period Close / Cash Flow / Financial Reports / Integrations. (M9 contributes the other 8.)
+Top-level 📅 Scheduling per §0.7. Badge: SLA breach alerts + dispatcher queue depth + unassigned emergency dispatches + appointments today pending confirmation.
 
-## 11.3 Routes & sub-routes
+## 12.3 Routes & sub-routes
 
 | Route | Renders | Primary gate |
 |---|---|---|
-| `/financials/chart-of-accounts` | CoA hierarchy | `coa:viewList` |
-| `/financials/chart-of-accounts/[id]` | Account detail with mappings | `coa:viewDetail` |
-| `/financials/chart-of-accounts/new` | Create account wizard | `coa:create` |
-| `/financials/gl-journal-entries` | GL entries list | `gl:viewList` |
-| `/financials/gl-journal-entries/new` | Manual entry (A/Acc only) | `gl:createManual` |
-| `/financials/gl-journal-entries/[id]` | Entry detail with source drill-back | `gl:viewDetail` |
-| `/financials/gl-recurring` | Recurring journal templates | `gl_recurring:viewList` |
-| `/financials/bank-accounts` | Bank accounts | `bank_accounts:viewList` |
-| `/financials/bank-accounts/[id]` | Account detail | `bank_accounts:viewDetail` |
-| `/financials/bank-reconciliation` | Reconciliation hub | `bank_recon:view` |
-| `/financials/bank-reconciliation/[accountId]` | Active reconciliation session | `bank_recon:execute` |
-| `/financials/tax-filing` | Tax filing dashboard | `tax_filing:view` |
-| `/financials/tax-filing/hst-gst` | HST/GST returns | `tax_filing:viewHstGst` |
-| `/financials/tax-filing/payroll` | T4 + payroll remittances | `tax_filing:viewPayroll` |
-| `/financials/tax-filing/contractor` | T5018 from M8/M10 | `tax_filing:viewT5018` |
-| `/financials/period-close` | Month-end + year-end | `period_close:view` |
-| `/financials/cash-flow` | Forecast + actual cash flow | `cash_flow:view` |
-| `/financials/reports/p-and-l` | P&L (Income Statement) | `reports:viewPnL` |
-| `/financials/reports/balance-sheet` | Balance Sheet | `reports:viewBalanceSheet` |
-| `/financials/reports/cash-flow-statement` | Cash Flow Statement | `reports:viewCashFlow` |
-| `/financials/reports/trial-balance` | Trial Balance | `reports:viewTrialBalance` |
-| `/financials/reports/budget-variance` | Budget vs Actual | `reports:viewBudgetVariance` |
-| `/financials/integrations` | QBO/Xero/Sage 50 hub | `integrations:viewFinancial` |
-| `/financials/integrations/qbo` | QuickBooks Online sync | `integrations:configureQbo` |
-| `/financials/integrations/xero` | Xero sync | `integrations:configureXero` |
-| `/financials/fx-revaluation` | Period-end FX adjustments | `fx:execute` |
+| `/scheduling` | Today dashboard with KPIs | `scheduling:view` |
+| `/scheduling/calendar` | Main calendar | `scheduling:viewCalendar` |
+| `/scheduling/calendar/day` | Day view | `scheduling:viewCalendar` |
+| `/scheduling/calendar/week` | Week view | `scheduling:viewCalendar` |
+| `/scheduling/calendar/month` | Month view | `scheduling:viewCalendar` |
+| `/scheduling/dispatch` | Emergency dispatch queue | `dispatch:view` |
+| `/scheduling/dispatch/new` | Create emergency dispatch | `dispatch:create` |
+| `/scheduling/gantt` | Project Gantt cross-projects | `scheduling:viewGantt` |
+| `/scheduling/resources/employees` | Employee resource calendar | `scheduling:viewEmployees` |
+| `/scheduling/resources/contractors` | Contractor resource calendar | `scheduling:viewContractors` |
+| `/scheduling/resources/vehicles` | Vehicle/equipment calendar | `scheduling:viewVehicles` |
+| `/scheduling/capacity` | Capacity heatmap | `scheduling:viewCapacity` |
+| `/scheduling/appointments/[id]` | Appointment detail | `appointments:viewDetail` |
+| `/scheduling/appointments/new` | Create appointment wizard | `appointments:create` |
+| `/scheduling/recurring` | Recurring series management | `scheduling:viewRecurring` |
+| `/scheduling/sla-alerts` | SLA breach warnings | `scheduling:viewSlaAlerts` |
+| `/scheduling/templates` | Schedule templates | `schedule_templates:viewList` |
+| `/scheduling/audit-log` | Module audit | `scheduling:viewAuditLog` |
+| `/scheduling/mobile` | Mobile-optimized today view | `scheduling:viewMobile` |
+| `/scheduling/route-optimizer` | Route optimization (Phase 2 placeholder) | `scheduling:viewRouteOptimizer` |
 
-## 11.4 Resources
+## 12.4 Resources
 
-### Owned tables (12)
+### Owned tables (10)
 
-- `chart_of_accounts` — accounts: account_number, name, type_id, sub_type_id, parent_account_id, currency_id, tax_treatment_id, is_active, description, allow_manual_posting
-- `gl_journal_entries` — header: entry_number, posting_date, description, source_module (M5/M6/M7/M8/M9/M10/M2/Manual), source_id, source_event_type, posted_by, posted_at, status_id, reversal_of_entry_id (nullable), locked_period_id (nullable)
-- `gl_journal_lines` — debit/credit lines: entry_id, account_id, debit, credit, currency_id, exchange_rate, foreign_currency_amount, line_description
-- `bank_accounts` — bank account master: name, bank_name, account_number_masked, routing_number_masked, currency_id, gl_account_id, opening_balance, current_balance, current_balance_as_of, plaid_connection_id (Phase 2)
-- `bank_transactions` — bank feed/imported: account_id, transaction_date, description, amount, running_balance, reference, matched_to_gl_line_id (nullable), match_confidence, import_source
-- `bank_reconciliation_sessions` — per-account periodic reconciliation: account_id, period_start, period_end, started_by, completed_by, ending_balance_per_bank, ending_balance_per_gl, variance, status_id, attached_statement_url
-- `accounting_periods` — period definitions: period_start, period_end, period_type (Month/Quarter/Year), status_id, soft_closed_by, soft_closed_at, hard_closed_by, hard_closed_at, hard_close_co_signer
-- `tax_filings` — tax return records: filing_type_id (HST/GST/PST/T4/T5018), period_start, period_end, total_collected, total_paid_out, total_remittance, filing_status_id, filed_at, cra_confirmation_number, attached_filing_pdf, attached_cra_response
-- `recurring_journal_templates` — recurring entries: name, description, schedule, template_lines jsonb, next_generation_date, last_generated_at, status
-- `fx_revaluation_runs` — period-end FX adjustment batches: period_id, executed_at, executed_by, total_unrealized_gain_loss, status, attached_revaluation_report_url
-- `accounting_integrations` — QBO/Xero/Sage 50 connections: integration_type, connection_state (encrypted OAuth in Vault), last_sync_at, sync_direction, mapping_rules jsonb, is_active
-- `accounting_integration_sync_log` — sync history: integration_id, sync_started_at, sync_completed_at, records_pushed, records_pulled, records_with_conflict, status, error_log_jsonb
+- `appointments` — main appointment: appointment_number (auto), title, description, appointment_type_id, status_id, priority_id, start_datetime, end_datetime, timezone (UTC stored, displayed in user TZ), location_type (Site/Office/Travel/Remote), site_id (nullable; FK to M1), client_id (nullable; FK to M1), project_id (nullable; M6), project_phase_id (nullable; M6), project_task_id (nullable; M6), contractor_wo_id (nullable; M10), source_recurring_series_id (nullable), is_emergency_dispatch, created_by, assigned_dispatcher_id, customer_notified_at, technician_notified_at, customer_confirmed_at, custom_fields jsonb, snapshot_sla_response_time (captured at creation for legal durability per §0.4 #8)
+- `appointment_resources` — M:N: appointment_id, resource_type (Employee/Contractor/Vehicle/Equipment), resource_id (polymorphic FK), role (Lead Tech/Helper/Apprentice/Supervisor), is_required
+- `appointment_recurrence_rules` — series config: series_name, first_appointment_id, recurrence_type, recurrence_interval, end_condition (After N / By Date / Never), exception_dates jsonb (holidays, blackouts), status_id, generated_count
+- `appointment_change_log` — append-only audit per §0.4 #10: appointment_id, change_type, changed_by, changed_at, before_snapshot jsonb, after_snapshot jsonb, change_reason
+- `resource_availability_blocks` — calculated capacity per resource per day (computed periodically): resource_type, resource_id, date, available_minutes, scheduled_minutes, utilization_pct, conflict_count
+- `dispatch_records` — emergency dispatch events: dispatch_number, caller_name, caller_phone, urgency, response_time_required (from M1 SLA), assigned_appointment_id, dispatched_by, dispatched_at, acknowledged_by_tech_at, on_site_at, resolved_at, sla_breach (boolean)
+- `schedule_templates` — reusable templates: name, description, default_appointment_type, default_duration_minutes, required_skills jsonb, required_certifications jsonb, default_resource_count, equipment_required jsonb
+- `sla_breach_alerts` — alerts for upcoming/actual violations: alert_type (Approaching/Imminent/Breached), site_id, appointment_id (nullable), client_id, required_response_time, actual_response_time (nullable), severity, generated_at, acknowledged_at, acknowledged_by, escalation_level
+- `external_calendar_sync_state` — Google/Outlook export sync: user_id, calendar_type, last_sync_at, sync_token, mapping_rules
+- `travel_time_estimates` — between-sites: from_site_id, to_site_id, estimated_travel_minutes, mode (Driving/Walking/Transit), last_calculated_at (using Google Distance Matrix API)
 
-### Status lookup tables (6)
+### Status lookup tables (4)
 
 | Table | Seeded values | Behavior bindings |
 |---|---|---|
-| `coa_account_types` | Asset, Liability, Equity, Revenue, COGS, Expense, Other Income, Other Expense | balance sheet vs income statement, sign convention |
-| `coa_account_sub_types` | Current Asset, Non-Current Asset, AR, Inventory, Fixed Assets, Accumulated Depreciation, Current Liability, Non-Current Liability, AP, Accrued Liabilities, Taxes Payable, Owner's Equity, Retained Earnings, Sales Revenue, Service Revenue, Recurring Revenue, COGS, Direct Labor, Subcontractor Costs, Materials, Operating Expenses, Administrative, Tax Expense, Other | report grouping, default tax treatment |
-| `gl_entry_statuses` | Draft, Posted, Reversed, Locked (in closed period) | allows-edit, allows-reversal |
-| `period_statuses` | Open, Soft Close, Hard Close, Reopened | allows-posting, requires-approval-to-reopen |
-| `tax_filing_statuses` | Draft, In Review, Filed, Acknowledged by CRA, Disputed, Closed | allows-edit, regulatory-deadline |
-| `bank_recon_statuses` | Not Started, In Progress, Variance Identified, Reconciled, Locked | allows-modification |
+| `appointment_statuses` | Tentative, Confirmed, En Route, On Site, In Progress, Completed, Cancelled by Customer, Cancelled by Us, No Show, Rescheduled | allows-edit, triggers-notification, terminal flag |
+| `appointment_types` | Installation, Service Call, Maintenance, Commissioning, Emergency Dispatch, Inspection, Training, Travel Time, Internal Meeting, Site Visit (pre-quote), Pickup/Delivery | default duration, default required skills, color coding |
+| `priority_levels` | Critical (P0), High (P1), Normal (P2), Low (P3) | SLA response time mapping, escalation thresholds |
+| `sla_breach_statuses` | Approaching (warning at 75%), Imminent (alert at 90%), Breached (notification), Acknowledged, Waived, Resolved | escalation, customer notification |
 
-## 11.5 Actions (~90 actions across 10 categories)
+## 12.5 Actions (~75 actions across 12 categories)
 
-**Chart of Accounts (10):** viewList, viewDetail, create, edit, archive, viewMappings, importFromTemplate, exportCoa, viewHierarchy, recategorize.
+**Calendar views (8):** viewMyDay, viewMyWeek, viewMyMonth, viewTeamCalendar, viewResourceCalendar, viewSiteCalendar, switchView, exportCalendar.
 
-**GL Journal Entries (12):** viewList, viewDetail, createManual (A/Acc separation of duties), editDraft, postEntry, reverseEntry, viewSourceTraceability (drill-back to source), bulkReverse, viewRecurring, generateRecurringNext, viewVariance, lockEntry.
+**Appointments lifecycle (15):** viewList, viewDetail, create (with auto-suggest engine), edit, reschedule, cancel, markComplete, recordNoShow, recordCustomerCancellation, applyTemplate, generateFromProjectPhase (auto from M6), generateFromTask (auto from M6), viewActivity, exportPdf, sendReminder.
 
-**Bank Reconciliation (10):** viewList, startReconciliation, importBankStatement (CSV/OFX), connectBankFeed (Plaid Phase 2), matchTransaction (auto + manual), splitTransaction, addUnmatched, completeReconciliation, viewVariance, exportReconReport.
+**Resources (8):** viewEmployeeAvailability, viewContractorAvailability, viewVehicleAvailability, assignResource, removeResource, viewConflicts (double-booking, cert expired, absence overlap), viewCapacityHeatmap, blockTimeOff (creates M2 absence record).
 
-**Bank Accounts (5):** viewList, viewDetail, create, edit, archive.
+**Dispatch (6):** viewQueue, createEmergencyDispatch, assignToTech, overrideNormalScheduling (with reason captured), viewDispatchHistory, escalate.
 
-**Period Close (8):** viewPeriods, softClose, hardClose (requires A + Acc co-sign), reopenPeriod (A only with reason), runPeriodEndChecks, runFxRevaluation, exportPeriodReport, viewLockStatus.
+**Recurring (5):** createSeries, editSeries, pauseSeries, cancelSeries, generateNextOccurrence.
 
-**Tax Filing (12):** viewDashboard, generateHstGstReturn, generateT4Slips, generateT5018Slips (consuming M8 + M10), recordRemittance, viewFilingHistory, exportFilingPdf, exportFilingCsv, recordCraResponse, viewTaxLiabilityBalance, configureFilingSchedule, generatePayrollRemittance.
+**SLA monitoring (5):** viewBreachAlerts, configureAlertThresholds, escalateBreachInternally, recordSlaWaiver (A only with reason), viewSlaPerformance.
 
-**Cash Flow (5):** viewForecast, viewActual, viewByPeriod, drillDownByCategory, exportForecast.
+**Auto-suggest engine (4):** suggestForAppointment, suggestRebalancing, viewSuggestionLog, acceptSuggestion.
 
-**Reports (15):** viewProfitLoss, viewBalanceSheet, viewCashFlowStatement, viewTrialBalance, exportToExcel, exportToPdf, viewByDepartment, viewByProject, compareToBudget, viewBudgetVariance, viewExpensesByCategory, viewRevenueBySource, viewMarginByProject (field-level gated), exportForAccountant, customizeReportLayout.
+**Templates (5):** viewList, create, edit, applyTemplate, archive.
 
-**Integrations (8):** connectQbo, connectXero, connectSage50, disconnectIntegration, configureMapping, triggerSync, viewSyncHistory, resolveConflict.
+**Mobile (5):** viewMobileSchedule, recordClockIn (geolocation captured), recordClockOut, recordOnSite, recordCompletedOnSite.
+
+**External calendar sync (3):** connectGoogleCalendar (one-way export at v1), connectOutlook (one-way at v1), exportToIcs.
+
+**Reports (5):** scheduleAdherenceReport, utilizationByResource, slaPerformanceByResponseType, dispatchTimeMetrics, customerCancellationsReport.
+
+**Audit (4):** viewAuditLog, viewChangeHistory, exportChangeLog, viewScheduleSnapshot.
 
 **Default grants:**
-- **A:** full access including hard close + reopen periods + manual GL entries
-- **Acc:** full access except hard close (requires A co-sign)
-- **PM:** view P&L for own projects only; view AR aging from M9; no GL detail access
-- **SR:** view none
-- **Tech:** view none
-- **VO:** view P&L only (no margin); view Balance Sheet (no detail accounts)
-- **Bookkeeper** (special role; granted via M2): view + post manual entries; cannot close periods
+- **A:** full
+- **Dispatcher (special role via M2):** full scheduling, dispatch authority, override
+- **PM:** create/edit/reschedule appointments for own projects' phases + tasks
+- **SR:** viewMy (own client appointments — read only)
+- **Tech:** viewMobileSchedule (own), clockIn/Out, markComplete (own)
+- **Acc:** viewList read-only (time reconciliation)
+- **VO:** viewList only
 
-## 11.6 Views
+## 12.6 Views
 
-### Chart of Accounts (`/financials/chart-of-accounts`)
+### Today dashboard (`/scheduling`)
 
-Hierarchical tree view. Filter by account type. Show: account number, name, type, sub-type, current balance, currency, last-activity-date. Drill into account → see all GL entries posted + module sources + filter by period.
+KPI tiles: Today's appointments / In Progress now / Completed today / SLA breaches today / Emergency dispatch queue / Unassigned. Quick actions. Live activity feed.
 
-### GL Journal Entry detail
+### Main calendar (`/scheduling/calendar`)
 
-Header + debit/credit lines + source traceability. **Source drill-back:** every GL entry shows its origin module + entity + event. Permission-aware (PM sees only own-project drill-backs).
+Day/Week/Month toggle. Multi-resource view (rows = resources, columns = time). Drag-drop to move appointments. Resize to change duration. Color-coded by appointment type. Filter chips: priority, status, project, technician, contractor, site, customer tier.
 
-### Bank Reconciliation interface
+Conflict detection visual indicators:
+- 🟥 Double-booking
+- 🟧 Certification expired for required skill
+- 🟨 Outside service territory
+- 🟪 Resource absence overlap
+- 🟦 SLA response time approaching
 
-Side-by-side: bank statement transactions vs GL postings. Auto-match by date + amount. Manual match drag-drop. Unmatched list. Running variance. Complete locks session.
+### Appointment create wizard
 
-### Period Close workflow
+Multi-step:
+1. Type & priority
+2. Customer & site
+3. Date & duration
+4. Required skills/certs (from M2)
+5. Auto-suggest resources (ranked list)
+6. Assign resources
+7. Travel time estimate (Google Distance Matrix)
+8. Notifications
+9. Review & confirm
 
-Step-by-step checklist:
-1. Review AR aging (drill into M9)
-2. Review AP aging (drill into M9)
-3. Verify inventory valuation matches FIFO
-4. Run FX revaluation for foreign currency balances
-5. Review accruals (revenue earned but not invoiced; expenses incurred but not billed)
-6. Run period-end checks
-7. Acc: Soft Close (period locks for new postings; reversal allowed)
-8. A + Acc co-sign: Hard Close (fully locked; reopen requires reason + audit)
+### Emergency dispatch flow
 
-### Tax Filing dashboard
+1. Caller info captured
+2. Site selected → SLA response time computed (M1 site response → client default → tier default precedence)
+3. Available technicians ranked: distance + skills + currently uncommitted time
+4. Override normal scheduling if needed (reason captured)
+5. Dispatch sent → tech notified → SLA clock starts
+6. Tech acknowledges → on-site → resolves → dispatch closed
 
-Per filing type (HST/GST/PST/T4/T5018):
-- Current period accumulator
-- Next filing deadline
-- Filing history with CRA confirmation
-- Generate return PDF (eight-layer protected)
-- Record remittance to CRA
+### Resource availability calendar
 
-### Cash Flow forecast
+Per-resource view: scheduled appointments + absences (M2) + cert expiry alerts. Color-coded utilization (red >90%, orange 75-90%, yellow 50-75%, green <50%).
 
-Time-series chart: actual past 90 days + forecast next 90 days. Inputs: AR aging, AP aging, scheduled invoices, recurring auto-generation, scheduled payroll, scheduled tax remittances. Drill down by category (Operating / Investing / Financing).
+### Capacity heatmap (`/scheduling/capacity`)
 
-### P&L Report
+Calendar grid showing utilization per day across teams. Drill into day → see all resources + bookings. Identify under-utilized days for proactive outreach.
 
-By period (Month / Quarter / YTD / Custom). Comparative columns (this period / last period / YoY / Budget / Variance). Drill into account → see GL entries. Filter by department (cost centre) or project. Export to Excel + PDF.
+### Mobile technician view (`/scheduling/mobile`)
 
-### Balance Sheet
+Today's schedule list. Each card:
+- Time + duration
+- Customer + site address (tap → navigate)
+- Type + priority
+- Required tools/equipment
+- Customer phone (tap to call)
+- Clock-in / Clock-out (geolocation)
+- Mark Complete with notes + photos + customer signature
 
-Point-in-time view. As-of date selector. Comparative columns. Drill into account → see composition.
+### Schedule change log
 
-### Cash Flow Statement
+Append-only audit. Filter by appointment, technician, date range. Shows: who changed what when, before/after snapshots, reason for change.
 
-Operating / Investing / Financing breakdown. Indirect method default.
+### SLA breach alerts (`/scheduling/sla-alerts`)
 
-### QBO/Xero Integration
+Active alerts panel: Approaching (75%) / Imminent (90%) / Breached. Click → drill into appointment → re-assign or escalate.
 
-Connection state. Last sync. CoA mapping interface. Sync direction (Export-only / Bidirectional Phase 2). Manual sync. Conflict resolution.
+## 12.7 Field-level visibility (5 flags)
 
-## 11.7 Field-level visibility (8 flags)
+- `visibility.scheduling.fullCalendarAcrossTeams` — A, Dispatcher only
+- `visibility.scheduling.employeeCostRate` — A, Acc only
+- `visibility.scheduling.privateAppointments` — owner-only
+- `visibility.scheduling.customerPii` — A, PM, assigned-tech
+- `visibility.scheduling.geolocationHistory` — A, owner only (30-day retention default per §0.4 #13)
 
-- `visibility.financials.bankBalances` — A, Acc only
-- `visibility.financials.taxLiability` — A, Acc, Bookkeeper-role
-- `visibility.financials.payrollGl` — A, Acc, HR-role
-- `visibility.financials.executiveCompensation` — A only (board-level)
-- `visibility.financials.proprietaryFinancials` — A, Acc, executives
-- `visibility.financials.intercompanyTransfers` — A only (Phase 2 multi-entity)
-- `visibility.financials.foreignExchangeRates` — A, Acc
-- `visibility.financials.unrealizedGainLoss` — A, Acc
+## 12.8 Custom-field surfaces
 
-## 11.8 Custom-field surfaces
+Per-appointment custom fields managed in Settings → Custom Fields → Appointments. Examples: Customer Phone Confirmed, Equipment to Bring, Special Access Required (gate code, key location), Customer Pet (warning), Site-Specific PPE Required, Parking Notes, Building Restrictions, Multi-Day Project Day Number.
 
-Limited custom fields here — financial data is structured. Custom dimensions for reporting: per-account custom tags. Per-GL-entry memo field is custom-friendly.
+## 12.9 Status surfaces
 
-## 11.9 Status surfaces
+4 lookup tables (see §12.4).
 
-6 lookup tables (see §11.4).
+## 12.10 Cross-module relationships
 
-## 11.10 Cross-module relationships
+### Reads (extensive — Module 12 is heaviest reader)
 
-### Reads from EVERY module
+- **Clients (M1):** site, response_times, on_stop status (blocks new appointments)
+- **Sites (M1):** location, access info, equipment installed
+- **SLAs (M1):** per-site response time → SLA enforcement
+- **Employees (M2):** availability, certifications, territories, absences, hourly_rate
+- **Settings (M3):** workflow rules, notification rules, appointment types, priorities, schedule templates
+- **Projects (M6):** project phases + tasks (work to schedule), project_pm + assigned techs
+- **Contractors (M10):** contractor work orders for sub-contractor scheduling
 
-Every state change posts a GL entry:
-- M5 quote: no GL (not yet revenue)
-- M6 project costs (labor, materials, sub)
-- M7 inventory (receive, issue, write-off, FIFO consumption)
-- M8 vendors: indirect via M7 + M9
-- M9 invoice AR + AP cycles
-- M10 contractors: indirect via M9
-- M2 payroll
-- M1 holdback
+### Writes
 
-### Writes nothing back
-
-GL is the destination. Read by:
-- M4 Dashboard (KPI widgets)
-- M13 Reports (broader reporting)
+- **Communication log (M1):** auto-notify customer on schedule changes + reminders
+- **Timesheets (M6):** mobile clock-in/out creates time entries on project_phase + cost_center
+- **Audit on every schedule change**
 
 ### Events emitted
 
-`gl_entry.posted`, `gl_entry.reversed`, `period.soft_closed`, `period.hard_closed`, `period.reopened`, `bank_recon.completed`, `bank_recon.variance_identified`, `tax_filing.generated`, `tax_filing.filed`, `tax_filing.cra_acknowledged`, `fx_revaluation.run`, `integration_sync.completed`, `integration_sync.conflict_detected`.
+`appointment.created`, `appointment.scheduled`, `appointment.rescheduled`, `appointment.assigned`, `appointment.customer_notified`, `appointment.tech_notified`, `appointment.confirmed_by_customer`, `appointment.en_route`, `appointment.on_site`, `appointment.in_progress`, `appointment.completed`, `appointment.cancelled`, `appointment.no_show`, `dispatch.created`, `dispatch.acknowledged`, `dispatch.on_site`, `dispatch.resolved`, `sla_breach.approaching`, `sla_breach.imminent`, `sla_breach.breached`, `sla_breach.acknowledged`, `sla_breach.waived`, `recurring_series.next_generated`, `schedule_change.logged`.
 
-## 11.11 Competitive floor delta
+## 12.11 Competitive floor delta
 
 Combines best of:
-- **simPRO:** basic GL export to MYOB/Xero/QBO
-- **ServiceTitan:** financial reporting, project P&L
-- **QuickBooks Online:** full GL, multi-currency, bank feed, tax filing
-- **Xero:** full GL, multi-currency, bank rec
-- **Sage Intacct:** enterprise GL with dimensions
+- **ServiceTitan dispatch:** drag-drop, capacity heatmap, mobile route, real-time location, customer notifications
+- **simPRO scheduling:** multi-resource, drag-drop, recurring, contractor scheduling
+- **FieldWire:** project-specific scheduling, plan-attachment to appointments
+- **Salesforce Field Service:** advanced AI routing + skill-based dispatch
 
 **Nexvelon-unique:**
-- **GL directly integrated with operational modules** — no separate accounting product needed
-- **Source-back traceability from any GL line to originating module event**
-- **Canadian-first tax compliance built-in** (HST/GST/PST + T4 + T5018)
-- **Period-end FX revaluation** for foreign currency balances
-- **Period locking with separation of duties** (soft close Acc → hard close A + Acc co-sign per §0.4 #11)
-- **Field-level visibility** on financial data
-- **Bank feed integration via Plaid** (Canadian banks; Phase 2)
-- **QBO/Xero export at v1; bidirectional sync Phase 2**
-- **Project P&L drilling into M6 costing**
-- **Cost-centre allocation** consistent with M5
-- **Recurring journal entries** for depreciation + accruals
-- **Holdback payable as separate liability** (Canadian Construction Act)
-- **Eight-layer print protection** on tax filings + financial reports
+- **Skill + cert + territory + availability + SLA-aware auto-suggest engine** — combines all five dimensions in ranking
+- **Certification expiry auto-block on scheduling** — extends §0.4 #12 regulatory expiry to scheduling layer
+- **SLA response time auto-enforcement** — per-site response time from M1; alerts at 75%/90%/breached
+- **Per-site response time precedence** — site SLA > site response > client response > tier default
+- **Cross-resource scheduling** — employees + contractors + vehicles + equipment in one calendar
+- **Mobile clock-in geolocation linked to project + phase + cost-centre** — drives M6 timesheets with proper cost allocation
+- **Emergency dispatch override workflow** with reason capture + audit
+- **Multi-day project phase scheduling** with phase-level Gantt
+- **Schedule change auto-notifies customer + tech** with operator-configurable templates
+- **Append-only schedule change log**
+- **Travel time estimates** between consecutive site appointments (Google Distance Matrix)
+- **External calendar one-way export at v1** (Google/Outlook); bidirectional sync Phase 2
+- **Geolocation privacy retention** (30-day default per §0.4 #13)
 
-## 11.12 Permissions design implications (items 63-67)
+## 12.12 Permissions design implications (items 68-72)
 
-63. **GL period locking** prevents post-close edits. Reopen requires A + reason + audit.
-64. **Manual journal entries gated** with separation of duties (creator ≠ poster).
-65. **Bank balances gated** to A/Acc field-level.
-66. **Hard close requires dual approval** (A + Acc co-sign per §0.4 #11). Both signatures captured.
-67. **Source-back traceability permission-aware.** GL line shows source but drill-back respects target-module permissions.
+68. **Certification expiry blocks scheduling** — extends §0.4 #12 regulatory expiry pattern to scheduling. Worker with expired cert can't be assigned to appointment requiring that cert. Manual override (A) requires reason.
+69. **SLA response time auto-enforcement** — appointments must satisfy per-site SLA. Creating outside SLA window triggers warning. SLA waiver requires Admin + reason.
+70. **Mobile clock-in geolocation captured** — privacy implications. Geolocation visible only to A and owner. Retained 30 days default per §0.4 #13 (operator-configurable).
+71. **Schedule view scoping per role** — Tech sees own; PM sees own team + own projects; Dispatcher sees all; SR sees own clients only; A sees all.
+72. **Customer-facing appointment notifications** gated by client communication preferences (from M1); operator-configurable opt-in/out per channel (email/SMS/none).
 
-## 11.13 Open questions — RESOLVED IN SESSION M
+## 12.13 Open questions — RESOLVED IN SESSION N
 
-1. ✅ **Built-in GL vs external accounting:** both supported.
-2. ✅ **Multi-currency:** single CAD functional; foreign revalued.
-3. ✅ **Departmental P&L:** YES via cost-centre allocation.
-4. ✅ **Project P&L:** YES consuming M6.
-5. ✅ **Budget tracking:** YES at v1.
-6. ✅ **Recurring journal entries:** YES at v1.
-7. ✅ **Multi-entity / multi-company:** Phase 2.
-8. ✅ **Period close approval workflow:** soft close Acc → hard close A + Acc co-sign.
-9. ✅ **Bank feed provider:** Plaid Phase 2; CSV/OFX at v1.
+1. ✅ **Route optimization at v1 or Phase 2:** Phase 2 (v1 manual ordering with travel time display).
+2. ✅ **AI scheduling recommendations:** Phase 2 (simple weighted scoring at v1).
+3. ✅ **Customer self-service scheduling portal:** Phase 2.
+4. ✅ **Mobile geolocation tracking continuously or only on clock events:** Only on clock events at v1; continuous Phase 2 with explicit opt-in.
+5. ✅ **Schedule conflict resolution UI:** YES at v1.
+6. ✅ **Multi-timezone scheduling:** YES at v1 (UTC stored, user TZ displayed).
+7. ✅ **Recurring appointment series with exceptions:** YES at v1.
+8. ✅ **External calendar sync (Google/Outlook):** one-way export at v1; bidirectional Phase 2.
+9. ✅ **Travel time calculation:** YES at v1 via Google Distance Matrix API.
+10. ✅ **Geolocation retention:** 30 days default operator-configurable; locked as §0.4 #13.
 
 Remaining:
-10. **Calendar year vs Fiscal year** — operator-configurable in Settings.
-11. **Drill-down report customization** — limited at v1; full report builder Phase 2.
-12. **Multi-language financial reports** — en + fr at v1.
+11. **In-app messaging between dispatcher and tech:** SMS via Twilio at v1; in-app chat Phase 2.
+12. **Customer photo upload from appointment confirmation:** Phase 2.
+13. **Multi-day appointment block with overnight stays:** YES at v1.
 
-## 11.14 Acceptance criteria (~45 scenarios)
+## 12.14 Acceptance criteria (~50 scenarios)
 
-### Functional — Chart of Accounts (1-5)
-1. Import standard Canadian CoA template; ~100 accounts.
-2. Create custom account with hierarchy parent.
-3. Archive unused account; blocked if balance.
-4. View account mappings — shows which modules use it.
-5. Recategorize account (cross-type blocked).
+### Functional — Appointment lifecycle (1-10)
 
-### Functional — GL Journal Entries (6-12)
-6. Invoice send (M9) → GL auto-posted: AR DR, Revenue CR, Tax CR.
-7. Payment received (M9) → Cash DR, AR CR.
-8. PO receive (M7) → Inventory DR, AP CR.
-9. Project labor cost (M6 timesheet) → COGS-Labor DR, Wages Payable CR.
-10. Manual entry: A creates, Acc posts (separation of duties).
-11. Reverse entry creates offsetting; original retained.
-12. Source drill-back opens source entity.
+1. Create appointment from project phase; auto-suggests resources.
+2. Drag-drop reschedule; change_log audit row written.
+3. Conflict detection: double-booking → red.
+4. Certification expiry: worker with expired ULC can't be assigned to fire alarm install.
+5. Customer On Stop (M1) → new appointment blocked.
+6. Emergency dispatch overrides normal scheduling with reason captured.
+7. Recurring series creates 12 monthly appointments; exception dates skipped.
+8. Customer cancellation → status updated; M9 invoice flag for fee.
+9. No-show recording → status + PM notification.
+10. Mobile completion → M6 timesheet entry created with phase + cost-centre.
 
-### Functional — Bank Reconciliation (13-17)
-13. Import bank statement CSV; transactions populate.
-14. Auto-match by date + amount.
-15. Manual match remaining.
-16. Variance identified; reconcile when zero.
-17. Complete locks session.
+### Functional — Auto-suggest engine (11-14)
 
-### Functional — Period Close (18-23)
-18. Run period-end checks.
-19. Soft close period (Acc); locked for new postings.
-20. Hard close requires A + Acc co-sign; both signatures captured.
-21. Hard close blocks all postings; manual entries blocked.
-22. Reopen period (A only with reason); audit row.
-23. FX revaluation runs at period end.
+11. Skill match.
+12. Territory match.
+13. Availability match.
+14. Performance grade weighted in ranking.
 
-### Functional — Tax Filing (24-29)
-24. Generate HST/GST return for quarter.
-25. Generate T4 slips year-end (M2 payroll).
-26. Generate T5018 slips year-end for contractors (M10).
-27. Generate T5018 slips year-end for vendors (M8).
-28. Record CRA remittance with confirmation.
-29. Tax filing PDF eight-layer protected.
+### Functional — SLA enforcement (15-19)
 
-### Functional — Reports (30-37)
-30. P&L for last quarter.
-31. Balance Sheet as-of date.
-32. Cash Flow Statement.
-33. Trial Balance.
-34. P&L by Department.
-35. P&L by Project (M6 drilling).
-36. Budget Variance.
-37. Export to Excel + PDF.
+15. Emergency client (4hr SLA) → appointment scheduled 5hr out → warning.
+16. SLA approaching alert at 75%.
+17. SLA imminent alert at 90%.
+18. SLA breach notification with escalation.
+19. SLA waiver (Admin only) with reason.
 
-### Functional — Cash Flow (38-40)
-38. Forecast next 60 days.
-39. Drill into forecast category.
-40. Compare forecast vs actual.
+### Functional — Dispatch (20-23)
 
-### Functional — Integrations (41-43)
-41. Connect QBO; OAuth; CoA mapping.
-42. Export GL entries to QBO.
-43. Conflict resolution.
+20. Emergency dispatch; nearest tech ranked.
+21. Override scheduled appointment with reason + audit.
+22. Tech acknowledges → on-site → resolved → SLA recorded.
+23. Dispatch metrics: avg ack, avg on-site, breach rate.
 
-### Functional — Permissions & security (44-45)
-44. PM sees P&L for own projects only; SR sees none.
-45. RLS blocks unauthorized GL read; manual entry blocked for non-A/Acc.
+### Functional — Mobile (24-29)
+
+24. Tech opens mobile schedule → today's appointments.
+25. Tap to navigate → Google Maps.
+26. Clock-in records geolocation + timestamp.
+27. Clock-out records + creates M6 timesheet entry.
+28. Mark complete with photos + customer signature.
+29. Customer email confirmation sent.
+
+### Functional — Resource calendar (30-34)
+
+30. Employee calendar shows schedule + absences + cert warnings.
+31. Contractor work order on contractor calendar.
+32. Vehicle/equipment scheduling.
+33. Capacity heatmap identifies overbooked days.
+34. Block time off creates M2 absence.
+
+### Functional — Recurring & templates (35-37)
+
+35. Recurring with end date generates correct count.
+36. Schedule template applied.
+37. Template versioning (existing appointments retain original snapshot).
+
+### Functional — External calendar (38-39)
+
+38. Export to Google Calendar via iCS.
+39. Outlook export.
+
+### Functional — Permissions (40-44)
+
+40. Tech sees own schedule only.
+41. PM sees own team + projects.
+42. Dispatcher sees full calendar.
+43. SR sees only own client appointments.
+44. Geolocation visible to A + owner only.
+
+### Functional — Performance & security (45-50)
+
+45. Calendar with 500 appointments + 50 resources loads <3s.
+46. Drag-drop reschedule <500ms.
+47. Auto-suggest with 100 candidates <1s.
+48. RLS blocks unauthorized calendar view.
+49. Geolocation purged after 30 days.
+50. Mobile clock-in idempotent.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Modules 12-13: pending walk
+# Module 13: pending walk
 ═══════════════════════════════════════════════════════════════════
 
-- §12 — Scheduling (major reader of M1+M2+M3+M6+M10 surfaces)
 - §13 — Reports
 
 ---
@@ -450,7 +469,7 @@ Remaining:
 
 ## 99. Consolidated action vocabulary
 
-*Running count: ~1130 actions across 11 modules (~110 M1 + ~80 M2 + ~270 M3 + ~35 M4 + ~85 M5 + ~110 M6 + ~95 M7 + ~65 M8 + ~115 M9 + ~75 M10 + ~90 M11).*
+*Running count: ~1205 actions across 12 modules (~110 M1 + ~80 M2 + ~270 M3 + ~35 M4 + ~85 M5 + ~110 M6 + ~95 M7 + ~65 M8 + ~115 M9 + ~75 M10 + ~90 M11 + ~75 M12).*
 
 ## 100. Final sidebar tree
 
@@ -458,16 +477,16 @@ Remaining:
 
 ## 101. Module dependency graph
 
-*Populated after all 13 modules walked.*
+*Populated after M13 walked.*
 
 ## 102. Cumulative permissions design implications
 
-*67 items so far (1-14 M1, 15-22 M2, 23-27 M3, 28-30 M4, 31-37 M5, 38-44 M6, 45-49 M7, 50-53 M8, 54-58 M9, 59-62 M10, 63-67 M11).*
+*72 items so far (1-14 M1, 15-22 M2, 23-27 M3, 28-30 M4, 31-37 M5, 38-44 M6, 45-49 M7, 50-53 M8, 54-58 M9, 59-62 M10, 63-67 M11, 68-72 M12).*
 
 ## 103. Cumulative acceptance criteria
 
-*~509 scenarios so far (54 M1 + 55 M2 + 42 M3 + 25 M4 + ~52 M5 + ~58 M6 + ~48 M7 + ~35 M8 + ~55 M9 + ~38 M10 + ~45 M11).*
+*~559 scenarios so far (54 M1 + 55 M2 + 42 M3 + 25 M4 + ~52 M5 + ~58 M6 + ~48 M7 + ~35 M8 + ~55 M9 + ~38 M10 + ~45 M11 + ~50 M12).*
 
 ---
 
-**End of v0.12.** Modules 1-11 complete. Financials module scoped with built-in GL (no separate accounting product needed at v1), source-back traceability from any GL line to originating module event, Canadian-first tax compliance (HST/GST/PST + T4 + T5018 consuming M2/M8/M10), period close with separation of duties (soft close Acc → hard close A + Acc co-sign), period-end FX revaluation, bank reconciliation, QBO/Xero/Sage 50 export at v1 (bidirectional sync Phase 2), project P&L drilling into M6, cost-centre allocation, recurring journal entries, holdback payable separate liability (Canadian Construction Act). Cross-cutting commitments from Sessions C-M propagate forward.
+**End of v0.13.** Modules 1-12 complete. Scheduling module scoped as the heaviest cross-module reader (M1+M2+M3+M6+M10) with skill+cert+territory+availability+SLA-aware auto-suggest engine, certification expiry auto-block extending §0.4 #12 to scheduling, SLA response time auto-enforcement with 75%/90%/breach alerts, per-site response time precedence, cross-resource scheduling (employees + contractors + vehicles + equipment), mobile clock-in geolocation linked to project + phase + cost-centre driving M6 timesheets, emergency dispatch override workflow with reason capture, append-only schedule change log, travel time estimates via Google Distance Matrix API, external calendar one-way export (Google/Outlook) at v1. New cross-cutting commitment §0.4 #13 locked: geolocation privacy retention (30-day default operator-configurable). Cross-cutting commitments from Sessions C-N propagate forward.
