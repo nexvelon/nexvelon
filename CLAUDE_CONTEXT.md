@@ -12,10 +12,13 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session O CLOSED. 🏁 AUDIT PHASE COMPLETE.**
+**As of 2026-05-12. Session O CLOSED (🏁 AUDIT COMPLETE) + Permissions Design Pass 1 landed.**
 
+- **Latest deliverable:** `NEXVELON_PERMISSIONS_DESIGN.md` v0.1 — Pass 1 (Action Vocabulary Catalog) of the Permissions module design pass. Future sessions MUST read this doc after the audit doc; it is the canonical permissions spec.
+- **Pass 1 deliverables:** ~1260 actions normalized to `resource:verb[:qualifier]` format; verb taxonomy (8 categories); qualifier taxonomy (scope/state/modal/field-section); resource taxonomy (all tables across M1-M13); action grouping for the M2 six-tab permissions editor UI (Tier 1-4 hierarchy + orthogonal cross-cuts); full action catalog by module with default role grants (A/PM/SR/Tech/Acc/VO + custom roles Dispatcher/Bookkeeper/HR-role/Executive); cross-references (dependencies, mutual exclusions per §0.4 #11, action chains); special-case treatment (public signed-URL, Admin exceptions with reason capture, system-generated, append-only); six open questions resolved with explicit decisions.
+- **Pending passes (Permissions design):** Pass 2 Database schema → Pass 3 Resolution algorithm → Pass 4 Field visibility engine → Pass 5 Status surface bindings → Pass 6 Append-only audit pattern → Pass 7 Request-admin-access workflow → Pass 8 Permissions editor UI → Pass 9 Effective-permissions caching → Pass 10 Cross-cutting enforcement patterns → Pass 11 Migration plan.
 - **Session O focus:** Module 13 of the feature audit (Reports) — final audit module. Cross-module reporting layer with ~40 standard library reports across 7 categories. Operator-defined custom reports (copy-and-modify at v1). Scheduled delivery via email + in-app. Saved report snapshots (immutable per §0.4 #10). Permission-aware queries end-to-end. Multi-language (en + fr). Eight-layer print on sensitive reports. Source-back traceability for financial reports. Seven in-session resolutions.
-- **Latest commit:** `docs: codify Session O — Module 13 (Reports) audit + AUDIT COMPLETE`. See `git log -1 --oneline`.
+- **Latest commit:** `docs: add NEXVELON_PERMISSIONS_DESIGN.md v0.1 — Pass 1 Action Vocabulary Catalog`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
@@ -23,7 +26,7 @@
 - **File size management note:** Through v0.14 (final audit version), M1-M12 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b, M11 b60caf7, M12 06261f6. M13 full content in v0.14.
 - **Pending pipeline (in order):**
   1. ✅ **Feature audit COMPLETE** — all 13 modules walked.
-  2. **NEXT: Permissions module — design pass** (ROADMAP item 2). Consumes ~1260 actions + 76 permissions design implications + 13 cross-cutting commitments + ten-dimensional model + 80 status surfaces with behavior bindings. This is the heaviest synthesis pass.
+  2. 🚧 **Permissions module — design pass** (ROADMAP item 2). **IN PROGRESS.** Pass 1 (Action Vocabulary Catalog) complete in `NEXVELON_PERMISSIONS_DESIGN.md` v0.1. **NEXT: Pass 2 (Database schema)** — designs `permissions`, `roles`, `role_permissions`, `user_permission_overrides`, `field_visibility_definitions`, `role_field_visibility`, `user_field_visibility_overrides`, `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`, `permission_audit_log`, `effective_permissions_cache`, `separation_of_duties_constraints`, `regulatory_expiry_block_overrides`, `geolocation_retention_policy`. Then Passes 3-11.
   3. **Permissions module — build** (ROADMAP item 3). Build the actual permissions runtime per design.
   4. **Quotes v1 build** (ROADMAP item 4). First operational module to ship to users.
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**

@@ -52,7 +52,23 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 ## 2. Permissions module — design pass
 
-**🎯 READY TO BEGIN.** Audit phase complete (Session O). All inputs locked. This pass synthesizes ~1260 actions + 76 permissions design implications + 13 cross-cutting commitments + ten-dimensional model + 80 status surfaces with behavior bindings into the actual permissions architecture. Expect this to be the heaviest synthesis session (2-3 hours).
+**🚧 IN PROGRESS.** Audit phase complete (Session O). Design doc landed at `NEXVELON_PERMISSIONS_DESIGN.md`. Built in 11 passes; **Pass 1 complete** (v0.1).
+
+**Pass status:**
+
+| Pass | Scope | Status |
+|---|---|---|
+| 1 | Action vocabulary catalog (~1260 actions normalized; verb/qualifier/resource taxonomies; full catalog by module with default role grants; cross-references; special-case treatment) | ✅ **COMPLETE** (v0.1) |
+| 2 | Database schema (roles, role_permissions, user_permission_overrides, permission_definitions, field_visibility_definitions, data_scope_definitions, audit tables, effective-permissions cache, cross-cutting constraint tables) | NEXT |
+| 3 | Permission resolution algorithm — runtime "can user X do action Y on entity Z?" | PENDING |
+| 4 | Field-level visibility engine — `visibility.*` flag evaluation at query + UI layer | PENDING |
+| 5 | Status surface binding layer — 80 status surfaces with behavior bindings at action-call time | PENDING |
+| 6 | Append-only audit pattern — every grant/revoke/override logged | PENDING |
+| 7 | Request-admin-access workflow (M2) — full spec | PENDING |
+| 8 | Permissions editor UI — six-tab editor from M2 fully specified | PENDING |
+| 9 | Effective-permissions caching strategy | PENDING |
+| 10 | Cross-cutting enforcement patterns — separation of duties, regulatory expiry auto-block, geolocation retention | PENDING |
+| 11 | Migration plan — adding this layer to existing production system without breaking anything | PENDING |
 
 **What:** A written design doc for the per-user, per-feature ACL
 described in `NEXVELON_PRINCIPLES.md` §2. Covers the data model,
