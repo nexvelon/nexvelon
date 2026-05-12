@@ -87,6 +87,14 @@ demoted by another Admin.
 have to be retrofitted — exactly the migration cost Principle 1 is
 designed to avoid.
 
+**Session C clarifications (2026-05-12).** These extend §2 commitments based on Module 1 of the feature audit:
+
+- **Ten dimensions of permission control.** Permissions aren't just role × resource × action. They span: (1) role definition — which permissions bundle into each role; (2) per-user override — additive and subtractive on top of role default; (3) data scope — which records the user can see (own/assigned/attribute/specific); (4) field-level visibility — which fields within a record; (5) action gates — what operations are allowed; (6) approval workflows — who approves what, with optional value caps and time bounds; (7) system policy — 2FA enforcement, session timeout, IP allowlist, device limit, force-re-auth for sensitive actions; (8) UI presentation — sidebar show/hide, default landing page, allowed dashboard widgets; (9) audit visibility — who reads logs and at what scope; (10) lookup and template management — who edits which lookup tables, templates, and clauses. The permissions module ships with all ten dimensions configurable; each is a section of the Users & Permissions UI.
+
+- **Contractual integrity exception to bidirectional override.** The action `clients:overrideSlaResponseTime` is Admin-only and CANNOT be granted to any other user via per-user additive override. This is the one hard exception to the universal bidirectional-override model. The system enforces it at the permissions check level — even an Admin-issued override-grant to another role has no effect for this specific action. Reason: SLAs are signed contracts; the ability to deviate from contractual response times has real legal exposure and must not be delegable.
+
+- **Eight-layer print protection** for documents whose distribution must be controlled (quotes, contracts, sensitive reports). The layers combine to make casual circumvention impractical and any circumvention auditable: (1) server-side PDF generation only — never client-rendered; (2) browser views styled as UI editors, not print-ready documents; (3) diagonal watermark on unapproved views, visible AND printable via `@media print`; (4) `@media print { display: none }` on protected content for unapproved status; (5) audit row on every render; (6) audit row on every PDF download; (7) email-from-system-only — Send actions trigger server-side email dispatch; (8) authenticated, non-shareable URLs. No combination produces a leak-proof system (no browser-based software can), but together they prevent casual leaks and ensure every action is detectable in the audit log.
+
 ---
 
 ## 3. Competitive bar
@@ -265,3 +273,11 @@ workflow — it doesn't ship yet. Deferred features go into
 `NEXVELON_ROADMAP.md` with a clear description of what's missing and
 why. A half-done module on the sidebar tells the operator the rest
 of the suite is also half-done; we don't ship that signal.
+
+**Session C clarifications (2026-05-12).** These extend §6 commitments based on Module 1 of the feature audit:
+
+- **Lookup-table rows carry behavior bindings, not just labels.** A status, tier, or type row isn't decorative — it's an operational config surface. A Tier row carries SLA defaults, discount %, payment terms, credit limit, AM-required flag, notification channel. A Client Status row carries whether quotes/projects/invoices are permitted at that status, and triggers for auto-promotion or credit hold. A Site Status row carries scheduling eligibility. Every lookup table built from this point forward includes its own behavior-binding columns alongside identity columns (name, sort_order, color, description, is_archived, default_for_new).
+
+- **Guided creation, never lazy creation.** Every lookup-table "+ Add" flow uses a multi-section wizard that walks the operator through identity → smart defaults inherited from the closest existing row → behavior bindings → workflow rule inheritance → preview → save. New rows are fully operational at save time — never label-only stubs requiring follow-up configuration. The wizard's smart-defaults inheritance reduces the cost of adding a new row (e.g. Diamond tier inherits Platinum's values, operator adjusts up).
+
+- **Versioned clauses, templates, and SLA language.** When an operator edits an onboarding-gate T&C clause, a quote template, or SLA template language, the system snapshots the previous version. Already-sent quotes / invoices / signed SLAs retain the version they were dispatched with. Only new dispatches use the edited version. This ensures contractual integrity — a customer who signed under v1 language can't be retroactively bound to v2.

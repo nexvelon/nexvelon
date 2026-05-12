@@ -40,24 +40,13 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 ## 1. Comprehensive feature audit + sidebar expansion
 
-**What:** A scoping pass across the entire suite *before* the
-permissions module is designed. Walk every module surface
-(`/dashboard`, `/quotes`, `/projects`, `/clients`, `/inventory`,
-`/scheduling`, `/financials`, `/reports`, `/users`, `/settings`),
-enumerate the actions a real security-systems integrator needs on
-each, and surface anything the current navigation hides or fragments.
+**What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Why first:** Permissions design depends on the action vocabulary.
-Designing the ACL before we know the full set of actions guarantees a
-retrofit later — exactly the migration cost
-`NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
+**Progress as of Session C (2026-05-12):** Module 1 of 13 (Clients + Sites + Contacts) complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.2. Module 1's spec is genuinely comprehensive — ~110 actions, 14 new field visibilities, 15 lookup tables, 54 acceptance-criteria test scenarios. Modules 2-13 pending in subsequent sessions: Users + Permissions, Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Same 14-subsection rubric proved out by Module 1. Cross-cutting commitments from Module 1 (ten dimensions of permission control, behavior-bound lookups, guided creation, SLA precedence, T&C composition, eight-layer print protection) propagate forward and don't need to be re-derived per module.
 
-**Deliverable:** A doc (likely `NEXVELON_FEATURE_AUDIT.md`) listing,
-per module, every action + view + field that needs a permission
-treatment, every cross-module relationship, and any new sidebar
-entries (e.g. Vendors as a top-level item rather than a Settings
-sub-pane). Updates `NEXVELON_PRINCIPLES.md` §3 reference floors as
-the audit surfaces fresh competitor research.
+**Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
+
+**Deliverable:** `NEXVELON_FEATURE_AUDIT.md` — fully populated with all 13 module sections + the consolidated action vocabulary + final sidebar tree + module dependency graph + cumulative permissions design implications + cumulative acceptance criteria.
 
 ---
 
@@ -81,6 +70,16 @@ DB schema (likely `permissions` + `user_permission_overrides` +
 rendering, audit-log shape for permission grants/revokes, and the
 migration strategy for replacing the current static `lib/permissions
 .ts` matrix.
+
+**Inputs from Session C** (in addition to the audit's action vocabulary):
+- Ten-dimensional control model (role / per-user / data scope / field / action / approval / system / UI / audit / lookup mgmt)
+- Contractual integrity exception for `clients:overrideSlaResponseTime` (cannot be granted via per-user override)
+- Eight-layer print protection requirements
+- Per-action "audit reads" opt-in flag (for `sites:viewAccess` and similar high-sensitivity reads)
+- Time-bounded grants with `expires_at` auto-revocation
+- Approval delegation framework with value caps + time bounds
+- Field-level encryption-at-rest for sensitive fields (gate codes, bank account numbers) via pgcrypto + Supabase Vault
+- Three-state per-tab gating on detail pages (hidden / disabled / interactive)
 
 ---
 
@@ -121,6 +120,13 @@ gates wired (`quotes:create`, `quotes:viewMargin`, `quotes:approve`,
 company-profile DB table (built incidentally — see deferred
 decisions). Beats the Sedona Office / Wisetrack / simPRO reference
 floor on margin clarity and convert-to-project friction.
+
+Additional from Session C:
+- **Onboarding gate auto-injection into T&C** — clause-per-gate composition assembling required-gate clauses into the quote T&C section. Versioned per dispatch.
+- **Eight-layer print protection** for quote PDFs.
+- **SLA reference in T&C** — quotes for clients with active site SLAs auto-reference the SLA name and effective dates in T&C.
+- **Quote approval workflow** with status flow Draft → Pending Approval → Approved → Sent → Binding (via onboarding gate fulfillment).
+- **Per-quote line-item permissions** — `quotes:viewMargin`, `quotes:viewCost` are field-level gates.
 
 ---
 

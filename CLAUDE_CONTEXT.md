@@ -12,113 +12,43 @@
 
 ## Current Session State
 
-**As of 2026-05-11. Session B CLOSED.**
+**As of 2026-05-12. Session C CLOSED.**
 
-- **Last completed feature:** Session B Priority 2 — in-app
-  change-password flow. The final working commit is `e472b1c`
-  ("fix(auth): use admin update endpoint to bypass secure-change
-  nonce requirement").
-- **Latest commit on `main`:** see `git log -1 --oneline`. As of
-  this docs commit, the auth surface is complete, the pre-Quotes
-  cleanup pass has landed, and the inline-mock-data sweep is
-  exhaustive (three sweeps total — see "Mock data wipe state"
-  below).
-- **Auth surface:** ✅ COMPLETE. Sign-in (password + email OTP),
-  sign-out, forgot-password, reset-password, in-app change-password,
-  invite-only signup via bootstrap CLI, server-side dashboard
-  validation with sub-2s session check via the
-  `SessionSeededShell` pattern. No outstanding bugs.
-- **Production mode:** ⚠️ **LIVE.** Data preservation rules in
-  `NEXVELON_PRINCIPLES.md` §1 apply from `8d44ef7` (chore cleanup)
-  forward. No more "we'll fix the data model later" mode. Every
-  migration is additive by default; drops require the documented
-  copy-deploy-drop sequence with operator sign-off comment.
-- **Mock data wipe state:** **thorough — three sweeps total.**
-  1. `8d44ef7` — initial wipe. All `lib/mock-data/*` files
-     emptied; `scripts/wipe-test-data.sql` committed (paste into
-     Supabase SQL Editor manually).
-  2. `b3fab6f` — first follow-up. Guarded empty-data crash paths
-     in `lib/scheduling-data.ts`, `lib/inventory-data.ts`,
-     `lib/notifications.ts`; added `NotificationsBell` empty
-     state; surfaced hardcoded fake identities in
-     `BrandingThemes`, `SettingsPanes.CompanyProfile`,
-     `QuoteDocument` letterhead.
-  3. `5fbca47` — exhaustive final. Found residual hits earlier
-     passes missed: 3 hardcoded PO events in dashboard
-     `recentActivity()`; 11 fake integrations + 2 fake API keys
-     + 3 fake webhooks + fake Enterprise subscription card in
-     Settings; hardcoded CRA business number in Financials HST
-     card; 5 fake vendors in `VENDOR_DIRECTORY`. Added "No
-     recent activity" empty state to `ActivityFeed`.
-  
-  Defense-in-depth note: `lib/project-data.ts` hardcoded
-  scaffolding (TASK_TEMPLATE, RICH_ZONES, etc.) and
-  `/projects/[id]` tab sub-components are NOT yet cleaned —
-  they're unreachable with `public.projects` empty, and get
-  cleaned when Projects v1 wires per `NEXVELON_ROADMAP.md`
-  item 5.
-- **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT
-  executed. Paste into Supabase SQL Editor manually when ready.
-  Admin account `jayshah.x@gmail.com` preserved.
-- **Pending pipeline (in order)** — full descriptions in
-  `NEXVELON_ROADMAP.md`:
-  1. **Comprehensive feature audit + sidebar expansion** —
-     scoping pass BEFORE the permissions module is designed.
-     Without this audit the ACL would ship against incomplete
-     action vocabulary.
-  2. **Permissions module — design pass.** Written design doc
-     for per-user, per-feature ACL with three UI states + Admin
-     override UX + field-level permission storage model.
-  3. **Permissions module — build.** Migration, `lib/api/
-     permissions.ts`, `lib/permissions.ts` DB-backed rewrite,
-     server-action + route gates, client hooks, Admin override
-     UI.
-  4. **Quotes v1.** First real business module beyond clients +
-     users. Beats Sedona Office / Wisetrack reference floor.
-  5. **Projects → Inventory → Vendors → Invoices →
-     Subcontractors → Financials → Scheduling.** Each ships
-     fully per `NEXVELON_PRINCIPLES.md` §6 (depth over breadth —
-     no "module lite"). Reports v1 wires after enough modules
-     have real data.
-- **Open architectural decisions** — see `NEXVELON_ROADMAP.md`
-  "Open architectural decisions awaiting design":
-  - Custom-field implementation (per-entity vs. generic vs.
-    JSONB).
-  - Workflow rule format (Phase 2 commitment per PRINCIPLES §6).
-  - Field-level permission storage model.
-- **Open product decisions** — see `NEXVELON_ROADMAP.md` "Open
-  product decisions deferred from earlier conversations":
-  - `quote_shares` table necessity given the new permissions
-    system (likely redundant).
-  - `unit_label` enum vs. freeform (likely enum + override).
-  - Currency at quote vs. client level (likely client default +
-    per-quote override).
-  - Discount granularity (likely all three: line + section +
-    total).
-  - Company-profile data source for PDF letterhead (likely a
-    `settings_company_profile` singleton table, alongside
-    Quotes v1).
-- **Live URL:** https://app.nexvelonglobal.com (Vercel auto-deploys
-  from `main`).
-- **GitHub repo:** https://github.com/nexvelon/nexvelon (default
-  branch `main`).
-- **Admin account:** `jayshah.x@gmail.com` (Jay Shah, Admin role).
+- **Session C focus:** Module 1 of the feature audit (Clients + Sites + Contacts) — operator design pass. Resulted in a major v0.2 of `NEXVELON_FEATURE_AUDIT.md` with full 14-subsection rubric proved out against real code, plus extensive operator-driven feature additions (banking config, per-site SLAs, response time precedence, individual-vs-company branching, customer-types expansion to 16 industries, payment terms flexibility, holdback, PO required, late fees, On Stop credit hold, onboarding gates with auto-injected T&C composition, eight-layer print protection, ten dimensions of permission control).
+- **Latest commit:** `docs: codify Session C — Module 1 audit + PRINCIPLES clarifications + handoff`. See `git log -1 --oneline`.
+- **Auth surface:** ✅ COMPLETE (unchanged from Session B).
+- **Production mode:** ⚠️ LIVE (unchanged from Session B). Data preservation rules apply from `8d44ef7` forward.
+- **Mock data wipe state:** thorough — three sweeps total (unchanged from Session B).
+- **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
+- **Feature audit progress:** 1 of 13 modules walked. Module 1 spec is genuinely comprehensive (~110 actions, 14 new field visibilities, 15 lookup tables, 54 acceptance-criteria test scenarios). Modules 2-13 pending.
+- **Pending pipeline (in order):**
+  1. **Feature audit Modules 2-13** — Users + Permissions, Settings, Dashboard, Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Use same 14-subsection rubric. Most will be less deep than Module 1 — many cross-cutting commitments (ten dimensions, behavior-bound lookups, guided creation, SLA precedence, T&C composition, eight-layer print) were captured in Module 1 and propagate forward.
+  2. **Permissions module — design pass.** Consumes the consolidated action vocabulary from the audit.
+  3. **Permissions module — build.** Includes the ten-dimensional control system.
+  4. **Quotes v1** — first revenue module. Brings SLA management UI, onboarding gates, T&C composition.
+  5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
+- **Major architectural decisions from Session C** (all captured in `NEXVELON_FEATURE_AUDIT.md` §1 and `NEXVELON_PRINCIPLES.md` §2 + §6 clarifications):
+  - Lookup rows carry behavior bindings, not just labels (every lookup table includes config columns)
+  - Guided-creation wizards for every lookup-table "+ Add" flow
+  - Versioned T&C clauses + templates + SLA language (snapshot at dispatch time)
+  - Ten dimensions of permission control (role / per-user / data scope / field / action / approval / system / UI / audit / lookup mgmt)
+  - Contractual integrity exception: `clients:overrideSlaResponseTime` is Admin-only, no per-user override permitted
+  - Eight-layer print protection for sensitive PDFs
+  - SLAs are per-site (not per-client) — property management firms have different service expectations per building
+  - Response time precedence: per-site SLA > per-site response field > per-client response field > tier default
+  - Individual-vs-Company toggle on client creation
+  - Client name renames: "Common Name" + "Legal Name" (instead of just "Name")
+  - 16 customer types (industry-flavored: Charity, Commercial Real Estate, Condo, Construction, Facility Services, Financial Institutions, Food, Health Care, IT/Tech, Power/Infrastructure, Retail/Office, Transportation, TV/Film, Residential, Government, Other)
+  - Banking, On Stop credit hold, holdback (10%/Excl/45-day default), PO required, late fee config — all on Client record
+  - Onboarding gates with clause-per-gate composition auto-injected into quote T&C
+  - Address autocomplete via OpenStreetMap Nominatim (free, no billing account required)
+- **Live URL:** https://app.nexvelonglobal.com (unchanged).
+- **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
+- **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** The Claude Code session that produced this commit holds no
-uncommitted plans, half-finished migrations, or in-progress designs.
-All Session B work is committed and reflected in this persistence
-layer. The next Claude Code session reconstructs full context from
-this repo cold — start with `NEXVELON_PRINCIPLES.md`, then the
-`## Current Session State` block above, then the four other docs in
-the reading order at the top of this file.
-
-The only "in-flight" item in the GLOBAL sense (not session-specific)
-is `scripts/wipe-test-data.sql` — it's committed but NOT executed.
-The next session can either execute it (paste into Supabase SQL
-Editor) or leave it for the operator to execute themselves before
-Quotes v1 starts. Either is fine.
+**None.** Session C produced no uncommitted plans or half-finished work. All decisions are codified in `NEXVELON_FEATURE_AUDIT.md` v0.2, the PRINCIPLES §2 + §6 clarifications, the updated ROADMAP, and `NEXVELON_SESSION_C_HANDOFF.md`. The next session reconstructs full context from the repo cold per the reading order at the top of `CLAUDE_CONTEXT.md`.
 
 ---
 
