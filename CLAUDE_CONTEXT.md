@@ -12,53 +12,48 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session R CLOSED. Permissions Design Pass 3 of 11 complete.**
+**As of 2026-05-12. Session S CLOSED. Permissions Design Pass 4 of 11 complete.**
 
-- **Session R focus:** Permissions Design — Pass 3 (Resolution Algorithm). Three intertwined runtime algorithms specified: A1 (action grant resolution; 7-phase: cache lookup → base table resolution → cross-cutting constraints → audit), A2 (data scope resolution returning SQL filter + bind params), A3 (field visibility resolution returning visible/masked/hidden). Performance budget locked: <5ms p99 compound; <1ms cache hit; <50ms p99 for typical 50-record list endpoint. Five worked resolution traces. Five edge cases handled (granted-but-blocked, co-sign, public, system-generated, expired temp overrides). RLS as defense-in-depth. Failure modes specified (fail-closed for grants, fail-open for audit). Debug API specified. Six observability metrics. Six Pass 3 open questions resolved.
-- **Latest commit:** `docs: permissions design Pass 3 — resolution algorithm`. See `git log -1 --oneline`.
+- **Session S focus:** Permissions Design — Pass 4 (Field-Level Visibility Engine). Implements Algorithm A3 from Pass 3 across two layers: backend serialization pipeline (8-stage: auth → action grant → scope → query → bulk visibility resolution → transformer → audit enqueue → JSON response) and frontend React component wrappers (`<FieldGated>` with VisibilityContext provider). Bulk visibility resolution: resolve ONCE per (user, resource, section) per request; apply plan to all rows (50-row list: 250 resolver calls → 5 calls + 50 transforms). Mask formatting library: 12 standard mask types. Async batched audit-on-read implementation (100ms timer + 50-entry size + 1000-entry backpressure + reconciliation cron + circuit breaker). Defense-in-depth Postgres views for 5 highest-sensitivity resources only (not all 47 flags). Complete 47-flag catalog mapped to database columns + mask types + role defaults across all 13 modules. Six Pass 4 open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 4 — field visibility engine`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 3 of 11 passes complete. Pending: Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.3 condenses Pass 1 (§1-§8) AND Pass 2 (§9) to summaries. Full Pass 1 at commit 9008fad; full Pass 2 at commit 1bafbd4. Pass 3 full content §10-§19. Consistent with audit doc condensation pattern.
+- **Permissions design progress:** 4 of 11 passes complete. Pending: Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.4 condenses Pass 1 (§1-§8), Pass 2 (§9), Pass 3 (§10). Full Pass 1 at 9008fad; Pass 2 at 1bafbd4; Pass 3 at ff08703. Pass 4 full content §11-§21.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 3 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 4 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 3:**
-  - **Three algorithms locked:** A1 (action grant), A2 (data scope), A3 (field visibility). Compose for compound resolution. Typical request runs all three.
-  - **Cache strategy: invalidate-and-lazy-fill** (not write-through). Permission changes are rare; reads are frequent. Trading one-time miss for faster writes.
-  - **Separation of duties enforcement: runtime check primary + database trigger defense-in-depth.** Runtime needed for UI rendering before action attempted (e.g., to hide Approve button from creator). DB trigger catches last-second violation.
-  - **User override does NOT bypass regulatory expiry.** §0.4 #12 supersedes user-level overrides. Only entries in regulatory_expiry_overrides (which require A approval + reason) bypass.
-  - **Co-sign enforcement** for hard close: separation_of_duties_constraints with allows_co_sign=TRUE; algorithm checks "has OTHER role already initiated softClose for this period?" before allowing hardClose.
-  - **Public actions** (signed URL): A1 NOT called; separate signed URL validator runs. Audit captures token_id + source_ip.
-  - **System-generated actions**: A1 NOT called; execute under "system" identity. Audit captures triggering_event + source_entity_id + NULL actor_user_id.
-  - **Temporary override expiration**: cache row's expires_at < NOW() → treated as cache miss; fallback to role default; audit event 'user_override_expired' emitted.
-  - **Performance budget**: <5ms p99 compound resolution; <50ms p99 typical list endpoint; <15ms p99 detail endpoint; <30ms p99 action endpoint.
-  - **Bulk resolution optimization**: when fetching 50 records, resolve field visibility once per (user, resource, field_section) and apply to all records — not 50 separate resolutions.
-  - **Cache warm-up on user login**: prefetch cache rows for dashboard widget actions to reduce first-render miss penalty.
-  - **Stale-while-revalidate** for non-critical reads (dashboard widgets only; <5 minute threshold). Critical paths always check fresh.
-  - **RLS policies generated from scope filter templates**. Application sets `app.current_user_id` per connection. Helper SQL functions (`current_user_has_scope_*`) query `effective_data_scope_cache`.
-  - **Failure modes**: fail-closed for action grants, regulatory expiry, separation of duties. Fail-open for audit logging (action proceeds; audit retried by reconciliation cron) and cache warming.
-  - **Debug API**: Admin-only `GET /api/admin/permission-debug` returns full resolution trace for support staff diagnosing "why was that user blocked?"
-  - **Resolution metrics emitted** to observability: duration_ms histogram, cache_hit_rate gauge, denials_total counter, audit_inserts_total counter.
-- **Six Pass 3 open questions resolved:**
-  - Cache scope: per-user (not global). Global cache only for permission_definitions in app memory.
-  - Stale-while-revalidate threshold: 5 minutes for dashboard-related reads only.
-  - Resolution algorithm versioning: function name versioning (resolve_action_grant_v1); new versions get new names; feature flag rollout.
-  - A/B testing permission changes: NO at v1; Phase 2.
-  - Real-time permission revocation: cache invalidation triggers immediately; effective within ms for next request; WebSocket push Phase 2.
-  - Multi-tenant resolution: deferred Phase 2; when added, cache key becomes (tenant_id, user_id, action_name).
+- **Major architectural decisions from Pass 4:**
+  - **Two-layer field visibility implementation:** backend serialization (primary) + frontend `<FieldGated>` wrapper (UI hygiene). Both query Pass 3 A3 resolver. Both must agree — backend exposes + frontend renders is the only forbidden combination.
+  - **Bulk visibility resolution pattern:** resolve ONCE per (user, resource, section) per request; apply plan to all rows. Cuts resolver calls from N×M to M.
+  - **Defense-in-depth Postgres views** for 5 highest-sensitivity resources only (clients, employees, vendors, contractors, payments). 42 other flags handled by application transformer alone. SQL function `user_field_visibility(flag_name)` consults `effective_field_visibility_cache` per row.
+  - **Per-field `<FieldGated>` standard** with section-level wrappers OK for clearly-bounded sections (banking panel, payroll panel) where every field shares one flag. Mixed-sensitivity sections always use per-field.
+  - **Async batched audit-on-read:** 100ms timer + 50-entry size + 1000-entry backpressure threshold + circuit breaker on repeated failures. Buffer FIFO; per-user ordering preserved. Reconciliation cron checks completeness daily.
+  - **Masking layer order:** RLS filters rows (data scope) → views mask columns (field visibility for sensitive 5) → transformer applies masks (all 47 flags) → audit enqueue.
+  - **12 standard mask types** library: card_last_4, card_brand_last_4, bank_account_last_4, routing_number_redacted, sin_last_3, ssn_last_4, email_partial, email_full_redact, phone_last_4, address_city_only, redacted, generic. Pure functions; no I/O; deterministic.
+  - **Edit gating**: hidden fields don't render; masked fields render read-only display (input replaced with MaskedDisplay component); user needs `visible` visibility AND action grant to edit.
+  - **Mask character is `•` (U+2022) Unicode bullet** — universally rendered; no localization variants needed at v1.
+  - **47-flag catalog complete**: covers all 13 modules. 1 never-granted flag (PCI). 9 flags with requires_audit_on_read=TRUE. 3 flags affecting row-level not field-level (handled by scope/predicate, not transformer).
+  - **Phase 2 deferrals locked:** per-tenant custom flags, per-tenant column mappings, admin "preview locked sections" mode, cross-field masking dependency engine, full report builder.
+- **Six Pass 4 open questions resolved:**
+  - View layer coverage: 5 highest-sensitivity resources only (not all 47 flags)
+  - `<FieldGated>` tooltip on hidden fields: NO at v1; Phase 2 admin-toggleable preview mode
+  - Audit-on-read for masked reads: NO; only `visible` reads audit
+  - Cross-field masking dependencies: same field_section = atomic visibility unit
+  - Mask format i18n: NO; `•` universal
+  - Test strategy: integration tests with snapshot comparison per role; nightly run; ~520 test cases (47 flags × 11 base roles); spec in build phase
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 3 produced no uncommitted plans. Next session continues with Pass 4 (Field-level visibility engine) — details the engine that implements A3 at the serialization + UI layers. Covers: serialization pipeline (query result → apply visibility → return), React component wrappers (`<FieldGated>`), mask formatting library, audit-on-read async implementation, bulk visibility resolution, visibility-aware Postgres views as defense-in-depth, per-tenant customization (Phase 2 placeholder), plus catalog of every visibility.* flag mapped to its database column(s).
+**None.** Pass 4 produced no uncommitted plans. Next session continues with Pass 5 (Status surface binding layer) — extends Pass 2 schema with `status_behavior_bindings` table; catalogs the 80 status surfaces × their bindings from the audit; defines how action handlers consult bindings; specifies state transition matrices per status surface; integrates with Pass 3 algorithms (binding checks in Phase 3 alongside cross-cutting constraints); clarifies operator-configurable bindings vs system-locked.
 
 ---
 
