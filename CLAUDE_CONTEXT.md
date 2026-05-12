@@ -12,44 +12,41 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session N CLOSED.**
+**As of 2026-05-12. Session O CLOSED. 🏁 AUDIT PHASE COMPLETE.**
 
-- **Session N focus:** Module 12 of the feature audit (Scheduling) — operational scheduling layer. Heaviest cross-module reader (M1+M2+M3+M6+M10). Skill+cert+territory+availability+SLA-aware auto-suggest engine. Certification expiry auto-block extends §0.4 #12 to scheduling. SLA response time auto-enforcement with 75%/90%/breach alerts. Cross-resource scheduling (employees + contractors + vehicles + equipment). Mobile clock-in geolocation linked to project + phase + cost-centre driving M6 timesheets. Emergency dispatch override workflow. Append-only schedule change log. Travel time estimates via Google Distance Matrix API. Ten in-session open questions resolved.
-- **Latest commit:** `docs: codify Session N — Module 12 (Scheduling) audit + handoff`. See `git log -1 --oneline`.
+- **Session O focus:** Module 13 of the feature audit (Reports) — final audit module. Cross-module reporting layer with ~40 standard library reports across 7 categories. Operator-defined custom reports (copy-and-modify at v1). Scheduled delivery via email + in-app. Saved report snapshots (immutable per §0.4 #10). Permission-aware queries end-to-end. Multi-language (en + fr). Eight-layer print on sensitive reports. Source-back traceability for financial reports. Seven in-session resolutions.
+- **Latest commit:** `docs: codify Session O — Module 13 (Reports) audit + AUDIT COMPLETE`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 12 of 13 modules walked. **Only M13 (Reports) remaining**.
-- **File size management note:** Through v0.13, M1-M11 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b, M11 b60caf7. Current session module always gets full content.
+- **🏁 AUDIT PHASE COMPLETE.** All 13 of 13 modules walked through Sessions C-O. Total: ~1260 cumulative actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked, 140+ owned tables, 80 status surfaces.
+- **File size management note:** Through v0.14 (final audit version), M1-M12 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b, M11 b60caf7, M12 06261f6. M13 full content in v0.14.
 - **Pending pipeline (in order):**
-  1. **Feature audit Module 13 (Reports)** — broader reporting layer beyond M4 Dashboard and M11 Financials. Operator-defined reports. Standard library per role. Scheduled report delivery.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1205 actions across 12 modules).
-  3. **Permissions module — build** (ROADMAP item 3).
-  4. **Quotes v1 build** (ROADMAP item 4).
+  1. ✅ **Feature audit COMPLETE** — all 13 modules walked.
+  2. **NEXT: Permissions module — design pass** (ROADMAP item 2). Consumes ~1260 actions + 76 permissions design implications + 13 cross-cutting commitments + ten-dimensional model + 80 status surfaces with behavior bindings. This is the heaviest synthesis pass.
+  3. **Permissions module — build** (ROADMAP item 3). Build the actual permissions runtime per design.
+  4. **Quotes v1 build** (ROADMAP item 4). First operational module to ship to users.
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session N:**
-  - **Five-dimensional auto-suggest engine** — skill match + certification match + territory match + availability match + SLA-aware. Performance grade weighted in ranking.
-  - **Certification expiry auto-block on scheduling** — extends §0.4 #12 regulatory expiry pattern. Worker can't be scheduled to appointment requiring expired cert. Manual override (A) with reason captured.
-  - **SLA response time auto-enforcement** — per-site response time from M1 client config (site SLA > site response > client response > tier default precedence). Alerts at 75% (Approaching), 90% (Imminent), 100% (Breached). SLA waiver requires Admin + reason.
-  - **Cross-resource scheduling** — employees + contractors + vehicles + equipment in one unified calendar. Polymorphic resource_type field on appointment_resources junction.
-  - **Mobile clock-in geolocation** — linked to project + phase + cost-centre at clock-in/out. Drives M6 timesheets with proper cost allocation. Geolocation captured only on clock events at v1 (privacy + battery).
-  - **Emergency dispatch override workflow** — overrides normal scheduling availability with reason captured + audit row.
-  - **Multi-day project phase scheduling** with phase-level Gantt.
-  - **Schedule change auto-notifies customer + tech** with operator-configurable templates respecting client communication preferences from M1.
-  - **Append-only schedule change log** (extends §0.4 #10) — every reschedule, reassign, status change captures before/after snapshots.
-  - **Travel time estimates** between consecutive site appointments via Google Distance Matrix API.
-  - **External calendar one-way export at v1** (Google/Outlook iCS); bidirectional sync Phase 2.
-  - **Geolocation privacy retention** — 30-day default operator-configurable; locked as §0.4 #13.
-  - **Conflict detection visual indicators** on calendar: double-booking (red), cert expired (orange), outside territory (yellow), absence overlap (purple), SLA approaching (blue).
-  - **Capacity heatmap** — calendar grid showing utilization per day across teams; under-utilized days flagged for proactive outreach.
-  - **Phase 2 deferrals locked:** route optimization, AI scheduling recommendations, customer self-service scheduling portal, continuous geolocation tracking, in-app dispatcher-tech chat, customer photo upload from confirmation email.
+- **Major architectural decisions from Session O:**
+  - **Three layers of reporting** distinguished: M4 Dashboard (real-time KPI widgets — operational), M11 Financials Reports (P&L/BS/CF/Tax — financial), M13 Reports (cross-module analytical + custom + scheduled — analytical).
+  - **~40 standard library reports** across 7 categories at v1: Sales, Operations, Field Service, Financial, Compliance, Performance, Executive.
+  - **Cross-module reports built-in** — e.g., "Project margin by customer tier" (M6+M1), "Quote conversion rate by SR" (M5+M2), "WSIB expiry calendar" (M2+M8+M10), "T5018 readiness" (M8+M10).
+  - **Operator-defined custom reports** via copy-and-modify at v1 (full report builder Phase 2 with drag-drop fields).
+  - **Scheduled report delivery** via email PDF + in-app inbox. Daily/Weekly/Monthly/Quarterly/On Demand schedules.
+  - **Saved report snapshots** immutable per §0.4 #10. Retention operator-configurable per category (default 7yr compliance, 2yr operational).
+  - **Permission-aware queries end-to-end** — each report respects executing user's data scopes + field visibility consistent with ten-dimensional permissions model. Cross-user data requires explicit grant.
+  - **Multi-language reports** (en + fr at v1 for Canadian compliance).
+  - **Eight-layer print protection** on sensitive reports (executive, payroll, financial, compliance).
+  - **Source-back traceability** for financial reports — drill from P&L line to source GL entries to source module events (extends M11 pattern to M13 reports).
+  - **Role-default availability + per-user override** consistent with ten-dimensional permissions model.
+  - **Phase 2 deferrals locked:** full report builder UI, AI-generated insights, report version control, cross-company reports for multi-entity, real-time execution for executive dashboards.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session N produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session O produced no uncommitted plans. The audit phase is now complete. Next session moves to the Permissions module design pass — the heaviest synthesis pass consuming everything from the audit phase.
 
 ---
 

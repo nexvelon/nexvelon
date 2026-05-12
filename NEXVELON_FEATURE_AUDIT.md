@@ -10,9 +10,10 @@
 >   4. `NEXVELON_ROADMAP.md`.
 >   5. **This file** — feature audit + sidebar expansion.
 >
-> **Status:** v0.13 — Modules 1-12 fully scoped through Sessions C-N.
-> Module 13 (Reports) pending. M1-M11 condensed to headline stats
-> per file-size management pattern; current module gets full content.
+> **Status:** v0.14 — **AUDIT COMPLETE.** All 13 of 13 modules
+> scoped through Sessions C-O. Audit phase closed. Next phase:
+> Permissions module design pass (ROADMAP item 2).
+> M1-M12 condensed to headline stats; M13 full content.
 
 ---
 
@@ -20,11 +21,11 @@
 
 ### 0.1-0.7
 
-Per v0.12 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C.
+Per v0.13 spec. Per-module rubric (14 subsections); role abbreviations (A/PM/SR/Tech/Sub/Acc/VO); action table columns; ten dimensions of permission control; baseline gaps from Session C.
 
 ### 0.4 Permissions model — locked commitments
 
-Through Sessions B-N:
+Through Sessions B-O (FINAL):
 
 1. **Role default + bidirectional per-user override.**
 2. **Three UI states per gated control:** hidden / disabled / interactive.
@@ -33,14 +34,14 @@ Through Sessions B-N:
 5. **Guided creation, never lazy creation.**
 6. **Ten dimensions of permission control.**
 7. **Contractual integrity exception:** `clients:overrideSlaResponseTime` Admin-only.
-8. **Versioned T&C clauses + workflow rules + dashboard widgets + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses + invoice send snapshots + contractor WO terms snapshots + labor rate snapshots + GL period locking + SLA response time snapshots on appointments.**
-9. **Eight-layer print protection** for sensitive PDFs (quotes, contracts, payroll, HR docs, commissioning certificates, handover packages, PO PDFs, remittance advice, T5018 forms, invoices, credit notes, statements, contractor WOs, MSA forms, tax filings, financial reports).
-10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor/contractor performance scoring, GL postings, schedule change log.
+8. **Versioned T&C clauses + workflow rules + dashboard widgets + quote terms snapshots + change order amendments + commissioning records + FIFO inventory layers + vendor-side T&C clauses + invoice send snapshots + contractor WO terms snapshots + labor rate snapshots + GL period locking + SLA response time snapshots on appointments + report snapshots for audit/legal durability.**
+9. **Eight-layer print protection** for sensitive PDFs (quotes, contracts, payroll, HR docs, commissioning certificates, handover packages, PO PDFs, remittance advice, T5018 forms, invoices, credit notes, statements, contractor WOs, MSA forms, tax filings, financial reports, executive reports).
+10. **Comprehensive logging visibility** per PRINCIPLES §4. **Append-only ledgers** for inventory movements, commissioning records, acceptance records, vendor/contractor performance scoring, GL postings, schedule change log, report snapshots.
 11. **Separation of duties** enforcement (AP bill creator ≠ approver; payment run creator ≠ approver; GL manual entry creator ≠ poster; hard close requires A + Acc co-sign).
 12. **Regulatory expiry auto-block enforcement** (insurance + WSIB + certification expired → PO/WO/appointment creation blocked; manual override requires A approval + reason).
 13. **Geolocation privacy retention** (mobile clock-in/out geolocation data retained 30 days default; operator-configurable).
 
-### 0.6 Walk order
+### 0.6 Walk order — COMPLETE
 
 1. Clients + Sites + Contacts *(complete §1)*
 2. Employees + Permissions *(complete §2)*
@@ -53,8 +54,10 @@ Through Sessions B-N:
 9. Invoices *(complete §9)*
 10. Subcontractors *(complete §10)*
 11. Financials *(complete §11)*
-12. **Scheduling** *(complete §12)*
-13. Reports
+12. Scheduling *(complete §12)*
+13. **Reports** *(complete §13)*
+
+**🏁 ALL 13 MODULES WALKED.** Audit phase closed.
 
 ### 0.7 Sidebar architecture *(unchanged from Session K)*
 
@@ -66,427 +69,468 @@ Through Sessions B-N:
 💰 Quotes
 📋 Projects
 📦 Inventory
-📅 Scheduling             ← Module 12 surface
+📅 Scheduling
 💵 Financials (parent — 16 sub-items spanning M9 + M11)
-📈 Reports
+📈 Reports                ← Module 13 surface
 ⚙️ Settings
 ```
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 1-11. Modules 1-11 — condensed headline stats
+# 1-12. Modules 1-12 — condensed headline stats
 ═══════════════════════════════════════════════════════════════════
 
 ## §1. Clients + Sites + Contacts
-23 routes, ~110 actions, 15 lookup tables, 14 field visibilities. Per-site SLAs with precedence. Contractual integrity exception. Holdback (10%/Excl/45 Ontario). 54 acceptance criteria. Permissions: items 1-14. (Full content at `073b393`.)
+23 routes, ~110 actions, 15 lookup tables, 14 field visibilities. Per-site SLAs with precedence. Contractual integrity exception. Holdback (10%/Excl/45 Ontario). 54 acceptance criteria. Permissions: items 1-14. (Full at `073b393`.)
 
 ## §2. Employees + Permissions
-25 routes, ~80 actions, 11 lookup tables, 14 field visibilities. Six-tab permissions editor. 25+ seeded certifications. Multi-territory. Resource Absences. 55 acceptance criteria. Permissions: items 15-22. (Full content at `4dc0cc2`.)
+25 routes, ~80 actions, 11 lookup tables, 14 field visibilities. Six-tab permissions editor. 25+ seeded certifications. Multi-territory. 55 acceptance criteria. Permissions: items 15-22. (Full at `4dc0cc2`.)
 
 ## §3. Settings
-~70 sub-pages, ~270 actions, 16 tables, 4 status surfaces. 29 operator-editable lookups. Workflow Rules. Email/PDF templates. 42 acceptance criteria. Permissions: items 23-27. (Full content at `87a9fc8`.)
+~70 sub-pages, ~270 actions, 16 tables, 4 status surfaces. 29 operator-editable lookups. Workflow Rules. Email/PDF templates. 42 acceptance criteria. Permissions: items 23-27. (Full at `87a9fc8`.)
 
 ## §4. Dashboard
-3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets, 6 role layouts. Three-way visibility gate. UI presentation as 10th dimension. 25 acceptance criteria. Permissions: items 28-30. (Full content at `6283d0f`.)
+3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets, 6 role layouts. Three-way visibility gate. UI as 10th dimension. 25 acceptance criteria. Permissions: items 28-30. (Full at `6283d0f`.)
 
 ## §5. Quotes
-18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types. Online portal acceptance. Immutable send snapshots. T&C auto-composition. 52 acceptance criteria. Permissions: items 31-37. (Full content at `5633e25`.)
+18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types. Online portal acceptance. Immutable send snapshots. T&C auto-composition. 52 acceptance criteria. Permissions: items 31-37. (Full at `5633e25`.)
 
 ## §6. Projects
-24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing. Change order workflow. Commissioning + ULC verification. Handover with warranty clock. Progress invoicing. Lien deadline tracking. 58 acceptance criteria. Permissions: items 38-44. (Full content at `bafb708`.)
+24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing. Change order workflow. Commissioning + ULC verification. Handover with warranty clock. 58 acceptance criteria. Permissions: items 38-44. (Full at `bafb708`.)
 
 ## §7. Inventory
-26 routes, ~95 actions, 15 owned tables, 6 status surfaces. Multi-location stock. FIFO valuation. Append-only movements ledger. Serial lifecycle. Photo on receive. Vendor catalog sync. 48 acceptance criteria. Permissions: items 45-49. (Full content at `f7cee0d`.)
+26 routes, ~95 actions, 15 owned tables, 6 status surfaces. Multi-location stock. FIFO valuation. Append-only movements ledger. Serial lifecycle. Vendor catalog sync. 48 acceptance criteria. Permissions: items 45-49. (Full at `f7cee0d`.)
 
 ## §8. Vendors
-18 routes, ~65 actions, 8 owned tables, 4 status surfaces. T5018 YTD + annual report. Vendor onboarding gates. Insurance/WSIB expiry tracking with auto-PO-block. Performance scoring with auto-degrade. Banking encrypted at rest. 35 acceptance criteria. Permissions: items 50-53. (Full content at `f3a763a`.)
+18 routes, ~65 actions, 8 owned tables, 4 status surfaces. T5018 YTD + annual report. Vendor onboarding gates. Insurance/WSIB expiry tracking. Performance scoring with auto-degrade. Banking encrypted. 35 acceptance criteria. Permissions: items 50-53. (Full at `f3a763a`.)
 
 ## §9. Invoices
-22 routes + 1 portal, ~115 actions, 14 owned tables, 5 status surfaces. AR + AP parallel flows. Customer payment portal with Stripe. 3-way match. Separation of duties on AP. T5018 auto-update. Canadian Construction Act holdback. 55 acceptance criteria. Permissions: items 54-58. (Full content at `681b2ad`.)
+22 routes + 1 portal, ~115 actions, 14 owned tables, 5 status surfaces. AR + AP parallel flows. Customer payment portal with Stripe. 3-way match. Separation of duties on AP. T5018 auto-update. Canadian Construction Act holdback. 55 acceptance criteria. Permissions: items 54-58. (Full at `681b2ad`.)
 
 ## §10. Subcontractors
-23 routes, ~75 actions, 13 owned tables, 5 status surfaces. WSIB auto-block (Ontario regulatory; §0.4 #12). T5018 mandatory. Lien deadline tracking. Worker manifest with cert verification. Skill + territory matching. Versioned labor rates. Cross-link with M8. 38 acceptance criteria. Permissions: items 59-62. (Full content at `4c0b33b`.)
+23 routes, ~75 actions, 13 owned tables, 5 status surfaces. WSIB auto-block (§0.4 #12). T5018 mandatory. Lien deadline tracking. Worker manifest with cert verification. Skill + territory matching. 38 acceptance criteria. Permissions: items 59-62. (Full at `4c0b33b`.)
 
 ## §11. Financials
-26 routes, ~90 actions, 12 owned tables, 6 status surfaces. Built-in GL with source-back traceability. Canadian-first tax compliance (HST/GST/PST + T4 + T5018). Period close with separation of duties (soft Acc → hard A+Acc co-sign). FX revaluation. Bank reconciliation. QBO/Xero/Sage 50 export at v1. Project P&L drilling. Recurring journals. Holdback payable separate liability. 45 acceptance criteria. Permissions: items 63-67. (Full content at `b60caf7`.)
+26 routes, ~90 actions, 12 owned tables, 6 status surfaces. Built-in GL with source-back traceability. Canadian-first tax compliance. Period close with separation of duties. FX revaluation. Bank reconciliation. QBO/Xero/Sage 50 export. 45 acceptance criteria. Permissions: items 63-67. (Full at `b60caf7`.)
+
+## §12. Scheduling
+20 routes, ~75 actions, 10 owned tables, 4 status surfaces. Heaviest cross-module reader (M1+M2+M3+M6+M10). Five-dimensional auto-suggest engine. Certification expiry auto-block. SLA response time auto-enforcement. Cross-resource scheduling. Mobile clock-in geolocation. 50 acceptance criteria. Permissions: items 68-72. (Full at `06261f6`.)
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 12. Module: Scheduling
+# 13. Module: Reports
 ═══════════════════════════════════════════════════════════════════
 
-## 12.1 Purpose
+## 13.1 Purpose
 
-Operational scheduling layer. Multi-resource calendar (employees + contractors + equipment + vehicles). Drag-drop appointment scheduling. SLA response time enforcement consuming M1 site-level SLAs. Capacity planning with heatmap. Skill + certification + territory + availability auto-suggest engine. Mobile schedule view for technicians with clock-in/out feeding M6 timesheets. Multi-day project phase scheduling. Recurring service appointments. Emergency dispatch with override workflow.
+Cross-module reporting layer. This module sits *above* the per-module reports (which each module M5-M12 already includes) and covers:
 
-For security integrators specifically:
-- **Certification expiry blocks scheduling** — worker can't be scheduled to fire alarm install if ULC expired (extends §0.4 #12 to scheduling)
-- **SLA response time auto-enforcement** — emergency response within 4 hours, Type A within 8 hours, etc. per M1 client config
-- **Per-site response time precedence** — emergency vs scheduled work routed differently
-- **Cross-resource scheduling** — employees + contractors + vehicles + equipment all schedulable
-- **Mobile clock-in geolocation** linked to project + phase + cost-centre (drives M6 timesheets)
+1. **Standard report library per role** — ~40 pre-built cross-module reports
+2. **Operator-defined custom reports** — basic copy-and-modify at v1; full report builder Phase 2
+3. **Scheduled report delivery** — email PDFs on a schedule
+4. **Report subscriptions** — users subscribe to reports they care about
+5. **Saved report snapshots** — historical instances for audit/legal durability (immutable per §0.4 #10)
+6. **Export formats** — CSV, Excel, PDF (eight-layer protected for sensitive reports)
+7. **Cross-module reports** — reports spanning 2+ modules
 
-**Major reader of:** M1 (sites, response times, on-stop status), M2 (employees, certifications, territories, availability, absences), M3 (workflow rules, notification rules), M6 (project phases, tasks), M10 (contractor work orders).
+**Key design distinction:**
+- M4 Dashboard = real-time KPI widgets on landing page (operational)
+- M11 Financials Reports = P&L, Balance Sheet, Cash Flow, Tax (financial)
+- M13 Reports = broader cross-module analytical reports + custom + scheduled delivery (analytical)
 
-## 12.2 Sidebar surface
+For security integrators specifically: reports for WSIB/insurance expiry calendars consuming M2+M8+M10; ULC certification status from M2; T5018 readiness from M8+M10; SLA performance by response type from M12+M1; project margin by customer tier from M6+M1; commissioning completion rate from M6.
 
-Top-level 📅 Scheduling per §0.7. Badge: SLA breach alerts + dispatcher queue depth + unassigned emergency dispatches + appointments today pending confirmation.
+## 13.2 Sidebar surface
 
-## 12.3 Routes & sub-routes
+Top-level 📈 Reports per §0.7. Badge: scheduled report failures + pending subscriptions awaiting first delivery.
+
+## 13.3 Routes & sub-routes
 
 | Route | Renders | Primary gate |
 |---|---|---|
-| `/scheduling` | Today dashboard with KPIs | `scheduling:view` |
-| `/scheduling/calendar` | Main calendar | `scheduling:viewCalendar` |
-| `/scheduling/calendar/day` | Day view | `scheduling:viewCalendar` |
-| `/scheduling/calendar/week` | Week view | `scheduling:viewCalendar` |
-| `/scheduling/calendar/month` | Month view | `scheduling:viewCalendar` |
-| `/scheduling/dispatch` | Emergency dispatch queue | `dispatch:view` |
-| `/scheduling/dispatch/new` | Create emergency dispatch | `dispatch:create` |
-| `/scheduling/gantt` | Project Gantt cross-projects | `scheduling:viewGantt` |
-| `/scheduling/resources/employees` | Employee resource calendar | `scheduling:viewEmployees` |
-| `/scheduling/resources/contractors` | Contractor resource calendar | `scheduling:viewContractors` |
-| `/scheduling/resources/vehicles` | Vehicle/equipment calendar | `scheduling:viewVehicles` |
-| `/scheduling/capacity` | Capacity heatmap | `scheduling:viewCapacity` |
-| `/scheduling/appointments/[id]` | Appointment detail | `appointments:viewDetail` |
-| `/scheduling/appointments/new` | Create appointment wizard | `appointments:create` |
-| `/scheduling/recurring` | Recurring series management | `scheduling:viewRecurring` |
-| `/scheduling/sla-alerts` | SLA breach warnings | `scheduling:viewSlaAlerts` |
-| `/scheduling/templates` | Schedule templates | `schedule_templates:viewList` |
-| `/scheduling/audit-log` | Module audit | `scheduling:viewAuditLog` |
-| `/scheduling/mobile` | Mobile-optimized today view | `scheduling:viewMobile` |
-| `/scheduling/route-optimizer` | Route optimization (Phase 2 placeholder) | `scheduling:viewRouteOptimizer` |
+| `/reports` | Reports hub with category cards | `reports:view` |
+| `/reports/library` | Full standard report library | `reports:viewLibrary` |
+| `/reports/library/[reportId]` | Single report render | `reports:viewReport:[id]` |
+| `/reports/category/[categoryId]` | Reports by category | `reports:viewByCategory` |
+| `/reports/custom` | Custom reports list | `custom_reports:viewList` |
+| `/reports/custom/new` | Create custom report | `custom_reports:create` |
+| `/reports/custom/[id]` | Custom report detail | `custom_reports:viewDetail` |
+| `/reports/scheduled` | Scheduled deliveries management | `scheduled_reports:viewList` |
+| `/reports/scheduled/new` | Schedule new delivery | `scheduled_reports:create` |
+| `/reports/subscriptions` | My subscriptions | `subscriptions:viewMy` |
+| `/reports/history` | Historical report snapshots | `report_snapshots:viewList` |
+| `/reports/history/[snapshotId]` | View historical snapshot | `report_snapshots:viewDetail` |
+| `/reports/audit-log` | Module audit | `reports:viewAuditLog` |
 
-## 12.4 Resources
+## 13.4 Resources
 
-### Owned tables (10)
+### Owned tables (7)
 
-- `appointments` — main appointment: appointment_number (auto), title, description, appointment_type_id, status_id, priority_id, start_datetime, end_datetime, timezone (UTC stored, displayed in user TZ), location_type (Site/Office/Travel/Remote), site_id (nullable; FK to M1), client_id (nullable; FK to M1), project_id (nullable; M6), project_phase_id (nullable; M6), project_task_id (nullable; M6), contractor_wo_id (nullable; M10), source_recurring_series_id (nullable), is_emergency_dispatch, created_by, assigned_dispatcher_id, customer_notified_at, technician_notified_at, customer_confirmed_at, custom_fields jsonb, snapshot_sla_response_time (captured at creation for legal durability per §0.4 #8)
-- `appointment_resources` — M:N: appointment_id, resource_type (Employee/Contractor/Vehicle/Equipment), resource_id (polymorphic FK), role (Lead Tech/Helper/Apprentice/Supervisor), is_required
-- `appointment_recurrence_rules` — series config: series_name, first_appointment_id, recurrence_type, recurrence_interval, end_condition (After N / By Date / Never), exception_dates jsonb (holidays, blackouts), status_id, generated_count
-- `appointment_change_log` — append-only audit per §0.4 #10: appointment_id, change_type, changed_by, changed_at, before_snapshot jsonb, after_snapshot jsonb, change_reason
-- `resource_availability_blocks` — calculated capacity per resource per day (computed periodically): resource_type, resource_id, date, available_minutes, scheduled_minutes, utilization_pct, conflict_count
-- `dispatch_records` — emergency dispatch events: dispatch_number, caller_name, caller_phone, urgency, response_time_required (from M1 SLA), assigned_appointment_id, dispatched_by, dispatched_at, acknowledged_by_tech_at, on_site_at, resolved_at, sla_breach (boolean)
-- `schedule_templates` — reusable templates: name, description, default_appointment_type, default_duration_minutes, required_skills jsonb, required_certifications jsonb, default_resource_count, equipment_required jsonb
-- `sla_breach_alerts` — alerts for upcoming/actual violations: alert_type (Approaching/Imminent/Breached), site_id, appointment_id (nullable), client_id, required_response_time, actual_response_time (nullable), severity, generated_at, acknowledged_at, acknowledged_by, escalation_level
-- `external_calendar_sync_state` — Google/Outlook export sync: user_id, calendar_type, last_sync_at, sync_token, mapping_rules
-- `travel_time_estimates` — between-sites: from_site_id, to_site_id, estimated_travel_minutes, mode (Driving/Walking/Transit), last_calculated_at (using Google Distance Matrix API)
+- `report_definitions` — built-in + custom report metadata: report_code (unique), name, category_id, description, query_spec jsonb (parametrized query), parameter_schema jsonb, default_role_access jsonb, output_formats[] (CSV/Excel/PDF), is_custom, is_active, created_by, created_at
+- `custom_reports` — operator-defined: name, source_report_id (copied from standard library), modifications jsonb, owner_user_id, shared_with_user_ids[], shared_with_role_ids[], status, last_run_at
+- `report_subscriptions` — user subscriptions: user_id, report_id, parameter_values jsonb, delivery_schedule_id, delivery_format, delivery_channels[] (email/in-app), is_active, last_delivered_at, next_delivery_at
+- `scheduled_report_deliveries` — execution records: subscription_id, scheduled_at, executed_at, status (Pending/Success/Failed), generated_pdf_url, generated_csv_url, recipient_emails[], delivery_error_log
+- `report_snapshots` — historical instances (immutable per §0.4 #10): report_id, parameters jsonb, executed_at, executed_by, output_pdf_url, output_csv_url, retention_until (per operator policy)
+- `report_execution_log` — full execution history: report_id, executed_by, executed_at, parameters jsonb, duration_ms, row_count, success flag, error_log
+- `report_dashboards` — operator-defined report groupings: name, description, report_ids[], owner_user_id, shared_with_role_ids[]
 
 ### Status lookup tables (4)
 
 | Table | Seeded values | Behavior bindings |
 |---|---|---|
-| `appointment_statuses` | Tentative, Confirmed, En Route, On Site, In Progress, Completed, Cancelled by Customer, Cancelled by Us, No Show, Rescheduled | allows-edit, triggers-notification, terminal flag |
-| `appointment_types` | Installation, Service Call, Maintenance, Commissioning, Emergency Dispatch, Inspection, Training, Travel Time, Internal Meeting, Site Visit (pre-quote), Pickup/Delivery | default duration, default required skills, color coding |
-| `priority_levels` | Critical (P0), High (P1), Normal (P2), Low (P3) | SLA response time mapping, escalation thresholds |
-| `sla_breach_statuses` | Approaching (warning at 75%), Imminent (alert at 90%), Breached (notification), Acknowledged, Waived, Resolved | escalation, customer notification |
+| `report_categories` | Sales, Operations, Field Service, Financial, Compliance, Performance, Executive, Custom | display order, icon, role default access |
+| `report_statuses` | Active, Archived, Draft, Deprecated | allows-execution, list visibility |
+| `delivery_schedules` | Daily, Weekly (Monday), Weekly (Friday), Monthly (1st), Monthly (Last), Quarterly, Annually, On Demand | calculation rule for next_delivery_at |
+| `report_export_formats` | CSV, Excel (xlsx), PDF (eight-layer), JSON | content type, file extension, protection flag |
 
-## 12.5 Actions (~75 actions across 12 categories)
+## 13.5 Actions (~55 actions across 10 categories)
 
-**Calendar views (8):** viewMyDay, viewMyWeek, viewMyMonth, viewTeamCalendar, viewResourceCalendar, viewSiteCalendar, switchView, exportCalendar.
+**Report library (10):** viewLibrary, viewReport (gated per report-role-mapping), runReport, viewParameters, configureParameters, viewLastResults, viewHistoricalRuns, viewMappings, exportPdf (eight-layer for sensitive), exportCsv, exportExcel.
 
-**Appointments lifecycle (15):** viewList, viewDetail, create (with auto-suggest engine), edit, reschedule, cancel, markComplete, recordNoShow, recordCustomerCancellation, applyTemplate, generateFromProjectPhase (auto from M6), generateFromTask (auto from M6), viewActivity, exportPdf, sendReminder.
+**Custom reports (8):** viewList, viewMyCustomReports, create (copy + modify at v1; full builder Phase 2), edit, duplicate, share (users/roles), archive, viewSourceData.
 
-**Resources (8):** viewEmployeeAvailability, viewContractorAvailability, viewVehicleAvailability, assignResource, removeResource, viewConflicts (double-booking, cert expired, absence overlap), viewCapacityHeatmap, blockTimeOff (creates M2 absence record).
+**Scheduled deliveries (6):** viewList, create, edit, pause, resume, cancel.
 
-**Dispatch (6):** viewQueue, createEmergencyDispatch, assignToTech, overrideNormalScheduling (with reason captured), viewDispatchHistory, escalate.
+**Subscriptions (5):** viewMy, subscribe, unsubscribe, configurePreferences, viewSubscriptionHistory.
 
-**Recurring (5):** createSeries, editSeries, pauseSeries, cancelSeries, generateNextOccurrence.
+**Snapshots (4):** viewList, viewSnapshot, exportHistoricalSnapshot, deleteSnapshot (A only with reason).
 
-**SLA monitoring (5):** viewBreachAlerts, configureAlertThresholds, escalateBreachInternally, recordSlaWaiver (A only with reason), viewSlaPerformance.
+**Categories (3):** viewList, viewByCategory, configureCategories (A only).
 
-**Auto-suggest engine (4):** suggestForAppointment, suggestRebalancing, viewSuggestionLog, acceptSuggestion.
+**Permissions (5):** viewRoleDefaults, configureRoleAccess (A only), configureUserOverride (A only), viewReportAccessAudit, runOnBehalf (A only).
 
-**Templates (5):** viewList, create, edit, applyTemplate, archive.
+**Dashboards (4):** viewDashboards, createDashboard, shareDashboard, viewSharedDashboard.
 
-**Mobile (5):** viewMobileSchedule, recordClockIn (geolocation captured), recordClockOut, recordOnSite, recordCompletedOnSite.
+**Reports of reports (7):** reportExecutionTrend, mostUsedReports, scheduledDeliverySuccess, customReportUsage, reportLatency, executiveSummaryUsage, complianceReportRunCadence.
 
-**External calendar sync (3):** connectGoogleCalendar (one-way export at v1), connectOutlook (one-way at v1), exportToIcs.
-
-**Reports (5):** scheduleAdherenceReport, utilizationByResource, slaPerformanceByResponseType, dispatchTimeMetrics, customerCancellationsReport.
-
-**Audit (4):** viewAuditLog, viewChangeHistory, exportChangeLog, viewScheduleSnapshot.
+**Audit (3):** viewAuditLog, viewExecutionLog, exportAuditTrail.
 
 **Default grants:**
-- **A:** full
-- **Dispatcher (special role via M2):** full scheduling, dispatch authority, override
-- **PM:** create/edit/reschedule appointments for own projects' phases + tasks
-- **SR:** viewMy (own client appointments — read only)
-- **Tech:** viewMobileSchedule (own), clockIn/Out, markComplete (own)
-- **Acc:** viewList read-only (time reconciliation)
-- **VO:** viewList only
+- **A:** full access
+- **PM:** library for Operations + Field Service + Compliance (own team/project scoped); create custom reports
+- **SR:** library for Sales (own clients scoped); subscribe to favourites
+- **Tech:** library for Field Service (own work scoped); subscribe to "My Schedule This Week"
+- **Acc:** library for Financial + Compliance + Performance; cross-user data with grant
+- **VO:** library for Executive (top-level; no margin); view-only
+- **Executive (custom role):** library for Executive; cross-user permitted
 
-## 12.6 Views
+## 13.6 Views
 
-### Today dashboard (`/scheduling`)
+### Reports hub (`/reports`)
 
-KPI tiles: Today's appointments / In Progress now / Completed today / SLA breaches today / Emergency dispatch queue / Unassigned. Quick actions. Live activity feed.
+Category cards (8 categories — Sales / Operations / Field Service / Financial / Compliance / Performance / Executive / Custom). Each card: report count + most-used report + quick subscribe link. Recently run reports list.
 
-### Main calendar (`/scheduling/calendar`)
+### Standard library (`/reports/library`)
 
-Day/Week/Month toggle. Multi-resource view (rows = resources, columns = time). Drag-drop to move appointments. Resize to change duration. Color-coded by appointment type. Filter chips: priority, status, project, technician, contractor, site, customer tier.
+Filter chips: category, role-default-availability, has-parameters, scheduled, has-snapshot-history. List view with: report name, category, last-run, format, role access. Click → run report.
 
-Conflict detection visual indicators:
-- 🟥 Double-booking
-- 🟧 Certification expired for required skill
-- 🟨 Outside service territory
-- 🟪 Resource absence overlap
-- 🟦 SLA response time approaching
+### Report execution
 
-### Appointment create wizard
+Parameters panel (operator-configurable values: date range, client filter, project filter). Run button → executes → table view + chart + export buttons. Long-running reports queued + executed async.
 
-Multi-step:
-1. Type & priority
-2. Customer & site
-3. Date & duration
-4. Required skills/certs (from M2)
-5. Auto-suggest resources (ranked list)
-6. Assign resources
-7. Travel time estimate (Google Distance Matrix)
-8. Notifications
-9. Review & confirm
+### Custom report builder (basic at v1)
 
-### Emergency dispatch flow
+1. Choose source report from library
+2. Modify parameters / filters / columns
+3. Save with name + share settings
+4. Run anytime
 
-1. Caller info captured
-2. Site selected → SLA response time computed (M1 site response → client default → tier default precedence)
-3. Available technicians ranked: distance + skills + currently uncommitted time
-4. Override normal scheduling if needed (reason captured)
-5. Dispatch sent → tech notified → SLA clock starts
-6. Tech acknowledges → on-site → resolves → dispatch closed
+Phase 2 full builder: drag-drop fields from data model, joins across modules, custom aggregations, scheduled refresh.
 
-### Resource availability calendar
+### Scheduled deliveries (`/reports/scheduled`)
 
-Per-resource view: scheduled appointments + absences (M2) + cert expiry alerts. Color-coded utilization (red >90%, orange 75-90%, yellow 50-75%, green <50%).
+List of active scheduled deliveries with last status. Configure new: report + parameters + schedule + recipients (email or in-app inbox) + format.
 
-### Capacity heatmap (`/scheduling/capacity`)
+### Subscriptions (`/reports/subscriptions`)
 
-Calendar grid showing utilization per day across teams. Drill into day → see all resources + bookings. Identify under-utilized days for proactive outreach.
+User's own subscriptions. Configure: which reports, frequency, format, delivery channel.
 
-### Mobile technician view (`/scheduling/mobile`)
+### Historical snapshots (`/reports/history`)
 
-Today's schedule list. Each card:
-- Time + duration
-- Customer + site address (tap → navigate)
-- Type + priority
-- Required tools/equipment
-- Customer phone (tap to call)
-- Clock-in / Clock-out (geolocation)
-- Mark Complete with notes + photos + customer signature
+Per-report list of past instances. Each snapshot is immutable. Click → view that exact historical state. Useful for audit/legal/compliance.
 
-### Schedule change log
+### Standard report library (~40 reports across 7 categories)
 
-Append-only audit. Filter by appointment, technician, date range. Shows: who changed what when, before/after snapshots, reason for change.
+**Sales (~6):** Quote pipeline by stage, Quote conversion rate by SR, Win/loss analysis, Quote aging by status, Average quote value trend, New leads + conversion.
 
-### SLA breach alerts (`/scheduling/sla-alerts`)
+**Operations (~7):** Project status overview, Project margin by customer tier, Project delay analysis, Change order impact analysis, Commissioning completion rate, Inventory turnover by category, Open POs by vendor.
 
-Active alerts panel: Approaching (75%) / Imminent (90%) / Breached. Click → drill into appointment → re-assign or escalate.
+**Field Service (~7):** Tech utilization by employee, SLA performance by response type, First-time fix rate, Customer satisfaction trend, Service call volume by site, Emergency dispatch metrics, Mobile completion rate.
 
-## 12.7 Field-level visibility (5 flags)
+**Financial (~5):** AR aging by sales rep, Vendor spend trend, Contractor spend YTD, Holdback liability outstanding, Late fee revenue.
 
-- `visibility.scheduling.fullCalendarAcrossTeams` — A, Dispatcher only
-- `visibility.scheduling.employeeCostRate` — A, Acc only
-- `visibility.scheduling.privateAppointments` — owner-only
-- `visibility.scheduling.customerPii` — A, PM, assigned-tech
-- `visibility.scheduling.geolocationHistory` — A, owner only (30-day retention default per §0.4 #13)
+**Compliance (~5):** WSIB expiry calendar (M2+M8+M10), Insurance renewal calendar (M2+M8+M10), ULC certification status (M2), T5018 readiness (M8+M10), Audit trail summary by module.
 
-## 12.8 Custom-field surfaces
+**Performance (~5):** Employee performance ranking (M2+M6+M12), Contractor performance ranking, Vendor performance ranking, SR pipeline + conversion ranking, PM project margin ranking.
 
-Per-appointment custom fields managed in Settings → Custom Fields → Appointments. Examples: Customer Phone Confirmed, Equipment to Bring, Special Access Required (gate code, key location), Customer Pet (warning), Site-Specific PPE Required, Parking Notes, Building Restrictions, Multi-Day Project Day Number.
+**Executive (~5):** Revenue trend, Customer acquisition, Top accounts, Cost trends, Cash flow forecast.
 
-## 12.9 Status surfaces
+## 13.7 Field-level visibility (3 flags)
 
-4 lookup tables (see §12.4).
+- `visibility.reports.executiveReports` — A, executives, VO (limited)
+- `visibility.reports.payrollReports` — A, HR-role, Acc
+- `visibility.reports.crossUserData` — A, role-with-grant
 
-## 12.10 Cross-module relationships
+## 13.8 Custom-field surfaces
 
-### Reads (extensive — Module 12 is heaviest reader)
+Limited custom fields here — report parameters are operator-configurable per report. Custom reports themselves are the operator extensibility surface.
 
-- **Clients (M1):** site, response_times, on_stop status (blocks new appointments)
-- **Sites (M1):** location, access info, equipment installed
-- **SLAs (M1):** per-site response time → SLA enforcement
-- **Employees (M2):** availability, certifications, territories, absences, hourly_rate
-- **Settings (M3):** workflow rules, notification rules, appointment types, priorities, schedule templates
-- **Projects (M6):** project phases + tasks (work to schedule), project_pm + assigned techs
-- **Contractors (M10):** contractor work orders for sub-contractor scheduling
+## 13.9 Status surfaces
+
+4 lookup tables (see §13.4).
+
+## 13.10 Cross-module relationships
+
+### Reads from ALL modules
+
+Reports query data from every module (M1-M12). Permission-aware queries: each report respects executing user's data scopes per ten-dimensional permissions model. Cross-user data requires explicit grant.
 
 ### Writes
 
-- **Communication log (M1):** auto-notify customer on schedule changes + reminders
-- **Timesheets (M6):** mobile clock-in/out creates time entries on project_phase + cost_center
-- **Audit on every schedule change**
+- **Communication log (M1):** scheduled delivery records sent emails
+- **Audit on every report execution + custom report change + subscription change**
 
 ### Events emitted
 
-`appointment.created`, `appointment.scheduled`, `appointment.rescheduled`, `appointment.assigned`, `appointment.customer_notified`, `appointment.tech_notified`, `appointment.confirmed_by_customer`, `appointment.en_route`, `appointment.on_site`, `appointment.in_progress`, `appointment.completed`, `appointment.cancelled`, `appointment.no_show`, `dispatch.created`, `dispatch.acknowledged`, `dispatch.on_site`, `dispatch.resolved`, `sla_breach.approaching`, `sla_breach.imminent`, `sla_breach.breached`, `sla_breach.acknowledged`, `sla_breach.waived`, `recurring_series.next_generated`, `schedule_change.logged`.
+`report.executed`, `report.exported`, `report.scheduled_delivery_sent`, `report.scheduled_delivery_failed`, `custom_report.created`, `custom_report.edited`, `custom_report.shared`, `subscription.created`, `subscription.cancelled`, `report_snapshot.captured`.
 
-## 12.11 Competitive floor delta
+## 13.11 Competitive floor delta
 
 Combines best of:
-- **ServiceTitan dispatch:** drag-drop, capacity heatmap, mobile route, real-time location, customer notifications
-- **simPRO scheduling:** multi-resource, drag-drop, recurring, contractor scheduling
-- **FieldWire:** project-specific scheduling, plan-attachment to appointments
-- **Salesforce Field Service:** advanced AI routing + skill-based dispatch
+- **ServiceTitan reports:** ~80 built-in library, scheduled delivery, custom reports
+- **simPRO BI reporting:** 70+ built-in + premium custom add-on, multi-format export
+- **QuickBooks reports:** financial focus
+- **Sage Intacct dimensions:** flexible reporting by department/project/location
 
 **Nexvelon-unique:**
-- **Skill + cert + territory + availability + SLA-aware auto-suggest engine** — combines all five dimensions in ranking
-- **Certification expiry auto-block on scheduling** — extends §0.4 #12 regulatory expiry to scheduling layer
-- **SLA response time auto-enforcement** — per-site response time from M1; alerts at 75%/90%/breached
-- **Per-site response time precedence** — site SLA > site response > client response > tier default
-- **Cross-resource scheduling** — employees + contractors + vehicles + equipment in one calendar
-- **Mobile clock-in geolocation linked to project + phase + cost-centre** — drives M6 timesheets with proper cost allocation
-- **Emergency dispatch override workflow** with reason capture + audit
-- **Multi-day project phase scheduling** with phase-level Gantt
-- **Schedule change auto-notifies customer + tech** with operator-configurable templates
-- **Append-only schedule change log**
-- **Travel time estimates** between consecutive site appointments (Google Distance Matrix)
-- **External calendar one-way export at v1** (Google/Outlook); bidirectional sync Phase 2
-- **Geolocation privacy retention** (30-day default per §0.4 #13)
+- **Cross-module reports built-in** — 40+ cross-module reports (most competitors silo reports per module)
+- **Permission-aware queries end-to-end** — each report respects executing user's data scopes + field visibility
+- **Report subscriptions with scheduled email + in-app delivery**
+- **Saved report snapshots** for audit/legal durability (immutable per §0.4 #10)
+- **Role-default availability + per-user override**
+- **Multi-language reports** (en + fr at v1)
+- **Eight-layer print protection** on sensitive reports
+- **Operator-defined custom reports** via copy-and-modify at v1
+- **Source-back traceability** in financial reports (drill from P&L line to source GL entries to source module events)
 
-## 12.12 Permissions design implications (items 68-72)
+## 13.12 Permissions design implications (items 73-76)
 
-68. **Certification expiry blocks scheduling** — extends §0.4 #12 regulatory expiry pattern to scheduling. Worker with expired cert can't be assigned to appointment requiring that cert. Manual override (A) requires reason.
-69. **SLA response time auto-enforcement** — appointments must satisfy per-site SLA. Creating outside SLA window triggers warning. SLA waiver requires Admin + reason.
-70. **Mobile clock-in geolocation captured** — privacy implications. Geolocation visible only to A and owner. Retained 30 days default per §0.4 #13 (operator-configurable).
-71. **Schedule view scoping per role** — Tech sees own; PM sees own team + own projects; Dispatcher sees all; SR sees own clients only; A sees all.
-72. **Customer-facing appointment notifications** gated by client communication preferences (from M1); operator-configurable opt-in/out per channel (email/SMS/none).
+73. **Report library access role-default with per-user override** — consistent with ten-dimensional permissions model.
+74. **Cross-user data in reports gated** — reports showing data across multiple users require explicit cross-user permission.
+75. **Scheduled report subscriptions audit** — every recipient + every delivery captured.
+76. **Saved report snapshots are immutable** — per §0.4 #10 append-only commitment.
 
-## 12.13 Open questions — RESOLVED IN SESSION N
+## 13.13 Open questions — RESOLVED IN SESSION O
 
-1. ✅ **Route optimization at v1 or Phase 2:** Phase 2 (v1 manual ordering with travel time display).
-2. ✅ **AI scheduling recommendations:** Phase 2 (simple weighted scoring at v1).
-3. ✅ **Customer self-service scheduling portal:** Phase 2.
-4. ✅ **Mobile geolocation tracking continuously or only on clock events:** Only on clock events at v1; continuous Phase 2 with explicit opt-in.
-5. ✅ **Schedule conflict resolution UI:** YES at v1.
-6. ✅ **Multi-timezone scheduling:** YES at v1 (UTC stored, user TZ displayed).
-7. ✅ **Recurring appointment series with exceptions:** YES at v1.
-8. ✅ **External calendar sync (Google/Outlook):** one-way export at v1; bidirectional Phase 2.
-9. ✅ **Travel time calculation:** YES at v1 via Google Distance Matrix API.
-10. ✅ **Geolocation retention:** 30 days default operator-configurable; locked as §0.4 #13.
+1. ✅ **Full report builder UI at v1 or Phase 2:** Phase 2 (basic copy-and-modify at v1).
+2. ✅ **AI-generated insights:** Phase 2.
+3. ✅ **Report version control:** Phase 2 (manual naming at v1).
+4. ✅ **Cross-company reports:** Phase 2 (multi-entity deferred).
+5. ✅ **Email vs in-app delivery:** Both.
+6. ✅ **Standard library count:** ~40 reports across 7 categories.
+7. ✅ **Snapshot retention:** operator-configurable per category; default 7 years compliance, 2 years operational.
 
 Remaining:
-11. **In-app messaging between dispatcher and tech:** SMS via Twilio at v1; in-app chat Phase 2.
-12. **Customer photo upload from appointment confirmation:** Phase 2.
-13. **Multi-day appointment block with overnight stays:** YES at v1.
+8. **Real-time vs batched execution:** batched at v1 (5-min cache); real-time for executive dashboards Phase 2.
+9. **Admin subscription footprint view:** YES at v1.
 
-## 12.14 Acceptance criteria (~50 scenarios)
+## 13.14 Acceptance criteria (~35 scenarios)
 
-### Functional — Appointment lifecycle (1-10)
+### Functional — Report library (1-7)
+1. View reports hub; category cards per role default.
+2. Sales category: SR sees Quote pipeline + own SR conversion rate.
+3. Run "Quote conversion rate by SR" — A sees all; SR sees self.
+4. Run with parameters (date range, client filter).
+5. Export to CSV.
+6. Export to PDF (eight-layer for executive).
+7. Execution log shows recent runs.
 
-1. Create appointment from project phase; auto-suggests resources.
-2. Drag-drop reschedule; change_log audit row written.
-3. Conflict detection: double-booking → red.
-4. Certification expiry: worker with expired ULC can't be assigned to fire alarm install.
-5. Customer On Stop (M1) → new appointment blocked.
-6. Emergency dispatch overrides normal scheduling with reason captured.
-7. Recurring series creates 12 monthly appointments; exception dates skipped.
-8. Customer cancellation → status updated; M9 invoice flag for fee.
-9. No-show recording → status + PM notification.
-10. Mobile completion → M6 timesheet entry created with phase + cost-centre.
+### Functional — Custom reports (8-11)
+8. Copy standard → modify → save.
+9. Share with specific user.
+10. Share with role (all PMs).
+11. Edit custom report; old snapshot retained.
 
-### Functional — Auto-suggest engine (11-14)
+### Functional — Subscriptions (12-15)
+12. Subscribe to "Weekly Quote Pipeline."
+13. Configure schedule (every Monday).
+14. Email PDF delivery.
+15. In-app inbox delivery.
 
-11. Skill match.
-12. Territory match.
-13. Availability match.
-14. Performance grade weighted in ranking.
+### Functional — Scheduled deliveries (16-19)
+16. Acc schedules "Monthly AR Aging" → finance team monthly.
+17. Failure logged + retry.
+18. Pause; resume later.
+19. Cancel.
 
-### Functional — SLA enforcement (15-19)
+### Functional — Snapshots (20-22)
+20. Quarterly P&L → snapshot captured immutably.
+21. View historical snapshot.
+22. Delete (A only with reason).
 
-15. Emergency client (4hr SLA) → appointment scheduled 5hr out → warning.
-16. SLA approaching alert at 75%.
-17. SLA imminent alert at 90%.
-18. SLA breach notification with escalation.
-19. SLA waiver (Admin only) with reason.
+### Functional — Permissions (23-28)
+23. SR runs cross-user report → blocked.
+24. A grants cross-user → PM can run.
+25. PM sees Operations reports for own team.
+26. Tech sees Field Service for own work.
+27. Acc sees Financial + Compliance.
+28. VO sees Executive top-level.
 
-### Functional — Dispatch (20-23)
+### Functional — Cross-module reports (29-31)
+29. Project margin by customer tier (M6+M1).
+30. Quote conversion rate by SR (M5+M2).
+31. WSIB expiry calendar (M2+M8+M10).
 
-20. Emergency dispatch; nearest tech ranked.
-21. Override scheduled appointment with reason + audit.
-22. Tech acknowledges → on-site → resolved → SLA recorded.
-23. Dispatch metrics: avg ack, avg on-site, breach rate.
-
-### Functional — Mobile (24-29)
-
-24. Tech opens mobile schedule → today's appointments.
-25. Tap to navigate → Google Maps.
-26. Clock-in records geolocation + timestamp.
-27. Clock-out records + creates M6 timesheet entry.
-28. Mark complete with photos + customer signature.
-29. Customer email confirmation sent.
-
-### Functional — Resource calendar (30-34)
-
-30. Employee calendar shows schedule + absences + cert warnings.
-31. Contractor work order on contractor calendar.
-32. Vehicle/equipment scheduling.
-33. Capacity heatmap identifies overbooked days.
-34. Block time off creates M2 absence.
-
-### Functional — Recurring & templates (35-37)
-
-35. Recurring with end date generates correct count.
-36. Schedule template applied.
-37. Template versioning (existing appointments retain original snapshot).
-
-### Functional — External calendar (38-39)
-
-38. Export to Google Calendar via iCS.
-39. Outlook export.
-
-### Functional — Permissions (40-44)
-
-40. Tech sees own schedule only.
-41. PM sees own team + projects.
-42. Dispatcher sees full calendar.
-43. SR sees only own client appointments.
-44. Geolocation visible to A + owner only.
-
-### Functional — Performance & security (45-50)
-
-45. Calendar with 500 appointments + 50 resources loads <3s.
-46. Drag-drop reschedule <500ms.
-47. Auto-suggest with 100 candidates <1s.
-48. RLS blocks unauthorized calendar view.
-49. Geolocation purged after 30 days.
-50. Mobile clock-in idempotent.
+### Functional — Performance & security (32-35)
+32. Report with 100k rows <10s.
+33. Permission-aware query respects scopes.
+34. RLS blocks unauthorized cross-user data.
+35. PDF eight-layer on payroll + executive.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Module 13: pending walk
+# 🏁 AUDIT COMPLETE
 ═══════════════════════════════════════════════════════════════════
 
-- §13 — Reports
+## All 13 modules walked. Final stats:
 
----
-
-═══════════════════════════════════════════════════════════════════
-# Consolidated outputs
-═══════════════════════════════════════════════════════════════════
+- **13 of 13 modules** scoped through Sessions C-O
+- **~1260 cumulative actions** across all modules
+- **76 permissions design implications** (items 1-76)
+- **~594 acceptance criteria** across all modules
+- **13 cross-cutting commitments** locked (§0.4 #1-13)
+- **140+ owned tables** across all modules
+- **75+ operator-editable lookup tables**
+- **Sidebar architecture** locked at top-level + parent menu structure
+- **Module dependency graph** populated below
 
 ## 99. Consolidated action vocabulary
 
-*Running count: ~1205 actions across 12 modules (~110 M1 + ~80 M2 + ~270 M3 + ~35 M4 + ~85 M5 + ~110 M6 + ~95 M7 + ~65 M8 + ~115 M9 + ~75 M10 + ~90 M11 + ~75 M12).*
+| Module | Actions | Tables | Status surfaces | Acceptance criteria |
+|---|---|---|---|---|
+| M1 Clients + Sites + Contacts | ~110 | 8+ | 15 | 54 |
+| M2 Employees + Permissions | ~80 | 20 | 11 | 55 |
+| M3 Settings | ~270 | 16 | 4 | 42 |
+| M4 Dashboard | ~35 | 5 | 3 | 25 |
+| M5 Quotes | ~85 | 12 | 5 | 52 |
+| M6 Projects | ~110 | 12 | 8 | 58 |
+| M7 Inventory | ~95 | 15 | 6 | 48 |
+| M8 Vendors | ~65 | 8 | 4 | 35 |
+| M9 Invoices | ~115 | 14 | 5 | 55 |
+| M10 Subcontractors | ~75 | 13 | 5 | 38 |
+| M11 Financials | ~90 | 12 | 6 | 45 |
+| M12 Scheduling | ~75 | 10 | 4 | 50 |
+| M13 Reports | ~55 | 7 | 4 | 35 |
+| **TOTAL** | **~1260** | **152** | **80** | **594** |
 
-## 100. Final sidebar tree
+## 100. Final sidebar tree *(locked Session K — see §0.7)*
 
-*Refined Session K — see §0.7.*
+```
+🧭 Sidebar
+─────────
+📊 Dashboard
+👥 People (parent: Clients / Sites / Employees / Vendors / Contractors / Misc Contacts)
+💰 Quotes
+📋 Projects
+📦 Inventory
+📅 Scheduling
+💵 Financials (parent: 16 sub-items spanning M9 + M11)
+📈 Reports
+⚙️ Settings
+```
 
 ## 101. Module dependency graph
 
-*Populated after M13 walked.*
+**Foundation modules (read by everything):**
+- M1 Clients + Sites + Contacts
+- M2 Employees + Permissions
+- M3 Settings
 
-## 102. Cumulative permissions design implications
+**Revenue modules:**
+- M5 Quotes — reads M1, M2, M3; writes Communication Log, generates Project on conversion
+- M6 Projects — reads M1, M2, M3, M5, M7, M8, M10; writes M9, M11, Communication Log
 
-*72 items so far (1-14 M1, 15-22 M2, 23-27 M3, 28-30 M4, 31-37 M5, 38-44 M6, 45-49 M7, 50-53 M8, 54-58 M9, 59-62 M10, 63-67 M11, 68-72 M12).*
+**Operations modules:**
+- M7 Inventory — reads M3, M5 (pricebook), M8; writes M6 costing, M11 GL
+- M8 Vendors — reads M3; read by M7, M9, M11
+- M10 Subcontractors — reads M3, M2 (certs/territories); read by M6, M9, M12
 
-## 103. Cumulative acceptance criteria
+**Financial modules:**
+- M9 Invoices — reads M1, M5, M6, M7, M8, M10; writes M11 GL
+- M11 Financials — reads ALL modules (GL destination); writes nothing back
 
-*~559 scenarios so far (54 M1 + 55 M2 + 42 M3 + 25 M4 + ~52 M5 + ~58 M6 + ~48 M7 + ~35 M8 + ~55 M9 + ~38 M10 + ~45 M11 + ~50 M12).*
+**Operational scheduling:**
+- M12 Scheduling — heaviest reader: M1, M2, M3, M6, M10; writes M1 Communication Log, M6 timesheets
+
+**Presentation/analytical:**
+- M4 Dashboard — reads ALL modules (KPI widgets)
+- M13 Reports — reads ALL modules (cross-module analytical reports)
+
+## 102. Cumulative permissions design implications (76 items)
+
+Items 1-14 (M1), 15-22 (M2), 23-27 (M3), 28-30 (M4), 31-37 (M5), 38-44 (M6), 45-49 (M7), 50-53 (M8), 54-58 (M9), 59-62 (M10), 63-67 (M11), 68-72 (M12), 73-76 (M13).
+
+Key cross-cutting patterns synthesized for Permissions design pass:
+- **Ten-dimensional permission control** (§0.4 #6)
+- **Field-level visibility** consistent across M1, M2, M5, M6, M7, M8, M9, M10, M11, M12, M13
+- **Append-only ledgers** (§0.4 #10) — inventory movements, commissioning records, acceptance records, performance scoring, GL postings, schedule change log, report snapshots
+- **Separation of duties** (§0.4 #11) — AP bill approval, payment runs, GL manual entries, hard close
+- **Regulatory expiry auto-block** (§0.4 #12) — insurance + WSIB + certification expired → blocks PO/WO/appointment
+- **Versioned snapshots for legal durability** (§0.4 #8) — quote terms, change orders, commissioning, FIFO layers, vendor T&C, invoice send, contractor WO, labor rates, GL period locking, SLA response time, report snapshots
+- **Eight-layer print protection** (§0.4 #9) — extensive list of sensitive PDF documents
+- **Banking encrypted at rest with audit-on-read** — M1 clients, M2 employees, M8 vendors, M10 contractors
+- **Cross-link patterns** — M8 ↔ M10 (vendor + contractor dual-role); M9 ↔ M6 (invoice → project); M7 ↔ M5 (pricebook → inventory)
+- **Auto-degrade workflows** — vendor performance, contractor performance, preferred-status removal
+- **Geolocation privacy retention** (§0.4 #13) — 30-day default operator-configurable
+
+## 103. Cumulative acceptance criteria (~594 scenarios)
+
+By module:
+54 M1 + 55 M2 + 42 M3 + 25 M4 + 52 M5 + 58 M6 + 48 M7 + 35 M8 + 55 M9 + 38 M10 + 45 M11 + 50 M12 + 35 M13 = **594 total acceptance scenarios** for v1 build phase QA.
+
+## 104. Phase 2 deferrals catalog
+
+Consolidated from across all modules:
+- Multi-company / multi-entity (M3, M8, M11)
+- SSO/SAML (M2)
+- Personal API tokens (M2)
+- Role hierarchy (M2)
+- Crew assignments (M2)
+- Two-tier permissions model (M2)
+- Workflow rules visual flowchart editor (M3)
+- SMS templates (M3)
+- BIM/CAD integration (M3)
+- Real-time WebSocket push for critical widgets (M4)
+- Native mobile app (M4, M12)
+- Operator-defined custom widgets (M4)
+- Multi-currency in single quote (M5)
+- Financing integrations Phase 2 (M5)
+- Volume discount rules engine (M5)
+- Real-time co-authoring (M5)
+- Customer status portal full version (M6)
+- Multiple PMs per project (M6)
+- Customer self-service scheduling portal (M12)
+- Continuous geolocation tracking (M12)
+- In-app dispatcher-tech chat (M12)
+- Plaid live bank feed (M11)
+- Bidirectional QBO/Xero sync (M11)
+- Full report builder UI (M13)
+- AI-generated insights (M13)
+- Report version control (M13)
+- Vendor portal full version (M8)
+- VMI vendor-managed inventory (M8)
+- Contractor portal full version (M10)
+- Sub-contractor self-onboarding signup (M10)
+- Mobile worker check-in verification (M10)
+- Audit-trail report for external auditor (M11)
+- Equipment firmware tracking integration (M7)
+- RMA workflow for customer returns (M7)
 
 ---
 
-**End of v0.13.** Modules 1-12 complete. Scheduling module scoped as the heaviest cross-module reader (M1+M2+M3+M6+M10) with skill+cert+territory+availability+SLA-aware auto-suggest engine, certification expiry auto-block extending §0.4 #12 to scheduling, SLA response time auto-enforcement with 75%/90%/breach alerts, per-site response time precedence, cross-resource scheduling (employees + contractors + vehicles + equipment), mobile clock-in geolocation linked to project + phase + cost-centre driving M6 timesheets, emergency dispatch override workflow with reason capture, append-only schedule change log, travel time estimates via Google Distance Matrix API, external calendar one-way export (Google/Outlook) at v1. New cross-cutting commitment §0.4 #13 locked: geolocation privacy retention (30-day default operator-configurable). Cross-cutting commitments from Sessions C-N propagate forward.
+**End of v0.14. AUDIT COMPLETE.** All 13 modules scoped through Sessions C-O. Next phase: Permissions module design pass (ROADMAP item 2). Consumes ~1260 actions + 76 permissions design implications + 13 cross-cutting commitments + ten-dimensional model + 80 status surfaces with behavior bindings.
+
+🏁 Phase 1 audit complete. Phase 2 begins with Permissions architecture.

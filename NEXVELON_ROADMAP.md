@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session N (2026-05-12):** Modules 1-12 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.13. Cumulative: ~1205 actions, 72 permissions design implications, ~559 acceptance criteria. M12 (Scheduling): ~75 actions, 10 new tables, 4 status surfaces, heaviest cross-module reader (M1+M2+M3+M6+M10), 5-dimensional auto-suggest engine (skill+cert+territory+availability+SLA), certification expiry auto-block (extends §0.4 #12), SLA response time auto-enforcement with 75%/90%/breach alerts, per-site precedence, cross-resource scheduling, mobile clock-in geolocation linked to project+phase+cost-centre driving M6 timesheets, emergency dispatch override workflow, append-only schedule change log, travel time via Google Distance Matrix, external calendar one-way export. Only M13 (Reports) remaining. Audit file management: v0.13 condenses M1-M11 sections to headline stats; full content preserved in git history at noted commit hashes.
+**🏁 COMPLETE as of Session O (2026-05-12):** All 13 of 13 modules walked through Sessions C-O. `NEXVELON_FEATURE_AUDIT.md` v0.14 is the final audit document. Total: ~1260 cumulative actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked (§0.4 #1-13), 140+ owned tables across all modules, 80 status surfaces with behavior bindings. M13 (Reports): ~55 actions, 7 new tables, 4 status surfaces, ~40 standard library cross-module reports across 7 categories, operator-defined custom reports via copy-and-modify (full builder Phase 2), scheduled delivery via email + in-app, saved report snapshots immutable per §0.4 #10, permission-aware queries end-to-end, multi-language (en + fr), eight-layer print on sensitive reports, source-back traceability for financial reports. Audit file management: v0.14 condenses M1-M12 sections to headline stats; full content preserved in git history at noted commit hashes. **Next phase: Permissions module design pass (item 2).**
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -51,6 +51,8 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 ---
 
 ## 2. Permissions module — design pass
+
+**🎯 READY TO BEGIN.** Audit phase complete (Session O). All inputs locked. This pass synthesizes ~1260 actions + 76 permissions design implications + 13 cross-cutting commitments + ten-dimensional model + 80 status surfaces with behavior bindings into the actual permissions architecture. Expect this to be the heaviest synthesis session (2-3 hours).
 
 **What:** A written design doc for the per-user, per-feature ACL
 described in `NEXVELON_PRINCIPLES.md` §2. Covers the data model,
@@ -183,6 +185,15 @@ migration strategy for replacing the current static `lib/permissions
 - Schedule change log append-only pattern (extends §0.4 #10)
 - Emergency dispatch override audit pattern
 - Schedule view scoping per role (Tech own; PM team+projects; Dispatcher all; SR client-scoped; A all)
+
+**Inputs from Session O** (additions from Module 13 walk):
+- Three layers of reporting (M4 Dashboard / M11 Financials / M13 Reports) with distinct permission models
+- Permission-aware report queries pattern (each report respects executing user's data scopes + field visibility)
+- Cross-user data in reports gated (explicit grant required)
+- Scheduled report subscription audit pattern (every recipient + delivery captured)
+- Saved report snapshots immutable per §0.4 #10
+- Multi-language report rendering pattern
+- Source-back traceability for financial reports
 
 ---
 
