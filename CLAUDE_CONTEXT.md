@@ -12,44 +12,42 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session O CLOSED (🏁 AUDIT COMPLETE) + Permissions Design Pass 1 landed.**
+**As of 2026-05-12. Session P CLOSED. Permissions Design Pass 1 of 11 complete.**
 
-- **Latest deliverable:** `NEXVELON_PERMISSIONS_DESIGN.md` v0.1 — Pass 1 (Action Vocabulary Catalog) of the Permissions module design pass. Future sessions MUST read this doc after the audit doc; it is the canonical permissions spec.
-- **Pass 1 deliverables:** ~1260 actions normalized to `resource:verb[:qualifier]` format; verb taxonomy (8 categories); qualifier taxonomy (scope/state/modal/field-section); resource taxonomy (all tables across M1-M13); action grouping for the M2 six-tab permissions editor UI (Tier 1-4 hierarchy + orthogonal cross-cuts); full action catalog by module with default role grants (A/PM/SR/Tech/Acc/VO + custom roles Dispatcher/Bookkeeper/HR-role/Executive); cross-references (dependencies, mutual exclusions per §0.4 #11, action chains); special-case treatment (public signed-URL, Admin exceptions with reason capture, system-generated, append-only); six open questions resolved with explicit decisions.
-- **Pending passes (Permissions design):** Pass 2 Database schema → Pass 3 Resolution algorithm → Pass 4 Field visibility engine → Pass 5 Status surface bindings → Pass 6 Append-only audit pattern → Pass 7 Request-admin-access workflow → Pass 8 Permissions editor UI → Pass 9 Effective-permissions caching → Pass 10 Cross-cutting enforcement patterns → Pass 11 Migration plan.
-- **Session O focus:** Module 13 of the feature audit (Reports) — final audit module. Cross-module reporting layer with ~40 standard library reports across 7 categories. Operator-defined custom reports (copy-and-modify at v1). Scheduled delivery via email + in-app. Saved report snapshots (immutable per §0.4 #10). Permission-aware queries end-to-end. Multi-language (en + fr). Eight-layer print on sensitive reports. Source-back traceability for financial reports. Seven in-session resolutions.
-- **Latest commit:** `docs: add NEXVELON_PERMISSIONS_DESIGN.md v0.1 — Pass 1 Action Vocabulary Catalog`. See `git log -1 --oneline`.
+- **Session P focus:** Permissions Design — Pass 1 (Action Vocabulary Catalog). Normalizes ~1260 actions from the 13-module audit into a consistent naming convention (resource:verb[:qualifier]). Verb taxonomy (8 categories), qualifier taxonomy (scope/state/modal/field-section), resource taxonomy (140+ resources across all modules) locked. Action grouping for permissions editor UI (4-tier hierarchy + 6 cross-cut tabs from M2). Cross-references documented (action dependencies, separation of duties, action chains). Special-case treatment for public actions, admin exceptions, system-generated, append-only actions.
+- **Latest commit:** `docs: permissions design Pass 1 — action vocabulary catalog`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **🏁 AUDIT PHASE COMPLETE.** All 13 of 13 modules walked through Sessions C-O. Total: ~1260 cumulative actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked, 140+ owned tables, 80 status surfaces.
-- **File size management note:** Through v0.14 (final audit version), M1-M12 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b, M11 b60caf7, M12 06261f6. M13 full content in v0.14.
+- **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
+- **Permissions design progress:** 1 of 11 passes complete. Pending: Pass 2 (Database schema), Pass 3 (Resolution algorithm), Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching), Pass 10 (Cross-cutting enforcement), Pass 11 (Migration plan).
+- **File size management:** NEXVELON_PERMISSIONS_DESIGN.md uses same v0.x versioning pattern as audit doc. Each pass extends the doc; earlier passes condensed if file gets unwieldy. Currently single growing file.
 - **Pending pipeline (in order):**
-  1. ✅ **Feature audit COMPLETE** — all 13 modules walked.
-  2. 🚧 **Permissions module — design pass** (ROADMAP item 2). **IN PROGRESS.** Pass 1 (Action Vocabulary Catalog) complete in `NEXVELON_PERMISSIONS_DESIGN.md` v0.1. **NEXT: Pass 2 (Database schema)** — designs `permissions`, `roles`, `role_permissions`, `user_permission_overrides`, `field_visibility_definitions`, `role_field_visibility`, `user_field_visibility_overrides`, `data_scope_definitions`, `role_data_scopes`, `user_data_scope_overrides`, `permission_audit_log`, `effective_permissions_cache`, `separation_of_duties_constraints`, `regulatory_expiry_block_overrides`, `geolocation_retention_policy`. Then Passes 3-11.
-  3. **Permissions module — build** (ROADMAP item 3). Build the actual permissions runtime per design.
-  4. **Quotes v1 build** (ROADMAP item 4). First operational module to ship to users.
-  5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session O:**
-  - **Three layers of reporting** distinguished: M4 Dashboard (real-time KPI widgets — operational), M11 Financials Reports (P&L/BS/CF/Tax — financial), M13 Reports (cross-module analytical + custom + scheduled — analytical).
-  - **~40 standard library reports** across 7 categories at v1: Sales, Operations, Field Service, Financial, Compliance, Performance, Executive.
-  - **Cross-module reports built-in** — e.g., "Project margin by customer tier" (M6+M1), "Quote conversion rate by SR" (M5+M2), "WSIB expiry calendar" (M2+M8+M10), "T5018 readiness" (M8+M10).
-  - **Operator-defined custom reports** via copy-and-modify at v1 (full report builder Phase 2 with drag-drop fields).
-  - **Scheduled report delivery** via email PDF + in-app inbox. Daily/Weekly/Monthly/Quarterly/On Demand schedules.
-  - **Saved report snapshots** immutable per §0.4 #10. Retention operator-configurable per category (default 7yr compliance, 2yr operational).
-  - **Permission-aware queries end-to-end** — each report respects executing user's data scopes + field visibility consistent with ten-dimensional permissions model. Cross-user data requires explicit grant.
-  - **Multi-language reports** (en + fr at v1 for Canadian compliance).
-  - **Eight-layer print protection** on sensitive reports (executive, payroll, financial, compliance).
-  - **Source-back traceability** for financial reports — drill from P&L line to source GL entries to source module events (extends M11 pattern to M13 reports).
-  - **Role-default availability + per-user override** consistent with ten-dimensional permissions model.
-  - **Phase 2 deferrals locked:** full report builder UI, AI-generated insights, report version control, cross-company reports for multi-entity, real-time execution for executive dashboards.
+  1. ✅ Feature audit COMPLETE.
+  2. **IN PROGRESS: Permissions module — design pass** (ROADMAP item 2). Pass 1 of 11 complete.
+  3. Permissions module — build (ROADMAP item 3).
+  4. Quotes v1 build (ROADMAP item 4).
+  5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
+- **Major architectural decisions from Pass 1:**
+  - **Format: `resource:verb[:qualifier]`** — all actions normalized to this convention. Audit doc actions (which used compound forms like `clients:viewList`) map cleanly: compound retained for state-distinct workflows (`markPaid`, `recordPayment`); qualifier form used for scope-distinct (`view:my` vs `view:all`).
+  - **Verb taxonomy locked** at 8 categories with fixed verb set. New verbs require taxonomy addition.
+  - **Resource taxonomy** matches database tables 1:1 wherever possible (alias allowed for very long names like `coa` for `chart_of_accounts`).
+  - **Qualifier taxonomy** locked: scope (my/team/assigned/project/tier/category/all), state (draft/pending/approved/sent/paid/void), modal (read/write/execute/manual/auto), field-section (banking/labor_rates/profit/internal_notes/executive/payroll/cost_rate/geolocation/worker_manifest/tax_forms/wsib/full_card_number).
+  - **Permissions editor UI structure** specified: 4-tier action hierarchy (Module → Resource → Category → Individual action) + 6 cross-cut tabs (Actions / Field Visibility / Data Scopes / Overrides / Custom Roles / Audit Log).
+  - **Three UI states per §0.4 #2** confirmed: hidden / disabled / interactive. Default state per action per role configurable.
+  - **Custom role model:** flat (no inheritance) at v1; clone-and-modify pattern. Role hierarchy Phase 2.
+  - **Public actions** (signed URL with no auth): customer quote portal acceptance, customer invoice payment portal — gated by signed URL token + scope-to-single-entity + expiry; outside role hierarchy.
+  - **Admin exceptions** (with reason capture + audit): 13 specific Admin-only override actions catalogued (clients:overrideSla, vendors:manualOverrideInsurance, contractors:manualOverrideWsib, appointments:overrideCertExpiry, sla_breach_alerts:recordSlaWaiver, accounting_periods:reopenPeriod, etc.).
+  - **System-generated actions** (auto, never user-initiated): 10+ specific auto-actions catalogued — gl_journal_entries:create:auto, vendor_t5018_records:autoUpdate, inventory_movements:create:auto, etc. Execute under system user identity; logged to audit but not gated by role permissions.
+  - **Append-only actions** (write-once, no edit/delete) per §0.4 #10: 9 specific resources — inventory_movements, commissioning_records, project_acceptance, vendor/contractor performance scores, gl_journal_lines, appointment_change_log, report_snapshots, permission_audit_log.
+  - **Six open questions resolved:** compound verb vs qualifier form (keep both forms; compound for state-distinct, qualifier for scope-distinct); per-record vs per-class actions (capability granted at class; enforcement at runtime per-record); role inheritance (NO at v1, flat with clone-modify; hierarchy Phase 2); per-tenant custom actions (NO at v1; fixed catalog; custom Phase 2); action versioning (new actions default denied; migration scripts add to baseline roles); action deprecation (mark deprecated; functional for 1 release; clean up second release; audit reads preserved).
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session O produced no uncommitted plans. The audit phase is now complete. Next session moves to the Permissions module design pass — the heaviest synthesis pass consuming everything from the audit phase.
+**None.** Pass 1 produced no uncommitted plans. Next session continues with Pass 2 (Database schema) — designing the tables that store permissions, roles, overrides, field visibility, data scopes, audit log, effective-permissions cache, plus cross-cutting constraint tables (separation of duties, regulatory expiry overrides, geolocation retention).
 
 ---
 

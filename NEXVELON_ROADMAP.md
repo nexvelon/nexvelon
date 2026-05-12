@@ -52,23 +52,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 ## 2. Permissions module — design pass
 
-**🚧 IN PROGRESS.** Audit phase complete (Session O). Design doc landed at `NEXVELON_PERMISSIONS_DESIGN.md`. Built in 11 passes; **Pass 1 complete** (v0.1).
-
-**Pass status:**
-
-| Pass | Scope | Status |
-|---|---|---|
-| 1 | Action vocabulary catalog (~1260 actions normalized; verb/qualifier/resource taxonomies; full catalog by module with default role grants; cross-references; special-case treatment) | ✅ **COMPLETE** (v0.1) |
-| 2 | Database schema (roles, role_permissions, user_permission_overrides, permission_definitions, field_visibility_definitions, data_scope_definitions, audit tables, effective-permissions cache, cross-cutting constraint tables) | NEXT |
-| 3 | Permission resolution algorithm — runtime "can user X do action Y on entity Z?" | PENDING |
-| 4 | Field-level visibility engine — `visibility.*` flag evaluation at query + UI layer | PENDING |
-| 5 | Status surface binding layer — 80 status surfaces with behavior bindings at action-call time | PENDING |
-| 6 | Append-only audit pattern — every grant/revoke/override logged | PENDING |
-| 7 | Request-admin-access workflow (M2) — full spec | PENDING |
-| 8 | Permissions editor UI — six-tab editor from M2 fully specified | PENDING |
-| 9 | Effective-permissions caching strategy | PENDING |
-| 10 | Cross-cutting enforcement patterns — separation of duties, regulatory expiry auto-block, geolocation retention | PENDING |
-| 11 | Migration plan — adding this layer to existing production system without breaking anything | PENDING |
+**🚧 IN PROGRESS as of Session P (2026-05-12):** Pass 1 of 11 complete. Action Vocabulary Catalog locked in `NEXVELON_PERMISSIONS_DESIGN.md` v0.1. ~1260 actions normalized to `resource:verb[:qualifier]` convention. Verb taxonomy (8 categories), qualifier taxonomy (scope/state/modal/field-section), resource taxonomy (140+ resources across 13 modules) all locked. Action grouping for permissions editor UI specified (4-tier hierarchy + 6 cross-cut tabs from M2 design). Cross-references documented (action dependencies, separation of duties, action chains). Special-case action treatment catalogued (public actions, admin exceptions, system-generated, append-only). Six open questions resolved with explicit decisions. Pending: Pass 2 (Database schema), Pass 3 (Resolution algorithm), Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching), Pass 10 (Cross-cutting enforcement), Pass 11 (Migration plan).
 
 **What:** A written design doc for the per-user, per-feature ACL
 described in `NEXVELON_PRINCIPLES.md` §2. Covers the data model,
