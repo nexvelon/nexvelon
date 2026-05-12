@@ -12,42 +12,50 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session P CLOSED. Permissions Design Pass 1 of 11 complete.**
+**As of 2026-05-12. Session Q CLOSED. Permissions Design Pass 2 of 11 complete.**
 
-- **Session P focus:** Permissions Design — Pass 1 (Action Vocabulary Catalog). Normalizes ~1260 actions from the 13-module audit into a consistent naming convention (resource:verb[:qualifier]). Verb taxonomy (8 categories), qualifier taxonomy (scope/state/modal/field-section), resource taxonomy (140+ resources across all modules) locked. Action grouping for permissions editor UI (4-tier hierarchy + 6 cross-cut tabs from M2). Cross-references documented (action dependencies, separation of duties, action chains). Special-case treatment for public actions, admin exceptions, system-generated, append-only actions.
-- **Latest commit:** `docs: permissions design Pass 1 — action vocabulary catalog`. See `git log -1 --oneline`.
+- **Session Q focus:** Permissions Design — Pass 2 (Database Schema). 14 tables specified across 5 groups (core permissions / field visibility / data scopes / audit / cross-cutting constraints) plus 1 materialized view. Schema covers: ~1260-row action catalog, role definitions (system + custom), role × permission grants with three-way state (granted/denied/default) + UI state override per §0.4 #2, per-user overrides with mandatory reason capture + temporary expiration, denormalized effective_permissions_cache for <1ms runtime lookups, field visibility with three states (visible/masked/hidden — PCI compliance support), 7 scope qualifiers with SQL filter templates, append-only audit log with UPDATE/DELETE triggers, separation of duties constraints (§0.4 #11) supporting co-sign (e.g., A + Acc hard close), regulatory expiry overrides (§0.4 #12) with reason capture + validity window, geolocation retention policies (§0.4 #13) with operator-configurable purge action. Migration order specified for production-safe rollout. Three architectural decisions locked. Six open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 2 — database schema`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 1 of 11 passes complete. Pending: Pass 2 (Database schema), Pass 3 (Resolution algorithm), Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching), Pass 10 (Cross-cutting enforcement), Pass 11 (Migration plan).
-- **File size management:** NEXVELON_PERMISSIONS_DESIGN.md uses same v0.x versioning pattern as audit doc. Each pass extends the doc; earlier passes condensed if file gets unwieldy. Currently single growing file.
+- **Permissions design progress:** 2 of 11 passes complete. Pending: Pass 3 (Resolution algorithm), Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.2 condenses Pass 1 content to summary §1-§8; full Pass 1 content preserved at commit 9008fad. Pass 2 full content in v0.2 §10-§19. Consistent with audit doc condensation pattern.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass** (ROADMAP item 2). Pass 1 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 2 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 1:**
-  - **Format: `resource:verb[:qualifier]`** — all actions normalized to this convention. Audit doc actions (which used compound forms like `clients:viewList`) map cleanly: compound retained for state-distinct workflows (`markPaid`, `recordPayment`); qualifier form used for scope-distinct (`view:my` vs `view:all`).
-  - **Verb taxonomy locked** at 8 categories with fixed verb set. New verbs require taxonomy addition.
-  - **Resource taxonomy** matches database tables 1:1 wherever possible (alias allowed for very long names like `coa` for `chart_of_accounts`).
-  - **Qualifier taxonomy** locked: scope (my/team/assigned/project/tier/category/all), state (draft/pending/approved/sent/paid/void), modal (read/write/execute/manual/auto), field-section (banking/labor_rates/profit/internal_notes/executive/payroll/cost_rate/geolocation/worker_manifest/tax_forms/wsib/full_card_number).
-  - **Permissions editor UI structure** specified: 4-tier action hierarchy (Module → Resource → Category → Individual action) + 6 cross-cut tabs (Actions / Field Visibility / Data Scopes / Overrides / Custom Roles / Audit Log).
-  - **Three UI states per §0.4 #2** confirmed: hidden / disabled / interactive. Default state per action per role configurable.
-  - **Custom role model:** flat (no inheritance) at v1; clone-and-modify pattern. Role hierarchy Phase 2.
-  - **Public actions** (signed URL with no auth): customer quote portal acceptance, customer invoice payment portal — gated by signed URL token + scope-to-single-entity + expiry; outside role hierarchy.
-  - **Admin exceptions** (with reason capture + audit): 13 specific Admin-only override actions catalogued (clients:overrideSla, vendors:manualOverrideInsurance, contractors:manualOverrideWsib, appointments:overrideCertExpiry, sla_breach_alerts:recordSlaWaiver, accounting_periods:reopenPeriod, etc.).
-  - **System-generated actions** (auto, never user-initiated): 10+ specific auto-actions catalogued — gl_journal_entries:create:auto, vendor_t5018_records:autoUpdate, inventory_movements:create:auto, etc. Execute under system user identity; logged to audit but not gated by role permissions.
-  - **Append-only actions** (write-once, no edit/delete) per §0.4 #10: 9 specific resources — inventory_movements, commissioning_records, project_acceptance, vendor/contractor performance scores, gl_journal_lines, appointment_change_log, report_snapshots, permission_audit_log.
-  - **Six open questions resolved:** compound verb vs qualifier form (keep both forms; compound for state-distinct, qualifier for scope-distinct); per-record vs per-class actions (capability granted at class; enforcement at runtime per-record); role inheritance (NO at v1, flat with clone-modify; hierarchy Phase 2); per-tenant custom actions (NO at v1; fixed catalog; custom Phase 2); action versioning (new actions default denied; migration scripts add to baseline roles); action deprecation (mark deprecated; functional for 1 release; clean up second release; audit reads preserved).
+- **Major architectural decisions from Pass 2:**
+  - **One row per action in permission_definitions** (~1260 rows; one-to-one with Pass 1 catalog). Simplest semantics; 1260 rows is trivial; granularity directly mirrors audit catalog.
+  - **Trigger-invalidated cache strategy** — effective_permissions_cache stores resolved (user × permission) result. Invalidated on grant/revoke/override events via PostgreSQL triggers. <1ms lookups at runtime.
+  - **Orthogonal data scopes** — role_data_scopes is separate from role_permissions. Scopes answer "which records?"; grants answer "what verbs?". Mixable cleanly: SR has `clients:edit` granted with `my` scope; A has `clients:edit` granted with `all` scope.
+  - **Three-way grant state** in role_permissions: granted / denied / default. 'default' rows can be omitted for storage efficiency.
+  - **UI state override** orthogonal to grant state. Operator can render a granted action as `disabled` (visible but greyed) for visibility cues.
+  - **Three field visibility states**: visible / masked / hidden. `masked` enables PCI compliance (show last-4 of card; never full card number).
+  - **Append-only audit log** with PostgreSQL triggers blocking UPDATE and DELETE. Provably immutable at database level.
+  - **Co-sign support** in separation_of_duties_constraints — hard close requires A + Acc; both signatures captured.
+  - **Regulatory expiry override** with reason capture, validity window, optional emergency justification, and revocation tracking.
+  - **Geolocation retention** operator-configurable per tenant with purge action ('coordinates_null' default; 'full_delete' Phase 2 option). Timestamp + appointment_id always retained for audit per §0.4 #13.
+  - **RLS as defense-in-depth** — PostgreSQL Row-Level Security policies AND application-layer query construction. Both layers enforce scope.
+  - **Materialized view for admin UI** — permission_resolution_view shows current effective state for any user (refreshed nightly + on-demand via editor save).
+  - **Migration order specified** for production-safe rollout. Tables in dependency order; seeding scripts after table creation; effective_permissions_cache built last and populated by initial resolution run.
+- **Six open questions resolved in Pass 2:**
+  - Cache TTL: NO TTL at v1 (triggers handle invalidation); revisit Phase 2 if staleness becomes a problem
+  - Per-record scope overrides: NO at v1 (would explode override surface area); Phase 2 consideration
+  - Materialized view refresh: nightly + on-demand via permissions editor (auto-trigger on save)
+  - Audit log retention: keep permanently at v1; Phase 2 operator-configurable with cold-storage archival
+  - Temporary override cleanup: leave row for auditability; resolution algorithm filters by expires_at; nightly job updates cache
+  - RLS vs application-layer: BOTH (defense-in-depth)
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 1 produced no uncommitted plans. Next session continues with Pass 2 (Database schema) — designing the tables that store permissions, roles, overrides, field visibility, data scopes, audit log, effective-permissions cache, plus cross-cutting constraint tables (separation of duties, regulatory expiry overrides, geolocation retention).
+**None.** Pass 2 produced no uncommitted plans. Next session continues with Pass 3 (Resolution algorithm) — designs the runtime algorithm that answers "can user X do action Y on entity Z?" in <5ms using the Pass 2 schema. Includes cache lookup path, cross-cutting constraint checks, data scope filter application, field visibility application, audit logging integration.
 
 ---
 
