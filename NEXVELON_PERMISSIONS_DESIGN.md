@@ -10,17 +10,18 @@
 >   5. `NEXVELON_SESSION_<latest>_HANDOFF.md`
 >   6. **This file** — Permissions design specification
 >
-> **Status:** v0.7 — Passes 1-7 complete. Pending: Pass 8 (Permissions
-> editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10
-> (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+> **Status:** v0.8 — Passes 1-8 complete. Pending: Pass 9 (Effective-
+> permissions caching strategy), Pass 10 (Cross-cutting enforcement
+> patterns), Pass 11 (Migration plan).
 >
-> Pass 1 (Action Vocabulary Catalog) condensed §1-§8; full at `9008fad`.
-> Pass 2 (Database Schema) condensed §9; full at `1bafbd4`.
-> Pass 3 (Resolution Algorithm) condensed §10; full at `ff08703`.
-> Pass 4 (Field Visibility Engine) condensed §11; full at `de1905f`.
-> Pass 5 (Status Surface Binding Layer) condensed §12; full at `904bfe5`.
-> Pass 6 (Append-Only Audit Pattern) condensed §13; full at `3c21e58`.
-> Pass 7 (Request-Admin-Access Workflow) full content begins at §14.
+> Pass 1 condensed §1-§8; full at `9008fad`.
+> Pass 2 condensed §9; full at `1bafbd4`.
+> Pass 3 condensed §10; full at `ff08703`.
+> Pass 4 condensed §11; full at `de1905f`.
+> Pass 5 condensed §12; full at `904bfe5`.
+> Pass 6 condensed §13; full at `3c21e58`.
+> Pass 7 condensed §14; full at `41734b6`.
+> Pass 8 (Permissions Editor UI) full content begins at §15.
 
 ---
 
@@ -34,14 +35,14 @@ Design specification for the Nexvelon permissions runtime.
 
 | Pass | Scope | Status |
 |---|---|---|
-| 1 | Action vocabulary catalog | ✅ COMPLETE (full at `9008fad`; condensed §1-§8) |
-| 2 | Database schema | ✅ COMPLETE (full at `1bafbd4`; condensed §9) |
-| 3 | Permission resolution algorithm | ✅ COMPLETE (full at `ff08703`; condensed §10) |
-| 4 | Field-level visibility engine | ✅ COMPLETE (full at `de1905f`; condensed §11) |
-| 5 | Status surface binding layer | ✅ COMPLETE (full at `904bfe5`; condensed §12) |
-| 6 | Append-only audit pattern | ✅ COMPLETE (full at `3c21e58`; condensed §13) |
-| 7 | Request-admin-access workflow | ✅ COMPLETE (this version) |
-| 8 | Permissions editor UI | PENDING |
+| 1 | Action vocabulary catalog | ✅ COMPLETE (full at `9008fad`) |
+| 2 | Database schema | ✅ COMPLETE (full at `1bafbd4`) |
+| 3 | Permission resolution algorithm | ✅ COMPLETE (full at `ff08703`) |
+| 4 | Field-level visibility engine | ✅ COMPLETE (full at `de1905f`) |
+| 5 | Status surface binding layer | ✅ COMPLETE (full at `904bfe5`) |
+| 6 | Append-only audit pattern | ✅ COMPLETE (full at `3c21e58`) |
+| 7 | Request-admin-access workflow | ✅ COMPLETE (full at `41734b6`) |
+| 8 | Permissions editor UI | ✅ COMPLETE (this version) |
 | 9 | Effective-permissions caching strategy | PENDING |
 | 10 | Cross-cutting enforcement patterns | PENDING |
 | 11 | Migration plan | PENDING |
@@ -59,10 +60,7 @@ Design specification for the Nexvelon permissions runtime.
 *Full Pass 1 content at commit `9008fad`.*
 
 ## 1. Format
-`resource:verb[:qualifier]` — plural noun + camelCase verb + optional qualifier.
-
-## 2-8. Taxonomies and treatment
-Verb taxonomy (8 categories). Qualifier taxonomy (4 categories). 140+ resources. 4-tier UI hierarchy + 6 cross-cut tabs. Three UI states (hidden/disabled/interactive). Action dependencies, mutual exclusions, chains. Public actions, Admin exceptions, system-generated, append-only special cases.
+`resource:verb[:qualifier]` — plural noun + camelCase verb + optional qualifier. Verb taxonomy (8 categories). Qualifier taxonomy (4 categories). 140+ resources. 4-tier UI hierarchy + 6 cross-cut tabs.
 
 ---
 
@@ -72,11 +70,9 @@ Verb taxonomy (8 categories). Qualifier taxonomy (4 categories). 140+ resources.
 
 *Full Pass 2 content at commit `1bafbd4`.*
 
-## 9. 14 tables across 5 groups + 1 materialized view
+## 9. Schema
 
-Core permissions (5): `permission_definitions`, `roles`, `role_permissions`, `user_permission_overrides`, `effective_permissions_cache`. Field visibility (3). Data scopes (3, orthogonal to grants). Audit (1, append-only). Cross-cutting constraints (3).
-
-Three architectural decisions: one row per action; trigger-invalidated cache; orthogonal data scopes.
+14 tables across 5 groups + 1 materialized view. Core permissions (5), field visibility (3), data scopes (3, orthogonal), audit (1 append-only), cross-cutting constraints (3). Three decisions: one row per action; trigger-invalidated cache; orthogonal scopes.
 
 ---
 
@@ -86,15 +82,9 @@ Three architectural decisions: one row per action; trigger-invalidated cache; or
 
 *Full Pass 3 content at commit `ff08703`.*
 
-## 10. Three runtime algorithms
+## 10. Three algorithms
 
-**A1 — Action grant resolution** (7-phase): cache lookup → base table resolution → Phase 3 cross-cutting constraints (3.1 separation of duties, 3.2 regulatory expiry, 3.3 status binding) → audit logging → return. <5ms p99 compound.
-
-**A2 — Data scope resolution:** SQL filter clause.
-
-**A3 — Field visibility resolution:** visible/masked/hidden.
-
-Failure modes: fail-closed for grants/expiry/SoD; fail-open for audit logging.
+A1 action grant (7-phase with Phase 3 constraints: separation of duties + regulatory expiry + status binding). A2 data scope. A3 field visibility. <5ms p99 compound.
 
 ---
 
@@ -106,7 +96,7 @@ Failure modes: fail-closed for grants/expiry/SoD; fail-open for audit logging.
 
 ## 11. Field visibility engine
 
-Backend serialization pipeline (8 stages). Frontend `<FieldGated>` + VisibilityContext. View layer for 5 highest-sensitivity resources. 12 standard mask types. Async batched audit-on-read. Complete 47-flag catalog.
+Backend serialization pipeline + frontend `<FieldGated>` wrapper + view layer for 5 highest-sensitivity resources. 12 mask types. Async batched audit-on-read. 47-flag catalog.
 
 ---
 
@@ -118,7 +108,7 @@ Backend serialization pipeline (8 stages). Frontend `<FieldGated>` + VisibilityC
 
 ## 12. Status surface binding layer
 
-Polymorphic `status_behavior_bindings` table across 80 status surfaces. 14 standard binding names. `status_transition_definitions` with triggers_effects JSONB. Phase 3.3 integration in Pass 3 A1. State transition matrices (invoice_statuses; contractor_wo_statuses with Ontario 60-day lien clock). System-locked vs operator-configurable. ~2000 binding + ~600 transition rows seed.
+Polymorphic `status_behavior_bindings` across 80 status surfaces. 14 standard binding names (8 action-gating + 6 effect-triggering + 5 UI-driving). `status_transition_definitions` with triggers_effects JSONB. Phase 3.3 integration. ~2000 bindings + ~600 transitions seed.
 
 ---
 
@@ -130,917 +120,971 @@ Polymorphic `status_behavior_bindings` table across 80 status surfaces. 14 stand
 
 ## 13. Append-only audit pattern
 
-8 append-only ledgers sharing uniform pattern (permission_audit_log + 7 module ledgers from §0.4 #10). Monthly time-based partitioning. PostgreSQL UPDATE/DELETE triggers. 21 enumerated event types with JSON payload schemas. Reversal pattern (insert offsets). 3-layer audit query API (endpoints + M13 reports + audit_log_combined SQL view). Cold archival + hash-chain tamper-evidence deferred Phase 2. ~38M rows/year combined volume. Performance <2ms insert / <200ms entity history / <2s UNION view.
-
-Three decisions: many tables one pattern; monthly partitioning; 3-layer query.
+8 ledgers sharing uniform pattern. Monthly time-based partitioning. UPDATE/DELETE triggers. 21 event types with JSON payload schemas. 3-layer query API (endpoints + M13 reports + `audit_log_combined` SQL view). ~38M rows/year combined.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part VII — Pass 7 (Request-Admin-Access Workflow) — FULL CONTENT
+# Part VII — Pass 7 condensed summary
 ═══════════════════════════════════════════════════════════════════
 
-## 14. Overview
+*Full Pass 7 content at commit `41734b6`.*
 
-Users who need a permission they don't have can REQUEST it. Admins review and approve/reject. The system automatically enforces approval decisions, time limits, and audit. Pass 7 specifies this workflow end-to-end.
+## 14. Request-admin-access workflow
 
-### 14.1 Why this matters
+State machine: Pending → Approved → Granted → Expired/Revoked + Rejected/Cancelled. Four request types: permission_grant / field_visibility_grant / data_scope_grant / role_temporary_assignment. New `user_role_assignments` table for multi-role support. 30+ column schema with polymorphic target + dual reasoning capture. All-admins notification v1; routing rules Phase 2. Auto-expiry 3 paths. 8 edge cases. 9 new audit event types (30 total now).
 
-Role defaults cover ~95% of real-world needs. The remaining 5% are situational and ad-hoc:
-- "I need to verify a vendor's banking details for a one-time wire transfer setup"
-- "I'm covering Sarah's accounting work next week while she's on vacation"
-- "I need to view a project's actual costs to explain a margin variance to a customer"
-- "Admin approval is needed to back-date this invoice; I'm requesting authority to do that for this specific case"
+---
 
-Without a request workflow, all of these become ad-hoc Slack messages or emails to admins, who then make direct user_permission_override grants. The decision context (who asked, why, what they actually need, what the admin said) gets scattered across communication channels.
+═══════════════════════════════════════════════════════════════════
+# Part VIII — Pass 8 (Permissions Editor UI) — FULL CONTENT
+═══════════════════════════════════════════════════════════════════
 
-With a request workflow, every grant is initiated by user need, captured with full context, time-bounded by default, and audited in the same `permission_audit_log` as direct admin grants.
+## 15. Overview
 
-### 14.2 What's distinct from direct admin overrides
+The first design pass where the system meets the human. Passes 1-7 specified what runs under the hood; Pass 8 specifies every admin interaction.
 
-Two reasons to have a request workflow on top of `user_permission_overrides`:
+### 15.1 Two competing goals
 
-**Initiation flips.** Direct overrides: admin pushes. Requests: user pulls. Most ad-hoc grants are user-initiated — users have context admins don't.
+The editor serves two contexts:
 
-**Reasoning capture.** Direct overrides capture admin's reason. Requests capture *both* user's justification AND admin's decision rationale. Compliance needs the full conversation.
+**Daily admin operations** — handle today's request, revoke yesterday's grant, check who has banking access. Fast lookup, clear status, minimum clicks.
 
-## 15. The state machine
+**System configuration** — set up custom role, redesign data scopes after org restructure, bulk-update grants for new permissions. Power, batch operations, conflict warnings.
 
-### 15.1 States
+Optimizing only for one breaks the other. Pass 8 does both without overloading.
+
+### 15.2 Scale considerations
+
+Information surface:
+- ~1260 actions × 11 base roles = ~14,000 grant cells in the action matrix
+- 47 field visibility flags × 11 roles = ~520 visibility cells
+- 140+ resources × 7 scopes × 11 roles = potential ~10,000 scope cells (sparse in practice)
+- Typical ongoing user overrides: 50-200 active
+- Typical pending requests: 5-20 at any time
+- Audit log: ~10M rows/year searchable
+
+Bad UI here makes everything else worthless. Performance + clarity equally critical.
+
+### 15.3 Permission to access the editor
+
+The editor itself is gated:
+- `permissions:viewEditor` — A only by default
+- `permissions:editRoleGrants` — A only
+- `permissions:setUserOverride` — A only
+- `permissions:viewAuditLog` — A by default; granted role can access
+
+If non-admin somehow lands at the editor URL, they see 403 with the standard message.
+
+## 16. Workspace architecture
+
+Per Decision 1 (chat walk): single workspace with six sections, not six separate pages.
+
+### 16.1 Top-level layout
 
 ```
-                           ┌───────────┐
-              ┌───────────►│  Approved  │──── grant fires ───┐
-              │            └────────────┘                    │
-              │                                              ▼
-       ┌───────────┐                                  ┌───────────┐
-       │  Pending  │                                  │  Granted  │
-       └─────┬─────┘                                  └─────┬─────┘
-             │                                              │
-             ├───── rejected ──────┐                        │
-             │                     ▼                        │
-             │              ┌───────────┐                   │
-             │              │ Rejected  │                   │
-             │              └───────────┘                   │
-             │                                              │
-             ├───── cancelled by requester ──┐              │
-             │                               ▼              │
-             │                        ┌───────────┐         │
-             │                        │ Cancelled │         │
-             │                        └───────────┘         │
-             │                                              │
-             │                              ┌───────────────┤
-             │                              │               │
-             │                              ▼               ▼
-             │                       ┌───────────┐   ┌───────────┐
-             └──── expired ────────► │  Expired  │   │  Revoked  │
-                                     └───────────┘   └───────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  HEADER                                                         │
+│  [Logo] Permissions Editor [Search: 🔍] [User Menu] [Save All]  │
+├──────────────┬─────────────────────────────────────────────────┤
+│              │                                                  │
+│  SIDEBAR     │   MAIN PANE                                      │
+│  (240px)     │                                                  │
+│              │   Section content rendered here                  │
+│  • Actions   │                                                  │
+│  • Field Vis │                                                  │
+│  • Scopes    │                                                  │
+│  • Overrides │                                                  │
+│  • Roles     │                                                  │
+│  • Audit Log │                                                  │
+│              │                                                  │
+│  ─────────   │                                                  │
+│              │                                                  │
+│  RECENT      │                                                  │
+│  • [user X]  │                                                  │
+│  • [role Y]  │                                                  │
+│              │                                                  │
+└──────────────┴─────────────────────────────────────────────────┘
 ```
 
-| State | Meaning | Who transitions |
-|---|---|---|
-| **Pending** | Submitted by requester; awaiting admin decision | (initial state) |
-| **Approved** | Admin has approved; grant will fire (immediately or at start_at) | Admin |
-| **Granted** | `user_permission_override` row inserted and effective | System (automatic after Approved) |
-| **Rejected** | Admin denied | Admin |
-| **Cancelled** | Requester withdrew before admin decision | Requester |
-| **Expired** | Pending too long without decision OR Granted-but-temporary expired | System (cron) |
-| **Revoked** | Granted-but-still-active permission was revoked early by admin | Admin |
+### 16.2 Persistent header elements
 
-### 15.2 Why Approved and Granted are separate
+**Global search bar** (top, 480px wide): searches across all sections.
 
-Per Decision 1 (chat walk):
-- **Future-dated grants** — admin approves James's banking access starting next Monday; state is Approved with `start_at` in the future; cron fires the grant at start_at; state becomes Granted.
-- **Atomicity** — if `user_permission_override` insert fails (e.g., permission was deprecated between request and approval), state stays Approved (recoverable) rather than Granted-but-broken.
+Query types supported:
+- `user:james` → jumps to user X's override list
+- `role:pm` → jumps to PM role detail
+- `perm:invoices:approve` → jumps to action in matrix
+- `entity:client_xyz` → jumps to entity's relevant audit + active grants
+- Free text → fuzzy search across user names, role names, permission action names
 
-In the typical case (immediate grant), the transition Approved → Granted happens within the same database transaction. The user perceives "Approved" and "Granted" as one event. But the state machine separates them for the edge cases.
+Result type-ahead with categorized buckets (Users / Roles / Permissions / Entities / Audit Events).
 
-### 15.3 Schema for `request_admin_access`
+**Save state indicator** (top-right):
+- "All changes saved" (green check) — default
+- "3 unsaved changes" (orange dot) — dirty state; clicking surfaces unsaved list
+- "Save All" button — explicit commit; some changes require confirmation
 
-The Pass 2 §9 schema is expanded:
+**User menu** (top-right corner): standard.
 
-```sql
-CREATE TABLE request_admin_access (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+### 16.3 Sidebar — section navigation
 
-  -- Identity
-  requester_user_id UUID NOT NULL REFERENCES users(id),
-  
-  -- Request type
-  request_type TEXT NOT NULL CHECK (request_type IN (
-    'permission_grant',          -- request for one specific action permission
-    'field_visibility_grant',    -- request for one field visibility flag
-    'data_scope_grant',          -- request to widen scope for a resource
-    'role_temporary_assignment'  -- request to take on a different role temporarily
-  )),
-  
-  -- Target (polymorphic per request_type)
-  target_permission_id UUID REFERENCES permission_definitions(id),
-  target_flag_id UUID REFERENCES field_visibility_definitions(id),
-  target_resource TEXT,                                          -- for data_scope_grant
-  target_scope_id UUID REFERENCES data_scope_definitions(id),    -- for data_scope_grant
-  target_role_id UUID REFERENCES roles(id),                      -- for role_temporary_assignment
-  
-  -- Context
-  related_entity_type TEXT,                                      -- e.g., 'client', 'vendor', 'invoice'
-  related_entity_id UUID,                                        -- the specific entity the user needs to operate on
-  
-  -- Duration
-  duration_type TEXT NOT NULL CHECK (duration_type IN (
-    'one_time',          -- single use; expires after first use OR end_at
-    'temporary',         -- effective between start_at and end_at
-    'permanent'          -- never expires (requires explicit revocation)
-  )),
-  start_at TIMESTAMPTZ,                                          -- nullable; when grant takes effect
-  end_at TIMESTAMPTZ,                                            -- nullable; when grant expires (temporary)
-  
-  -- State
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
-    'pending', 'approved', 'granted', 'rejected', 'cancelled', 'expired', 'revoked'
-  )),
-  
-  -- Lifecycle timestamps
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  approved_at TIMESTAMPTZ,
-  granted_at TIMESTAMPTZ,                                        -- when user_permission_override actually inserted
-  decided_at TIMESTAMPTZ,                                        -- approved_at OR rejected_at (whichever)
-  expired_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ,
-  cancelled_at TIMESTAMPTZ,
-  
-  -- People
-  decided_by_user_id UUID REFERENCES users(id),                  -- admin who approved/rejected
-  revoked_by_user_id UUID REFERENCES users(id),                  -- admin who revoked early
-  
-  -- Reasoning (both sides)
-  requester_justification TEXT NOT NULL,                         -- mandatory; user's "why"
-  admin_decision_rationale TEXT,                                 -- admin's "why" for approve/reject
-  revocation_reason TEXT,                                        -- admin's reason for early revocation
-  
-  -- The granted override (back-reference; populated on grant)
-  granted_override_id UUID REFERENCES user_permission_overrides(id),
-  
-  -- Forensic metadata
-  request_ip_address INET,
-  request_user_agent TEXT,
-  
-  -- Routing (Phase 2 placeholder)
-  routing_rule_id UUID,                                          -- nullable; v1 always NULL
-  
-  -- Pending expiry (auto-expire if not decided)
-  pending_expires_at TIMESTAMPTZ,                                -- if pending > 7 days, auto-expire
-  
-  -- Activity tracking (for audit + usage analytics)
-  use_count INTEGER NOT NULL DEFAULT 0,                          -- how many times the granted permission was actually used
-  first_used_at TIMESTAMPTZ,
-  last_used_at TIMESTAMPTZ
-);
+Six section links plus Recent items:
 
-CREATE INDEX idx_request_admin_access_requester ON request_admin_access(requester_user_id, requested_at DESC);
-CREATE INDEX idx_request_admin_access_status_pending ON request_admin_access(status) WHERE status = 'pending';
-CREATE INDEX idx_request_admin_access_status_granted ON request_admin_access(status, end_at) WHERE status = 'granted';
-CREATE INDEX idx_request_admin_access_decided_by ON request_admin_access(decided_by_user_id, decided_at DESC);
-CREATE INDEX idx_request_admin_access_target_permission ON request_admin_access(target_permission_id);
-CREATE INDEX idx_request_admin_access_pending_expires ON request_admin_access(pending_expires_at) WHERE status = 'pending';
+```
+[Section icons + labels]
+✓ Actions           ← currently active (highlighted)
+  Field Visibility
+  Data Scopes
+  Overrides         (3 pending)   ← badge with pending request count
+  Custom Roles
+  Audit Log
+
+────────────────────
+
+Recently viewed:
+👤 James Smith
+🎭 Project Manager
+🔑 invoices:approve
+🏢 Client: Acme Corp
 ```
 
-## 16. Request types
+Recent items: top 5 cross-section references, updated on every drill-in.
 
-Four request types covering different needs.
+### 16.4 Main pane
 
-### 16.1 `permission_grant` (most common)
+Renders the active section. Each section described in §17-§22.
 
-Request to be granted a specific permission action.
+### 16.5 Cross-section linking
 
-Example: SR requests `invoices:viewProfit` for a specific client's project so they can explain a quote margin to the customer.
+Throughout the workspace, entities (users, roles, permissions, etc.) are clickable links that jump to their canonical view:
 
-```json
-{
-  "request_type": "permission_grant",
-  "target_permission_id": "<id of invoices:viewProfit>",
-  "related_entity_type": "client",
-  "related_entity_id": "<client_xyz>",
-  "duration_type": "temporary",
-  "start_at": null,                              // immediate on approval
-  "end_at": "2026-05-19T23:59:59Z",              // 7 days
-  "requester_justification": "Need to explain margin variance to customer XYZ during their account review meeting on Friday. Will reference specific project P-2024-042."
-}
+- Click "James Smith" in any context → jumps to Overrides section filtered to user james
+- Click "Project Manager" in any context → jumps to Custom Roles section showing PM details
+- Click `invoices:approve` in any context → jumps to Actions section with that row highlighted
+
+Breadcrumbs in main pane show drill path; back button preserves filter state.
+
+### 16.6 Save flow
+
+Per Decision 2 (chat walk): transactional, not optimistic.
+
+Changes accumulate in a draft buffer. User explicitly clicks "Save All" or "Apply" buttons. On save:
+
+1. Loading state shown ("Saving 3 changes...")
+2. Server validates entire batch atomically
+3. If validation passes: all changes applied in one transaction; cache invalidates; success toast
+4. If validation fails: changes preserved in draft buffer; specific failures highlighted in UI; user fixes and retries
+
+Conflict detection runs as part of save (see §22.3).
+
+## 17. Section 1: Actions
+
+The action grant matrix is the editor's largest surface. ~1260 actions × ~11 roles. Navigation hierarchy from Pass 1 §5: Module → Resource → Category → Action.
+
+### 17.1 Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ACTIONS                                              [+ Bulk Edit]│
+├──────────────────────────────────────────────────────────────────┤
+│  [Filter: Module ▼] [Filter: Resource ▼] [Filter: Verb ▼]         │
+│  [Show: Only Granted | Only Denied | All | Differs from Default]  │
+│  [Search actions: 🔍                                            ]  │
+├──────────────────────────────────────────────────────────────────┤
+│  📦 M9 — Invoices ▼                                                │
+│    💼 invoices ▼                                                   │
+│      ▼ View                                                        │
+│      ▼ Create                                                      │
+│      ▼ Edit                                                        │
+│      ▼ State Transitions                                           │
+│      └ invoices:submit         [A:✓][PM:✓][SR:✓][Tech:⊘][Acc:✓]   │
+│      └ invoices:approve       *[A:✓][PM:✓][SR:⊘][Tech:⊘][Acc:✓]   │
+│      └ invoices:send          *[A:✓][PM:✓][SR:✓][Tech:⊘][Acc:✓]   │
+│      └ invoices:reject         [A:✓][PM:✓][SR:⊘][Tech:⊘][Acc:✓]   │
+│      └ invoices:markPaid       [A:✓][PM:✓][SR:⊘][Tech:⊘][Acc:✓]   │
+│      └ invoices:void           [A:✓][PM:⊘][SR:⊘][Tech:⊘][Acc:⊘]   │
+│      └ invoices:reopen         [A:✓][PM:⊘][SR:⊘][Tech:⊘][Acc:⊘]🔒│
+│      ▼ Communication                                               │
+│      ▼ Reporting                                                   │
+│      ▼ Admin Override                                              │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-On approval + grant: inserts `user_permission_override` with `user_id = requester`, `permission_id = target_permission_id`, `override_state = 'granted'`, `is_temporary = TRUE`, `expires_at = end_at`.
+Cell legend:
+- `✓` granted, interactive
+- `⊘` denied
+- `✓ⓘ` granted, with disabled or hidden UI state override
+- `*` row has at least one user override (asterisk before action name)
+- `🔒` system-locked row (per §0.4 commitments) — cells not editable; tooltip explains why
 
-### 16.2 `field_visibility_grant`
+### 17.2 Cell interaction
 
-Request to see a specific field visibility flag (banking details, payroll, SIN, etc.).
+Click a cell:
+1. Cell expands inline showing detail panel:
+   ```
+   ┌─────────────────────────────────────────────┐
+   │ Permission: invoices:approve                 │
+   │ Role: Project Manager                        │
+   │                                              │
+   │ Current state: [Granted ▼]                   │
+   │ UI state:      [Default (Interactive) ▼]     │
+   │                                              │
+   │ Description: Approve invoice for sending      │
+   │ Module: M9 | Verb category: state_transition │
+   │ Sensitivity: 🔒 sensitive                     │
+   │                                              │
+   │ Dependencies: invoices:viewDetail (required) │
+   │ Constraints: separation_of_duties            │
+   │ (cannot approve own AP bills)                │
+   │                                              │
+   │ Recent activity:                             │
+   │ • 3 PMs currently have this granted          │
+   │ • 12 approvals in last 30 days              │
+   │ • 0 user overrides active                   │
+   │                                              │
+   │ [Cancel]                       [Save Change] │
+   └─────────────────────────────────────────────┘
+   ```
+2. User changes state from default; clicks Save Change
+3. Change added to draft buffer (top-right indicator updates)
+4. Cell shows orange dot indicating unsaved change
+5. On Save All from header: validation + commit
 
-Example: Acc requests `visibility.vendors.banking` for a one-time wire transfer setup.
+### 17.3 Bulk edit mode
 
-```json
-{
-  "request_type": "field_visibility_grant",
-  "target_flag_id": "<id of visibility.vendors.banking>",
-  "related_entity_type": "vendor",
-  "related_entity_id": "<vendor_abc>",
-  "duration_type": "one_time",
-  "end_at": "2026-05-13T23:59:59Z",              // 24 hours
-  "requester_justification": "Setting up new wire transfer details for vendor ABC; need to verify banking info matches their void cheque submission."
-}
+Click "+ Bulk Edit" enters multi-select mode:
+
+```
+☐ Select all in view
+─────────────────────────
+☑ invoices:submit
+☑ invoices:approve
+☐ invoices:reject
+☑ invoices:send
+
+[2 selected] [Action ▼: Grant / Deny / Reset to Default]
+            [Role: PM ▼]
 ```
 
-On approval + grant: inserts `user_field_visibility_overrides`. Special: `field_visibility_grant` requests for `requires_audit_on_read=TRUE` flags trigger audit on the request itself (event_type `field_visibility_user_override_granted` in permission_audit_log).
+Bulk operations validate the full set; partial success not allowed (all or nothing per save).
 
-### 16.3 `data_scope_grant`
+### 17.4 Filtering
 
-Request to widen scope for a resource.
+Multi-axis filters:
+- **Module**: M1 through M13 multi-select
+- **Resource**: searchable dropdown of resources within selected modules
+- **Verb category**: 8 categories (view/create/edit/state/config/comm/admin/workflow)
+- **Show**: Only Granted / Only Denied / All / Differs from Default (the last filters to non-default grants only — usually most useful)
+- **Search**: fuzzy on action_name
 
-Example: PM requests their scope for `projects` to be expanded from `team` to `all` while filling in for a regional manager.
+Filters compose. URL updates with filter state for bookmark/share.
 
-```json
-{
-  "request_type": "data_scope_grant",
-  "target_resource": "projects",
-  "target_scope_id": "<id of 'all' scope>",
-  "duration_type": "temporary",
-  "start_at": "2026-05-14T00:00:00Z",
-  "end_at": "2026-05-28T23:59:59Z",              // 2 weeks
-  "requester_justification": "Filling in for Regional Manager Mike while he's on parental leave. Need cross-team visibility on Eastern Ontario projects."
-}
+### 17.5 System-locked rows
+
+Per Pass 5 §18.1, certain rows are system-locked (enforce §0.4 commitments). UI rendering:
+
+- 🔒 icon at end of row
+- Cells render as locked (no hover, no click-to-edit)
+- Tooltip on hover: "This permission enforces §0.4 #8 immutable snapshot policy. Cannot be modified via permissions editor. See documentation."
+- Cells DO show current state (admin can see; just can't change)
+
+Examples of system-locked rows:
+- `payments:view:full_card_number` — PCI compliance, never granted
+- All `*:edit*` actions on Sent invoices (via status binding)
+- `inventory_movements:edit` / `:hardDelete` — append-only ledger
+
+### 17.6 Comparison view
+
+Sometimes admin needs to see "what's different between PM and SR?" Comparison mode renders two roles side-by-side with differences highlighted:
+
+```
+[Compare: PM vs SR]
+─────────────────────────────────────
+invoices:approve     [PM: ✓] [SR: ⊘]   ← diff highlighted
+invoices:send        [PM: ✓] [SR: ✓]
+invoices:exportPdf   [PM: ✓] [SR: ✓]
+clients:viewBanking  [PM: ✓] [SR: ⊘]   ← diff highlighted
 ```
 
-On approval + grant: inserts `user_data_scope_overrides`.
+Filter "show only differences" toggle.
 
-### 16.4 `role_temporary_assignment`
+### 17.7 Performance
 
-Request to take on a different role temporarily (e.g., adding Bookkeeper role to PM during covering period). Useful when one-off permission grants aren't enough.
+- Initial render: lazy load by module (only expand current; collapse on scroll out)
+- Cell state pre-fetched in single GraphQL/REST query: SELECT role_id, permission_id, grant_state FROM role_permissions WHERE role_id IN ($roles)
+- Action matrix data: ~14k rows max; <200ms initial fetch with index hits
+- Filter operations: client-side (data already loaded); <50ms reactivity
 
-Example: Senior PM requests temporary Bookkeeper role to cover an accounting team member's leave.
+## 18. Section 2: Field Visibility
 
-```json
-{
-  "request_type": "role_temporary_assignment",
-  "target_role_id": "<id of bookkeeper role>",
-  "duration_type": "temporary",
-  "start_at": "2026-05-13T00:00:00Z",
-  "end_at": "2026-05-27T23:59:59Z",
-  "requester_justification": "Covering Sarah's bookkeeper work while she's on bereavement leave. Need to handle weekly bank reconciliations + GL entry review."
-}
+The 47-flag catalog from Pass 4 §17. Smaller than Actions but with more nuance (3-state visibility, mask preview).
+
+### 18.1 Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  FIELD VISIBILITY                                                 │
+├──────────────────────────────────────────────────────────────────┤
+│  [Filter: Module ▼] [Filter: Sensitivity ▼] [Search: 🔍       ]   │
+├──────────────────────────────────────────────────────────────────┤
+│  📦 M1 — Clients                                                   │
+│  └─ visibility.clients.banking                                     │
+│     Cols: banking_account_name, routing, account_number            │
+│     Audit-on-read: ✓                                               │
+│     Mask preview: ••••••••5678                                     │
+│     ┌──────┬──────┬──────┬──────┬──────┐                          │
+│     │  A   │  PM  │  SR  │ Tech │ Acc  │                          │
+│     │visible│masked│hidden│hidden│visible│ ← visibility states     │
+│     │  ✓   │  ✓ⓘ │  ✗   │  ✗   │  ✓👁│ ← 👁 = audit on read       │
+│     └──────┴──────┴──────┴──────┴──────┘                          │
+│  └─ visibility.clients.internalNotes                               │
+│     ...                                                            │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-On approval + grant: creates a special `user_role_assignments` row (NOT a user_permission_override) that the resolution algorithm honors as an additive role. User effectively has TWO roles during the grant window; A1 resolution unions permissions from both.
+State indicators:
+- `visible` → field rendered normally
+- `masked` → field rendered with masked value (preview shown above the matrix)
+- `hidden` → field absent from UI entirely
 
-> **Note:** `user_role_assignments` is a new table introduced by Pass 7. It's a small addition to Pass 2's schema:
-> ```sql
-> CREATE TABLE user_role_assignments (
->   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
->   user_id UUID NOT NULL REFERENCES users(id),
->   role_id UUID NOT NULL REFERENCES roles(id),
->   is_primary BOOLEAN NOT NULL DEFAULT FALSE,
->   granted_by_request_id UUID REFERENCES request_admin_access(id),
->   start_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
->   end_at TIMESTAMPTZ,
->   revoked_at TIMESTAMPTZ,
->   revoked_by UUID REFERENCES users(id),
->   CONSTRAINT user_role_assignments_unique_primary UNIQUE (user_id, is_primary) DEFERRABLE INITIALLY DEFERRED
-> );
-> ```
-> Primary role (the user's "default") has `is_primary=TRUE`. Additional roles from requests are `is_primary=FALSE`. A1 resolution unions all active role grants for the user.
+### 18.2 Cell interaction
 
-## 17. Approval workflow end-to-end
-
-Full lifecycle from user click to grant taking effect.
-
-### 17.1 Step 1: Request submission
-
-User clicks a "Request Access" button somewhere in the UI (e.g., on a disabled banking section that they don't have permission to see):
-
-```typescript
-// Pseudocode for build phase
-async function submitRequest(req: SubmitRequestInput): Promise<RequestAccess> {
-  // Validate inputs
-  validateRequest(req);
-  
-  // Check for duplicate active request
-  const existing = await db.query(
-    `SELECT id, status FROM request_admin_access 
-     WHERE requester_user_id = $1 
-       AND target_permission_id = $2 
-       AND status IN ('pending', 'approved', 'granted')`,
-    [currentUser.id, req.target_permission_id]
-  );
-  if (existing.rowCount > 0) {
-    throw new DuplicateRequestError(...);  // handler returns existing request id
-  }
-  
-  // Set pending_expires_at to 7 days from now
-  const pendingExpiresAt = addDays(new Date(), 7);
-  
-  // Insert request row
-  const requestRow = await db.insert('request_admin_access', {
-    requester_user_id: currentUser.id,
-    request_type: req.request_type,
-    target_permission_id: req.target_permission_id,
-    target_flag_id: req.target_flag_id,
-    target_resource: req.target_resource,
-    target_scope_id: req.target_scope_id,
-    target_role_id: req.target_role_id,
-    related_entity_type: req.related_entity_type,
-    related_entity_id: req.related_entity_id,
-    duration_type: req.duration_type,
-    start_at: req.start_at,
-    end_at: req.end_at,
-    status: 'pending',
-    requester_justification: req.justification,
-    request_ip_address: currentRequest.ip,
-    request_user_agent: currentRequest.userAgent,
-    pending_expires_at: pendingExpiresAt
-  });
-  
-  // Audit log
-  await auditLog({
-    event_type: 'request_admin_access_submitted',
-    actor_user_id: currentUser.id,
-    target_user_id: currentUser.id,
-    target_permission_id: req.target_permission_id,
-    after_state: { request_id: requestRow.id, status: 'pending' },
-    reason: req.justification
-  });
-  
-  // Notify admins
-  await notifyAdmins(requestRow);
-  
-  return requestRow;
-}
+Click cell to change visibility state:
+```
+┌──────────────────────────────────────────────┐
+│ Flag: visibility.clients.banking              │
+│ Role: Sales Rep                               │
+│                                               │
+│ Current: hidden                               │
+│ Change to: [Hidden ▼]                         │
+│  → Visible                                    │
+│  → Masked  (shown as: ••••5678)              │
+│  → Hidden                                     │
+│                                               │
+│ Audit-on-read: This field triggers audit log  │
+│ entry on every visible read.                  │
+│                                               │
+│ Sensitivity: SENSITIVE                        │
+│ Affected columns: banking_account_name,       │
+│ banking_routing_number, banking_account_number│
+│                                               │
+│ Phase 2 deferrals affect this flag:           │
+│ • Per-tenant column mapping customization     │
+│                                               │
+│ [Cancel]                       [Save Change]  │
+└──────────────────────────────────────────────┘
 ```
 
-### 17.2 Step 2: Admin notification
+### 18.3 Never-granted flags
 
-Three channels (per Decision 2 — all admins notified at v1):
+`visibility.payments.fullCardNumber` (PCI compliance, `is_never_granted=TRUE`) renders with all cells locked at `hidden`. Admin tooltip: "PCI compliance — cannot be granted to any user. Last-4 only via separate masked path."
 
-**In-app notification:**
-- Bell icon badge increments
-- Notification panel shows: "James Smith requested temporary access to invoices:viewProfit for client XYZ until 2026-05-19. [Review →]"
+### 18.4 Bulk operations
 
-**Email:**
-- Subject: "Access request pending: invoices:viewProfit"
-- Body: requester info, justification, target, duration, link to review
+Same as Actions section. Multi-select flags → set state for selected role(s).
 
-**Slack (if configured):**
-- DM to admin or channel post (per operator Settings)
-- Message: same content as email; quick-action buttons (Review / Approve / Reject)
+## 19. Section 3: Data Scopes
 
-Notification routing rules (Phase 2 placeholder):
-- `routing_rule_id` column on `request_admin_access` is NULL at v1
-- Phase 2 introduces `notification_routing_rules` table; assigns specific request types to specific admin subsets
+The role × resource × scope matrix.
 
-### 17.3 Step 3: Admin review
+### 19.1 Layout
 
-Admin opens the request in the permissions editor (Pass 8 covers UI). Review context shows:
-- Requester identity, role, team
-- Recent activity (last 30 days summary)
-- Justification (free text)
-- Target permission with description from `permission_definitions`
-- Related entity (if any) with context (e.g., for client_xyz: SLA tier, recent invoices, current status)
-- Duration request
-- Previous similar requests by this user (granted/rejected history)
-- Suggested decision (heuristic-based; v1 simple; Phase 2 ML-based)
-
-Admin actions:
-1. **Approve** with optional duration adjustment + rationale
-2. **Approve with modifications** — change duration or scope; admin's adjustment captured
-3. **Reject** with rationale
-4. **Request more info** — adds comment thread (Phase 2; v1 admin just rejects with reason "need more info")
-
-### 17.4 Step 4: Approval handling
-
-```typescript
-async function approveRequest(requestId: string, approval: ApprovalInput) {
-  const request = await db.fetchOne('request_admin_access', requestId);
-  
-  // Sanity checks
-  if (request.status !== 'pending') {
-    throw new InvalidStateError(`Request ${requestId} is not pending`);
-  }
-  if (!currentUser.isAdmin) {
-    throw new ForbiddenError(...);
-  }
-  
-  // Self-approval check (per edge case §18.3)
-  if (request.requester_user_id === currentUser.id) {
-    throw new SelfApprovalNotAllowedError(...);
-  }
-  
-  await db.transaction(async (tx) => {
-    // Update request status
-    await tx.update('request_admin_access', requestId, {
-      status: 'approved',
-      approved_at: NOW(),
-      decided_at: NOW(),
-      decided_by_user_id: currentUser.id,
-      admin_decision_rationale: approval.rationale,
-      // Allow admin to adjust duration on approval
-      start_at: approval.start_at ?? request.start_at,
-      end_at: approval.end_at ?? request.end_at
-    });
-    
-    // Audit
-    await auditLog({
-      event_type: 'request_admin_access_approved',
-      actor_user_id: currentUser.id,
-      target_user_id: request.requester_user_id,
-      target_permission_id: request.target_permission_id,
-      after_state: { request_id: requestId, status: 'approved' },
-      reason: approval.rationale
-    }, tx);
-    
-    // Determine: grant now or schedule for start_at?
-    const effectiveStartAt = approval.start_at ?? request.start_at ?? NOW();
-    const grantImmediately = effectiveStartAt <= NOW();
-    
-    if (grantImmediately) {
-      await fireGrant(requestId, tx);  // see §17.5
-    }
-    // Else: cron will fire grant at start_at (see §17.7)
-  });
-  
-  // Notify requester
-  await notifyRequester(requestId, 'approved');
-}
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  DATA SCOPES                                                      │
+├──────────────────────────────────────────────────────────────────┤
+│  Scope per resource per role                                       │
+│  [Filter: Module ▼] [Search resource: 🔍              ]            │
+├──────────────────────────────────────────────────────────────────┤
+│                  │  A   │  PM  │  SR  │ Tech │ Acc  │ VO  │       │
+│  Resource        │      │      │      │      │      │     │       │
+│  ────────────────┼──────┼──────┼──────┼──────┼──────┼─────┤       │
+│  clients         │ all  │ team │ my   │assign│ all  │ all │       │
+│  projects        │ all  │ team │ my   │assign│ all  │ all │       │
+│  invoices        │ all  │ proj │ my   │  -   │ all  │ all │       │
+│  appointments    │ all  │ team │ my   │ my   │  -   │ all │       │
+│  ...                                                              │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 17.5 Step 5: Grant firing
+Cells show scope code: `all`, `team`, `project`, `my`, `assigned`, `tier`, `category`, or `-` (resource not applicable for that role).
 
-```typescript
-async function fireGrant(requestId: string, tx: Transaction) {
-  const request = await tx.fetchOne('request_admin_access', requestId);
-  
-  let overrideId: string;
-  
-  if (request.request_type === 'permission_grant') {
-    overrideId = await tx.insert('user_permission_overrides', {
-      user_id: request.requester_user_id,
-      permission_id: request.target_permission_id,
-      override_state: 'granted',
-      reason: `Per request ${requestId}: ${request.requester_justification}`,
-      is_temporary: request.duration_type !== 'permanent',
-      expires_at: request.end_at,
-      granted_by: request.decided_by_user_id
-    });
-  } else if (request.request_type === 'field_visibility_grant') {
-    overrideId = await tx.insert('user_field_visibility_overrides', {
-      user_id: request.requester_user_id,
-      flag_id: request.target_flag_id,
-      override_visibility_state: 'visible',  // or 'masked' per request
-      reason: `Per request ${requestId}: ${request.requester_justification}`,
-      is_temporary: request.duration_type !== 'permanent',
-      expires_at: request.end_at,
-      granted_by: request.decided_by_user_id
-    });
-  } else if (request.request_type === 'data_scope_grant') {
-    overrideId = await tx.insert('user_data_scope_overrides', {
-      user_id: request.requester_user_id,
-      resource: request.target_resource,
-      override_scope_id: request.target_scope_id,
-      reason: `Per request ${requestId}: ${request.requester_justification}`,
-      is_temporary: request.duration_type !== 'permanent',
-      expires_at: request.end_at,
-      granted_by: request.decided_by_user_id
-    });
-  } else if (request.request_type === 'role_temporary_assignment') {
-    overrideId = await tx.insert('user_role_assignments', {
-      user_id: request.requester_user_id,
-      role_id: request.target_role_id,
-      is_primary: false,
-      granted_by_request_id: requestId,
-      start_at: request.start_at ?? NOW(),
-      end_at: request.end_at
-    });
-  }
-  
-  // Update request to Granted
-  await tx.update('request_admin_access', requestId, {
-    status: 'granted',
-    granted_at: NOW(),
-    granted_override_id: overrideId
-  });
-  
-  // Audit
-  await auditLog({
-    event_type: 'request_admin_access_granted',
-    actor_user_id: request.decided_by_user_id,
-    target_user_id: request.requester_user_id,
-    target_permission_id: request.target_permission_id,
-    after_state: { request_id: requestId, override_id: overrideId, status: 'granted' }
-  }, tx);
-  
-  // Invalidate effective_permissions_cache for this user (Pass 3 §11.4 trigger handles this)
-  // Audit-on-read trigger (Pass 4) handles sensitive field visibility grants
-}
+### 19.2 Cell interaction
+
+Click cell:
+```
+┌──────────────────────────────────────────────┐
+│ Resource: clients                             │
+│ Role: Sales Rep                               │
+│                                               │
+│ Current scope: my                             │
+│ Change to: [my ▼]                             │
+│  → all       — Unrestricted (Admin level)    │
+│  → team      — User's team's records         │
+│  → assigned  — Records assigned to user      │
+│  → project   — Records in user's projects    │
+│  → my        — Records owned/created by user │
+│  → tier      — Filtered by specific tier      │
+│  → category  — Filtered by category           │
+│  → (none)    — Resource not applicable       │
+│                                               │
+│ SQL filter for this scope:                    │
+│   (created_by = :current_user OR              │
+│    owner_id = :current_user)                  │
+│                                               │
+│ Impact: ~120 active SRs would be affected     │
+│                                               │
+│ [Cancel]                       [Save Change]  │
+└──────────────────────────────────────────────┘
 ```
 
-### 17.6 Step 6: Rejection
+### 19.3 Scope impact preview
 
-```typescript
-async function rejectRequest(requestId: string, rejection: RejectionInput) {
-  // Similar pattern: validate, update status to 'rejected', audit, notify
-  await db.update('request_admin_access', requestId, {
-    status: 'rejected',
-    decided_at: NOW(),
-    decided_by_user_id: currentUser.id,
-    admin_decision_rationale: rejection.rationale
-  });
+Critical UX: changing scope can dramatically affect what users see. Detail panel shows estimated impact:
+
+- "Changing SR scope on `clients` from `my` to `all` affects 120 active SR users. Estimated additional records visible to each: ~2400."
+- Warning if change would expose sensitive data: "⚠ This change grants visibility into ~3200 banking records that were previously hidden. Are you sure?"
+
+## 20. Section 4: Overrides
+
+Active user overrides + Request management sub-section.
+
+### 20.1 Top-level layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  OVERRIDES                                                        │
+├──────────────────────────────────────────────────────────────────┤
+│  [Active Overrides] [Pending Requests (3)] [Request History]      │
+├──────────────────────────────────────────────────────────────────┤
+│  ... sub-section content ...                                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Three sub-tabs:
+- Active Overrides
+- Pending Requests (count badge)
+- Request History
+
+### 20.2 Active Overrides sub-tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ACTIVE OVERRIDES                                  [+ Grant Override]│
+├──────────────────────────────────────────────────────────────────┤
+│  [Filter: Role ▼] [Type ▼: Permission/Visibility/Scope/Role]      │
+│  [Show: Active | Expiring soon (≤7 days) | All]                   │
+│  [Search user/permission: 🔍                                   ]   │
+├──────────────────────────────────────────────────────────────────┤
+│  User              │ Type        │ Target              │ Expires  │
+│  ──────────────────┼─────────────┼─────────────────────┼──────────┤
+│  Maria Santos (PM) │ Permission  │ invoices:approve    │ Permanent│
+│                    │             │   (granted by req#42)│         │
+│  James Lee (Tech)  │ Visibility  │ visibility.employees│ 2d remain│
+│                    │             │   .banking          │ ⚠       │
+│  Sarah Khan (SR)   │ Scope       │ clients: my → team  │ 8d remain│
+│                    │             │   (vacation coverage)│         │
+│  David Park (PM)   │ Role        │ + Bookkeeper        │ 12d      │
+│                    │             │                     │          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Click row → detail panel shows:
+- User profile
+- Override type + target (clickable to relevant section)
+- Reason (from `reason` column)
+- Granted by + granted at
+- Expires at (countdown for temporary)
+- Activity (use_count, first_used_at, last_used_at if from request)
+- Actions: [Revoke] [Extend duration]
+
+### 20.3 Pending Requests sub-tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  PENDING REQUESTS (3)                                             │
+├──────────────────────────────────────────────────────────────────┤
+│  [Sort: Newest First ▼] [Filter: Type ▼]                          │
+├──────────────────────────────────────────────────────────────────┤
+│  Request from Lin Wei (SR)             Submitted 2h ago           │
+│  ──────────────────────────────────────────────────────────────── │
+│  Type: Field Visibility Grant                                     │
+│  Target: visibility.invoices.profit                               │
+│  Duration: Temporary (7 days)                                     │
+│  Related: Invoice INV-2024-555 (client Acme Corp)                │
+│                                                                   │
+│  Justification:                                                   │
+│  "Need to verify margin against contract pricing for the          │
+│   client review meeting Friday. Will reference specific           │
+│   invoice INV-2024-555 only."                                     │
+│                                                                   │
+│  Lin's recent activity (last 30 days):                            │
+│  • 47 invoice views (all in own scope)                            │
+│  • 0 previous similar requests                                    │
+│  • 1 request 6 months ago (approved; vendor banking)             │
+│                                                                   │
+│  Suggested decision: Approve (similar pattern to past approval)   │
+│                                                                   │
+│  [Reject ✗]  [Approve with modifications]  [Approve ✓]            │
+│                                                                   │
+│  Approval form (expands on click):                                │
+│  Duration: [7 days ▼]                                             │
+│  Rationale: [____________________________]                        │
+│  ▢ Notify Lin via Slack on approval                               │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Approval flow:
+1. Click [Approve ✓] → form expands inline
+2. Admin sets rationale; optionally adjusts duration
+3. Submit → server transaction (approve + fireGrant if start_at <= NOW)
+4. Card updates to "Approved" state with green check
+5. Card auto-dismisses after 3 seconds; moves to History
+
+Rejection flow:
+1. Click [Reject ✗] → form expands with rationale field
+2. Submit → server updates to Rejected; notifies Lin
+3. Card auto-dismisses
+
+### 20.4 Request History sub-tab
+
+Read-only chronological list of all past requests:
+
+```
+[Filter: All / Approved / Rejected / Expired / Revoked / Cancelled]
+[Search: 🔍] [Date range: Last 90 days ▼]
+
+Date       | Requester | Type       | Target              | Status   | Decided By
+2026-05-08 | Lin Wei   | Field Vis  | invoices.profit     | Approved | A. Mehta
+2026-05-07 | James Lee | Permission | clients:overrideSla | Rejected | A. Mehta
+...
+```
+
+Click row → expanded view with full request details (matching pending view structure).
+
+### 20.5 Grant Override (direct, no request workflow)
+
+Admin can grant overrides directly without going through request workflow:
+
+```
+[+ Grant Override]
+  ↓
+┌──────────────────────────────────────────────┐
+│  Grant Override (Direct)                      │
+│                                               │
+│  Target user: [Search user ▼]                 │
+│  Override type: [Permission ▼]                │
+│  Target permission: [Search ▼]                │
+│                                               │
+│  Override state: [Granted ▼]                  │
+│  Reason: [____________________________]       │
+│                                               │
+│  Duration: ▢ Permanent                        │
+│           ▢ Temporary [until: 📅 picker]      │
+│                                               │
+│  ⚠ Direct overrides do NOT go through the     │
+│  request workflow. Audit captures your        │
+│  action.                                      │
+│                                               │
+│  [Cancel]                          [Grant]    │
+└──────────────────────────────────────────────┘
+```
+
+Used for: emergencies, admin-initiated grants (employee promotion), bulk grant operations.
+
+## 21. Section 5: Custom Roles
+
+Role builder with clone-from-existing pattern (per Pass 1 §8: flat model with clone-and-modify; no role inheritance at v1).
+
+### 21.1 Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  CUSTOM ROLES                                       [+ New Role]  │
+├──────────────────────────────────────────────────────────────────┤
+│  System Roles (read-only summary)                                 │
+│  • Admin (8 users)                                                │
+│  • Project Manager (12 users)                                     │
+│  • Sales Rep (24 users)                                           │
+│  • Technician (35 users)                                          │
+│  • Subcontractor (45 users - portal only)                         │
+│  • Accounting (5 users)                                           │
+│  • View Only (8 users)                                            │
+│  • Dispatcher (3 users)                                           │
+│  • Bookkeeper (2 users)                                           │
+│  • HR-role (2 users)                                              │
+│  • Executive (4 users)                                            │
+│                                                                   │
+│  ─────────────────────────────────────                            │
+│  Custom Roles                                                     │
+│  • Senior Field Tech (cloned from Technician) - 5 users          │
+│  • Junior PM (cloned from PM) - 3 users                          │
+│  • External Consultant (cloned from Subcontractor) - 2 users     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 21.2 New role wizard
+
+```
+[+ New Role]
+  ↓
+┌─────────────────────────────────────────────────────┐
+│  New Role — Step 1 of 3                              │
+│                                                       │
+│  Role Name: [_______________________]                 │
+│  Description: [_______________________]               │
+│  Display badge color: [Color picker]                  │
+│                                                       │
+│  Clone from existing role:                           │
+│  [Search system roles ▼]   or  [Start blank]         │
+│                                                       │
+│                          [Cancel] [Next →]            │
+└─────────────────────────────────────────────────────┘
+
+Step 2: Action permissions
+  Inherited from cloned role pre-filled
+  Admin modifies grants matrix similar to Section 1
   
-  await auditLog({ event_type: 'request_admin_access_rejected', ... });
-  await notifyRequester(requestId, 'rejected', rejection.rationale);
-}
+Step 3: Field visibility + Data scopes
+  Inherited from cloned role pre-filled
+  Admin modifies similar to Section 2 + 3
+
+[Save Role]
 ```
 
-### 17.7 Step 7: Auto-grant firing for future-dated approvals
+### 21.3 Role detail view
 
-Daily cron job:
+Click an existing role:
 
-```typescript
-async function fireScheduledGrants() {
-  // Find approved-but-not-granted requests where start_at has passed
-  const ready = await db.query(`
-    SELECT id FROM request_admin_access 
-    WHERE status = 'approved' 
-      AND granted_at IS NULL 
-      AND COALESCE(start_at, NOW()) <= NOW()
-  `);
-  
-  for (const row of ready.rows) {
-    try {
-      await db.transaction(async (tx) => {
-        await fireGrant(row.id, tx);
-      });
-    } catch (err) {
-      // Log error; alert admin; do not fail the whole cron
-      logger.error('Failed to fire scheduled grant', { requestId: row.id, error: err });
-      await alertAdmins(`Failed to fire scheduled grant for request ${row.id}: ${err.message}`);
-    }
-  }
-}
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Project Manager (PM)                                             │
+├──────────────────────────────────────────────────────────────────┤
+│  Description: Project lifecycle management                        │
+│  Display color: 🟣 Purple                                          │
+│  System role: ✓ (cannot delete)                                   │
+│                                                                   │
+│  [Actions ▼]                                                      │
+│  → 1247 of 1260 actions granted (default + grants - denials)     │
+│  [View grant matrix for PM →]                                     │
+│                                                                   │
+│  [Field Visibility ▼]                                             │
+│  → 24 of 47 flags visible                                         │
+│  [View visibility matrix for PM →]                                │
+│                                                                   │
+│  [Data Scopes ▼]                                                  │
+│  → Mostly 'team' or 'project' scope                              │
+│  [View scope matrix for PM →]                                     │
+│                                                                   │
+│  Users with this role (12):                                       │
+│  [List of users with quick action buttons]                       │
+│                                                                   │
+│  Activity (last 30 days):                                         │
+│  • 1,250 actions executed                                         │
+│  • 5 admin exceptions invoked                                     │
+│  • 12 separation-of-duties blocks                                 │
+│  [View detailed activity →]                                       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 17.8 Step 8: Auto-expiry
+### 21.4 Role archival
 
-The same daily cron from Pass 3 §11.4 (step 5) that handles expired user_permission_overrides ALSO handles request expiry:
+Custom roles can be archived (not deleted) when no longer needed:
 
-```typescript
-async function autoExpireRequestsAndGrants() {
-  // Expire pending requests older than pending_expires_at
-  await db.query(`
-    UPDATE request_admin_access 
-    SET status = 'expired', expired_at = NOW() 
-    WHERE status = 'pending' 
-      AND pending_expires_at < NOW()
-    RETURNING id, requester_user_id
-  `);
-  // Notify requesters of expired requests
-  
-  // Expire granted requests where end_at < NOW()
-  // (The corresponding user_permission_overrides etc. are expired by Pass 3 §11.4 trigger)
-  await db.query(`
-    UPDATE request_admin_access 
-    SET status = 'expired', expired_at = NOW() 
-    WHERE status = 'granted' 
-      AND end_at < NOW()
-  `);
-}
+```
+[Archive Role]
+  ↓
+"Archive 'External Consultant'? 
+ Users currently assigned: 2
+ They will retain access until reassigned to another role.
+ 
+ Confirm reassignment:
+ • Maria Santos → [Sales Rep ▼]
+ • David Park → [Sales Rep ▼]
+ 
+ [Cancel]  [Archive Role]"
 ```
 
-### 17.9 Step 9: Early revocation by admin
+System roles cannot be archived (UI disables).
 
-Admin can revoke an active granted request before its `end_at`:
+## 22. Section 6: Audit Log
 
-```typescript
-async function revokeGrant(requestId: string, revocation: RevocationInput) {
-  // Update request
-  await db.update('request_admin_access', requestId, {
-    status: 'revoked',
-    revoked_at: NOW(),
-    revoked_by_user_id: currentUser.id,
-    revocation_reason: revocation.reason
-  });
-  
-  // Revoke the underlying override
-  const request = await db.fetchOne('request_admin_access', requestId);
-  await db.update('user_permission_overrides', request.granted_override_id, {
-    revoked_at: NOW(),
-    revoked_by: currentUser.id,
-    revocation_reason: revocation.reason
-  });
-  
-  // Audit
-  await auditLog({ event_type: 'request_admin_access_revoked', ... });
-  
-  // Cache invalidates via Pass 3 §11.4 trigger
-}
+Embedded interface for `permission_audit_log` queries.
+
+### 22.1 Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  AUDIT LOG                                       [Export ▼]       │
+├──────────────────────────────────────────────────────────────────┤
+│  Quick filters:                                                   │
+│  [Last 24h] [Last 7d] [Last 30d] [Custom range]                   │
+│  [Event type ▼] [Actor user ▼] [Target user ▼] [Target perm ▼]    │
+│  [🔍 Search]                                                       │
+├──────────────────────────────────────────────────────────────────┤
+│  When                Event                          Actor          │
+│  ────────────────────────────────────────────────────────────────│
+│  5/12 14:23  request_admin_access_granted          A. Mehta       │
+│              Target: Lin Wei | invoices.profit                    │
+│              [View details →]                                     │
+│                                                                   │
+│  5/12 11:45  admin_exception_invoked               A. Mehta       │
+│              Target: client Acme Corp | overrideSla              │
+│              Reason: "30-day IT migration relief"                 │
+│              [View details →]                                     │
+│                                                                   │
+│  5/12 09:30  role_permission_granted                A. Mehta       │
+│              Target: PM role | invoices:approve                   │
+│              [View details →]                                     │
+│                                                                   │
+│  5/12 09:15  field_read_with_audit                  Sarah Khan     │
+│              Target: vendor banking detail (vendor abc)           │
+│                                                                   │
+│  [Load more ↓]                                                    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## 18. Notification routing
+### 22.2 Row detail expansion
 
-### 18.1 v1: notify all admins
+Click a row → modal/drawer with full event details:
 
-When a request is submitted:
-1. Query `users WHERE role_id = admin_role_id AND is_active = TRUE`
-2. For each admin, emit notification to all enabled channels (in-app + email + Slack if configured)
-
-Operator can configure notification channel preferences in Settings:
-- Default channels per admin (per Settings → User Profile)
-- Default channels per request type (Phase 2 — for now uniform)
-
-### 18.2 Outcome notifications to requester
-
-On approve / reject / expire / revoke:
-- In-app notification (always)
-- Email if requester has email notifications enabled
-- Slack if configured
-
-### 18.3 v1: notification deduplication
-
-If admin A approves a request, admins B and C still see the pending notification briefly until polling refresh. Solved by:
-- Pending notification batched/polled every 30 seconds (in-app)
-- On approval, server emits "notification removed" event via WebSocket if connected
-
-### 18.4 Phase 2 routing rules placeholder
-
-`request_admin_access.routing_rule_id` is NULL at v1. Phase 2 introduces:
-
-```sql
--- Phase 2 placeholder; not implemented at v1
-CREATE TABLE notification_routing_rules (
-  id UUID PRIMARY KEY,
-  rule_name TEXT,
-  request_type TEXT,                            -- e.g., 'field_visibility_grant'
-  target_filter JSONB,                          -- e.g., { "flag_category": "banking" }
-  notify_role_codes TEXT[],                     -- e.g., ['accounting'] for banking requests
-  notify_specific_user_ids UUID[],
-  fallback_to_all_admins BOOLEAN DEFAULT TRUE,
-  priority INTEGER
-);
+```
+┌─────────────────────────────────────────────────┐
+│  Event: request_admin_access_granted             │
+│  Occurred: 2026-05-12 14:23:45 UTC               │
+│  Event ID: e7a3...                               │
+├─────────────────────────────────────────────────┤
+│  Actor:                                          │
+│  • A. Mehta (Admin)                              │
+│  • IP: 192.168.1.5                               │
+│  • User-Agent: Mozilla/5.0...                    │
+│  • Request ID: req_abc123                        │
+│                                                  │
+│  Target:                                         │
+│  • Type: request                                 │
+│  • ID: req_admin_access_42                       │
+│                                                  │
+│  Before/After:                                   │
+│  {                                               │
+│    "request_id": "...",                          │
+│    "override_id": "ovr_xyz",                     │
+│    "status": "granted"                           │
+│  }                                               │
+│                                                  │
+│  Related events (same request_id):               │
+│  • [submitted at 12:15] →                        │
+│  • [approved at 14:00] →                         │
+│  • [granted at 14:23] (THIS) →                   │
+│  • [first read at 14:30] →                       │
+│  • [second read at 15:42] →                      │
+│                                                  │
+│  [Close]                  [View entity history]  │
+└─────────────────────────────────────────────────┘
 ```
 
-Then when emitting notifications, query routing rules first; fall back to "all admins" if no rule matches.
+### 22.3 Filters and queries
 
-## 19. Auto-expiry handling
+Quick filters at top + advanced filter panel for power users.
 
-### 19.1 Three expiry paths
+Filter combinations are URL-encoded for bookmark/share. Audit queries use the 3-layer API from Pass 6 §16 (entity-history / user-actions / event-stream endpoints).
 
-1. **Pending too long** — request submitted but no admin decision within `pending_expires_at` (7 days default; operator configurable in Settings)
-2. **Granted-temporary expired** — `end_at` reached
-3. **Granted-one-time used and expired** — `duration_type='one_time'` and `last_used_at` is set (with grace period)
+### 22.4 Export
 
-### 19.2 Pending expiry
+Click Export → format selection (PDF / CSV / JSON). Triggers `POST /api/admin/audit/export` per Pass 6 §20.3. PDF uses §0.4 #9 eight-layer print protection.
 
-Daily cron job (per §17.8) checks `pending_expires_at`. Auto-transitions to Expired. Notifies requester. Optionally notifies admins ("3 pending requests expired without decision").
+Permission: `audit:export` — A and compliance role only.
 
-Operator can configure:
-- `pending_expiry_days` in Settings (default 7)
-- Auto-escalation (after 3 days, escalate to additional admins) — Phase 2
+### 22.5 Pre-built compliance reports
 
-### 19.3 Granted-temporary expiry
+Sidebar shortcut to M13 compliance reports (per Pass 6 §16.5):
+- Audit Trail by User
+- Admin Exceptions Last 90 Days
+- Sensitive Field Reads
+- Regulatory Override History
+- Co-Sign Activity
+- Permission Grant Changes Last Quarter
 
-When `end_at < NOW()`:
-- The underlying `user_permission_overrides` row is marked expired by Pass 3 §11.4 trigger (cache invalidates)
-- The corresponding `request_admin_access` row updates status to 'expired'
-- Requester notified (in-app + email)
+Each is one-click access; renders in M13 reports module with audit_log_combined data source.
 
-### 19.4 One-time grants
+## 23. Cross-section concerns
 
-For `duration_type='one_time'`:
-- On first use of the granted permission, set `request_admin_access.first_used_at`
-- Increment `use_count`
-- For `one_time`: also revoke the override after first use + 24-hour grace period (in case user needs to retry)
+### 23.1 Global search
 
-Use-tracking implementation: A1 resolution algorithm (Pass 3) emits an event after a granted action executes. The event listener updates `request_admin_access.last_used_at` + `use_count`.
+Persistent in header. Searches:
+- Users (name, email)
+- Roles (name, description)
+- Permissions (action_name, description)
+- Audit events (event_type, target_entity_id)
+- Active overrides (by reason text)
 
-For one-time grants:
-```typescript
-// After successful action execution for a user with a one-time request grant active
-if (request.duration_type === 'one_time' && request.use_count === 0) {
-  // Schedule revocation in 24 hours
-  await scheduler.schedule({
-    delay_hours: 24,
-    task: 'revoke_one_time_grant',
-    payload: { request_id: request.id }
-  });
-}
-```
+Type-ahead with categorized buckets. Click result → jumps to canonical view.
 
-### 19.5 Permanent grants
+Implementation:
+- Client-side fuzzy matching against pre-loaded indexes (users, roles, permissions are small enough to cache)
+- Server-side search for audit events (query string passed to API)
 
-`duration_type='permanent'` requests have `end_at = NULL` and never auto-expire. Admin can revoke manually anytime.
+### 23.2 Save flow
 
-## 20. Edge cases
+Per §16.6 — transactional save with validation.
 
-### 20.1 Multiple pending requests for same user+permission
+Draft buffer:
+- Stored in browser localStorage (survives page refresh)
+- Capped at 100 unsaved changes (further changes prompt admin to save first)
+- Cleared on successful save OR explicit "Discard All"
 
-User submits a request for `clients:viewBanking` for client X. Then submits another for `clients:viewBanking` for client Y. Both legitimate; different contexts.
+Save sequence:
+1. Click "Save All"
+2. Loading state ("Saving N changes...")
+3. POST to `/api/admin/permissions/batch-save` with all draft changes
+4. Server validates entire batch:
+   - Each individual change valid
+   - No new separation_of_duties violations introduced
+   - No new conflicts with status bindings
+   - No removal of permissions critical for currently-active sessions
+5. If valid: atomic transaction; all changes committed; cache invalidates; success toast
+6. If invalid: response highlights specific failed changes; draft preserved; admin fixes and retries
 
-**Decision:** allow multiple pending requests as long as `related_entity_id` differs. The duplicate check in §17.1 includes `related_entity_id` in the WHERE clause.
+### 23.3 Conflict detection
 
-If user tries to submit a SECOND pending request with the SAME `target_permission_id` AND `related_entity_id` while one is still pending — the duplicate check rejects with "you already have a pending request; cancel it to submit a new one, or wait for admin decision."
+Pre-save warnings on potentially problematic changes:
 
-### 20.2 User re-requesting after rejection
+**Cascading effects:**
+- "Removing `invoices:approve` from PM role affects 5 active overrides that grant PMs override access. Proceed?"
 
-If admin rejects a request, user can immediately submit a new one (different justification) for the same permission. The system allows this. Reasons:
-- Maybe the user clarifies their justification
-- Maybe the context changed (new event in the org)
+**Separation of duties:**
+- "Granting `ap_bills:approve` to a user who already has `ap_bills:create` for the same scope is a separation of duties conflict (§0.4 #11). Either restrict scope OR remove `ap_bills:create` grant first."
 
-Audit captures both requests independently. Admin sees the rejection history when reviewing the new request (UI shows "Previous similar requests by this user").
+**Regulatory expiry:**
+- "This permission is blocked by regulatory expiry constraints for 3 contractors. Grant will take effect for those contractors only after their WSIB is renewed."
 
-Phase 2 consideration: rate-limiting (e.g., 3 rejected requests for same permission within 7 days triggers admin alert).
+**Active session impact:**
+- "12 users currently logged in have this permission. Changes will take effect on their next request. Refresh recommended for sensitive changes."
 
-### 20.3 Admin self-requesting
+Warnings non-blocking; admin can proceed with explicit acknowledgment.
 
-Admin tries to submit a request for themselves.
+### 23.4 Undo/redo
 
-**Decision (v1):** Block in the request submission UI. Admins should grant themselves directly via the user_permission_overrides editor in Pass 8. Self-request through the workflow creates audit trail issues (who approves it?).
+Within a save session (before save):
+- Each change is reversible via Ctrl+Z (or Cmd+Z)
+- Redo via Ctrl+Y (or Cmd+Y)
+- Stack capped at 50 actions
 
-Schema-level prevention:
-```sql
-ALTER TABLE request_admin_access
-ADD CONSTRAINT no_admin_self_request 
-CHECK (requester_user_id != decided_by_user_id);
-```
+After save: no undo. Audit log shows full history.
 
-If admin needs a permission they don't have, they bypass the request workflow and use direct override editing (audit captures their action). Approval workflow is for non-admins.
+### 23.5 Mobile responsive
 
-Edge case: admin role is one of MULTIPLE roles a user has (e.g., user has Tech + Admin via `role_temporary_assignment`). Can they self-request? Decision: NO — if they have Admin via any active assignment, they can self-grant directly.
+Editor designed desktop-first but mobile-functional for emergency operations:
 
-### 20.4 Request for permission already granted
-
-User has `invoices:viewProfit` granted via role default but tries to "request" it anyway (perhaps because UI showed it as disabled due to a different reason — like a status binding).
-
-**Decision:** Validation rejects with message "You already have this permission. If you're seeing it as unavailable, it may be due to entity status (e.g., the invoice is in a state that doesn't allow editing) rather than your permission level."
-
-Validation logic in `submitRequest`:
-```typescript
-// Check if user already has this permission
-const grant = await resolveActionGrant(currentUser.id, targetPermission.action_name);
-if (grant.is_granted) {
-  throw new AlreadyGrantedError({
-    message: 'You already have this permission...',
-    reason_if_denied_when_attempted: grant.reason_if_denied  // helps user understand why UI shows disabled
-  });
-}
-```
-
-### 20.5 Expired-but-recently-used grants
-
-Grant expires at `end_at`. But the user was actively using the permission right up until expiry. Should they be cut off mid-action?
-
-**Decision:** Yes. Active actions complete (server handles them mid-request), but new actions fail. UI shows "Your access has expired" toast.
-
-If the user needs continued access, they submit a new request. Audit captures the expiry; if they re-request, admin can see the prior grant + usage pattern.
-
-### 20.6 Request for `requires_audit_on_read=TRUE` field visibility
-
-When the request is for a flag with `requires_audit_on_read=TRUE` (banking, payroll, SIN — the 9 sensitive flags from Pass 4 §17), the grant itself triggers additional audit:
-
-- Standard `request_admin_access_granted` audit row
-- PLUS event_type `field_visibility_user_override_granted` with the flag identity (per Pass 6 §15.1)
-- PLUS pre-emptive alert: "Sensitive field visibility granted to user X — first read will trigger audit-on-read"
-
-When the user actually USES the granted permission (reads the field), Pass 4's audit-on-read async batched system captures every read. Compliance officers see the granted permission + every read as separate audit events.
-
-### 20.7 Revocation during pending state
-
-What if admin "revokes" a request before approving it? Decision: that's a rejection. UI doesn't show a "Revoke" button when request is in Pending state.
-
-### 20.8 Requester deactivated mid-request
-
-User submits request. User account deactivated by HR. Request still pending.
-
-**Decision:** Auto-cancel pending requests when requester's `is_active` flips to FALSE. Audit row captures the auto-cancel.
-
-For granted requests when user deactivated: the underlying `user_permission_overrides` row is also revoked (cascade via Pass 3 §11.4 trigger on `users.is_active` change).
-
-## 21. Integration with Pass 4 audit-on-read
-
-For requests targeting `requires_audit_on_read=TRUE` flags (the 9 sensitive flags from Pass 4 §17):
-
-### 21.1 Special audit handling
-
-Three audit events fire (vs one for standard requests):
-1. `request_admin_access_submitted` — when request created (standard)
-2. `field_visibility_user_override_granted` — when grant fires
-3. `field_read_with_audit` — each time the user reads the granted field (Pass 4's async batched)
-
-### 21.2 Compliance report integration
-
-M13's "Sensitive Field Reads" compliance report (per Pass 6 §16.5) joins:
-- `permission_audit_log` for grant events (`field_visibility_user_override_granted`)
-- `permission_audit_log` for read events (`field_read_with_audit`)
-- `request_admin_access` for request context
-
-Output shows full chain: who requested, who approved, when granted, when each read occurred, what entity each read related to.
-
-### 21.3 Admin alerting
-
-Operator can configure in Settings: "Alert admin on any granted-and-read sensitive field access" — Slack/email push when a `field_read_with_audit` fires for a permission granted via the request workflow.
-
-Helps catch usage that doesn't match the original justification (e.g., grant was for "vendor wire setup" but reads cluster on customer banking sections).
-
-## 22. New audit event types for Pass 7
-
-Adding to Pass 6 §15.1 event type catalog:
-
-| Event type | Triggered by | Required JSONB fields | Optional |
-|---|---|---|---|
-| `request_admin_access_submitted` | User submits a new request | `request_id`, `request_type`, `target_*` fields, `requester_justification`, `duration_type`, `start_at`, `end_at` | `related_entity_*` |
-| `request_admin_access_approved` | Admin approves a request | `request_id`, `admin_decision_rationale`, `effective_start_at`, `effective_end_at` | duration adjustments by admin |
-| `request_admin_access_rejected` | Admin rejects a request | `request_id`, `admin_decision_rationale` | |
-| `request_admin_access_granted` | Grant fires (immediate or scheduled) | `request_id`, `override_id`, `override_table` | |
-| `request_admin_access_cancelled` | Requester cancels pending request | `request_id`, `cancellation_reason` | |
-| `request_admin_access_expired` | Auto-expiry (pending too long OR granted past end_at) | `request_id`, `expiry_type` ('pending_timeout' / 'duration_end' / 'one_time_used') | |
-| `request_admin_access_revoked` | Admin revokes active grant early | `request_id`, `override_id`, `revocation_reason` | |
-| `request_admin_access_auto_cancelled` | User deactivated; pending request auto-cancelled | `request_id`, `cancellation_trigger` ('user_deactivated') | |
-| `request_one_time_used` | One-time grant used; revocation scheduled | `request_id`, `used_at`, `revocation_scheduled_for` | |
-
-Total event types in `permission_audit_log` is now 21 (Pass 6) + 9 (Pass 7) = **30 event types**.
-
-## 23. Performance characteristics
-
-Request workflow is admin-tool-class (not hot-path runtime). Performance targets:
-
-| Operation | Target |
+| Surface | Mobile rendering |
 |---|---|
-| Submit request | <100ms (validation + insert + notify trigger) |
-| Approve request (immediate grant) | <200ms (validation + transaction with multiple inserts + cache invalidation + audit) |
-| Approve request (future-dated) | <100ms |
-| Reject request | <100ms |
-| Cancel by requester | <50ms |
-| List pending requests (admin dashboard) | <300ms p99 |
-| List user's requests history | <300ms p99 |
-| Daily auto-expiry cron | <30s for full sweep (batch operations) |
-| Daily auto-grant cron | <30s for full sweep |
+| Sidebar | Hidden behind hamburger; navigation drawer |
+| Actions matrix | Single-role view at a time; role picker at top |
+| Field Visibility matrix | Same — single role view |
+| Data Scopes matrix | List view by resource, not matrix |
+| Overrides | List view with smaller cards |
+| Pending Requests | Card list optimized for approval — large tap targets |
+| Custom Roles | List + drill-in |
+| Audit Log | List view; row detail full-screen modal |
 
-Caching strategy: requests don't get their own cache (volume is low — hundreds per day at scale, not thousands). Queries hit `request_admin_access` directly. Indexes from §15.3 cover the common patterns.
+Mobile primary use case: admin gets notification on phone, opens Pending Requests, approves a request, done.
 
-## 24. Notification infrastructure dependencies
+### 23.6 Accessibility
 
-Pass 7 depends on notification infrastructure built in build phase:
-- In-app notification service (WebSocket + polling fallback)
-- Email service (transactional emails via SendGrid/Postmark/SES; build phase chooses)
-- Slack integration (per-tenant Slack workspace OAuth; configurable per admin in Settings)
+WCAG 2.1 AA target:
+- All interactive elements keyboard-navigable (Tab, Enter, Escape)
+- Focus indicators visible
+- ARIA labels on all matrix cells, action buttons
+- Color not used as sole indicator (✓/⊘ symbols + colors)
+- Screen reader announces state changes ("Permission invoices:approve for Project Manager set to granted")
+- High-contrast mode supported via CSS variables
+- Reduced motion preference respected (no auto-dismissing cards if user prefers)
 
-These are NOT specified in Pass 7 — they're build-phase infrastructure decisions. Pass 7 specifies WHAT messages get sent; build phase specifies HOW they're delivered.
+### 23.7 Performance budget
 
-## 25. Open questions (Pass 7)
+- Initial load: <1.5s (matrix data + user list + role list pre-fetched)
+- Section switch: <100ms (no re-fetch; client-side render)
+- Cell click → detail panel open: <50ms
+- Save 1-10 changes: <500ms
+- Save 11-100 changes: <2s
+- Audit log query: <500ms (per Pass 6 performance budget)
+- Search type-ahead: <30ms (client-side fuzzy)
 
-1. **Should rejection rate-limiting trigger admin alerts?** (e.g., user rejected 5 times for same permission in 7 days = potential issue). Decision: NO at v1; Phase 2 consideration. Admins see rejection history when reviewing each request.
+## 24. Open questions (Pass 8)
 
-2. **Should there be a "request approval" hierarchy?** (e.g., requests for sensitive permissions need TWO admin approvals). Decision: NO at v1; current co-sign pattern (Pass 3 §15.2) handles high-stakes actions. Multi-step approval Phase 2.
+1. **Should the editor have a "dry run" mode?** (preview effects of changes without saving). Decision: NO at v1 — conflict detection (§23.3) plus the explicit save step is sufficient. Phase 2 consideration.
 
-3. **Comment threads on requests?** (admin asks "why specifically this client?" before approving). Decision: NO at v1 — admin can reject with "need more info" reason; user resubmits with clarification. Phase 2 adds threaded comments.
+2. **Should there be admin-to-admin handoff workflows?** (e.g., A1 starts a change set; A2 reviews and saves). Decision: NO at v1 — single-admin save with audit trail is sufficient. Phase 2 with multi-step approval.
 
-4. **Mobile push notifications for pending requests?** Decision: deferred to build phase mobile spec. v1 web app uses in-app + email + Slack.
+3. **Should non-admins see a read-only version of their permissions?** (e.g., user views their own grants). Decision: YES via separate UI at `/profile/permissions` — read-only view of user's effective permissions + active overrides. Not part of the admin editor but reusing components.
 
-5. **Templated request justifications?** (e.g., common templates like "Covering for vacationing colleague"). Decision: NO at v1; free text justification enforces thoughtfulness. Phase 2 could add suggested templates.
+4. **Permission editor activity audit.** Should admin's actions in the editor itself be audited beyond per-change events? Decision: each save operation generates its own audit row (event_type='editor_batch_save') containing the diff; finer than per-change events; Phase 2 consideration if needed.
 
-6. **Request analytics dashboard?** (e.g., "common request patterns this month"). Decision: deferred to M13 reports (similar to compliance reports from Pass 6). v1 has basic admin dashboard showing pending count + recent activity.
+5. **Bulk import/export of grants?** (CSV roundtrip). Decision: YES — admin can export current role grants matrix to CSV, edit offline, import back. Validation catches malformed imports. Useful for org-wide audits.
 
-7. **Auto-approval rules?** (e.g., "auto-approve requests for view-only permissions during business hours"). Decision: NO at v1. Auto-approval defeats the audit-trail purpose. Phase 2 may add bounded auto-approval rules with conservative defaults.
+6. **Side-by-side comparison of roles?** Already addressed (§17.6). Confirmed for v1.
+
+7. **Time-travel view of permissions?** (e.g., "what did PM have access to on 2025-12-01?"). Decision: NO at v1 — audit log reconstructs historical states but no dedicated UI. Phase 2 with materialized historical snapshots.
+
+8. **Permission templates?** (operator can create reusable bundles like "AP coverage bundle" = invoices:approve + payments:create + etc., apply to user with one click). Decision: NO at v1; manual override granting + custom roles cover real needs. Phase 2 if operator demand emerges.
+
+## 25. New audit event types for Pass 8
+
+Adding to Pass 7's total of 30 event types:
+
+| Event type | Triggered by | Required JSONB fields |
+|---|---|---|
+| `editor_batch_save` | Admin clicks Save All in editor | `changes_summary` (array of all changes), `change_count`, `validation_passed` |
+| `bulk_export_audit_log` | Admin exports audit log | `filter_criteria`, `format`, `row_count`, `download_url` (signed) |
+
+Total event types in permission_audit_log: 30 (Pass 7) + 2 (Pass 8) = **32 event types**.
 
 ## 26. Migration order extension
 
-Adding to Pass 6's 32-step migration order:
+Adding to Pass 7's 39-step migration order:
 
-- Step 33: Add Pass 7-specific columns to `request_admin_access` (per §15.3 schema; the table itself was specified in Pass 2 §9 as a stub)
-- Step 34: Create `user_role_assignments` table
-- Step 35: Migrate existing `users.role_id` to `user_role_assignments` (mark `is_primary=TRUE`)
-- Step 36: Add Pass 7 event types to permission_audit_log validation
-- Step 37: Install pending-expiry cron job (daily)
-- Step 38: Install scheduled-grant cron job (every 5 minutes for finer granularity)
-- Step 39: Install one-time-grant revocation scheduler integration
+- Step 40: Build editor frontend bundle (component library, routing, state management)
+- Step 41: Build editor backend endpoints (`/api/admin/permissions/*`)
+- Step 42: Build batch-save endpoint with validation pipeline
+- Step 43: Build conflict detection service
+- Step 44: Build editor permissions gating (only admins access)
+- Step 45: Build user profile permissions view (read-only at `/profile/permissions`)
 
-Now 39 total steps. Pass 11 covers production rollout.
+Now 45 total migration steps.
+
+## 27. Implementation dependencies
+
+Pass 8 depends on:
+- All passes 1-7 design complete (✓)
+- Build phase infrastructure: React + Tailwind UI framework, GraphQL or REST API, WebSocket for live updates
+- Authentication context (currentUser, isAdmin)
+- Notification delivery (in-app at minimum; email + Slack handled separately)
+
+Pass 8 is the FIRST pass whose output significantly impacts build phase — the editor is the largest single piece of UI in the permissions module build.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 27. What's next (Pass 8 preview)
+# 28. What's next (Pass 9 preview)
 ═══════════════════════════════════════════════════════════════════
 
-**Pass 8: Permissions editor UI.**
+**Pass 9: Effective-permissions caching strategy.**
 
-Six-tab editor specified across Passes 1-7 — now fully detailed. Pass 8 covers:
+Pass 2 introduced `effective_permissions_cache`. Pass 3 specified the algorithm's cache lookup. Pass 5 introduced `effective_status_bindings_cache`. But cache strategy details — invalidation triggers' detailed implementation, warm-up patterns, stale-while-revalidate thresholds, multi-tenant cache key design Phase 2 prep — these need specification before build.
 
-- Tab 1 (Actions) — the 4-tier action hierarchy from Pass 1 §5; per-row grant/deny/default + ui_state_override toggles; bulk operations
-- Tab 2 (Field Visibility) — the 47-flag catalog from Pass 4 §17 with role-default + per-user override columns
-- Tab 3 (Data Scopes) — per-role per-resource scope matrix
-- Tab 4 (Overrides) — list view of all active user overrides with expiry tracking
-- Tab 5 (Custom Roles) — role creation wizard with clone-from-existing pattern
-- Tab 6 (Audit Log) — embedded view of `permission_audit_log` with filters
-- Plus the request management UI for Pass 7 workflow (sub-tab under Overrides)
-- Layout, search/filter, save-and-validate flow, conflict detection (e.g., warn admin about cascading effects)
-- Mobile responsive considerations (admin can approve requests from phone)
-- Accessibility (keyboard navigation; screen reader support)
+Pass 9 covers:
+- Trigger implementation details (the SQL functions and triggers that invalidate caches on grant/revoke/override events)
+- Cache warm-up patterns (on user login, prefetch what they'll need for dashboard)
+- Stale-while-revalidate thresholds (<5 minute dashboard cache OK; everything else fresh)
+- Cache eviction strategy (expired temporary overrides; deprecated permissions; deactivated users)
+- Cache size budgeting (memory + disk; what fits in PostgreSQL buffer pool)
+- Read-replica strategy for hot reads
+- Multi-tenant cache key design Phase 2 preparation
+- Cache observability (hit rate metrics; staleness detection)
+- Failure mode handling (cache table unavailable → fall back to base tables; alert ops)
 
-Pass 8 will produce v0.8 of the design doc.
+Pass 9 will produce v0.9 of the design doc.
 
 ---
 
-**End of v0.7.** Pass 7 (Request-Admin-Access Workflow) complete. State machine (Pending → Approved → Granted → Expired/Revoked + Rejected/Cancelled paths) specified. Four request types: permission_grant, field_visibility_grant, data_scope_grant, role_temporary_assignment. New `user_role_assignments` table for the fourth type (supports multi-role users). Full schema for `request_admin_access` table with 30+ columns covering identity, target (polymorphic), context, duration, lifecycle, reasoning (both sides), forensic metadata, activity tracking. Approval workflow end-to-end (submit → notify → review → approve/reject → grant fires → notify requester). Notification routing v1 (all admins) with Phase 2 placeholder. Auto-expiry handling for three paths (pending timeout / duration end / one-time used). Eight edge cases handled. Integration with Pass 4 audit-on-read for sensitive permissions. Nine new event types added to permission_audit_log catalog (30 total now). Performance budget specified. Seven Pass 7 open questions resolved. Two architectural decisions locked. Migration order extended +7 steps (now 39 total).
+**End of v0.8.** Pass 8 (Permissions Editor UI) complete. Workspace architecture (single page with six sections; persistent header + sidebar + main pane; cross-section linking). Six sections fully specified: Actions (matrix with 4-tier hierarchy, cell interactions, bulk edit, system-locked rows, comparison view), Field Visibility (matrix with mask previews, audit-on-read indicators, never-granted handling), Data Scopes (resource × role matrix with impact preview), Overrides (active + pending requests + history with full request approval flow), Custom Roles (clone-from-existing wizard with archival), Audit Log (embedded query interface with event details, filters, export, compliance reports shortcut). Cross-section concerns: global search, transactional save with conflict detection, undo/redo, mobile responsive, WCAG 2.1 AA accessibility, performance budgets. Two architectural decisions locked: workspace pattern (not separate tabs); transactional save (not optimistic). Eight Pass 8 open questions resolved. Two new audit event types added (32 total in permission_audit_log catalog now). Migration order extended +6 steps (now 45 total).

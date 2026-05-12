@@ -12,77 +12,65 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session V CLOSED. Permissions Design Pass 7 of 11 complete.**
+**As of 2026-05-12. Session W CLOSED. Permissions Design Pass 8 of 11 complete.**
 
-- **Session V focus:** Permissions Design — Pass 7 (Request-Admin-Access Workflow). State machine (Pending → Approved → Granted → Expired/Revoked + Rejected/Cancelled paths). Four request types: permission_grant / field_visibility_grant / data_scope_grant / role_temporary_assignment. New `user_role_assignments` table introduced for multi-role support. Full schema for request_admin_access expanded with 30+ columns. Approval workflow end-to-end. Notification routing v1 (all admins; Phase 2 routing rules placeholder). Auto-expiry handling 3 paths. 8 edge cases. Integration with Pass 4 audit-on-read for sensitive permissions. 9 new event types added to permission_audit_log catalog (30 total). 7 Pass 7 open questions resolved. Migration order extended +7 steps (now 39 total).
-- **Latest commit:** `docs: permissions design Pass 7 — request-admin-access workflow`. See `git log -1 --oneline`.
+- **Session W focus:** Permissions Design — Pass 8 (Permissions Editor UI). Workspace architecture (single page with six sections; not separate tabs). Six sections fully specified with layouts, cell interactions, bulk operations, conflict detection. Header with global search + save state indicator. Sidebar with section nav + pending request badge + Recently viewed. Cross-section linking. Transactional save flow with conflict detection. Undo/redo. Mobile responsive (admin can approve requests from phone). WCAG 2.1 AA accessibility. Performance budgets locked (<1.5s initial load; <500ms small save). 8 Pass 8 open questions resolved. 2 new audit event types added (32 total now).
+- **Latest commit:** `docs: permissions design Pass 8 — permissions editor UI`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 7 of 11 passes complete. Pending: Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.7 condenses Pass 1-6 to summaries. Full content preserved at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58). Pass 7 full content §14-§26.
+- **Permissions design progress:** 8 of 11 passes complete. Pending: Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.8 condenses Pass 1-7 to summaries. Full content at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6). Pass 8 full content §15-§27.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 7 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 8 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 7:**
-  - **State machine separates Approved from Granted** — supports future-dated grants (admin approves with start_at in future; cron fires grant at start_at) and atomicity on grant failure (request stays at Approved if user_permission_override insert fails for any reason). In typical case (immediate grant), transition happens in same transaction; user perceives as one event.
-  - **Four request types cover the design space:**
-    - `permission_grant` — most common (specific action permission)
-    - `field_visibility_grant` — sensitive field visibility (banking, SIN, payroll, etc.)
-    - `data_scope_grant` — widen scope on a resource (e.g., team → all temporarily)
-    - `role_temporary_assignment` — take on second role for coverage periods
-  - **`user_role_assignments` table introduced** for multi-role support. Primary role (`is_primary=TRUE`) is user's default. Additional roles from requests have `is_primary=FALSE`. A1 resolution unions all active role grants for the user. UNIQUE constraint with DEFERRABLE INITIALLY DEFERRED handles primary role re-assignment.
-  - **Polymorphic target columns** in request_admin_access support all four request types in one table (target_permission_id OR target_flag_id OR target_resource+target_scope_id OR target_role_id, exactly one populated per request).
-  - **Notification fanout v1: all admins** notified via in-app + email + Slack. routing_rule_id column (NULL at v1) prepared for Phase 2 routing rules table. Single-tenant systems have 1-3 admins typically; routing adds complexity without solving real v1 problem.
-  - **Three notification channels per request event:** in-app (always), email (per admin preference), Slack (if configured). Per-admin channel preferences in Settings.
-  - **Auto-expiry handles 3 paths:**
-    - Pending timeout (default 7 days; operator-configurable in Settings)
-    - Duration end (granted-temporary expires at end_at; Pass 3 cron handles override revocation; this cron handles request status update)
-    - One-time used (one_time grants schedule revocation 24h after first use as grace period)
-  - **Self-approval blocked at CHECK constraint** (`requester_user_id != decided_by_user_id`) plus UI prevention. Admins use direct override editor for self-grants (audit captures their action).
-  - **Duplicate request check** includes related_entity_id — same permission for different entities allowed; same permission for same entity rejects with "you have a pending request; cancel or wait."
-  - **Already-granted permission requests** validation rejects with helpful explanation including reason_if_denied from current grant resolution (helps user understand why UI showed disabled — often status binding, not permission).
-  - **Sensitive flag requests trigger triple audit**: grant event + pre-emptive grant audit (for `requires_audit_on_read=TRUE` flags) + every read via Pass 4 async batched.
-  - **M13 compliance report joins** request_admin_access + permission_audit_log for "Sensitive Field Reads" report — shows full chain: who requested, who approved, when granted, every read.
-  - **Operator-configurable alerts**: Slack push when granted sensitive permission is actually used (catches usage patterns not matching original justification).
-  - **Active actions complete on grant expiry**; new actions fail. UI shows "Your access has expired" toast.
-  - **User deactivation cascades**: pending requests auto-cancelled; granted overrides revoked via Pass 3 §11.4 trigger on users.is_active change.
-- **Nine new event types added to permission_audit_log catalog (30 total now):**
-  - request_admin_access_submitted
-  - request_admin_access_approved
-  - request_admin_access_rejected
-  - request_admin_access_granted
-  - request_admin_access_cancelled
-  - request_admin_access_expired
-  - request_admin_access_revoked
-  - request_admin_access_auto_cancelled (user deactivated)
-  - request_one_time_used
-- **Seven Pass 7 open questions resolved:**
-  - Rejection rate-limiting alerts: NO at v1; Phase 2 consideration
-  - Multi-step approval hierarchy: NO at v1; co-sign pattern handles high-stakes
-  - Comment threads on requests: NO at v1; use "need more info" rejection pattern
-  - Mobile push notifications: deferred to build phase
-  - Templated justifications: NO at v1; free text enforces thoughtfulness
-  - Request analytics dashboard: deferred to M13 reports
-  - Auto-approval rules: NO at v1; defeats audit-trail purpose
-- **Phase 2 deferrals from Pass 7:**
-  - Notification routing rules (table placeholder ready)
-  - Auto-escalation after 3-day pending
-  - Multi-admin approval requirements for highest-stakes permissions
-  - Threaded comments on requests
-  - Templated justifications
-  - Auto-approval rules with conservative defaults
+- **Major architectural decisions from Pass 8:**
+  - **Workspace pattern (single page, six sections)** — not six separate pages. Admin mental model is "I'm working on user/role/permission X" not "I'm in tab Y". Persistent search + cross-section linking + reduced navigation. Mobile reduces to single-pane drill-in pattern naturally.
+  - **Transactional save (not optimistic)** — permission changes can have cascading effects (separation of duties violations, regulatory conflicts) requiring server validation. 100-200ms wait with clear loading acceptable for admin operations. Optimistic UI reserved for filter/search/nav.
+  - **Six sections fully specified:**
+    - Section 1 Actions: 4-tier hierarchy matrix; cell click → inline detail panel with grant state + UI state override + dependencies + constraints + recent activity; bulk edit mode; system-locked rows (🔒) for §0.4 commitments; role comparison view side-by-side
+    - Section 2 Field Visibility: 47-flag matrix with mask preview values shown; 3-state cells (visible/masked/hidden); audit-on-read indicator (👁); never-granted lock for PCI; sensitivity level shown per flag
+    - Section 3 Data Scopes: role × resource × scope matrix; cell change shows SQL filter template + impact preview ("affects 120 active SRs; ~2400 additional records visible") + warning for sensitive data exposure
+    - Section 4 Overrides: three sub-tabs — Active Overrides (filterable list with expiry tracking + revoke/extend actions); Pending Requests (badge count; inline approval flow with rationale + duration adjustment; Lin's recent activity context; suggested decision heuristic); Request History (read-only chronological); plus + Grant Override button for direct admin grants
+    - Section 5 Custom Roles: system roles read-only summary; custom roles list with user counts; New Role wizard with clone-from-existing + start blank options; role detail view with grant/visibility/scope summaries + user list + activity stats; archival flow with required user reassignment
+    - Section 6 Audit Log: quick filters (24h/7d/30d) + advanced filters; chronological event list with row detail expansion; related events chain (request lifecycle reconstruction); export with format selection + eight-layer PDF protection; compliance reports sidebar shortcut to M13
+  - **Global search persistent in header** — categorized type-ahead across Users / Roles / Permissions / Entities / Audit Events; client-side fuzzy for cached data; server-side for audit
+  - **Draft buffer in localStorage** — survives page refresh; capped at 100 unsaved changes; "Discard All" or save to clear
+  - **Conflict detection at save time** — cascading effect warnings, separation of duties violations introduced, regulatory expiry conflicts, active session impact; warnings non-blocking with explicit acknowledgment
+  - **Undo/redo within save session** — Ctrl+Z/Y; 50-action stack; cleared after save (audit log shows full history)
+  - **Mobile responsive** — hamburger nav, single-role-at-a-time matrix view, large tap targets, mobile primary use case: admin approves request from phone notification
+  - **WCAG 2.1 AA accessibility** — keyboard nav, ARIA labels, screen reader announcements, color-not-sole-indicator, high-contrast, reduced motion
+  - **Performance budgets locked**: <1.5s initial load, <100ms section switch, <50ms cell expansion, <500ms 1-10 change save, <2s 11-100 change save, <500ms audit query, <30ms search type-ahead
+  - **Implementation dependencies on build phase**: React + Tailwind UI framework, GraphQL or REST API, WebSocket for live notification updates, authentication context (currentUser/isAdmin), in-app notification delivery
+- **Eight Pass 8 open questions resolved:**
+  - Dry-run mode: NO at v1 (conflict detection + explicit save sufficient)
+  - Admin-to-admin handoff workflows: NO at v1; Phase 2 multi-step approval
+  - Non-admin read-only view of own permissions: YES at separate /profile/permissions URL (reuses components)
+  - Editor activity audit beyond per-change: YES — editor_batch_save event with diff summary
+  - Bulk CSV import/export of grants: YES at v1 (useful for org-wide audits)
+  - Side-by-side role comparison: YES (confirmed; §17.6)
+  - Time-travel view of historical permissions: NO at v1 (audit log reconstructs); Phase 2 materialized snapshots
+  - Permission templates (reusable bundles): NO at v1; custom roles cover real needs; Phase 2 if demand
+- **Phase 2 deferrals from Pass 8:**
+  - Dry-run preview mode
+  - Admin-to-admin change handoff workflows
+  - Time-travel historical permissions view
+  - Permission templates / bundles
+  - ML-based suggested decisions for request approvals
+- **Two new audit event types added (32 total in permission_audit_log catalog):**
+  - editor_batch_save (with changes_summary diff array)
+  - bulk_export_audit_log (with filter_criteria, format, row_count, signed download_url)
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 7 produced no uncommitted plans. Next session continues with Pass 8 (Permissions editor UI) — six-tab editor with all the data flows from Passes 1-7 now rendered in UI. Tab 1 (Actions hierarchy), Tab 2 (Field Visibility 47 flags), Tab 3 (Data Scopes matrix), Tab 4 (Overrides + request management sub-tab), Tab 5 (Custom Roles wizard), Tab 6 (Audit Log embedded view). Plus search/filter, save-and-validate flow, conflict detection, mobile responsive considerations, accessibility.
+**None.** Pass 8 produced no uncommitted plans. Next session continues with Pass 9 (Effective-permissions caching strategy) — trigger implementation details (the SQL functions and triggers invalidating caches on grant/revoke/override events), cache warm-up patterns (on user login prefetch dashboard widget actions), stale-while-revalidate thresholds (<5min dashboard only; rest fresh), cache eviction strategy, cache size budgeting (PostgreSQL buffer pool fit), read-replica strategy for hot reads, multi-tenant cache key design Phase 2 prep, cache observability (hit rate metrics), failure mode handling.
 
 ---
 
