@@ -12,65 +12,57 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session W CLOSED. Permissions Design Pass 8 of 11 complete.**
+**As of 2026-05-12. Session X CLOSED. Permissions Design Pass 9 of 11 complete.**
 
-- **Session W focus:** Permissions Design — Pass 8 (Permissions Editor UI). Workspace architecture (single page with six sections; not separate tabs). Six sections fully specified with layouts, cell interactions, bulk operations, conflict detection. Header with global search + save state indicator. Sidebar with section nav + pending request badge + Recently viewed. Cross-section linking. Transactional save flow with conflict detection. Undo/redo. Mobile responsive (admin can approve requests from phone). WCAG 2.1 AA accessibility. Performance budgets locked (<1.5s initial load; <500ms small save). 8 Pass 8 open questions resolved. 2 new audit event types added (32 total now).
-- **Latest commit:** `docs: permissions design Pass 8 — permissions editor UI`. See `git log -1 --oneline`.
+- **Session X focus:** Permissions Design — Pass 9 (Effective-Permissions Caching Strategy). Four caches specified in detail: effective_permissions_cache (~630k rows at 500 users) + effective_field_visibility_cache (~23k rows) + effective_data_scope_cache (~3.5k rows) + effective_status_bindings_cache (~400 rows). Total v1 ~132MB fits in PostgreSQL buffer pool. Detailed invalidation trigger architecture with 8 event types and specific WHERE clauses. Lazy-fill pattern (INSERT ON CONFLICT DO NOTHING). Cache warm-up patterns (on login + on grant change). Stale-while-revalidate ONLY for dashboard widgets <5min. Cache eviction (daily expiry + weekly cleanup). Size budgeting across 4 scale tiers. Read-replica capability ready at v1 (primary-only default). Multi-tenant Phase 2 prep. 8 metrics + 4 alerts for observability. Recovery patterns + failure modes. 3 architectural decisions locked. 7 Pass 9 open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 9 — effective-permissions caching strategy`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 8 of 11 passes complete. Pending: Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.8 condenses Pass 1-7 to summaries. Full content at: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6). Pass 8 full content §15-§27.
+- **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked. Total ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments.
+- **Permissions design progress:** 9 of 11 passes complete. Pending: Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.9 introduces more aggressive condensation for Passes 1-8 (one-paragraph summaries each) since we now have 8 prior passes whose full summaries would dominate. Full content commits: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6), Pass 8 (c090599). Pass 9 full content §16-§28.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 8 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 9 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 8:**
-  - **Workspace pattern (single page, six sections)** — not six separate pages. Admin mental model is "I'm working on user/role/permission X" not "I'm in tab Y". Persistent search + cross-section linking + reduced navigation. Mobile reduces to single-pane drill-in pattern naturally.
-  - **Transactional save (not optimistic)** — permission changes can have cascading effects (separation of duties violations, regulatory conflicts) requiring server validation. 100-200ms wait with clear loading acceptable for admin operations. Optimistic UI reserved for filter/search/nav.
-  - **Six sections fully specified:**
-    - Section 1 Actions: 4-tier hierarchy matrix; cell click → inline detail panel with grant state + UI state override + dependencies + constraints + recent activity; bulk edit mode; system-locked rows (🔒) for §0.4 commitments; role comparison view side-by-side
-    - Section 2 Field Visibility: 47-flag matrix with mask preview values shown; 3-state cells (visible/masked/hidden); audit-on-read indicator (👁); never-granted lock for PCI; sensitivity level shown per flag
-    - Section 3 Data Scopes: role × resource × scope matrix; cell change shows SQL filter template + impact preview ("affects 120 active SRs; ~2400 additional records visible") + warning for sensitive data exposure
-    - Section 4 Overrides: three sub-tabs — Active Overrides (filterable list with expiry tracking + revoke/extend actions); Pending Requests (badge count; inline approval flow with rationale + duration adjustment; Lin's recent activity context; suggested decision heuristic); Request History (read-only chronological); plus + Grant Override button for direct admin grants
-    - Section 5 Custom Roles: system roles read-only summary; custom roles list with user counts; New Role wizard with clone-from-existing + start blank options; role detail view with grant/visibility/scope summaries + user list + activity stats; archival flow with required user reassignment
-    - Section 6 Audit Log: quick filters (24h/7d/30d) + advanced filters; chronological event list with row detail expansion; related events chain (request lifecycle reconstruction); export with format selection + eight-layer PDF protection; compliance reports sidebar shortcut to M13
-  - **Global search persistent in header** — categorized type-ahead across Users / Roles / Permissions / Entities / Audit Events; client-side fuzzy for cached data; server-side for audit
-  - **Draft buffer in localStorage** — survives page refresh; capped at 100 unsaved changes; "Discard All" or save to clear
-  - **Conflict detection at save time** — cascading effect warnings, separation of duties violations introduced, regulatory expiry conflicts, active session impact; warnings non-blocking with explicit acknowledgment
-  - **Undo/redo within save session** — Ctrl+Z/Y; 50-action stack; cleared after save (audit log shows full history)
-  - **Mobile responsive** — hamburger nav, single-role-at-a-time matrix view, large tap targets, mobile primary use case: admin approves request from phone notification
-  - **WCAG 2.1 AA accessibility** — keyboard nav, ARIA labels, screen reader announcements, color-not-sole-indicator, high-contrast, reduced motion
-  - **Performance budgets locked**: <1.5s initial load, <100ms section switch, <50ms cell expansion, <500ms 1-10 change save, <2s 11-100 change save, <500ms audit query, <30ms search type-ahead
-  - **Implementation dependencies on build phase**: React + Tailwind UI framework, GraphQL or REST API, WebSocket for live notification updates, authentication context (currentUser/isAdmin), in-app notification delivery
-- **Eight Pass 8 open questions resolved:**
-  - Dry-run mode: NO at v1 (conflict detection + explicit save sufficient)
-  - Admin-to-admin handoff workflows: NO at v1; Phase 2 multi-step approval
-  - Non-admin read-only view of own permissions: YES at separate /profile/permissions URL (reuses components)
-  - Editor activity audit beyond per-change: YES — editor_batch_save event with diff summary
-  - Bulk CSV import/export of grants: YES at v1 (useful for org-wide audits)
-  - Side-by-side role comparison: YES (confirmed; §17.6)
-  - Time-travel view of historical permissions: NO at v1 (audit log reconstructs); Phase 2 materialized snapshots
-  - Permission templates (reusable bundles): NO at v1; custom roles cover real needs; Phase 2 if demand
-- **Phase 2 deferrals from Pass 8:**
-  - Dry-run preview mode
-  - Admin-to-admin change handoff workflows
-  - Time-travel historical permissions view
-  - Permission templates / bundles
-  - ML-based suggested decisions for request approvals
-- **Two new audit event types added (32 total in permission_audit_log catalog):**
-  - editor_batch_save (with changes_summary diff array)
-  - bulk_export_audit_log (with filter_criteria, format, row_count, signed download_url)
+- **Major architectural decisions from Pass 9:**
+  - **Pull invalidation (not push)** — triggers DELETE matching cache rows; next read repopulates via algorithm. Resolution algorithm is only source of truth; cache is dumb storage; no logic duplication in triggers. INSERT ON CONFLICT DO NOTHING handles concurrent miss races.
+  - **Single cache table, composite index, partition-ready for Phase 2** — v1 (500 users / 630k rows) fits buffer pool easily. Composite index (user_id, permission_action_name) gives constant-time lookup. Phase 2 partitions by tenant_id when crossing 2-5M rows.
+  - **Read-replica capability ready, primary-only default** — application uses READ_REPLICA_URL env var; falls back to primary if unset. Build phase enables replica when CPU >70%, latency p99 >5ms, 1000+ concurrent users, or multi-region deploy. 10ms replication lag acceptable for permission grants.
+  - **Pull invalidation events catalogued per cache (8 total)**: role_permissions changes / user_permission_overrides changes / users.role_id changes / user_role_assignments changes / permission_definitions.is_deprecated / users.is_active changes (effective_permissions_cache); role_field_visibility / user_field_visibility_overrides / field_visibility_definitions.is_deprecated (field visibility); role_data_scopes / user_data_scope_overrides (data scope); status_behavior_bindings (status bindings).
+  - **Cache warm-up patterns**: on login (~30 critical actions per role; async <100ms; not blocking); on grant change (all users with affected role get cache populated post-invalidation); cold-start relies on natural traffic (acceptable 2-5min recovery).
+  - **Stale-while-revalidate threshold <5min** for dashboard widgets only. Never for action authorization, field visibility serialization, or admin operations. Opt-in per call site via maxStalenessMs parameter.
+  - **Cache eviction strategy**: daily cron for expired temporary overrides; weekly cron for deprecated permissions + deactivated users; monthly cron for orphan sanity check (should always return 0; non-zero indicates cascade miss).
+  - **Size budgets at 4 scale tiers**: 50 users / 14MB total, 500 users / 132MB, 2000 users / 530MB, 5000 users / 1.36GB. PostgreSQL configuration recommendations: shared_buffers 4GB v1; 8GB Phase 2.
+  - **Status bindings cache NOT user-scoped** — bindings are same for all users on a given status row; significant size saving (only ~400 rows).
+  - **Performance budgets**: <1ms cache hit p99, <5ms cache miss + resolution, <2ms small invalidation, <100ms admin operation invalidation, >95% hit rate target.
+  - **Observability**: 8 metrics emitted (hits/misses/lookup_duration/invalidation_events/rows_invalidated/size_rows/size_bytes/staleness_p99) + 4 alerts (hit rate <90% for 5min, latency p99 >5ms for 5min, size growth >10%/hr, 0 invalidations for >24h with admin activity). Per-user cache diagnostic API endpoint /api/admin/cache-diagnostics for support.
+  - **Recovery patterns**: cold rebuild via TRUNCATE (2-5min latency degradation as repopulates); partial rebuild by user/permission; failure modes — cache unavailable falls back to base table resolution with metrics tracking fallback rate; trigger failure detected by audit comparison; race condition mitigated by last_invalidated_at check on cache writes.
+  - **Multi-tenant cache key design Phase 2**: add tenant_id column + composite UNIQUE (tenant_id, user_id, permission_id) + optional HASH PARTITION BY tenant_id with 16 partitions. Trigger updates scope invalidation to tenant.
+- **Seven Pass 9 open questions resolved:**
+  - TTL beyond expires_at: NO (triggers handle; TTL would force unnecessary re-computation)
+  - Synchronous warm-up first request: NO (async fire-and-forget)
+  - Cache NEGATIVE results: YES (otherwise denied actions always miss)
+  - Pre-warm in CI/staging: NO at v1 (natural traffic in 2-5min)
+  - Multi-region replica: deferred Phase 2
+  - Cache for public resources (signed URL): NO (validator does own check)
+  - User-facing cache telemetry: NO at v1 (ops dashboard only)
+- **Phase 2 deferrals from Pass 9:**
+  - Multi-tenant partitioning by tenant_id
+  - Multi-region replica strategy
+  - Synchronous replication for permission-critical writes (if 10ms staleness becomes problem)
+  - Pre-warm script for planned maintenance deploy windows
+  - User-facing performance breakdown
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 8 produced no uncommitted plans. Next session continues with Pass 9 (Effective-permissions caching strategy) — trigger implementation details (the SQL functions and triggers invalidating caches on grant/revoke/override events), cache warm-up patterns (on user login prefetch dashboard widget actions), stale-while-revalidate thresholds (<5min dashboard only; rest fresh), cache eviction strategy, cache size budgeting (PostgreSQL buffer pool fit), read-replica strategy for hot reads, multi-tenant cache key design Phase 2 prep, cache observability (hit rate metrics), failure mode handling.
+**None.** Pass 9 produced no uncommitted plans. Next session continues with Pass 10 (Cross-cutting enforcement patterns) — catalogues all 13 §0.4 cross-cutting commitments and their enforcement points across passes; composition rules (e.g., separation of duties + regulatory expiry + status binding combined check); exception escalation paths; cross-cutting test surface; audit coverage verification; build phase priorities (MVP-critical vs Phase 2 hardening).
 
 ---
 
