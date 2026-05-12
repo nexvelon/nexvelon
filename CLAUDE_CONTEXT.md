@@ -12,38 +12,43 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session F CLOSED.**
+**As of 2026-05-12. Session G CLOSED.**
 
-- **Session F focus:** Module 4 of the feature audit (Dashboard) — operator design pass enumerating ~20 seeded widgets, six default role layouts (A/PM/SR/Tech/Acc/VO), three-way widget visibility gate, per-user landing page choice. Five in-session open questions resolved. Module 4 confirmed light as predicted.
-- **Latest commit:** `docs: codify Session F — Module 4 (Dashboard) audit + handoff`. See `git log -1 --oneline`.
+- **Session G focus:** Module 5 of the feature audit (Quotes) — first revenue module. Three quote types (Service / Project / Service Contract), online portal acceptance with signed URL + e-signature, immutable send snapshots for legal durability, eight-layer print protection on revenue PDFs, T&C auto-composition from Module 1 onboarding gates, value + discount threshold approval routing, per-cost-centre tax codes (Canadian compliance), holdback in quote totals, field-level margin visibility. Ten in-session open questions resolved.
+- **Latest commit:** `docs: codify Session G — Module 5 (Quotes) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 4 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard all complete). The three foundational modules plus Dashboard are now done. Modules 5-13 pending: Quotes (next; first revenue module — major), Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+- **Feature audit progress:** 5 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes all complete). The three foundational modules + Dashboard (presentation) + Quotes (first revenue) are now done. Modules 6-13 pending: Projects (next; consumes Quote conversion), Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 5-13** — Quotes, Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports. Cross-cutting commitments from Sessions C + D + E + F propagate.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary + ten-dimensional model + Session C + D + E + F additions.
+  1. **Feature audit Modules 6-13** — Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~580 actions across 5 modules) + ten-dimensional model + Session C-G additions.
   3. **Permissions module — build** (ROADMAP item 3).
-  4. **Quotes v1** (ROADMAP item 4).
+  4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session F:**
-  - **Dashboard as per-role presentation layer** — composes widgets reading from every other module. Six seeded role layouts.
-  - **UI presentation locked as 10th dimension of permission control** — sidebar visibility + dashboard widget layout + landing page choice all gated by permission framework.
-  - **Three-way widget visibility gate** — widget shown only if source-module list permission granted AND widget enabled company-wide AND user has not hidden it.
-  - **Widget catalog is code-defined at v1** — same pattern as permissions catalog. Phase 2 introduces "saved-report-as-widget" for operator-defined widgets.
-  - **Per-user dashboard layout customization** — drag-drop rearrange, resize, hide/show individual widgets. Per-user override takes precedence over role default. Admin edits role default but not specific users' overrides.
-  - **Per-user landing page choice** — any module's list view (Clients, Projects, Schedule) can replace /dashboard as user's default landing.
-  - **5-min cached widget data with on-focus refresh for critical widgets** — SLA breach and today's schedule refresh on focus; manual refresh button always available.
-  - **CSV export per tabular widget** — respects data scope.
-  - **Drill-through everywhere** — every widget header links to source-module list view filtered by widget's criteria; respects user's source-module permission.
-  - **Mobile responsive at v1; native app Phase 2.**
+- **Major architectural decisions from Session G:**
+  - **Three quote types** — Service Quote (one-off jobs), Project Quote (multi-milestone work converting to Project), Service Contract Quote (recurring revenue generating service_contracts row).
+  - **Online portal acceptance** — client-facing signed URL (no login), 90-day expiry, revoked on acceptance, e-signature via touch/desktop. Faster than competitors requiring client portal accounts.
+  - **Immutable send snapshots** — line items, pricing, T&C, template version captured at send time in quote_terms_snapshots. Legal durability per §0.4 #8. Revisions create new snapshots.
+  - **Eight-layer print protection** extended to revenue PDFs (force-reauth, watermark, audit row, 24h signed URL).
+  - **T&C auto-composition** from Module 1 onboarding gates — each clause tagged with source attribution, editable, re-composable.
+  - **Value + discount threshold approval routing** — combined AND logic. Defaults: <$5k self-approve, $5-25k→PM, $25-50k→PM+margin review (gates if margin <15%), >$50k→Admin. Discount: <10% self-approve, 10-25%→PM, >25%→Admin. Configurable per role in Settings.
+  - **Per-cost-centre tax codes** — different cost centres carry different tax codes (Canadian split-tax-treatment compliance).
+  - **Holdback in quote totals** — Canadian Construction Act compliance (10%/Excl/45 default from client config).
+  - **Field-level margin visibility** — A/PM default; SR per-user override only. quotes:viewMargin is visibility flag distinguishing who-sees from who-can-do.
+  - **Quote → Project conversion locks source quote** — read-only post-conversion. Revisions blocked. New quote required for changes.
+  - **Pre-built assemblies** (simPRO pattern) — bundled line items for repeated patterns ("Standard Camera Install").
+  - **Cost centres** (simPRO pattern) — Equipment / Labor / Materials / Sub-Contractor / Travel / Commissioning / Training / Misc — with sub-totals on PDF.
+  - **Pricebook with vendor catalog sync** — master catalog of line items with default cost/sell/margin/tax.
+  - **Three quote types** drive workflow variants and conversion targets (project / job / service_contract).
+  - **Phase 2 deferrals locked:** Multi-currency in single quote, financing integrations, volume discount rules engine, real-time co-authoring, quote import from competitor systems, dynamic pricing rules engine, line-item-level custom fields.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session F produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session G produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 

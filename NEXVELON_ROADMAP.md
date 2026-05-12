@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session F (2026-05-12):** Modules 1, 2, 3, and 4 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.5. M1 (Clients + Sites + Contacts): ~110 actions, 15 lookup tables, 14 field visibilities, 54 acceptance criteria. M2 (Employees + Permissions): ~80 actions, 11 lookup tables, 14 field visibilities, 55 acceptance criteria. M3 (Settings): ~270 actions (heavily templated), 16 Settings-specific tables, 4 status surfaces, 42 acceptance criteria. M4 (Dashboard): ~35 actions, 5 new tables, 3 status surfaces, 25 acceptance criteria, six seeded role layouts (A/PM/SR/Tech/Acc/VO), three-way widget visibility gate. The three foundational modules plus Dashboard are complete; remaining 9 are operational/feature surfaces consuming the foundations. Modules 5-13 pending: Quotes (major), Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+**Progress as of Session G (2026-05-12):** Modules 1, 2, 3, 4, and 5 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.6. M1 (Clients + Sites + Contacts): ~110 actions. M2 (Employees + Permissions): ~80 actions, 11 lookup tables, six-tab permissions editor. M3 (Settings): ~270 actions, 16 Settings tables, configuration spine. M4 (Dashboard): ~35 actions, ~20 seeded widgets, three-way visibility gate. M5 (Quotes): ~85 actions, 12 new tables, 5 status surfaces, three quote types (Service/Project/Service Contract), online portal acceptance flow with e-signature, immutable send snapshots, eight-layer print protection on revenue PDFs, T&C auto-composition, value+discount threshold approval routing, per-cost-centre tax codes, holdback in totals (Canadian compliance), field-level margin visibility. Cumulative: ~580 actions, 37 permissions design implications, ~230 acceptance criteria. The three foundational modules + Dashboard + first revenue module are complete. Modules 6-13 pending: Projects (next; consumes Quote conversion), Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -107,6 +107,15 @@ migration strategy for replacing the current static `lib/permissions
 - Per-user landing page choice
 - Permission-aware widget data queries with drill-through respecting source-module permissions
 
+**Inputs from Session G** (additions from Module 5 walk):
+- Field-level margin visibility pattern (separating who-can-do from what-they-see)
+- Value + discount threshold approval routing with AND logic
+- Immutable snapshot pattern at quote send time
+- Online portal signed URL scoped to single quote (not general access tokens)
+- Append-only acceptance records with one-way signature hash
+- Quote → Project conversion lock pattern (source becomes read-only)
+- Per-cost-centre tax code support (Canadian split-tax compliance)
+
 ---
 
 ## 3. Permissions module — build
@@ -153,6 +162,25 @@ Additional from Session C:
 - **SLA reference in T&C** — quotes for clients with active site SLAs auto-reference the SLA name and effective dates in T&C.
 - **Quote approval workflow** with status flow Draft → Pending Approval → Approved → Sent → Binding (via onboarding gate fulfillment).
 - **Per-quote line-item permissions** — `quotes:viewMargin`, `quotes:viewCost` are field-level gates.
+
+**Detailed scope from Session G** — see `NEXVELON_FEATURE_AUDIT.md` §5 for the complete spec:
+
+- **Three quote types** (§5.1): Service Quote (one-off → job), Project Quote (multi-milestone → Project), Service Contract Quote (recurring → service_contracts row in M1).
+- **~85 actions** across 11 categories (§5.5): lifecycle (25), margin/cost (5 field-gated), line items, pricebook, assemblies, cost centers, templates, tracking, output, communication, bulk.
+- **12 new owned tables** (§5.4): `quotes`, `quote_line_items`, `quote_taxes`, `quote_discounts`, `quote_revisions`, `quote_approvals`, `quote_views`, `quote_acceptance_records` (append-only), `quote_terms_snapshots` (versioned), `quote_templates`, `pricebook_items` + `pricebook_categories`, `pre_built_assemblies`, `cost_centers`.
+- **5 status lookup tables** (§5.4): `quote_statuses` (13 seeded values incl. Draft / Pending Approval / Approved / Sent / Viewed / Negotiating / Accepted/Signed / Binding / Rejected / Withdrawn / Expired / Converted to Project / Archived), `approval_statuses`, `quote_revision_reasons`, `quote_types`, `cost_center_defaults`.
+- **Online portal at `/q/[token]`** (§5.6) — client-facing signed URL, 90-day expiry, no login required, revoked on acceptance, e-signature via touch (draw) or desktop (type + attest).
+- **Immutable send snapshots** (§5.12 #33) — line items + pricing + T&C captured at send time in `quote_terms_snapshots`. Revisions create new snapshots. Legal durability per PRINCIPLES §0.4 #8.
+- **Eight-layer print protection on revenue PDFs** (§5.6) — server-side gen only, force-reauth, watermark (operator + timestamp), audit row, 24h signed URL, print event capture, embedded metadata, no bulk export.
+- **T&C auto-composition** (§5.6) — composed from client's onboarding gates (M1 commitment honored); each clause tagged with source attribution; editable with audit; re-composable if client gates change post-creation.
+- **Value + discount threshold approval routing** (§5.13 #1-2; §5.12 #32) — combined AND logic; configurable per role in Settings. Defaults: <$5k self-approve, $5-25k→PM, $25-50k→PM+margin review (gates if margin <15%), >$50k→Admin. Discount: <10% self, 10-25%→PM, >25%→Admin.
+- **Per-cost-centre tax codes** (§5.13 #9) — Canadian split-tax compliance (Equipment/Labor/Materials lines can carry different tax codes per BC GST+PST vs ON HST scenarios).
+- **Holdback in quote totals** (§5.14 #8) — Ontario Construction Act default (10%/Excl/45 from client config); quote shows immediate due + holdback released later.
+- **Field-level margin visibility** (§5.7, §5.12 #31) — A/PM default; SR per-user override only. `quotes:viewMargin` is visibility flag, not action.
+- **Quote → Project conversion** (§5.12 #35) — locks source quote (read-only post-conversion); revisions blocked; new quote required for post-acceptance changes; sets `originating_quote_id` FK on project.
+- **Pre-built assemblies + cost centres + pricebook** (§5.6) — simPRO pattern; bundled line items, grouped subtotals on PDF, master catalog with vendor sync.
+- **Append-only acceptance records** (§5.12 #37) — signature image stored with one-way hash; no update, only read.
+- **52 acceptance criteria** (§5.14) — covering creation, approval workflow, send & track, conversion, versioning, pricing/discount/tax/holdback, permissions, eight-layer print, performance.
 
 ---
 
