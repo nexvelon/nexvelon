@@ -52,7 +52,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 ## 2. Permissions module — design pass
 
-**🚧 IN PROGRESS as of Session Y (2026-05-12):** Pass 10 of 11 complete. ONE PASS REMAINING. `NEXVELON_PERMISSIONS_DESIGN.md` v0.10. Pass 1-9 condensed to one-paragraph summaries each. Pass 10 (Cross-Cutting Enforcement Patterns) full content §10-§29. Integration/verification pass: all 13 §0.4 commitments fully enforcement-mapped across all earlier passes. 13 sections (§11-§23) mapping 1:1 to commitments #1-#13. Each cataloged with: what it commits, enforcement-point inventory (schema/trigger/algorithm/UI/audit), composition rules, exception escalation paths, test scenarios, build phase priority. Cross-cutting composition matrix locked. Layered defense pattern (5 layers per commitment). Audit coverage verification. Build phase priorities classified (all 13 MVP-critical; v1 vs Phase 2 hardening distinctions). v1 ship checklist (8 criteria). 26 integration test scenarios specified. Operator-facing documentation framework. 6 Pass 10 open questions resolved. Migration order extended +3 steps (now 56 total). Pending: Pass 11 (Migration plan) — FINAL pass.
+**🏁 COMPLETE as of Session Z (2026-05-12):** All 11 of 11 design passes locked. `NEXVELON_PERMISSIONS_DESIGN.md` v0.11 — final version. Full pass content preserved in git history at commits: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6), Pass 8 (c090599), Pass 9 (7eb540e), Pass 10 (215ee01), Pass 11 (this commit). Design phase totals: ~1260 actions catalogued, 14+ database tables across 5 groups, 3 runtime resolution algorithms (<5ms p99), 47-flag field visibility catalog, 80 status surfaces with polymorphic bindings, 8 append-only ledgers, request-admin-access workflow with 4 types, permissions editor UI with 6 sections, 4-cache architecture, all 13 §0.4 cross-cutting commitments fully enforcement-mapped, 56-step migration order in 6-phase rollout plan, 32 audit event types, ~54 integration test scenarios. Design phase formally closes; ready for build phase activation.
 
 **What:** A written design doc for the per-user, per-feature ACL
 described in `NEXVELON_PRINCIPLES.md` §2. Covers the data model,
@@ -198,6 +198,8 @@ migration strategy for replacing the current static `lib/permissions
 ---
 
 ## 3. Permissions module — build
+
+**🚧 IN PROGRESS as of Session Z (2026-05-12):** Build phase opens. First step: Phase 1 from `NEXVELON_PERMISSIONS_DESIGN.md` v0.11 §12.1 (Foundation: deploy ~23 new permissions tables + 8 append-only ledgers + all backfill scripts for existing user/role data; feature flags off; system dormant; verify backfill correctness). Subsequent phases: Phase 2 (Algorithm online — cohort A), Phase 3 (Field visibility + scopes — cohort B), Phase 4 (Cross-cutting constraints — cohort C), Phase 5 (Editor + requests — cohort D), Phase 6 (Full activation + cutover — global). Total build: 6 phases over ~12-16 weeks per Pass 11 plan.
 
 **What:** Implement the design from item 2. Migration `0005_perms_
 schema.sql`, `lib/api/permissions.ts`, `lib/permissions.ts` rewrite

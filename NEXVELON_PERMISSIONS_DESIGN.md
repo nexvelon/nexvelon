@@ -1,6 +1,6 @@
 # NEXVELON_PERMISSIONS_DESIGN.md
 
-> **The permissions architecture for Nexvelon — design phase.**
+> **The permissions architecture for Nexvelon — DESIGN PHASE COMPLETE.**
 >
 > A new Claude Code session reads, in order:
 >   1. `NEXVELON_PRINCIPLES.md`
@@ -10,7 +10,8 @@
 >   5. `NEXVELON_SESSION_<latest>_HANDOFF.md`
 >   6. **This file** — Permissions design specification
 >
-> **Status:** v0.10 — Passes 1-10 complete. Pending: Pass 11 (Migration plan).
+> **Status:** v0.11 — DESIGN PHASE COMPLETE. All 11 passes locked.
+> Build phase opens after this commit.
 >
 > Pass 1 condensed §1; full at `9008fad`.
 > Pass 2 condensed §2; full at `1bafbd4`.
@@ -21,7 +22,8 @@
 > Pass 7 condensed §7; full at `41734b6`.
 > Pass 8 condensed §8; full at `c090599`.
 > Pass 9 condensed §9; full at `7eb540e`.
-> Pass 10 (Cross-Cutting Enforcement Patterns) full content begins at §10.
+> Pass 10 condensed §10; full at `215ee01`.
+> Pass 11 (Migration Plan) full content begins at §11.
 
 ---
 
@@ -29,9 +31,9 @@
 
 ### 0.1 Purpose
 
-Design specification for the Nexvelon permissions runtime.
+Design specification for the Nexvelon permissions runtime. **DESIGN PHASE COMPLETE.**
 
-### 0.2 Pass overview
+### 0.2 Pass overview — ALL COMPLETE
 
 | Pass | Scope | Status |
 |---|---|---|
@@ -44,8 +46,8 @@ Design specification for the Nexvelon permissions runtime.
 | 7 | Request-admin-access workflow | ✅ COMPLETE (`41734b6`) |
 | 8 | Permissions editor UI | ✅ COMPLETE (`c090599`) |
 | 9 | Effective-permissions caching strategy | ✅ COMPLETE (`7eb540e`) |
-| 10 | Cross-cutting enforcement patterns | ✅ COMPLETE (this version) |
-| 11 | Migration plan | PENDING |
+| 10 | Cross-cutting enforcement patterns | ✅ COMPLETE (`215ee01`) |
+| 11 | Migration plan | ✅ COMPLETE (this version) |
 
 ### 0.3 Role abbreviations
 
@@ -54,7 +56,7 @@ Design specification for the Nexvelon permissions runtime.
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Parts I-IX — Passes 1-9 condensed summaries
+# Parts I-X — Passes 1-10 condensed summaries
 ═══════════════════════════════════════════════════════════════════
 
 *Full content preserved at commits noted in §0.2.*
@@ -63,7 +65,7 @@ Design specification for the Nexvelon permissions runtime.
 `resource:verb[:qualifier]` naming. 8 verb categories. 4 qualifier categories. 140+ resources across 13 modules. 4-tier UI hierarchy + 6 cross-cut tabs. ~1260 actions catalogued.
 
 ## 2. Pass 2 — Schema
-14 tables across 5 groups + 1 materialized view. Three decisions: one row per action; trigger-invalidated cache; orthogonal data scopes. 16-step migration order.
+14 tables across 5 groups + 1 materialized view. Three decisions: one row per action; trigger-invalidated cache; orthogonal data scopes. 16-step migration order at end of pass.
 
 ## 3. Pass 3 — Resolution algorithm
 A1 action grant (7-phase: cache lookup → base resolution → Phase 3 constraints with SoD/regulatory/status binding sub-phases → audit). A2 data scope. A3 field visibility. <5ms p99 compound; <1ms cache hit; >95% hit rate target.
@@ -84,822 +86,806 @@ State machine (Pending → Approved → Granted → Expired/Revoked). 4 request 
 Workspace architecture (single page, 6 sections, persistent header + sidebar + main pane). Cross-section linking. Transactional save with conflict detection. WCAG 2.1 AA. 2 new event types (32 total).
 
 ## 9. Pass 9 — Caching strategy
-4 caches with pull invalidation + 8 invalidation event types. Lazy-fill via INSERT ON CONFLICT. Warm-up on login + grant change. Stale-while-revalidate <5min for dashboards only. Read-replica capability ready (primary-only default). Multi-tenant Phase 2 prep. 8 observability metrics + 4 alerts.
+4 caches with pull invalidation + 8 invalidation event types. Lazy-fill via INSERT ON CONFLICT. Warm-up on login + grant change. Stale-while-revalidate <5min for dashboards only. Read-replica capability ready. Multi-tenant Phase 2 prep. 8 observability metrics + 4 alerts.
+
+## 10. Pass 10 — Cross-cutting enforcement
+13 sections mapping 1:1 to §0.4 commitments. Per-commitment enforcement-point inventory + composition matrix + escalation paths + test scenarios + build priority. 5-layer defense pattern. ~54 integration test scenarios. 8-criteria v1 ship checklist.
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# Part X — Pass 10 (Cross-Cutting Enforcement Patterns) — FULL CONTENT
+# Part XI — Pass 11 (Migration Plan) — FULL CONTENT
 ═══════════════════════════════════════════════════════════════════
 
-## 10. Overview
+## 11. Overview
 
-The audit committed to 13 cross-cutting commitments in §0.4. Throughout Passes 2-9, we've referenced them piecemeal. Pass 10 catalogues the complete enforcement picture end-to-end: for each commitment, where in the system it's enforced (schema constraint? trigger? algorithm phase? UI state? audit event?).
+The bridge between design and execution. Passes 1-10 specified WHAT to build; Pass 11 specifies HOW to roll it out to production without breaking what already works.
 
-This is primarily a **synthesis and verification pass**. The architecture is already designed. Pass 10 confirms it covers all 13 commitments completely and catches any gaps.
+### 11.1 Constraints
 
-### 10.1 The 13 cross-cutting commitments
+- Production live since commit `8d44ef7`; users working in it daily
+- Existing system has auth + basic permission checks (Pass 0 baseline)
+- 56 migration steps from Passes 2-10 cannot all happen at once
+- Botched migration = real users blocked from real work
+- Rollback must be possible at every phase
+- §0.4 data preservation rules apply throughout
 
-From `NEXVELON_FEATURE_AUDIT.md` v0.14 §0.4:
+### 11.2 Goal
 
-| # | Commitment | Theme |
-|---|---|---|
-| 1 | Role default + bidirectional per-user override | Permission model |
-| 2 | Three UI states (hidden / disabled / interactive) | UI semantics |
-| 3 | Fine-grained by default | Granularity philosophy |
-| 4 | Lookup rows carry behavior bindings | Configuration model |
-| 5 | Guided creation never lazy | UX commitment |
-| 6 | Ten dimensions of permission control | Permission richness |
-| 7 | Contractual integrity exception (clients:overrideSlaResponseTime Admin-only) | SLA preservation |
-| 8 | Versioned snapshots for legal durability | Immutability |
-| 9 | Eight-layer print protection | Document security |
-| 10 | Append-only ledgers (7 module ledgers + permission_audit_log) | Forensic trail |
-| 11 | Separation of duties enforcement | Financial control |
-| 12 | Regulatory expiry auto-block enforcement | Compliance |
-| 13 | Geolocation privacy retention (30-day default operator-configurable) | Privacy |
+Ship the full permissions system to production in a sequenced way where each phase is independently valuable, independently rollback-able, and verifiable before proceeding.
 
-### 10.2 What Pass 10 produces
+### 11.3 Three architectural decisions
 
-Five outputs per commitment:
+**Decision 1: Phased rollout (not big-bang).** 6 phases, each independently deployed and verified. Catch problems while only some users affected; rollback contained.
 
-1. **Enforcement point inventory** — every place in the system where this commitment is enforced
-2. **Composition rules** — when multiple commitments apply to one action, the precedence order
-3. **Exception escalation paths** — who can override, how, with what audit
-4. **Test scenarios** — integration test cases for build phase
-5. **Build phase priority** — MVP-critical vs Phase 2 hardening
+**Decision 2: Runtime-toggleable feature flags.** DB-stored flag table. Flip without redeploy. Audit trail of who toggled what when.
 
-### 10.3 What's NOT in Pass 10
+**Decision 3: Eager backfill strategy.** Phase 1 populates expected rows for all existing users + roles before any activation. Hit rate >95% from day one of subsequent phases. Lazy backfill rejected (first-access cache miss per action would be slow).
 
-- New schema (Pass 2-9 covered it)
-- New algorithms (Pass 3 covered it)
-- New UI patterns (Pass 8 covered it)
-- Migration logistics (Pass 11)
+## 12. The six rollout phases
 
-Pass 10 is the bridge between design and build.
+The 56 migration steps from Passes 2-10 grouped into six deployment phases.
 
-## 11. Commitment §0.4 #1 — Role default + bidirectional per-user override
+### 12.1 Phase 1 — Foundation (schema + backfill)
 
-### 11.1 What it commits
+**Goal:** Stand up all permissions tables; populate with defaults; everything dormant.
 
-Every action has a role-default grant state (granted/denied/default) per role. Individual users can be granted access beyond their role's default OR denied access despite their role's default — both directions of override supported.
+**Migration steps included** (from Pass 2-10 sequence):
+- Steps 1-16: All 14 permissions tables + materialized view (Pass 2)
+- Steps 17-23: status_behavior_bindings + transitions + cache (Pass 5)
+- Steps 24-32: 8 append-only ledgers + partitioning + triggers (Pass 6)
+- Steps 33-39: request_admin_access expansion + user_role_assignments (Pass 7)
+- Steps 46-53: Cache invalidation triggers + observability infrastructure (Pass 9)
 
-### 11.2 Enforcement points
+**Feature flag state:** `permissions.engine.enabled = FALSE` (dormant — code paths skip new tables).
 
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `role_permissions` table (role × permission junction with grant_state enum) | Pass 2 §11.3 |
-| Schema | `user_permission_overrides` table (per-user grants/denials with mandatory reason) | Pass 2 §11.4 |
-| Algorithm | A1 Phase 2: base table resolution checks role default THEN applies user override | Pass 3 §11.2 Phase 2 step 3-4 |
-| Cache | `effective_permissions_cache` stores resolution result with `resolution_source` discriminator | Pass 2 §11.5 + Pass 9 §17 |
-| Trigger | Cache invalidation on role_permissions / user_permission_overrides changes | Pass 9 §17.1 |
-| UI | Permissions Editor Section 1 (Actions) cell editing | Pass 8 §17 |
-| UI | Permissions Editor Section 4 (Overrides) — Active Overrides sub-tab | Pass 8 §20.2 |
-| Audit | Event types: role_permission_granted/revoked, user_override_granted/revoked/expired | Pass 6 §15.1 |
+**Backfill activities:**
+- Seed `permission_definitions` with ~1260 rows from Pass 1 catalogue
+- Seed `roles` with 11 system roles
+- Seed `role_permissions` with default grants per Pass 1 catalogue role columns
+- Seed `field_visibility_definitions` with 47 flags from Pass 4
+- Seed `role_field_visibility` with role defaults from Pass 4 §17
+- Seed `data_scope_definitions` with 7 scope qualifiers
+- Seed `role_data_scopes` with default scopes per role
+- Seed `status_behavior_bindings` with ~2000 rows + `status_transition_definitions` with ~600 rows
+- Seed `separation_of_duties_constraints` with 4 constraints
+- Seed `geolocation_retention_policies` with default 30-day retention
+- Migrate existing `users.role_id` to `user_role_assignments` (mark `is_primary=TRUE`)
+- Build initial 3 months of partitions per append-only ledger
+- Install monthly partition-creation cron
+- Apply UPDATE/DELETE triggers to all 8 ledgers
 
-### 11.3 Composition rules
+**Verification before declaring Phase 1 complete:**
+- All 14+9+8+7 tables exist with correct schema
+- Row counts match expectations (1260 permission_definitions, 11 roles, ~9000 role_permissions, etc.)
+- All triggers compile and fire correctly on test inserts
+- Backfill scripts idempotent (re-running produces same result)
+- Existing app continues to function (flag is FALSE; no behavior change)
 
-When user has both role default AND active user override:
-- Override wins (algorithm Phase 2 step 4)
-- Audit captures resolution_source = 'user_override_grant' or 'user_override_deny'
+**Duration:** 1-2 weeks elapsed; mostly waiting on backfill validation.
 
-When user override is expired:
-- Treated as no override; falls back to role default
-- Audit event 'user_override_expired' on transition
+**Rollback procedure:** All schema changes deployed in a single migration transaction with explicit `BEGIN ... COMMIT`. If anything fails, rollback restores prior state. After commit, rollback requires DROP TABLE for all new objects + data preservation per §0.4 (audit log preserved if any rows already written).
 
-### 11.4 Exception escalation
+### 12.2 Phase 2 — Resolution algorithm online (read-only)
 
-Per-user override grants:
-- Direct override (admin grants without request workflow) — A only
-- Via request workflow (Pass 7) — A approves (or A+Acc co-sign for highest-stakes per Phase 2)
+**Goal:** A1 algorithm + cache reads work; writes still skip new system.
 
-### 11.5 Test scenarios
+**Migration steps included:**
+- Steps 40-44: Build editor frontend bundle + backend endpoints (Pass 8) — deployed but flag-gated
+- Build A1 resolution algorithm code (Pass 3) — deployed
+- Build A2 + A3 algorithms code (Pass 3) — deployed
+- Build effective_permissions_cache invalidation triggers (Pass 9 §17)
+- Build observability instrumentation (Pass 9 §23)
+- Build warm-up service (Pass 9 §18)
 
-1. **Positive — role default granted**: User with PM role attempts `invoices:approve`; granted (role default).
-2. **Positive — user override grants beyond role**: SR with `invoices:approve` user override attempts approval; granted.
-3. **Positive — user override denies despite role**: PM with `invoices:approve` user override (denied) attempts approval; blocked.
-4. **Edge — override expired**: PM with expired `invoices:approve` grant override attempts approval; falls back to role default (granted); audit emitted.
-5. **Edge — both grant and deny override exist (impossible by schema)**: UNIQUE constraint on (user, permission) prevents; test confirms.
+**Feature flag state:**
+- `permissions.engine.enabled = TRUE` for A and 2-3 designated PM users (cohort A)
+- All other users still on old permission checks
 
-### 11.6 Build phase priority
+**Verification activities:**
+- Cohort A users (Admin + designated PMs) use system; observe via audit log + metrics
+- Cache hit rate metrics validate >95% target
+- Permission resolution latency p99 measured (<5ms compound target)
+- No false denials reported by cohort A
+- Audit log entries appearing correctly
 
-**MVP-critical.** Pass 2 schema + Pass 3 algorithm + basic UI must ship in v1. Pass 7 request workflow can ship within v1 cycle but not absolutely blocking.
+**Duration:** 2 weeks (cohort observation period).
 
----
+**Rollback procedure:** Flip `permissions.engine.enabled = FALSE` for cohort A. Their permissions revert to old system within seconds (cache irrelevant when flag off). No data loss; just code path change.
 
-## 12. Commitment §0.4 #2 — Three UI states (hidden / disabled / interactive)
+### 12.3 Phase 3 — Field visibility + data scopes activate
 
-### 12.1 What it commits
+**Goal:** Frontend serialization pipeline + `<FieldGated>` wrapper + data scope filters live in production.
 
-Every gated control renders in one of three states: hidden (absent from UI), disabled (visible but greyed out), interactive (fully usable). Operators can override defaults per action per role.
-
-### 12.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `permission_definitions.default_ui_state` column | Pass 2 §11.1 |
-| Schema | `role_permissions.ui_state_override` column | Pass 2 §11.3 |
-| Algorithm | A1 Phase 2 step 5: UI state resolution | Pass 3 §11.2 |
-| Cache | `effective_permissions_cache.resolved_ui_state` | Pass 2 §11.5 |
-| Frontend | `<FieldGated>` component honors visibility state | Pass 4 §15 |
-| Frontend | Action buttons rendered conditionally based on `ui_state` from A1 result | Pass 3 §11.1 |
-| UI | Editor Section 1 cell shows current ui_state + dropdown to change | Pass 8 §17.2 |
-
-### 12.3 Composition rules
-
-State priority (highest wins):
-1. Explicit deny → ui_state = hidden (or disabled if permission_definitions.default_ui_state = 'disabled')
-2. Role permission ui_state_override
-3. permission_definitions.default_ui_state
-
-The frontend respects what A1 returns; no client-side override.
-
-### 12.4 Exception escalation
-
-UI state changes done by Admin only via Editor Section 1. No request workflow for UI state changes (it's a configuration concern, not a grant concern).
-
-### 12.5 Test scenarios
-
-1. **Default interactive renders normally** — granted action with default ui_state shows as enabled button
-2. **Default disabled greys but visible** — granted action with disabled ui_state shows greyed; hover tooltip explains "Available but UI disabled"
-3. **Default hidden absent from UI** — denied action with hidden default doesn't render
-4. **Override interactive → disabled** — admin changes pm role override to disabled; PM users see greyed button on next request
-5. **Override hidden → interactive (sensitive action)** — admin reveals hidden action; users see clickable; warning displayed about exposing
-
-### 12.6 Build phase priority
-
-**MVP-critical.** UI state semantics drive the entire admin experience.
-
----
-
-## 13. Commitment §0.4 #3 — Fine-grained by default
-
-### 13.1 What it commits
-
-Permissions are granular. Not "client management" as a single permission, but `clients:viewList` + `clients:viewDetail` + `clients:create` + `clients:editBasic` + `clients:editAdvanced` + ... — each addressable independently.
-
-### 13.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Vocabulary | Pass 1 catalogues ~1260 distinct actions (vs ~150 if coarse-grained) | Pass 1 §1 |
-| Schema | `permission_definitions` 1-row-per-action (Pass 2 decision 1) | Pass 2 §11.1 |
-| Algorithm | A1 resolves at action granularity | Pass 3 §11.2 |
-| UI | Editor Section 1 shows full hierarchy with leaf-level cells | Pass 8 §17 |
-| Field | Pass 4's 47 visibility flags are even more granular than actions (per-section per-resource) | Pass 4 §17 |
-
-### 13.3 Composition rules
-
-No composition concerns — granularity is a vocabulary property, not a runtime check.
-
-### 13.4 Exception escalation
-
-N/A — fine-grained is the only granularity supported. Custom roles can group actions for convenience (Pass 8 §21 wizard) but the underlying grants stay granular.
-
-### 13.5 Test scenarios
-
-1. **Granted view list but not detail** — SR has `clients:viewList` granted, `clients:viewDetail` denied; list view works, click-through to detail blocks
-2. **Granted basic edit but not advanced** — PM has `clients:editBasic`, denied `clients:editAdvanced` (which includes tier/holdback); attempts to edit basic name → works; attempts to edit tier → blocks
-3. **Field-level granularity beyond action** — Acc has `vendors:viewDetail` granted but `visibility.vendors.banking` hidden; vendor detail renders without banking section
-
-### 13.6 Build phase priority
-
-**MVP-critical.** Granularity philosophy underpins everything; no shortcuts.
-
----
-
-## 14. Commitment §0.4 #4 — Lookup rows carry behavior bindings
-
-### 14.1 What it commits
-
-Status rows (invoice statuses, appointment statuses, etc.) carry behavior flags like `allows_edit`, `triggers_late_fee`, `is_terminal`. Action handlers consult these bindings; operators can configure (within system-locked constraints).
-
-### 14.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `status_behavior_bindings` polymorphic table | Pass 5 §13.1 |
-| Schema | `status_transition_definitions` | Pass 5 §13.2 |
-| Schema | `effective_status_bindings_cache` | Pass 5 §13.3 |
-| Schema | `permission_definitions.binding_dependencies` JSONB column | Pass 5 §17.2 |
-| Algorithm | A1 Phase 3.3 status binding check | Pass 5 §17.1 |
-| Cache | Bindings cache invalidates on status_behavior_bindings changes | Pass 9 §17.1 |
-| UI | Settings UI for operator-configurable bindings (not part of Permissions Editor; lives in M3 Settings module) | M3 audit spec |
-| Audit | Event type `status_binding_changed` | Pass 6 §15.1 |
-| Audit | Event type `status_transition_executed` | Pass 6 §15.1 |
-
-### 14.3 Composition rules
-
-When A1 Phase 3.3 binding check denies AND Phase 3.1 SoD also denies — both reasons captured in audit; UI shows first violation only (priority: SoD > binding > regulatory).
-
-When binding allows but role default denies — role default wins (binding only adds constraints, doesn't grant).
-
-### 14.4 Exception escalation
-
-System-locked bindings (enforcing §0.4 #8/#11/#12/#13/PCI/Construction Act/lien/append-only) cannot be modified by operators. UI renders them as 🔒. No override path.
-
-Operator-configurable bindings can be tuned in Settings; audit captures changes.
-
-### 14.5 Test scenarios
-
-1. **Granted action blocked by binding** — PM with `invoices:edit` attempts to edit Sent invoice; A1 Phase 3.3 denies (allows_edit=FALSE on Sent status); reason captured
-2. **Custom status with custom bindings** — operator adds "Pending Customer Approval" status; configures allows_edit=TRUE; PM can edit invoice in that custom status
-3. **System-locked binding cannot be operator-changed** — operator attempts UI edit on Sent.allows_edit; UI rejects with tooltip
-4. **Binding cache invalidates on operator change** — operator changes binding value; cache invalidated; next user request reflects new binding
-
-### 14.6 Build phase priority
-
-**MVP-critical.** Pass 5 bindings are integral to action enforcement.
-
----
-
-## 15. Commitment §0.4 #5 — Guided creation never lazy
-
-### 15.1 What it commits
-
-Entity creation flows guide users through required fields and dependent decisions; never accept a barely-populated row that requires later completion to be valid. Examples: creating a project pulls required fields from settings (project number sequence, default cost center); creating an invoice requires linked client + line items; creating a contractor WO requires labor rates + scope.
-
-### 15.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | NOT NULL constraints on critical columns | Per-module schemas |
-| Schema | CHECK constraints validating state at insert | Per-module schemas |
-| Frontend | Multi-step creation wizards in M5/M6/M7/M9/M10/M12 (per audit) | M-specific UI specs |
-| Status bindings | Status='Draft' may allow incomplete state; transition to 'Pending Approval' requires complete | Pass 5 §14 |
-| Action chains | Pass 1 §6 action chains enforce sequence (e.g., Quote → Project flow) | Pass 1 §6 |
-
-### 15.3 Composition rules
-
-This commitment lives mostly outside the permissions runtime — it's a UX commitment enforced at the module level. The permissions layer enables it by:
-- Gating which fields are visible (Pass 4 — admin might add a field that PMs see and SRs don't)
-- Gating which actions trigger transitions (Pass 5 — only granted users can `submit`)
-
-### 15.4 Exception escalation
-
-N/A — guided creation is a UX commitment; not bypassable.
-
-### 15.5 Test scenarios
-
-1. **Required fields enforced at schema** — attempt to INSERT invoice with null client_id; rejected by NOT NULL
-2. **Multi-step wizard cannot skip steps** — UI prevents jumping to Step 3 without Step 1+2 complete
-3. **Transition to Pending blocks on incomplete state** — Draft invoice with empty line items cannot transition to Pending (status binding `allows_state_transition` filters out Pending → only Draft → Draft or Draft → Void allowed)
-
-### 15.6 Build phase priority
-
-**MVP-critical at module level, NOT a permissions concern.** Permissions runtime enables the commitment but enforcement is module-specific.
-
----
-
-## 16. Commitment §0.4 #6 — Ten dimensions of permission control
-
-### 16.1 What it commits
-
-The permission model supports ten distinct dimensions of control: action grants, field visibility, data scope, UI state, status bindings, separation of duties, regulatory expiry, geolocation retention, sensitive field audit-on-read, request-based grants.
-
-### 16.2 Enforcement points
-
-Pass 10 §11-§22 collectively enforce these 10 dimensions. Cross-reference:
-
-| Dimension | Pass | Enforcement |
-|---|---|---|
-| 1. Action grants | Pass 2-3 | role_permissions + user_permission_overrides + A1 |
-| 2. Field visibility | Pass 4 | field_visibility_definitions + 47-flag catalog + A3 |
-| 3. Data scope | Pass 3 | data_scope_definitions + A2 + RLS |
-| 4. UI state | Pass 2-3 | ui_state_override + A1 |
-| 5. Status bindings | Pass 5 | status_behavior_bindings + Phase 3.3 |
-| 6. Separation of duties | Pass 3 | separation_of_duties_constraints + Phase 3.1 |
-| 7. Regulatory expiry | Pass 3 | regulatory_expiry_overrides + Phase 3.2 |
-| 8. Geolocation retention | Pass 2 | geolocation_retention_policies + daily purge |
-| 9. Sensitive field audit-on-read | Pass 4 | requires_audit_on_read flag + async batched |
-| 10. Request-based grants | Pass 7 | request_admin_access workflow |
-
-### 16.3 Composition rules
-
-All ten dimensions evaluate independently. Compound decision = AND of all applicable dimensions. If any denies, action denied.
-
-### 16.4 Exception escalation
-
-N/A — composition is automatic.
-
-### 16.5 Test scenarios
-
-Cross-dimensional scenarios:
-
-1. **All dimensions allow** — PM with role grant + field visibility + scope + active UI + binding allow + no SoD + WSIB valid + no geolocation + no audit-on-read + no request needed → action proceeds normally
-2. **Action grant + binding compose** — PM has `invoices:edit` granted but Sent status binding denies → blocked at Phase 3.3
-3. **Field visibility within granted detail** — Acc has `vendors:viewDetail` granted but `visibility.vendors.banking` hidden → vendor detail renders without banking
-4. **Scope filters records but visible records still field-gated** — SR sees own clients (scope) but each client's banking section hidden (visibility)
-
-### 16.6 Build phase priority
-
-**MVP-critical.** Each dimension is one of the design passes; ship all together.
-
----
-
-## 17. Commitment §0.4 #7 — Contractual integrity exception (clients:overrideSlaResponseTime Admin-only)
-
-### 17.1 What it commits
-
-Some actions are reserved for Admin alone, with reason capture and audit. The canonical example: changing a client's contracted SLA response time is Admin-only because it materially alters legal contract terms.
-
-### 17.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `permission_definitions.is_admin_exception` flag = TRUE | Pass 2 §11.1 |
-| Schema | `permission_definitions.requires_reason_capture` = TRUE | Pass 2 §11.1 |
-| Algorithm | A1 Phase 4: if is_admin_exception, audit always emitted | Pass 3 §11.2 |
-| UI | Editor renders admin-exception rows with 🔒 indicator (for non-admins) and ⚠ for admins | Pass 8 §17.1 |
-| UI | Action execution requires reason capture before submit | Per-module UI specs |
-| Audit | Event type `admin_exception_invoked` | Pass 6 §15.1 |
-
-### 17.3 The 13 admin exceptions (from Pass 1 §7)
-
-Catalogued in `permission_definitions`:
-
-- `clients:overrideSlaResponseTime` (§0.4 #7 canonical example)
-- `clients:editTier`
-- `clients:editHoldbackConfig`
-- `clients:hardDelete`
-- `vendors:manualOverrideInsurance`
-- `vendors:manualOverrideWsib`
-- `contractors:manualOverrideWsib`
-- `contractors:manualOverrideInsurance`
-- `appointments:overrideCertExpiry`
-- `sla_breach_alerts:recordSlaWaiver`
-- `dispatch_records:overrideNormalScheduling` (A or Dispatcher with reason)
-- `accounting_periods:reopenPeriod`
-- `report_snapshots:deleteSnapshot`
-
-### 17.4 Composition rules
-
-Admin exception flag overrides general permission grant: even if a PM has `clients:overrideSlaResponseTime` via override, the action ALSO requires reason capture and emits audit. Admin role itself doesn't bypass these requirements.
-
-### 17.5 Exception escalation
-
-These are themselves the exception path. No further override exists. If business need requires bypassing audit/reason capture, that's a schema change requiring code modification — not an operational override.
-
-### 17.6 Test scenarios
-
-1. **Admin executes with reason** — A invokes `clients:overrideSlaResponseTime`; reason captured; action proceeds; audit row written
-2. **Non-admin with override fails reason check** — PM granted via user_override attempts the action without reason; UI blocks
-3. **Audit row contains all required fields** — admin_exception_invoked audit row has actor_user_id, target_permission_id, target_entity_id, before_state, after_state, reason
-4. **Cannot bypass audit via direct DB write** — even if admin manually updates clients table SQL, the audit doesn't auto-emit; ops alert if such writes detected (Phase 2 SOC2 hardening)
-
-### 17.7 Build phase priority
-
-**MVP-critical.** Auditability of admin exceptions is non-negotiable.
-
----
-
-## 18. Commitment §0.4 #8 — Versioned snapshots for legal durability
-
-### 18.1 What it commits
-
-Sent invoices, sent quotes, signed change orders, signed contractor WOs, signed project acceptance records are immutable. Once sent/signed, the snapshot is frozen for legal durability. Edits forbidden.
-
-### 18.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | Status bindings: `allows_edit = FALSE` on Sent/Signed/Approved statuses | Pass 5 §15 |
-| Algorithm | A1 Phase 3.3 binding check denies edit on Sent invoices | Pass 5 §17.1 |
-| Append-only | `report_snapshots`, `commissioning_records`, `project_acceptance_records` are append-only ledgers (Pass 6) | Pass 6 §18 |
-| Schema | Snapshot copies of customer/vendor/contractor data fields embedded in invoices/quotes/etc. — not referenced by FK that could change | Per-module schemas |
-| UI | Permissions Editor §17.5 renders `allows_edit=FALSE` on Sent as 🔒 system-locked | Pass 8 §17.5 |
-| Audit | Reversal pattern for corrections (Pass 6 §19) | Pass 6 §19 |
-
-### 18.3 Composition rules
-
-Even Admin cannot edit a Sent invoice. To "correct" a Sent invoice, the workflow is:
-1. Issue credit note (reverses original)
-2. Issue new corrected invoice
-3. Original invoice untouched; audit trail of full sequence preserved
-
-System-locked binding: cannot be modified by operators.
-
-### 18.4 Exception escalation
-
-No exception path. Only workflow: reversal via credit note + new invoice. Audit captures full sequence.
-
-### 18.5 Test scenarios
-
-1. **Sent invoice edit attempt blocked** — admin attempts to edit Sent invoice; A1 Phase 3.3 denies; UI shows "Cannot edit Sent invoice" tooltip
-2. **Credit note reversal works** — credit note created against Sent invoice; original untouched; audit captures both events with source_event_id linking
-3. **Direct DB UPDATE blocked by trigger** (Phase 2 hardening) — even if app bypassed, append-only triggers on related ledgers catch attempts
-4. **Snapshot data embedded** — Sent invoice has copy of customer address from time of sending; even if customer address later changes, sent invoice still shows old address
-
-### 18.6 Build phase priority
-
-**MVP-critical.** Legal durability is non-negotiable.
-
----
-
-## 19. Commitment §0.4 #9 — Eight-layer print protection
-
-### 19.1 What it commits
-
-Sensitive printed documents (invoices, quotes, financial reports, compliance exports) have eight layers of protection: watermark, header/footer info, page numbering, recipient name, timestamp, document ID, status banner, "Print copy" indicator.
-
-### 19.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| PDF templates | M3 Settings → PDF Templates with eight-layer protection baked in | M3 audit spec |
-| Action | `*:exportPdf` actions render through protected template | Pass 1 §6 |
-| Compliance export | `/api/admin/audit/export` PDF format uses eight-layer template | Pass 6 §20.3 |
-| UI | Print preview shows all 8 layers before download | Per-module UI |
-| Audit | Event types capture export actions; including the eight-layer-protected PDF | Pass 6 §15.1 |
-
-### 19.3 Composition rules
-
-All PDFs from the system (invoice PDF, quote PDF, audit export PDF, compliance report PDF) inherit eight-layer template. No bypass for "internal" PDFs — all eight layers always applied.
-
-### 19.4 Exception escalation
-
-Operators can configure WHICH info appears in which layer via M3 Settings → PDF Templates. They cannot REMOVE layers — at least all 8 must be configured.
-
-### 19.5 Test scenarios
-
-1. **Invoice PDF has all 8 layers** — generate invoice PDF; verify watermark + header + page numbers + recipient + timestamp + doc ID + status banner + print indicator present
-2. **Operator customizes layer content** — admin changes watermark text in Settings; new PDFs reflect; existing snapshots untouched
-3. **Audit export PDF includes 8 layers** — POST /api/admin/audit/export with format=pdf; downloaded PDF has full protection
-
-### 19.6 Build phase priority
-
-**MVP-critical for outbound documents** (invoices/quotes); **lower priority for internal-only** (audit exports — important but build phase can ship v1 with simplified template, harden later).
-
----
-
-## 20. Commitment §0.4 #10 — Append-only ledgers
-
-### 20.1 What it commits
-
-Eight ledgers (permission_audit_log + 7 module ledgers: inventory_movements, commissioning_records, project_acceptance_records, vendor_performance_scores, contractor_performance_scores, gl_journal_lines, appointment_change_log, report_snapshots) are append-only. UPDATE and DELETE blocked at database level. Reversals via insert offsetting events.
-
-### 20.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | 8 ledger tables with uniform pattern (Pass 6 §14.1) | Pass 6 §18 |
-| Trigger | PostgreSQL UPDATE/DELETE triggers blocking modifications (Pass 6 §14.2) | Pass 6 §14.2 |
-| Partitioning | Monthly time-based partitioning for scale (Pass 6 §14.3) | Pass 6 §14.3 |
-| Algorithm | Append-only resources flagged in `permission_definitions.is_append_only_target` | Pass 2 §11.1 |
-| Cache | N/A — these tables not cached (writes-heavy) |
-| UI | Editor Section 1 shows 🔒 on `inventory_movements:edit`, `:hardDelete`, etc. | Pass 8 §17.5 |
-| Audit | `permission_audit_log` IS itself an append-only ledger | Pass 6 §14 |
-
-### 20.3 Composition rules
-
-Append-only is absolute at the database level. No application-level bypass. Even Admin cannot UPDATE or DELETE.
-
-Application-level "corrections" use reversal pattern: INSERT new offsetting row with source_event_id linking to original.
-
-### 20.4 Exception escalation
-
-No exception path. Absolute.
-
-### 20.5 Test scenarios
-
-1. **UPDATE blocked by trigger** — `UPDATE inventory_movements SET quantity_change = ...` raises exception P0001
-2. **DELETE blocked by trigger** — same
-3. **INSERT (new row) works** — `INSERT INTO inventory_movements (...)` succeeds normally
-4. **Reversal pattern functions** — credit note creates reversal entries in `gl_journal_lines`; original entries untouched; net effect correct
-5. **Partition pruning works** — `SELECT * FROM permission_audit_log WHERE occurred_at >= '2026-05-01'` hits only May partition
-
-### 20.6 Build phase priority
-
-**MVP-critical.** Cannot ship without append-only enforcement.
-
----
-
-## 21. Commitment §0.4 #11 — Separation of duties enforcement
-
-### 21.1 What it commits
-
-Same user cannot perform conflicting actions on the same record (e.g., AP bill creator cannot also approve). Co-signing supported for high-stakes actions (A + Acc for hardClose).
-
-### 21.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `separation_of_duties_constraints` table | Pass 2 §15.1 |
-| Algorithm | A1 Phase 3.1 SoD check | Pass 3 §11.2 |
-| Database trigger | Defense-in-depth: CHECK at INSERT/UPDATE prevents same-user creator+approver | Pass 3 decision 2 |
-| Status binding | Some transitions require co-sign via `status_transition_definitions.requires_co_sign + co_sign_role_codes` | Pass 5 §14, §15.2 |
-| Cache | Cache invalidates on `separation_of_duties_constraints` changes (rare admin operation) | Pass 9 §17.1 |
-| UI | Editor shows "Cannot approve own AP bills" tooltip on action button | Pass 8 §17 |
-| Audit | Event types: violations logged as denial; co-sign captured as `co_sign_executed` | Pass 6 §15.1 |
-
-### 21.3 The 4 separation-of-duties constraints (from Pass 2 §15.1)
-
-| Constraint | Conflicting actions |
-|---|---|
-| `ap_bill_creator_not_approver` | `ap_bills:create` vs `ap_bills:approve` (same bill) |
-| `payment_run_creator_not_approver` | `ap_payment_runs:create` vs `ap_payment_runs:approve` (same run) |
-| `gl_entry_creator_not_poster` | `gl_journal_entries:create:manual` vs `gl_journal_entries:post` (same entry) |
-| `hard_close_co_sign` | `accounting_periods:hardClose` requires A + Acc co-sign |
-
-### 21.4 Composition rules
-
-If SoD blocks AND user has override (Pass 7 grant), SoD STILL blocks — overrides cannot bypass separation of duties. The override is for granting an action capability; SoD is per-record (you can't be both creator and approver of the SAME record).
-
-If SoD blocks AND co-sign supported: first signer recorded; second signer (different role) completes.
-
-### 21.5 Exception escalation
-
-For three same_record constraints (AP bill, payment run, GL entry): no override path. Must reassign the second action to a different user.
-
-For hard close: co-sign IS the path. Both roles must explicitly sign with audit.
-
-### 21.6 Test scenarios
-
-1. **AP bill creator denied approval of own** — PM creates ap_bill_42; later attempts approval; Phase 3.1 denies; reason captured
-2. **AP bill creator can approve different bill** — PM creates ap_bill_42; can approve ap_bill_43 created by SR; SoD only applies same-record
-3. **Hard close co-sign flow** — Acc invokes softClose; A invokes hardClose; Phase 3.1 sees softClose by different role; allows; audit captures co_sign_executed
-4. **Hard close blocked when same-role co-sign** — Acc1 invokes softClose; Acc2 attempts hardClose; Phase 3.1 denies (both Acc role)
-5. **User override does not bypass SoD** — even with `ap_bills:approve` granted via user override, PM still can't approve bill they created
-
-### 21.7 Build phase priority
-
-**MVP-critical.** Financial control is non-negotiable.
-
----
-
-## 22. Commitment §0.4 #12 — Regulatory expiry auto-block enforcement
-
-### 22.1 What it commits
-
-Expired insurance / WSIB / certifications auto-block dependent actions (PO creation for expired-insurance vendor; WO creation for expired-WSIB contractor; appointment scheduling for expired-cert employee).
-
-### 22.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `regulatory_expiry_overrides` table | Pass 2 §15.2 |
-| Schema | Source data (vendor/contractor/employee tables) carries expiry dates | Per-module schemas |
-| Algorithm | A1 Phase 3.2 regulatory expiry check | Pass 3 §11.2 |
-| Status binding | Some statuses (e.g., vendor "On Hold") system-locked when regulatory expired | Pass 5 §18.1 |
-| Cache | Cache rebuilds when expiry status flips (cron-based or manual override insert) | Pass 9 §17.1 |
-| UI | Editor renders override events with reason capture required | Pass 8 §20.5 |
-| Audit | Event type `regulatory_block_overridden` | Pass 6 §15.1 |
-
-### 22.3 The 6 regulatory expiry types
-
-From Pass 2 §15.2:
-- vendor_insurance_expired
-- vendor_wsib_expired
-- contractor_insurance_expired
-- contractor_wsib_expired
-- contractor_certification_expired
-- employee_certification_expired
-
-### 22.4 Composition rules
-
-Regulatory expiry STILL applies when user has role grant + user override. The Pass 3 algorithm explicitly states: "User override does NOT bypass regulatory expiry. §0.4 #12 supersedes user-level overrides."
-
-Only an `regulatory_expiry_overrides` entry (which itself requires A approval with reason) bypasses.
-
-### 22.5 Exception escalation
-
-Override path: A invokes admin exception (per §0.4 #7) → creates `regulatory_expiry_overrides` row with reason + emergency_justification + valid_until window. The override applies during the window; auto-expires.
-
-Audit event: `regulatory_block_overridden`.
-
-### 22.6 Test scenarios
-
-1. **Expired-insurance vendor PO blocked** — PM attempts `purchase_orders:create` for vendor with expired insurance; Phase 3.2 denies; reason captured
-2. **Override permits action during window** — A creates override valid 7 days; same PM attempts; Phase 3.2 sees override; allows; audit captures both block + override
-3. **Override expires correctly** — 8 days later; same PM attempts; Phase 3.2 denies again (override now invalid)
-4. **User override does NOT bypass expiry** — PM with `purchase_orders:create` granted via user override AND no regulatory override → still blocked at Phase 3.2
-5. **Audit chain reconstruction** — regulatory_block_overridden event chains via source_event_id back to the blocking event for traceability
-
-### 22.7 Build phase priority
-
-**MVP-critical.** Regulatory compliance is non-negotiable.
-
----
-
-## 23. Commitment §0.4 #13 — Geolocation privacy retention (30-day default operator-configurable)
-
-### 23.1 What it commits
-
-Geolocation data (clock-in/out coordinates from M12 mobile) retained 30 days by default; operator-configurable. After retention, coordinates set to NULL while timestamp + appointment_id retained for audit.
-
-### 23.2 Enforcement points
-
-| Layer | Mechanism | Location |
-|---|---|---|
-| Schema | `geolocation_retention_policies` table | Pass 2 §15.3 |
-| Schema | `appointment_change_log.geolocation_data` JSONB column | Pass 6 §18.6 |
-| Field visibility | `visibility.scheduling.geolocationHistory` flag with `retention_days` (Pass 4 §17.10) | Pass 4 §17.10 |
-| Daily cron | Purges coordinates >retention_days old; preserves timestamp + appointment_id | Pass 6 §18.6 + new cron |
-| Settings UI | M3 Settings → Privacy → Geolocation Retention (operator-configurable) | M3 audit spec |
-| Audit | Daily purge run creates audit event `geolocation_data_purged` (new event type to add Pass 11) | Pass 11 |
-
-### 23.3 Composition rules
-
-Operator-configurable retention. Default 30 days. Minimum 7 days (per audit). Operator cannot set 0 days (compliance baseline).
-
-Purge action: `coordinates_null` default (sets lat/lng to NULL but keeps timestamp + appointment_id). Phase 2 option: `full_delete` (removes row entirely; loses audit trail).
-
-### 23.4 Exception escalation
-
-No override at user level. Operator can extend retention (e.g., 90 days for compliance investigations) in Settings.
-
-### 23.5 Test scenarios
-
-1. **Retention 30 days default** — appointment 31 days old has coordinates purged; timestamp + appointment_id remain
-2. **Operator extends retention** — admin sets retention 60 days; new purge runs respect new value
-3. **Field visibility honors retention** — Tech viewing own geolocation_history sees recent coordinates but old ones NULL
-4. **Audit captures purge run** — daily cron writes `geolocation_data_purged` event with row count
-
-### 23.6 Build phase priority
-
-**MVP-critical for v1 cycle** but can ship v1 day-1 with manual purge; daily cron added shortly after.
-
----
-
-## 24. Cross-cutting composition matrix
-
-When multiple commitments apply to one action, this matrix shows precedence:
-
-| Commitment | Can be bypassed by | Cannot be bypassed by |
-|---|---|---|
-| #1 Role default | User override (Pass 7) | — |
-| #1 User override | Regulatory expiry (#12), SoD (#11), Append-only (#10), Snapshots (#8) | — |
-| #2 UI state | Admin reconfiguration | — |
-| #3 Granularity | (not bypassable) | — |
-| #4 Status bindings | System-locked exceptions | Operator config (for system-locked) |
-| #7 Admin exceptions | (themselves the exception path) | — |
-| #8 Immutable snapshots | (not bypassable; use reversal) | — |
-| #10 Append-only | (not bypassable; use reversal) | — |
-| #11 Separation of duties | Co-sign for hard close only | User override |
-| #12 Regulatory expiry | Admin override with reason | User override |
-| #13 Geolocation retention | Operator extending retention | User-level access |
-
-Read this matrix: row commitment cannot be bypassed by anything in "User override" column unless explicitly listed under "Can be bypassed by."
-
-### 24.1 Layered defense
-
-The architecture has multiple layers of defense for each commitment:
-
-```
-Request → Auth → A1 (algorithm Phase 1-3) → Schema constraint → DB trigger
-   ↓        ↓        ↓                          ↓                ↓
-   1        2        3                          4                5
+**Migration steps included:**
+- Build `<FieldGated>` component + VisibilityContext provider (Pass 4)
+- Build serialization transformer pipeline (Pass 4)
+- Build 12 mask formatter functions (Pass 4)
+- Build async batched audit-on-read service (Pass 4)
+- Build 5 database views for sensitive resources (Pass 4 §16.2)
+- Build data scope filter injection in query layer (Pass 3 A2)
+- Configure RLS policies (Pass 3 §12.5)
+
+**Feature flag state:**
+- `permissions.field_visibility.enabled = TRUE` for cohort B (all PMs + Accounting)
+- `permissions.data_scopes.enabled = TRUE` for cohort B
+
+**Verification activities:**
+- Field visibility rendering correctly per Pass 4 §17 catalogue across cohort B users
+- Banking sections masked for non-Acc users
+- Internal notes hidden from SRs
+- Profit margins hidden from non-PM users
+- Audit-on-read events firing for banking access
+- Data scope filters returning correct subsets
+- No data leak via raw API access (defense-in-depth: app transformer + view + RLS)
+
+**Duration:** 2 weeks.
+
+**Rollback procedure:** Flip flags FALSE; users revert to seeing all fields and all scopes (old behavior). Cached visibility entries invalidated.
+
+### 12.4 Phase 4 — Status bindings + cross-cutting constraints
+
+**Goal:** Phase 3.3 status binding check + Phase 3.1 SoD + Phase 3.2 regulatory expiry all live.
+
+**Migration steps included:**
+- Build A1 Phase 3 cross-cutting constraint logic (Pass 3 + Pass 5 + Pass 10)
+- Build effect executor for status transitions (Pass 5 §16.3)
+- Build separation_of_duties runtime check + DB trigger defense-in-depth (Pass 3 + Pass 10)
+- Build regulatory_expiry_overrides workflow (Pass 3 + Pass 10)
+- Build Ontario 60-day lien clock enforcement (Pass 5 §19.2)
+- Build co-sign workflow (Pass 5 §15.2 + Pass 10 §21)
+
+**Feature flag state:**
+- `permissions.cross_cutting.enabled = TRUE` for cohort C (all PMs + SRs + Accounting)
+- Tech + Admin remain on full system
+
+**Verification activities:**
+- Sent invoice edits blocked (immutable snapshots §0.4 #8)
+- AP bill creator cannot approve own (SoD §0.4 #11)
+- Hard close requires A + Acc co-sign (§0.4 #11)
+- Expired-insurance vendor PO creation blocked unless overridden (§0.4 #12)
+- Override actions require reason capture and emit audit events
+- Lien deadline enforcement: cannot close Trade Contractor WO before 60 days
+
+**Duration:** 3 weeks (more complex behavior validation).
+
+**Rollback procedure:** Flag FALSE → cross-cutting constraints skip Phase 3; users revert to action grant only.
+
+### 12.5 Phase 5 — Permissions editor UI live
+
+**Goal:** Admin can manage permissions through full editor; request workflow live.
+
+**Migration steps included:**
+- Step 40-45: Permissions editor frontend (all 6 sections — Pass 8)
+- Pass 7 request workflow: submit + approve + grant fire + notify
+- Notification routing (in-app + email + Slack)
+- Pending request auto-expiry cron
+- Scheduled grant cron
+
+**Feature flag state:**
+- `permissions.editor.enabled = TRUE` for all Admin users
+- Request workflow available to all users (submission); approval only to Admin
+
+**Verification activities:**
+- Admin can grant/revoke from editor; changes propagate via cache invalidation
+- Users submit requests; admins receive notifications
+- Approval triggers user_permission_override; permission becomes active within seconds
+- Auto-expiry runs; expired grants revert
+- Audit captures all activities
+
+**Duration:** 2-3 weeks.
+
+**Rollback procedure:** Disable editor for admins; revert to direct DB grant management (manual SQL). Existing grants preserved.
+
+### 12.6 Phase 6 — Full activation + cutover
+
+**Goal:** All users on new system; old permission code paths removed; system is authoritative.
+
+**Migration steps included:**
+- Steps 54-56: Integration test suite + commitment verification API + operator documentation generator (Pass 10)
+- Build remaining audit query endpoints (Pass 6 §16)
+- Build M13 compliance reports (Pass 6 §16.5)
+- Build cache diagnostic API endpoint (Pass 9 §23.3)
+- Flip ALL users to new permissions system
+
+**Feature flag state:**
+- `permissions.engine.enabled = TRUE` for ALL users
+- Old permission code paths begin deprecation
+
+**Verification activities:**
+- All v1 ship checklist criteria from Pass 10 §25.3 pass:
+  - [ ] All 13 commitments enforced at runtime
+  - [ ] All 13 integration tests passing (~54 tests)
+  - [ ] Pass 10 §24 composition matrix verified
+  - [ ] Audit emits all 32 event types correctly
+  - [ ] Permissions editor renders all 6 sections
+  - [ ] Cache hit rate >95% under simulated load
+  - [ ] All admin exceptions require reason capture
+  - [ ] All append-only ledgers reject UPDATE/DELETE with P0001
+
+**Duration:** 2 weeks of cutover + 4 weeks parallel observation.
+
+**Rollback procedure:** After full cutover, rollback becomes a major operation (revert deploys + data preservation work). Treat as emergency-only. Soft rollback per cohort (return cohort to old code path) is preferred if issues arise.
+
+**Old code paths removed:** ~4 weeks after Phase 6 successful cutover, the old permission check code paths are removed from codebase. Phase 6.1 (mini-phase) cleanup.
+
+## 13. Feature flag table
+
+Runtime-toggleable flags stored in DB. Each flag controls one rollout dimension.
+
+```sql
+CREATE TABLE feature_flags (
+  flag_name TEXT PRIMARY KEY,
+  enabled_globally BOOLEAN NOT NULL DEFAULT FALSE,
+  enabled_user_ids UUID[] DEFAULT '{}'::UUID[],
+  enabled_role_codes TEXT[] DEFAULT '{}'::TEXT[],
+  description TEXT,
+  enabled_at TIMESTAMPTZ,
+  enabled_by UUID REFERENCES users(id),
+  notes TEXT
+);
 ```
 
-Most commitments enforced at layers 3-5. Pass 8 UI prevents most violations at layer 0 (don't render the button if denied). But true enforcement is server-side; UI is hygiene only.
+Application checks flag at request time:
+```typescript
+// Pseudocode
+async function isFeatureEnabled(flagName: string, userId: string): Promise<boolean> {
+  const flag = await db.queryOne('SELECT * FROM feature_flags WHERE flag_name = $1', [flagName]);
+  if (!flag) return false;
+  if (flag.enabled_globally) return true;
+  if (flag.enabled_user_ids?.includes(userId)) return true;
+  const userRole = await getUserRole(userId);
+  if (flag.enabled_role_codes?.includes(userRole.code)) return true;
+  return false;
+}
+```
 
-### 24.2 Audit coverage verification
+### 13.1 Flag catalogue
 
-Every commitment denial emits an audit event. Pass 6 §15.1 catalogue covers:
-
-| Commitment | Denial event |
-|---|---|
-| #1 user_override_deny | `user_override_revoked` (when admin revokes); resolution_source captured in cache hit |
-| #2 UI state change | `role_permission_ui_state_changed` |
-| #4 binding denial | resolution_source='status_binding_violation' in cache hit log |
-| #7 admin exception execution | `admin_exception_invoked` |
-| #8 snapshot edit attempt | denied at A1 Phase 3.3; resolution_source captured |
-| #10 append-only attempt | trigger raises P0001 (no row written; alert via failed query metric) |
-| #11 SoD denial | resolution_source='separation_of_duties_violation' |
-| #11 co-sign | `co_sign_executed` |
-| #12 expiry block | resolution_source='regulatory_expiry_block' |
-| #12 override | `regulatory_block_overridden` |
-| #13 purge | `geolocation_data_purged` (new event type Pass 11 will add) |
-
-## 25. Build phase priorities
-
-### 25.1 MVP-critical (must ship with v1)
-
-All 13 commitments are MVP-critical at v1 in some form. None can be deferred entirely. Variations in what "v1 implementation" looks like:
-
-| Commitment | v1 implementation | Phase 2 hardening |
+| Flag name | Controls | Phase introduced |
 |---|---|---|
-| #1 Role + override | Pass 2 schema + Pass 3 algorithm + UI editing | Multi-step approval workflow for high-stakes |
-| #2 UI states | All 3 states supported | Conditional state (e.g., disabled if X, hidden if Y) |
-| #3 Granularity | All ~1260 actions catalogued | Operator-defined custom granularity |
-| #4 Bindings | 80 surfaces with 14 binding names | Operator-defined custom binding names |
-| #5 Guided creation | Multi-step wizards in all modules | AI-suggested completion |
-| #6 Ten dimensions | All 10 implemented per Passes 2-9 | Cross-dimensional rule engine |
-| #7 Admin exceptions | 13 catalogued + reason capture | Auto-approval rules for low-risk |
-| #8 Snapshots | allows_edit=FALSE on Sent statuses | Cryptographic snapshot integrity (hash chain) |
-| #9 Print protection | Eight-layer baseline template | Operator-configurable layer customization |
-| #10 Append-only | 8 ledgers with triggers + partitioning | Cold archival to S3 Glacier |
-| #11 SoD | 4 constraints + co-sign for hardClose | Multi-step approval for highest-stakes |
-| #12 Regulatory expiry | 6 expiry types + override with reason | Multi-step approval for emergency overrides |
-| #13 Geolocation | 30-day default + daily purge | GDPR-compliant configurable per-user retention |
+| `permissions.engine.enabled` | A1 algorithm + cache reads | Phase 2 |
+| `permissions.field_visibility.enabled` | Pass 4 backend pipeline + frontend `<FieldGated>` | Phase 3 |
+| `permissions.data_scopes.enabled` | A2 data scope filter injection + RLS | Phase 3 |
+| `permissions.cross_cutting.enabled` | Phase 3.1/3.2/3.3 constraints in A1 | Phase 4 |
+| `permissions.audit_on_read.enabled` | Async batched sensitive field audit | Phase 3 |
+| `permissions.append_only_triggers.enabled` | UPDATE/DELETE blocking on ledgers | Phase 1 (off until tested) |
+| `permissions.editor.enabled` | Permissions editor UI access for admins | Phase 5 |
+| `permissions.request_workflow.enabled` | Pass 7 request submission and approval | Phase 5 |
+| `permissions.cache_warmup.enabled` | Async warm-up on login | Phase 2 |
+| `permissions.read_replica.enabled` | Cache reads route to replica vs primary | (deferred per Pass 9 §22) |
 
-### 25.2 Build phase sequencing recommendations
+Flags flipped via admin tool (Phase 5 includes a feature flag editor sub-page).
 
-When building, recommended order:
+### 13.2 Per-cohort rollout pattern
 
-1. **Foundation** (cannot defer): Pass 2 schema + Pass 3 algorithm + Pass 6 append-only ledgers
-2. **Engines** (block UI development): Pass 4 field visibility + Pass 5 status bindings + Pass 9 caching
-3. **Workflow** (admin operations): Pass 7 request workflow + Pass 10 commitment enforcement
-4. **UI** (visible to users): Pass 8 permissions editor
-5. **Audit + ops**: Pass 6 query API + observability (Pass 9)
+Each phase has a defined cohort (subset of users) that activates first. Cohort sequence:
 
-### 25.3 v1 ship checklist
+- **Cohort A (Phase 2):** A + 2-3 designated PM users (~5 users)
+- **Cohort B (Phase 3):** Cohort A + remaining PMs + all Acc (~15-20 users)
+- **Cohort C (Phase 4):** Cohort B + all SRs (~30-40 users)
+- **Cohort D (Phase 5):** Cohort C + all Tech (~70-80 users)
+- **Cohort E (Phase 6):** ALL users — global activation
 
-Before v1 production ship, all of these must pass:
+Cohort sizing assumes ~120 total users in v1 production. Numbers adjust by tenant.
 
-- [ ] All 13 commitments have working enforcement at runtime (not just schema)
-- [ ] All 13 have integration tests passing
-- [ ] Pass 10 §24 composition matrix verified via test cases
-- [ ] Audit emits all event types from Pass 6 §15.1 + Pass 7 + Pass 8 catalogue (32 total)
-- [ ] Permissions editor renders all 6 sections correctly
-- [ ] Cache hit rate >95% under simulated load
-- [ ] All A-only admin exceptions require reason capture
-- [ ] All append-only ledgers reject UPDATE/DELETE with P0001 exception
+## 14. Backward compatibility during rollout
 
-## 26. Integration test surface
+The existing app must keep working as the new system progressively comes online.
 
-Build phase must implement these test scenarios. Per-commitment scenarios from §11-§23 plus cross-cutting scenarios:
+### 14.1 The dual-path pattern
 
-### 26.1 Cross-cutting scenarios
+For each gated check, the application code looks like:
 
-1. **Three-dimensional grant** — PM with role grant + active user override + valid SoD context → action proceeds
-2. **Override doesn't bypass regulatory** — User override granted; regulatory expiry blocks; action denied
-3. **Co-sign requires different roles** — Acc1 + Acc2 cannot co-sign hardClose (same role); A + Acc can
-4. **Append-only + reversal cycle** — GL post → reversal post → correction post; all three rows preserved; net effect correct
-5. **Status binding + admin exception interact** — admin invokes `clients:overrideSlaResponseTime`; binding `allows_edit` on client status is TRUE; admin exception flag also TRUE; both checks pass; reason captured; audit emitted
-6. **Cache invalidation cascade** — grant change invalidates effective_permissions_cache; next read repopulates; UI reflects new state
-7. **Audit on every commitment denial** — for each of 13 commitments, denial scenario captured in audit log
+```typescript
+// Pseudocode for build phase
+async function checkPermission(userId: string, actionName: string): Promise<boolean> {
+  if (await isFeatureEnabled('permissions.engine.enabled', userId)) {
+    // New system: full A1 algorithm
+    return await resolveActionGrant(userId, actionName).is_granted;
+  }
+  
+  // Old system: legacy check
+  return await legacyPermissionCheck(userId, actionName);
+}
+```
 
-### 26.2 Negative scenarios (commitment bypass attempts)
+Both paths exist simultaneously during rollout. Flag determines which runs per user.
 
-1. **Cannot edit Sent invoice via direct DB UPDATE** — Phase 2 hardening (audit comparison detects)
-2. **Cannot bypass append-only via DELETE** — trigger raises P0001
-3. **Cannot bypass SoD via two-user-collusion** — first user creates; second user (different) approves; allowed; no violation
-4. **Cannot bypass regulatory expiry via user override** — explicit test confirmed
+### 14.2 Schema additions are backward-compatible
 
-### 26.3 Edge cases
+All new tables are ADDITIVE — no existing tables are dropped or restructured during rollout. The existing `users.role_id` column remains; new `user_role_assignments` table is populated FROM it (preserving primary role). The old column stays for backward compat.
 
-1. **Concurrent commitment evaluations** — two requests simultaneously check SoD on same record; both succeed/fail consistently (race condition mitigation per Pass 9 §24.3)
-2. **Cache miss under load** — many simultaneous cache misses for same (user, permission); INSERT ON CONFLICT handles race
-3. **Cron timing edge cases** — temporary override expires at 03:00 UTC; cron runs at 03:00 UTC; race window <1 minute acceptable
+After Phase 6 successful cutover (and Phase 6.1 cleanup), `users.role_id` can be deprecated (kept as cached convenience; new code reads from `user_role_assignments`).
 
-## 27. Operator-facing documentation
+### 14.3 API contracts
 
-Pass 10 produces a synthesis document for operators (not directly part of design doc):
+Existing API endpoints continue to return the same shape. New permission-gated endpoints either:
+- Use the dual-path check (some users see new logic; others see old)
+- Are new endpoints that don't replace existing ones (so old paths keep working)
 
-For each commitment, operator-facing docs explain:
-- **What it does** in plain language
-- **Why it exists** (compliance / financial control / customer trust)
-- **What operators can configure** vs system-locked
-- **How to respond** to common scenarios (e.g., "How do I grant temporary banking access?" → request workflow)
+After Phase 6 + cleanup: old endpoints deprecated; clients migrated to new endpoints over time.
 
-Build phase produces this as part of M3 Settings → Help section.
+### 14.4 Existing user grants
 
-## 28. Open questions (Pass 10)
+At Phase 1 backfill:
+- For each existing user with role X, populate `user_role_assignments` row (`is_primary=TRUE`)
+- For each existing user with custom permission overrides (if any in old system), populate equivalent `user_permission_overrides` row
+- No user loses permissions during transition
 
-1. **Should denial reasons be visible to end users or just admins?** Decision: short, actionable reason visible to users ("Cannot edit; invoice has been sent"); detailed reasoning only in admin audit log. Avoid leaking system internals to non-admins.
+Verification: spot-check 20 random existing users; verify their effective permissions before vs after Phase 1 produce identical results.
 
-2. **Should there be a "test mode" that simulates commitment enforcement without actually applying?** Decision: NO at v1; admin reads audit log to trace what happened. Phase 2 may add for dry-run scenarios.
+## 15. Performance baseline + monitoring
 
-3. **How granular should the audit be for cross-cutting composition?** (When multiple commitments evaluate, should each be logged separately or combined?). Decision: A1 logs the FINAL resolution result with resolution_source naming the FIRST violation found. Verbose multi-layer audit Phase 2 if needed.
+Before Phase 2 activation, establish performance baseline. During phases, watch for regressions.
 
-4. **Should the composition matrix (§24) be enforceable at schema level?** Decision: NO at v1 — enforced via algorithm; schema enforces individual commitments. Composition is computed at runtime.
+### 15.1 Baseline metrics (collected before Phase 2)
 
-5. **Cross-tenant commitment differences in Phase 2?** Decision: Phase 2 — some operators may want stricter SoD or weaker than baseline. Schema additions needed: per-tenant `commitment_overrides` table. Not at v1.
+| Metric | Target baseline (pre-permissions) |
+|---|---|
+| Average request latency p99 | <200ms |
+| List endpoint latency p99 (50 records) | <300ms |
+| Authentication overhead | <20ms |
+| Database CPU | <40% |
+| Database connection pool utilization | <60% |
 
-6. **Compliance certifications (SOC 2, ISO 27001) — how does Pass 10 align?** Decision: Pass 10 enforcement satisfies most common compliance frameworks at v1. Audit log + append-only + access controls + retention + separation of duties — all standard frameworks ask for these. SOC 2 Type II audit may identify gaps; addressed in Phase 2 hardening.
+### 15.2 During-rollout monitoring
 
-## 29. Migration order extension
+After each phase, compare to baseline:
 
-Pass 10 doesn't add new schema. But it adds **integration test infrastructure**:
+| Metric | Phase 2 target | Phase 6 target |
+|---|---|---|
+| Request latency p99 | <230ms (+15%) | <250ms (+25%) |
+| List endpoint p99 | <340ms (+13%) | <370ms (+23%) |
+| Permission check overhead | <5ms p99 | <5ms p99 |
+| Cache hit rate | N/A | >95% |
+| Database CPU | <50% | <55% |
 
-- Step 54: Build integration test suite with 13 commitment scenarios + cross-cutting + edge cases
-- Step 55: Build commitment enforcement verification API (admin endpoint to spot-check enforcement)
-- Step 56: Build operator-facing commitment documentation generator (auto-generated from Pass 10 catalogue)
+If metrics exceed targets, investigation needed before proceeding to next phase. Rollback ready if numbers regress >50%.
 
-Now 56 total migration steps.
+### 15.3 Alerts during rollout
+
+Per Pass 9 §23.2 + additional rollout-specific:
+
+- `permission_cache.hit_rate < 90%` for >5 minutes → investigate
+- `permission_resolution.duration_ms.p99 > 5ms` for >5 minutes → DB load issue
+- `permission_audit_log.insert_failure_rate > 0.1%` → trigger or table issue
+- `feature_flag_check_latency.p99 > 5ms` → flag check shouldn't be slow
+- `legacy_permission_check.duration_ms > 100ms` → old system degrading
+
+### 15.4 Rollout dashboard
+
+Custom dashboard for the rollout period showing:
+- Current phase (1-6)
+- Active flags + their cohort scope
+- Metric comparison to baseline
+- Recent rollback events (if any)
+- User feedback channel (any reported issues from new vs old system)
+
+After Phase 6 + cleanup, rollout dashboard becomes general permissions ops dashboard.
+
+## 16. Smoke test checklist (per phase)
+
+After each phase deployment, run smoke tests before declaring phase complete.
+
+### 16.1 Phase 1 smoke (schema + backfill)
+
+- [ ] All 23+ new permissions tables exist with correct schema (DESCRIBE TABLE output matches spec)
+- [ ] Row counts match: 1260 permission_definitions, 47 field_visibility_definitions, 7 data_scope_definitions, 11 roles, ~9000 role_permissions, ~50 role_field_visibility, ~25 role_data_scopes, ~2000 status_behavior_bindings, ~600 status_transition_definitions, 4 separation_of_duties_constraints
+- [ ] All triggers compile (no NOTICE/WARNING on creation)
+- [ ] Trigger smoke test: INSERT a test row into role_permissions; verify effective_permissions_cache invalidation event fires (logged to ops)
+- [ ] Append-only ledger triggers fire: UPDATE attempt on inventory_movements raises P0001
+- [ ] Monthly partition cron schedule created in cron service
+- [ ] Initial 3 partitions per ledger exist (current + previous + next month)
+- [ ] All existing user permissions resolve identically to pre-deploy (spot check 20 users)
+- [ ] Feature flag table populated with all 10 flags, all `enabled_globally=FALSE`
+- [ ] Application logs show NO permission resolution attempts via new system (flags FALSE)
+- [ ] Production app remains functional (random user testing)
+
+### 16.2 Phase 2 smoke (resolution algorithm)
+
+- [ ] Cohort A users have `permissions.engine.enabled = TRUE`
+- [ ] Cohort A users see no functional changes (default grants produce identical results to old system)
+- [ ] Permission audit log shows entries for cohort A users
+- [ ] Cache hit rate metric reports >50% within 30 minutes (warming up)
+- [ ] Cache hit rate metric reports >95% after 24 hours
+- [ ] Permission resolution duration p99 <5ms
+- [ ] No FALSE negatives reported (denied actions that should be granted)
+- [ ] No FALSE positives reported (granted actions that should be denied)
+- [ ] Warm-up service fires on cohort A logins; logs warm-up completion
+- [ ] Cache invalidation triggers fire on admin permission changes; verified via DB log
+
+### 16.3 Phase 3 smoke (field visibility + scopes)
+
+- [ ] Cohort B users see banking sections per role: A/Acc visible, others masked/hidden
+- [ ] Cohort B users see profit fields per role: A/PM/Acc visible, others hidden
+- [ ] Cohort B users see internal notes per role: A/PM/Acc visible, others hidden
+- [ ] PCI compliance: `payments.fullCardNumber` never visible to any user including Admin
+- [ ] Audit-on-read events firing for banking field access by Acc users
+- [ ] Async audit-on-read flush completing within 100ms target
+- [ ] Data scope filters return correct subsets: SR sees own clients only; PM sees team; A sees all
+- [ ] RLS policies prevent direct database query bypass (test: try to SELECT all clients as a non-Admin user session)
+- [ ] View layer (`v_clients_with_visibility`, etc.) masks correctly when read directly
+
+### 16.4 Phase 4 smoke (cross-cutting)
+
+- [ ] Sent invoice edit attempt blocked with clear error message
+- [ ] AP bill creator approval attempt blocked with SoD reason
+- [ ] Hard close requires both A and Acc signatures; single-role attempt blocked
+- [ ] Expired-insurance vendor PO creation blocked with regulatory reason
+- [ ] Admin can create regulatory override with reason capture; PO then permitted
+- [ ] Ontario 60-day lien clock: Trade Contractor WO close attempt at day 30 blocked; at day 61 allowed
+- [ ] Effect executor: invoice send triggers GL entry creation, customer notification, etc.
+- [ ] All denials emit appropriate audit events
+- [ ] Cross-cutting tests pass: ~54 integration tests per Pass 10 §26
+
+### 16.5 Phase 5 smoke (editor + requests)
+
+- [ ] Admin accesses permissions editor at expected URL
+- [ ] All 6 editor sections render correctly
+- [ ] Admin can grant a test permission to a user; verify next request reflects (cache invalidates)
+- [ ] User submits request via UI; admin receives notification (in-app + email)
+- [ ] Admin approves request; user_permission_override row created; permission becomes active
+- [ ] Auto-expiry cron runs; expired temporary grant reverts user to role default
+- [ ] All editor activity audited as `editor_batch_save` events
+- [ ] Mobile responsive: admin approves request from phone (large tap targets working)
+- [ ] WCAG 2.1 AA accessibility: keyboard navigation through editor works; screen reader announces state changes
+
+### 16.6 Phase 6 smoke (full activation)
+
+- [ ] All users have `permissions.engine.enabled = TRUE`
+- [ ] All v1 ship checklist criteria from Pass 10 §25.3 pass:
+  - All 13 commitments enforced
+  - All 13 integration tests passing
+  - Composition matrix verified
+  - Audit emits all 32 event types
+  - Editor renders all 6 sections
+  - Cache hit rate >95% under load
+  - All admin exceptions require reason capture
+  - All append-only ledgers reject modifications
+- [ ] No regression alerts firing
+- [ ] User feedback: positive or neutral (no major complaints from cohort)
+- [ ] Permission resolution duration p99 <5ms under production load
+- [ ] Old permission check code paths still present (will be removed in Phase 6.1)
+
+## 17. Rollback procedures per phase
+
+For each phase, the exact procedure to revert if things break.
+
+### 17.1 Phase 1 rollback (schema deployment)
+
+**If Phase 1 deploy fails:** Transaction rolls back automatically (all DDL in BEGIN..COMMIT).
+
+**If issues discovered post-deploy:**
+- New tables can be DROPPED in reverse FK order
+- Existing tables untouched throughout Phase 1 (only additive)
+- Cron jobs disabled
+- Triggers dropped
+- Estimated rollback time: 30 minutes
+
+Data preservation: any rows already written to new tables can be exported to backup before DROP.
+
+### 17.2 Phase 2 rollback (algorithm online)
+
+**Step 1:** Flip `permissions.engine.enabled = FALSE` for cohort A users.
+
+**Step 2:** Users immediately revert to legacy permission checks on next request.
+
+**Step 3 (if needed):** Disable cache writes by flipping `permissions.cache_warmup.enabled = FALSE`.
+
+**Step 4 (if needed):** Truncate effective_permissions_cache. Empty cache; system functional via legacy path.
+
+Estimated rollback time: <1 minute (just flag flip).
+
+### 17.3 Phase 3 rollback (field visibility + scopes)
+
+**Step 1:** Flip `permissions.field_visibility.enabled = FALSE` for cohort B users.
+
+**Step 2:** Frontend re-renders without `<FieldGated>` masking; all fields visible per old system.
+
+**Step 3:** Flip `permissions.data_scopes.enabled = FALSE`. Scope filters stop being injected; queries return as before.
+
+**Step 4:** Async audit-on-read service idles (no more events from this).
+
+Estimated rollback time: <1 minute per flag flip.
+
+**Concerns:** Some sensitive data may have been exposed during the affected window — capture by auditing access logs.
+
+### 17.4 Phase 4 rollback (cross-cutting constraints)
+
+**Step 1:** Flip `permissions.cross_cutting.enabled = FALSE` for cohort C users.
+
+**Step 2:** Phase 3 of A1 algorithm becomes no-op; cross-cutting checks skipped.
+
+**Step 3:** Users can again perform actions that should have been blocked (Sent invoice edits, SoD violations, expired regulatory).
+
+**Step 4:** Database triggers (defense-in-depth for SoD; append-only) remain active — second line of defense.
+
+Estimated rollback time: <1 minute.
+
+**Concerns:** Reverting cross-cutting opens compliance holes. Don't rollback unless absolutely necessary; prefer fixing forward.
+
+### 17.5 Phase 5 rollback (editor + requests)
+
+**Step 1:** Flip `permissions.editor.enabled = FALSE`. Admin cannot access editor UI.
+
+**Step 2:** Existing role/permission grants remain functional (data persisted).
+
+**Step 3:** Admin manages grants via direct DB SQL until editor is restored.
+
+**Step 4:** Pending requests in workflow remain visible to admins via SQL query; can be approved manually.
+
+Estimated rollback time: 5 minutes (flag flip + manual DB operations re-enable).
+
+### 17.6 Phase 6 rollback (full activation)
+
+This is the hardest rollback. After cutover, the system is authoritative; old code paths deprecating.
+
+**If issues discovered:**
+1. Flip `permissions.engine.enabled = FALSE` globally
+2. ALL users revert to legacy permission system
+3. Cache becomes stale; no harm if not used
+4. Investigate; fix forward preferred
+
+**Soft rollback per cohort (recommended approach):**
+- Identify the cohort experiencing issues
+- Disable `permissions.engine.enabled` for that cohort only
+- Investigate; fix; re-enable
+
+**Hard rollback (last resort):**
+- Disable all permissions flags globally
+- Reactivate legacy permission system
+- Address issues
+- Re-attempt Phase 6 from scratch
+
+After Phase 6.1 cleanup (~4 weeks post-cutover), old code paths removed and hard rollback no longer possible. Treat Phase 6.1 as point-of-no-return.
+
+## 18. Go-live cutover plan
+
+The final flip from "new system optional" to "new system authoritative."
+
+### 18.1 Pre-cutover checklist
+
+- All Phase 1-5 smoke tests passing for 2+ weeks
+- Cache hit rate >95% sustained for 2+ weeks
+- Zero high-severity production incidents related to permissions for 2+ weeks
+- User feedback channel reports neutral-or-positive sentiment
+- Performance baseline shows no significant regression
+- All v1 ship checklist criteria (Pass 10 §25.3) verified
+
+### 18.2 Cutover sequence
+
+1. **T-48h:** Final go/no-go decision in stakeholder meeting. Operator + Admin user confirms.
+2. **T-24h:** Communications to all users: "Permissions system upgrading 2026-XX-XX 09:00 UTC; expect 1-2 hours of slightly slower response."
+3. **T-0:** Flip `permissions.engine.enabled = TRUE` globally. Triggers warm-up on next-active users.
+4. **T+15min:** Verify metrics: cache hit rate climbing to >50%; latency targets being met.
+5. **T+60min:** Verify metrics: cache hit rate >85%.
+6. **T+24h:** Verify metrics: hit rate >95% sustained. Run smoke tests.
+7. **T+1 week:** Verify metrics: no regressions; user feedback positive. Phase 6 deemed successful.
+
+If any verification step fails:
+- T+15min: rollback (flag global FALSE); investigate within 1 hour
+- T+60min: rollback if hit rate <30%; investigate
+- T+24h: rollback if hit rate <85%; investigate
+
+### 18.3 Post-cutover (Phase 6.1)
+
+After 4 weeks of stable Phase 6:
+- Remove legacy permission code paths from codebase
+- Deprecate `users.role_id` (keep column; new code reads from `user_role_assignments`)
+- Documentation update: legacy patterns removed
+- Final design phase closure announcement
+
+## 19. Monitoring activation timeline
+
+Observability metrics from Pass 9 §23 activated incrementally per phase.
+
+### 19.1 Phase 1 metrics
+
+- `permission_definitions.total_rows`
+- `roles.total_rows`
+- `feature_flags.total_rows`
+- All append-only ledger row counts
+- Migration script run logs
+
+### 19.2 Phase 2 metrics (Pass 9 §23 baseline)
+
+- `permission_cache.hits_total`
+- `permission_cache.misses_total`
+- `permission_cache.lookup_duration_ms`
+- `permission_resolution.duration_ms`
+- `permission_cache.size_rows`
+
+### 19.3 Phase 3 metrics
+
+- `field_visibility.audit_on_read_count`
+- `field_visibility.flush_duration_ms`
+- `data_scope.filter_application_count`
+- `view_layer.read_count_per_resource`
+
+### 19.4 Phase 4 metrics
+
+- `separation_of_duties.violations_blocked`
+- `regulatory_expiry.blocks_triggered`
+- `regulatory_expiry.overrides_invoked`
+- `status_transitions.executed_count`
+- `effect_executor.tasks_queued`
+
+### 19.5 Phase 5 metrics
+
+- `permission_editor.batch_saves_total`
+- `permission_editor.conflict_detected_count`
+- `request_admin_access.submitted_count`
+- `request_admin_access.approved_count`
+- `request_admin_access.rejected_count`
+- `request_admin_access.expired_count`
+
+### 19.6 Phase 6 metrics
+
+- Full Pass 9 §23 catalogue active
+- Custom dashboards built for ops team
+- Alerts configured per Pass 9 §23.2 thresholds
+
+## 20. Risk register
+
+Risks identified during planning + mitigation strategies.
+
+### 20.1 High-impact risks
+
+| Risk | Mitigation |
+|---|---|
+| **Trigger function breaks during deploy** | Test in staging extensively; staged deployment; manual rollback to drop trigger if needed |
+| **Cache invalidation race condition causes stale grants** | `last_invalidated_at` check on writes; Pass 9 §24.3; monitoring alerts on extended staleness |
+| **Field visibility false-exposure of banking data** | Defense-in-depth: app transformer + view + RLS; spot-check audits; clear error messaging on visibility plan failures |
+| **Cross-cutting constraint blocks legitimate work** | Phased cohort rollout catches false-positives before global; clear admin exception path |
+| **Performance regression from caching overhead** | Baseline metrics; per-phase regression thresholds; rollback triggers |
+
+### 20.2 Operational risks
+
+| Risk | Mitigation |
+|---|---|
+| **Admin accidentally grants too-broad permission** | Conflict detection in editor (Pass 8 §23.3); audit captures all changes |
+| **Cohort users frustrated by behavior change** | Communications; cohort feedback loop; willing to roll back if needed |
+| **Edge case discovered post-launch** | Phased rollout; ability to disable specific phases; soft rollback |
+
+### 20.3 Schedule risks
+
+| Risk | Mitigation |
+|---|---|
+| **Phase X takes longer than 2-week target** | Build phase plans 30% buffer; if Phase 3 takes 4 weeks instead of 2, that's acceptable; pipeline tolerates |
+| **Holiday/blackout periods disrupt rollout** | Plan rollouts to avoid year-end, fiscal close, major holidays |
+
+## 21. Communication plan
+
+User-facing communications throughout rollout.
+
+### 21.1 Pre-Phase 1
+
+Email to all users from operator: "Major permissions upgrade coming. Phased rollout over 12-16 weeks. Most users see no change initially. Detailed permissions for some sensitive fields gradually rolling out. Questions to ops@nexvelonglobal.com."
+
+### 21.2 Per-phase communications
+
+- T-24h: "Phase X going live tomorrow morning. Expected behavior changes for cohort N: ..."
+- T+0: "Phase X is live. If you experience unexpected behavior, contact ops."
+- T+24h: "Phase X performing as expected. Thanks for patience."
+
+### 21.3 Phase 5 specific (user-facing)
+
+When request workflow goes live, users get an in-app banner: "New: if you need temporary access to a feature, click 'Request Access'."
+
+### 21.4 Phase 6 cutover
+
+Full announcement: "Permissions upgrade complete. New features: granular access control, role-based dashboards, audit trail for sensitive actions. Documentation at /docs/permissions."
+
+## 22. Success criteria
+
+The rollout is considered successful when ALL of these are TRUE:
+
+1. **All 6 phases deployed without major incident** (no >2-hour outage; no widespread user complaints)
+2. **v1 ship checklist (Pass 10 §25.3) passes for 4 consecutive weeks**
+3. **No user reports data leak or wrong-permission incident**
+4. **Performance baselines maintained (within targets)**
+5. **Cache hit rate sustained >95% across 4 consecutive weeks**
+6. **All 13 §0.4 commitments demonstrably enforced**
+7. **Audit log captures all activities; compliance officer satisfied with coverage**
+8. **At least one Phase 7-style request approval has gone through workflow end-to-end successfully**
+9. **At least one operator-defined custom role has been created and is in use**
+10. **Operator-facing documentation auto-generated and helpful to support tickets**
+
+## 23. Open questions (Pass 11)
+
+1. **Should we run rollout in staging environment first?** Decision: YES — full Phase 1-6 dry run in staging before production Phase 1. Staging-prod parity check required. Build phase confirms staging is comparable.
+
+2. **Should we plan a v1.1 patch release for issues discovered post-launch?** Decision: YES — block out 4 weeks post-Phase-6 for v1.1 patch deploys addressing discovered edge cases. Phase 2 cleanup work falls into this.
+
+3. **Should we allow operators to opt-out of certain phases?** Decision: NO — phases are sequenced; opt-out breaks dependencies. Operator can request earlier Phase 6 cutover if confident; cannot skip phases.
+
+4. **What if a Phase X gets stuck for >4 weeks?** Decision: stakeholder review; could be: legitimate complexity discovered (extend phase), implementation issue (fix and proceed), or fundamental design issue (revisit design). Don't proceed to next phase until current passes.
+
+5. **Should we have a single "go-live" date for all customers?** Decision: NO — each tenant rollout independently in Phase 2 (multi-tenant). v1 single-tenant has one go-live.
+
+6. **Should we publish the rollout plan publicly to users?** Decision: high-level summary to users; detailed plan internal only. User communications focus on what they'll experience, not internal mechanics.
+
+## 24. Cumulative summary — Permissions Design Phase
+
+### 24.1 What was designed
+
+Across 11 passes:
+- ~1260 actions normalized with `resource:verb[:qualifier]` vocabulary
+- 23+ database tables across 5 functional groups + 1 materialized view
+- 3 runtime resolution algorithms (A1, A2, A3) with <5ms p99 compound resolution
+- 47-flag field visibility catalog with 12 standard mask types
+- 80 status surfaces with polymorphic behavior bindings
+- 8 append-only ledgers with uniform pattern + monthly partitioning
+- Request-admin-access workflow with 4 request types + 7-state lifecycle
+- Permissions editor UI with 6 sections + cross-section linking + accessibility
+- 4-cache architecture with pull invalidation + warm-up + observability
+- 13 §0.4 cross-cutting commitments fully enforcement-mapped
+- 56-step migration order with 6-phase deployment plan
+
+### 24.2 What's locked across the phase
+
+- **Total events in `permission_audit_log` catalogue: 32** (21 from Pass 6 + 9 from Pass 7 + 2 from Pass 8)
+- **Performance targets: <5ms p99 compound resolution; >95% cache hit rate**
+- **All 13 §0.4 commitments have MVP-critical v1 implementation specified**
+- **Phase 2 hardening backlog catalogued (~30 items across all passes)**
+
+### 24.3 What ships in v1
+
+Per Pass 10 §25 build phase priorities — all 13 commitments at MVP-critical level with specific v1 implementations. Phase 2 hardening for advanced cases.
+
+### 24.4 What's deferred to Phase 2
+
+~30 items across all passes. Major categories:
+- Multi-tenant partitioning
+- Multi-region replica
+- Cryptographic snapshot integrity (hash chain)
+- Cold archival to S3 Glacier
+- Multi-step approval workflows
+- GDPR-compliant configurable retention
+- ML-based suggestions
+- Plugin architecture for operator-defined custom actions/bindings/flags
+- SOC 2 Type II hardening
+
+### 24.5 Build phase pipeline
+
+After Pass 11 commits:
+1. Update ROADMAP item 2 to "✅ COMPLETE — 11 of 11 passes locked"
+2. Update ROADMAP item 3 to "🚧 IN PROGRESS — Permissions module build"
+3. Build phase starts with Phase 1 from Pass 11 §12.1 (Foundation: schema + backfill)
 
 ---
 
 ═══════════════════════════════════════════════════════════════════
-# 30. What's next (Pass 11 preview — final pass)
+# 25. End of design phase
 ═══════════════════════════════════════════════════════════════════
 
-**Pass 11: Migration plan.**
+This is the final design pass. After commit, the permissions design phase formally closes.
 
-The full design is now specified across Passes 1-10. Pass 11 lays out the production rollout plan:
+### 25.1 What the next Claude Code session does
 
-- The 56 migration steps from Pass 2 + 5-9 + 10 condensed into deployment phases
-- Production-safe migration sequencing (data preservation rules from §0.4)
-- Backward compatibility during rollout (the app keeps working as migrations apply)
-- Feature flags for incremental enablement (e.g., enable cache layer per cache, not all at once)
-- Rollback procedures per phase (if migration fails halfway, how to recover)
-- Smoke testing checklist after each phase
-- Performance baseline establishment
-- Go-live cutover plan
-- Monitoring activation timeline
+For the NEXT session opening (build phase Session A):
 
-Pass 11 produces v0.11 — the final version of the design doc. After Pass 11, design phase closes and build phase opens.
+> Continuing Nexvelon build. **Permissions Design Phase COMPLETE — all 11 passes locked. Build phase opening with Phase 1 (Foundation: schema + backfill).** Before responding to anything, read these files in order: `NEXVELON_PRINCIPLES.md`, `CLAUDE_CONTEXT.md`, `NEXVELON_FEATURE_AUDIT.md` v0.14, `NEXVELON_PERMISSIONS_DESIGN.md` v0.11, `NEXVELON_ROADMAP.md`, then the latest `NEXVELON_SESSION_*_HANDOFF.md`. Then ask what to work on. Repo: github.com/nexvelon/nexvelon. Live: https://app.nexvelonglobal.com. Build phase begins with Phase 1: deploy permissions schema + backfill existing user/role data. Feature flags off; system dormant; verify backfill correctness.
+
+### 25.2 Design phase metrics
+
+- Sessions used: 11 (Sessions P-Z including this)
+- Cumulative architectural decisions locked: ~35
+- Cumulative open questions resolved: ~50
+- Total event types catalogued: 32
+- Migration steps documented: 56
+- Integration test scenarios specified: ~54
+
+### 25.3 Acknowledgments
+
+The design works because:
+- The audit (Sessions A-O) did rigorous module-level capture
+- The design phase (Sessions P-Z) synthesized that into a working system
+- The decision to do design-then-build (vs incremental) protected against rework
+
+Build phase will validate the design. Expect to discover gaps; the design is a strong foundation, not an oracle.
 
 ---
 
-**End of v0.10.** Pass 10 (Cross-Cutting Enforcement Patterns) complete. 13 commitments from §0.4 catalogued with complete enforcement-point inventory across all passes (schema constraints, trigger code, algorithm phases, UI states, audit events). 13 sections (§11-§23) mapping 1:1 to commitments. Composition matrix specifying precedence when multiple commitments apply. Build phase priorities classified (all 13 MVP-critical with v1 vs Phase 2 hardening distinctions). Integration test surface specified with 26 test scenarios (cross-cutting + per-commitment + negative bypass attempts + edge cases). v1 ship checklist with 8 criteria. Operator-facing documentation framework. 6 Pass 10 open questions resolved. Migration order extended +3 steps (now 56 total).
+**End of v0.11. END OF DESIGN PHASE.** Pass 11 (Migration Plan) complete. Six-phase rollout plan specified: Foundation (schema + backfill) → Resolution algorithm online (read-only) → Field visibility + data scopes → Cross-cutting constraints → Permissions editor + requests → Full activation + cutover. Runtime-toggleable feature flag table with 10 flags. Eager backfill strategy. Backward compatibility via dual-path pattern (legacy + new permission checks). Cohort-based rollout (5 cohorts A through E covering ~120 users). Performance baseline targets specified per phase. Smoke test checklists per phase (~80 checks total). Rollback procedures per phase (estimated rollback times ~1 minute to 30 minutes). Go-live cutover plan with T-48h, T-24h, T-0, T+15min, T+60min, T+24h, T+1week milestones. Risk register catalogued (5 high-impact + 3 operational + 2 schedule). Communication plan. 10-criterion success definition. 6 Pass 11 open questions resolved. Cumulative summary of all 11 passes locked. Design phase formally closes; build phase opens with Phase 1.

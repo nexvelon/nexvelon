@@ -12,60 +12,97 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session Y CLOSED. Permissions Design Pass 10 of 11 complete.**
+**As of 2026-05-12. Session Z CLOSED. 🏁 PERMISSIONS DESIGN PHASE COMPLETE — all 11 passes locked. Build phase opens.**
 
-- **Session Y focus:** Permissions Design — Pass 10 (Cross-Cutting Enforcement Patterns). Integration/verification pass. 13 sections (§11-§23) mapping 1:1 to §0.4 commitments #1-#13. Each commitment cataloged with enforcement-point inventory + composition rules + exception escalation paths + test scenarios + build phase priority. Cross-cutting composition matrix (§24) showing precedence when multiple commitments apply. Layered defense visualization. Audit coverage verification. Build phase priorities (all 13 MVP-critical with v1 vs Phase 2 hardening distinctions). v1 ship checklist (8 criteria). 26 integration test scenarios specified. Operator-facing documentation framework. 6 Pass 10 open questions resolved. Migration order extended +3 steps (now 56 total).
-- **Latest commit:** `docs: permissions design Pass 10 — cross-cutting enforcement patterns`. See `git log -1 --oneline`.
+- **Session Z focus:** Permissions Design — Pass 11 (Migration Plan) — THE FINAL DESIGN PASS. 6-phase rollout plan (Foundation → Resolution algorithm read-only → Field visibility+scopes → Cross-cutting constraints → Editor+requests → Full activation+cutover). Runtime-toggleable feature flag table with 10 flags. Eager backfill strategy. Backward compatibility via dual-path pattern. 5-cohort rollout (A through E covering ~120 users). Performance baseline + per-phase regression thresholds. Smoke test checklists per phase (~80 individual checks). Rollback procedures per phase (1min to 30min). Go-live cutover plan with milestones + rollback triggers. Phase 6.1 cleanup (point-of-no-return at ~4 weeks post-cutover). Monitoring activation timeline. 10-risk register. Communication plan. 10-criterion success definition. 6 Pass 11 open questions resolved. Three architectural decisions: phased rollout, runtime flags, eager backfill.
+- **Latest commit:** `docs: permissions design Pass 11 — migration plan (END OF DESIGN PHASE)`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked. Total ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments now fully enforcement-mapped.
-- **Permissions design progress:** 10 of 11 passes complete. Pending: Pass 11 (Migration plan) — FINAL pass.
-- **File size management:** v0.10 keeps Passes 1-9 as one-paragraph summaries. Full content commits: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6), Pass 8 (c090599), Pass 9 (7eb540e). Pass 10 full content §10-§29.
+- **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments now fully enforcement-mapped + migration-planned.
+- **Permissions design progress:** 🏁 **11 of 11 passes COMPLETE.** Design phase formally closes. Build phase opens.
+- **File size management:** v0.11 keeps Passes 1-10 as one-paragraph summaries. Full content preserved in git history at commits noted in §0.2. Pass 11 full content §11-§25.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 10 of 11 complete. Pass 11 next (FINAL).
-  3. Permissions module — build (ROADMAP item 3).
-  4. Quotes v1 build (ROADMAP item 4).
-  5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 10:**
-  - **All 13 cross-cutting commitments have complete enforcement-point inventory** — each commitment traced through schema constraints, trigger code, algorithm phases, UI states, audit events. Operators asking "where exactly is §0.4 #X enforced?" get definitive answer.
-  - **Cross-cutting composition matrix locked** (§24):
-    - User override CAN bypass: role default (#1)
-    - User override CANNOT bypass: regulatory expiry (#12), SoD (#11), append-only (#10), immutable snapshots (#8)
-    - Admin exception path: 13 specific actions require reason capture + audit even for Admin role
-    - Co-sign path: hard close only (A + Acc); other SoD constraints have no override
-    - Append-only: absolute; reversal pattern only correction mechanism
-    - Geolocation retention: operator can extend; cannot disable below 7-day minimum
-  - **Layered defense pattern** explicit across all commitments: Request → Auth → A1 algorithm → Schema constraint → DB trigger (5 layers per commitment).
-  - **Audit coverage verification**: every commitment denial emits an event from Pass 6 §15.1 catalogue (32 event types total now).
-  - **Build phase priorities** classified per commitment: all 13 MVP-critical with v1 implementation vs Phase 2 hardening distinctions. Pass 8 §17.5 system-locked rows enforce per-commitment.
-  - **Build phase sequencing**: foundation (Pass 2 schema + Pass 3 algorithm + Pass 6 append-only) → engines (Pass 4 visibility + Pass 5 bindings + Pass 9 caching) → workflow (Pass 7 requests + Pass 10 commitments) → UI (Pass 8 editor) → audit + ops (Pass 6 + Pass 9 observability).
-  - **v1 ship checklist** locked with 8 criteria: all 13 commitments enforced at runtime; all 13 integration tests pass; composition matrix verified; audit emits all event types; permissions editor renders all 6 sections; cache hit rate >95%; all admin exceptions require reason; all append-only ledgers reject UPDATE/DELETE with P0001.
-  - **26 integration test scenarios** specified for build phase: 13 commitment-specific (positive + negative + edge per commitment) + 7 cross-cutting composition + 4 negative bypass attempts + 3 race condition / concurrency edge cases. Total ~54 tests covering Pass 10 commitments.
-  - **Operator-facing documentation framework** specified: auto-generated from Pass 10 catalogue into M3 Settings → Help section. Each commitment explained in plain language with "what it does", "why it exists", "what you can configure", "how to respond" sections.
-- **Six Pass 10 open questions resolved:**
-  - Denial reasons visible to end users: SHORT actionable reason visible (e.g., "Cannot edit; invoice has been sent"); detailed in admin audit only
-  - Test mode for commitment enforcement simulation: NO at v1; admin reads audit log
-  - Audit granularity for cross-cutting composition: A1 logs FINAL resolution with first violation as resolution_source; multi-layer Phase 2
-  - Composition matrix schema-enforceable: NO at v1 (algorithm enforces; schema enforces individual commitments)
-  - Cross-tenant commitment differences: Phase 2 (per-tenant commitment_overrides table)
-  - SOC 2 / ISO 27001 alignment: Pass 10 satisfies most common compliance frameworks at v1; SOC 2 Type II hardening Phase 2
-- **Phase 2 deferrals from Pass 10:**
-  - Multi-step approval workflow for highest-stakes admin exceptions
-  - Cryptographic snapshot integrity (hash chain) per §0.4 #8 extension
-  - Multi-step approval for emergency regulatory overrides
-  - Cross-dimensional rule engine (combining multiple commitments declaratively)
-  - Per-tenant commitment overrides
-  - SOC 2 Type II hardening
-  - GDPR-compliant configurable per-user geolocation retention
+  2. ✅ Permissions module — design pass COMPLETE (11 of 11 passes locked).
+  3. **🚧 NEXT: Permissions module — build phase Phase 1 (Foundation: schema + backfill).**
+  4. Permissions module — build phase Phases 2-6 (algorithm online → field visibility → cross-cutting → editor → full activation).
+  5. Quotes v1 build.
+  6. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
+- **Major architectural decisions from Pass 11:**
+  - **Phased rollout (not big-bang)** — 6 phases, each independently valuable + independently rollback-able. Catch problems while only some users affected; rollback contained.
+  - **Runtime-toggleable feature flags (not compile-time)** — DB-stored `feature_flags` table with `enabled_globally`, `enabled_user_ids[]`, `enabled_role_codes[]` columns. Flip without redeploy. Audit trail of who toggled what when. Supports per-user/role cohort scoping.
+  - **Eager backfill (not lazy)** — Phase 1 populates expected rows for all existing users + roles before activation. >95% hit rate from day 1. Lazy backfill rejected (per-user-first-action cache miss would be slow).
+  - **Dual-path pattern for backward compatibility** — application code has `if (isFeatureEnabled(...)) { newSystem() } else { legacySystem() }` per check. Both paths exist simultaneously during rollout. Flag determines which runs per user.
+  - **5 cohorts A-E covering ~120 users**:
+    - Cohort A (Phase 2): A + 2-3 designated PMs
+    - Cohort B (Phase 3): + remaining PMs + all Acc
+    - Cohort C (Phase 4): + all SRs
+    - Cohort D (Phase 5): + all Tech
+    - Cohort E (Phase 6): ALL — global activation
+  - **6 phases with explicit duration + verification + rollback** for each:
+    - Phase 1 Foundation (1-2 weeks): schema + backfill; flags FALSE; existing app unchanged
+    - Phase 2 Algorithm online (2 weeks): A1+A2+A3 algorithms + cache reads; cohort A only
+    - Phase 3 Field visibility + scopes (2 weeks): backend serialization + frontend FieldGated + RLS; cohort B
+    - Phase 4 Cross-cutting constraints (3 weeks): SoD + regulatory expiry + status binding + co-sign; cohort C
+    - Phase 5 Editor + requests (2-3 weeks): permissions editor UI + request workflow; cohort D
+    - Phase 6 Full activation + cutover (2 weeks + 4 weeks parallel observation): ALL users; old paths deprecating
+  - **Phase 6.1 cleanup (~4 weeks post-cutover)** removes legacy code paths — point-of-no-return.
+  - **10 feature flags catalogued** (permissions.engine.enabled, .field_visibility.enabled, .data_scopes.enabled, .cross_cutting.enabled, .audit_on_read.enabled, .append_only_triggers.enabled, .editor.enabled, .request_workflow.enabled, .cache_warmup.enabled, .read_replica.enabled).
+  - **Performance baseline + per-phase regression thresholds** — Phase 2 target <230ms request p99 (+15% from baseline); Phase 6 target <250ms (+25%). Investigation triggers >50% regression.
+  - **~80 smoke test checks across 6 phases** — per-phase specific checks before declaring phase complete.
+  - **Rollback procedures per phase** — flag-flip rollbacks <1min for Phases 2-5; schema-drop for Phase 1 ~30min; cohort-soft rollback for Phase 6.
+  - **Go-live cutover plan** — T-48h go/no-go meeting; T-24h user comms; T-0 global flag flip; verification at T+15min/T+60min/T+24h/T+1week with rollback triggers at each.
+  - **10-criterion success definition** — all 6 phases without major incident; v1 ship checklist for 4 weeks; no data leak/wrong-permission incidents; performance maintained; cache hit rate >95% sustained 4 weeks; all 13 §0.4 commitments enforced; audit captures all activities; ≥1 request approval through workflow; ≥1 operator-defined custom role created; operator docs auto-generated.
+- **Six Pass 11 open questions resolved:**
+  - Run rollout in staging first: YES (full Phase 1-6 dry run before production)
+  - Plan v1.1 patch release post-launch: YES (4-week patch window for edge cases)
+  - Operator opt-out of phases: NO (sequenced; opt-out breaks dependencies)
+  - Phase stuck >4 weeks: stakeholder review — extend/fix/redesign
+  - Single go-live for all customers: NO (per-tenant Phase 2; v1 single-tenant has one go-live)
+  - Public rollout plan to users: high-level summary visible; detailed plan internal
+- **Phase 2 deferrals from Pass 11:**
+  - Operator opt-out / phase skipping
+  - Multi-tenant per-tenant phased rollouts (each tenant independent)
+  - ML-based regression detection during rollout
+  - Auto-rollback on regression thresholds (v1 manual decision)
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
+### Cumulative Permissions Design Phase Summary
+
+**11 of 11 passes complete. Design phase formally closes.**
+
+| Pass | Sessions | What was designed |
+|---|---|---|
+| 1 | P | Action vocabulary catalog (~1260 actions normalized) |
+| 2 | Q | Database schema (14 tables + 1 materialized view across 5 groups) |
+| 3 | R | Resolution algorithm (A1/A2/A3 — 7-phase A1; <5ms p99) |
+| 4 | S | Field visibility engine (47-flag catalog + 12 mask types + 5 view layer) |
+| 5 | T | Status binding layer (80 surfaces + 14 binding names + state matrices) |
+| 6 | U | Append-only audit (8 ledgers + 21 event types + monthly partitioning) |
+| 7 | V | Request-admin-access workflow (4 request types + 7-state machine + 9 new events) |
+| 8 | W | Permissions editor UI (workspace + 6 sections + 32 total event types) |
+| 9 | X | Caching strategy (4 caches + pull invalidation + warm-up + observability) |
+| 10 | Y | Cross-cutting enforcement patterns (13 §0.4 commitments fully mapped) |
+| 11 | Z | Migration plan (6 phases + 5 cohorts + 56 migration steps + rollback) |
+
+**Cumulative metrics:**
+- ~1260 actions catalogued and grant-mapped per role
+- 32 audit event types specified
+- 13 cross-cutting commitments fully enforcement-mapped
+- 56 migration steps grouped into 6 deployment phases
+- ~54 integration test scenarios specified
+- ~50 open design questions resolved
+- ~35 architectural decisions locked
+- ~30 Phase 2 hardening items deferred and catalogued
+
 ### Open In-Flight Items
 
-**None.** Pass 10 produced no uncommitted plans. Next session is the FINAL design pass — Pass 11 (Migration plan). After Pass 11, design phase closes and build phase opens. Pass 11 covers: 56-step migration sequencing into deployment phases, production-safe rollout (data preservation rules from §0.4), backward compatibility during rollout, feature flags for incremental enablement, rollback procedures per phase, smoke testing checklist, performance baseline establishment, go-live cutover plan, monitoring activation timeline.
+**None.** Pass 11 produced no uncommitted plans. **Design phase closes after this commit.**
+
+**Next session is BUILD PHASE Session A** — first step is Phase 1 from Pass 11 §12.1 (Foundation: deploy permissions schema + backfill existing user/role data; feature flags off; system dormant; verify backfill correctness).
 
 ---
 
