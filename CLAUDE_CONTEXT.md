@@ -12,43 +12,42 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session G CLOSED.**
+**As of 2026-05-12. Session H CLOSED.**
 
-- **Session G focus:** Module 5 of the feature audit (Quotes) — first revenue module. Three quote types (Service / Project / Service Contract), online portal acceptance with signed URL + e-signature, immutable send snapshots for legal durability, eight-layer print protection on revenue PDFs, T&C auto-composition from Module 1 onboarding gates, value + discount threshold approval routing, per-cost-centre tax codes (Canadian compliance), holdback in quote totals, field-level margin visibility. Ten in-session open questions resolved.
-- **Latest commit:** `docs: codify Session G — Module 5 (Quotes) audit + handoff`. See `git log -1 --oneline`.
+- **Session H focus:** Module 6 of the feature audit (Projects) — first operations module. Three-state costing (Estimated/Committed/Actual) with real-time forecast-at-completion. Change order workflow with customer signature via signed URL portal. Commissioning workflow with per-equipment test results + customer per-item sign-off + ULC fire-alarm verification auto-attachment. Handover package auto-assembly triggering warranty clock. Progress invoicing with Canadian Construction Act compliance. Seven in-session open questions resolved.
+- **Latest commit:** `docs: codify Session H — Module 6 (Projects) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 5 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes all complete). The three foundational modules + Dashboard (presentation) + Quotes (first revenue) are now done. Modules 6-13 pending: Projects (next; consumes Quote conversion), Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+- **Feature audit progress:** 6 of 13 modules walked (Clients + Sites + Contacts, Employees + Permissions, Settings, Dashboard, Quotes, Projects all complete). The three foundational modules + Dashboard (presentation) + Quotes (first revenue) + Projects (first operations) are now done. Modules 7-13 pending: Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+- **File size management note:** Starting v0.7, M1-M5 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 at 073b393, M2 at 4dc0cc2, M3 at 87a9fc8, M4 at 6283d0f, M5 at 5633e25. Current session module always gets full content in the doc.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 6-13** — Projects, Inventory, Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~580 actions across 5 modules) + ten-dimensional model + Session C-G additions.
+  1. **Feature audit Modules 7-13** — Inventory (next), Vendors, Invoices, Subcontractors, Financials, Scheduling, Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~690 actions across 6 modules) + ten-dimensional model + Session C-H additions.
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session G:**
-  - **Three quote types** — Service Quote (one-off jobs), Project Quote (multi-milestone work converting to Project), Service Contract Quote (recurring revenue generating service_contracts row).
-  - **Online portal acceptance** — client-facing signed URL (no login), 90-day expiry, revoked on acceptance, e-signature via touch/desktop. Faster than competitors requiring client portal accounts.
-  - **Immutable send snapshots** — line items, pricing, T&C, template version captured at send time in quote_terms_snapshots. Legal durability per §0.4 #8. Revisions create new snapshots.
-  - **Eight-layer print protection** extended to revenue PDFs (force-reauth, watermark, audit row, 24h signed URL).
-  - **T&C auto-composition** from Module 1 onboarding gates — each clause tagged with source attribution, editable, re-composable.
-  - **Value + discount threshold approval routing** — combined AND logic. Defaults: <$5k self-approve, $5-25k→PM, $25-50k→PM+margin review (gates if margin <15%), >$50k→Admin. Discount: <10% self-approve, 10-25%→PM, >25%→Admin. Configurable per role in Settings.
-  - **Per-cost-centre tax codes** — different cost centres carry different tax codes (Canadian split-tax-treatment compliance).
-  - **Holdback in quote totals** — Canadian Construction Act compliance (10%/Excl/45 default from client config).
-  - **Field-level margin visibility** — A/PM default; SR per-user override only. quotes:viewMargin is visibility flag distinguishing who-sees from who-can-do.
-  - **Quote → Project conversion locks source quote** — read-only post-conversion. Revisions blocked. New quote required for changes.
-  - **Pre-built assemblies** (simPRO pattern) — bundled line items for repeated patterns ("Standard Camera Install").
-  - **Cost centres** (simPRO pattern) — Equipment / Labor / Materials / Sub-Contractor / Travel / Commissioning / Training / Misc — with sub-totals on PDF.
-  - **Pricebook with vendor catalog sync** — master catalog of line items with default cost/sell/margin/tax.
-  - **Three quote types** drive workflow variants and conversion targets (project / job / service_contract).
-  - **Phase 2 deferrals locked:** Multi-currency in single quote, financing integrations, volume discount rules engine, real-time co-authoring, quote import from competitor systems, dynamic pricing rules engine, line-item-level custom fields.
+- **Major architectural decisions from Session H:**
+  - **Three-state costing (Estimated/Committed/Actual)** with real-time forecast-at-completion. PM sees margin erosion in real time as costs accumulate.
+  - **Change order workflow** — drafted → internal approval → sent to customer via signed URL portal → customer signature → implementation. Generates legally durable amendment tied to original quote_terms_snapshot. Triggers amended invoicing if billing has begun.
+  - **Commissioning workflow** with per-equipment test results, photo+GPS evidence (date-stamped from mobile capture), customer per-item sign-off. Conditional pass available with deficiency list capture. Final commissioning certificate generated as eight-layer-protected PDF. ULC fire-alarm verification documents auto-attach for fire alarm projects (Ontario ULC-S536 compliance).
+  - **Append-only commissioning + acceptance records** with one-way hash on signatures.
+  - **Handover workflow** — final customer sign-off triggers warranty clock; warranty terms versioned. Auto-assembled handover package PDF includes signed contract + COs + commissioning records + as-builts + manuals + warranty + service contact info. Service Contract Quote auto-generates from project for recurring revenue if applicable.
+  - **Progress invoicing** — Deposit / Progress Claims (% based or per-phase) / Final Claim / Retention Release. Respects holdback config from Module 1 (Canadian Construction Act 10%/Excl/45-day default).
+  - **Trade Contractor lien deadline tracking** (Ontario Construction Act 60-day rule) for AR/Financials integration.
+  - **Field-level margin visibility per project** — A/PM default; SR per-user override only. `projects:viewMargin` is visibility flag distinguishing who-sees from who-can-do.
+  - **Eight-layer print protection** extended to commissioning certificates + handover packages.
+  - **Change order thresholds separate from quote thresholds.** Defaults: <$2k self-approve, $2-10k → PM, >$10k → Admin. Scope thresholds: <5% self-approve, 5-15% → PM, >15% → Admin.
+  - **Project templates** with vertical-specific seeded templates (Camera install, Access control install, Fire alarm install, Intrusion alarm install, Integration project, Maintenance contract setup).
+  - **Read-only Gantt chart at v1**; edit-via-Gantt Phase 2.
+  - **Phase 2 deferrals locked:** Customer status portal (signed-URL view-only at v1; full portal Phase 2), multiple PMs per project (single primary at v1), daily logs mandatory enforcement, project meeting notes with scheduler, phase/task custom fields, sub-contractor portal full access.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session G produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session H produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
