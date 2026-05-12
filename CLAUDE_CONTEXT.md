@@ -12,50 +12,53 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session Q CLOSED. Permissions Design Pass 2 of 11 complete.**
+**As of 2026-05-12. Session R CLOSED. Permissions Design Pass 3 of 11 complete.**
 
-- **Session Q focus:** Permissions Design — Pass 2 (Database Schema). 14 tables specified across 5 groups (core permissions / field visibility / data scopes / audit / cross-cutting constraints) plus 1 materialized view. Schema covers: ~1260-row action catalog, role definitions (system + custom), role × permission grants with three-way state (granted/denied/default) + UI state override per §0.4 #2, per-user overrides with mandatory reason capture + temporary expiration, denormalized effective_permissions_cache for <1ms runtime lookups, field visibility with three states (visible/masked/hidden — PCI compliance support), 7 scope qualifiers with SQL filter templates, append-only audit log with UPDATE/DELETE triggers, separation of duties constraints (§0.4 #11) supporting co-sign (e.g., A + Acc hard close), regulatory expiry overrides (§0.4 #12) with reason capture + validity window, geolocation retention policies (§0.4 #13) with operator-configurable purge action. Migration order specified for production-safe rollout. Three architectural decisions locked. Six open questions resolved.
-- **Latest commit:** `docs: permissions design Pass 2 — database schema`. See `git log -1 --oneline`.
+- **Session R focus:** Permissions Design — Pass 3 (Resolution Algorithm). Three intertwined runtime algorithms specified: A1 (action grant resolution; 7-phase: cache lookup → base table resolution → cross-cutting constraints → audit), A2 (data scope resolution returning SQL filter + bind params), A3 (field visibility resolution returning visible/masked/hidden). Performance budget locked: <5ms p99 compound; <1ms cache hit; <50ms p99 for typical 50-record list endpoint. Five worked resolution traces. Five edge cases handled (granted-but-blocked, co-sign, public, system-generated, expired temp overrides). RLS as defense-in-depth. Failure modes specified (fail-closed for grants, fail-open for audit). Debug API specified. Six observability metrics. Six Pass 3 open questions resolved.
+- **Latest commit:** `docs: permissions design Pass 3 — resolution algorithm`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
 - **Feature audit:** 🏁 COMPLETE — 13 of 13 modules walked (Sessions C-O). Total: ~1260 actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked.
-- **Permissions design progress:** 2 of 11 passes complete. Pending: Pass 3 (Resolution algorithm), Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
-- **File size management:** v0.2 condenses Pass 1 content to summary §1-§8; full Pass 1 content preserved at commit 9008fad. Pass 2 full content in v0.2 §10-§19. Consistent with audit doc condensation pattern.
+- **Permissions design progress:** 3 of 11 passes complete. Pending: Pass 4 (Field visibility engine), Pass 5 (Status surface bindings), Pass 6 (Append-only audit), Pass 7 (Request-admin-access workflow), Pass 8 (Permissions editor UI), Pass 9 (Effective-permissions caching strategy), Pass 10 (Cross-cutting enforcement patterns), Pass 11 (Migration plan).
+- **File size management:** v0.3 condenses Pass 1 (§1-§8) AND Pass 2 (§9) to summaries. Full Pass 1 at commit 9008fad; full Pass 2 at commit 1bafbd4. Pass 3 full content §10-§19. Consistent with audit doc condensation pattern.
 - **Pending pipeline (in order):**
   1. ✅ Feature audit COMPLETE.
-  2. **IN PROGRESS: Permissions module — design pass.** Pass 2 of 11 complete.
+  2. **IN PROGRESS: Permissions module — design pass.** Pass 3 of 11 complete.
   3. Permissions module — build (ROADMAP item 3).
   4. Quotes v1 build (ROADMAP item 4).
   5. Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.
-- **Major architectural decisions from Pass 2:**
-  - **One row per action in permission_definitions** (~1260 rows; one-to-one with Pass 1 catalog). Simplest semantics; 1260 rows is trivial; granularity directly mirrors audit catalog.
-  - **Trigger-invalidated cache strategy** — effective_permissions_cache stores resolved (user × permission) result. Invalidated on grant/revoke/override events via PostgreSQL triggers. <1ms lookups at runtime.
-  - **Orthogonal data scopes** — role_data_scopes is separate from role_permissions. Scopes answer "which records?"; grants answer "what verbs?". Mixable cleanly: SR has `clients:edit` granted with `my` scope; A has `clients:edit` granted with `all` scope.
-  - **Three-way grant state** in role_permissions: granted / denied / default. 'default' rows can be omitted for storage efficiency.
-  - **UI state override** orthogonal to grant state. Operator can render a granted action as `disabled` (visible but greyed) for visibility cues.
-  - **Three field visibility states**: visible / masked / hidden. `masked` enables PCI compliance (show last-4 of card; never full card number).
-  - **Append-only audit log** with PostgreSQL triggers blocking UPDATE and DELETE. Provably immutable at database level.
-  - **Co-sign support** in separation_of_duties_constraints — hard close requires A + Acc; both signatures captured.
-  - **Regulatory expiry override** with reason capture, validity window, optional emergency justification, and revocation tracking.
-  - **Geolocation retention** operator-configurable per tenant with purge action ('coordinates_null' default; 'full_delete' Phase 2 option). Timestamp + appointment_id always retained for audit per §0.4 #13.
-  - **RLS as defense-in-depth** — PostgreSQL Row-Level Security policies AND application-layer query construction. Both layers enforce scope.
-  - **Materialized view for admin UI** — permission_resolution_view shows current effective state for any user (refreshed nightly + on-demand via editor save).
-  - **Migration order specified** for production-safe rollout. Tables in dependency order; seeding scripts after table creation; effective_permissions_cache built last and populated by initial resolution run.
-- **Six open questions resolved in Pass 2:**
-  - Cache TTL: NO TTL at v1 (triggers handle invalidation); revisit Phase 2 if staleness becomes a problem
-  - Per-record scope overrides: NO at v1 (would explode override surface area); Phase 2 consideration
-  - Materialized view refresh: nightly + on-demand via permissions editor (auto-trigger on save)
-  - Audit log retention: keep permanently at v1; Phase 2 operator-configurable with cold-storage archival
-  - Temporary override cleanup: leave row for auditability; resolution algorithm filters by expires_at; nightly job updates cache
-  - RLS vs application-layer: BOTH (defense-in-depth)
+- **Major architectural decisions from Pass 3:**
+  - **Three algorithms locked:** A1 (action grant), A2 (data scope), A3 (field visibility). Compose for compound resolution. Typical request runs all three.
+  - **Cache strategy: invalidate-and-lazy-fill** (not write-through). Permission changes are rare; reads are frequent. Trading one-time miss for faster writes.
+  - **Separation of duties enforcement: runtime check primary + database trigger defense-in-depth.** Runtime needed for UI rendering before action attempted (e.g., to hide Approve button from creator). DB trigger catches last-second violation.
+  - **User override does NOT bypass regulatory expiry.** §0.4 #12 supersedes user-level overrides. Only entries in regulatory_expiry_overrides (which require A approval + reason) bypass.
+  - **Co-sign enforcement** for hard close: separation_of_duties_constraints with allows_co_sign=TRUE; algorithm checks "has OTHER role already initiated softClose for this period?" before allowing hardClose.
+  - **Public actions** (signed URL): A1 NOT called; separate signed URL validator runs. Audit captures token_id + source_ip.
+  - **System-generated actions**: A1 NOT called; execute under "system" identity. Audit captures triggering_event + source_entity_id + NULL actor_user_id.
+  - **Temporary override expiration**: cache row's expires_at < NOW() → treated as cache miss; fallback to role default; audit event 'user_override_expired' emitted.
+  - **Performance budget**: <5ms p99 compound resolution; <50ms p99 typical list endpoint; <15ms p99 detail endpoint; <30ms p99 action endpoint.
+  - **Bulk resolution optimization**: when fetching 50 records, resolve field visibility once per (user, resource, field_section) and apply to all records — not 50 separate resolutions.
+  - **Cache warm-up on user login**: prefetch cache rows for dashboard widget actions to reduce first-render miss penalty.
+  - **Stale-while-revalidate** for non-critical reads (dashboard widgets only; <5 minute threshold). Critical paths always check fresh.
+  - **RLS policies generated from scope filter templates**. Application sets `app.current_user_id` per connection. Helper SQL functions (`current_user_has_scope_*`) query `effective_data_scope_cache`.
+  - **Failure modes**: fail-closed for action grants, regulatory expiry, separation of duties. Fail-open for audit logging (action proceeds; audit retried by reconciliation cron) and cache warming.
+  - **Debug API**: Admin-only `GET /api/admin/permission-debug` returns full resolution trace for support staff diagnosing "why was that user blocked?"
+  - **Resolution metrics emitted** to observability: duration_ms histogram, cache_hit_rate gauge, denials_total counter, audit_inserts_total counter.
+- **Six Pass 3 open questions resolved:**
+  - Cache scope: per-user (not global). Global cache only for permission_definitions in app memory.
+  - Stale-while-revalidate threshold: 5 minutes for dashboard-related reads only.
+  - Resolution algorithm versioning: function name versioning (resolve_action_grant_v1); new versions get new names; feature flag rollout.
+  - A/B testing permission changes: NO at v1; Phase 2.
+  - Real-time permission revocation: cache invalidation triggers immediately; effective within ms for next request; WebSocket push Phase 2.
+  - Multi-tenant resolution: deferred Phase 2; when added, cache key becomes (tenant_id, user_id, action_name).
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Pass 2 produced no uncommitted plans. Next session continues with Pass 3 (Resolution algorithm) — designs the runtime algorithm that answers "can user X do action Y on entity Z?" in <5ms using the Pass 2 schema. Includes cache lookup path, cross-cutting constraint checks, data scope filter application, field visibility application, audit logging integration.
+**None.** Pass 3 produced no uncommitted plans. Next session continues with Pass 4 (Field-level visibility engine) — details the engine that implements A3 at the serialization + UI layers. Covers: serialization pipeline (query result → apply visibility → return), React component wrappers (`<FieldGated>`), mask formatting library, audit-on-read async implementation, bulk visibility resolution, visibility-aware Postgres views as defense-in-depth, per-tenant customization (Phase 2 placeholder), plus catalog of every visibility.* flag mapped to its database column(s).
 
 ---
 
