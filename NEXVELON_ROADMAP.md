@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session K (2026-05-12):** Modules 1-9 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.10. Cumulative: ~965 actions, 58 permissions design implications, ~426 acceptance criteria. M9 (Invoices): ~115 actions, 14 new tables, 5 status surfaces, two parallel flows (AR + AP), customer payment portal with Stripe (CC + EFT + ACH + wire), 3-way match (PO + Receipt + Bill) automated, separation of duties on AP, T5018 YTD auto-update on AP payments, Canadian Construction Act holdback release timing, eight-layer print on invoice/credit note/statement PDFs, immutable send snapshots, multi-currency, late fee auto-application, customer credit balance, recurring invoice templates linked to Service Contracts. Sidebar refined: Financials becomes parent menu with 12 sub-items spanning M9 + M11. Modules 10-13 pending: Subcontractors (next), Financials, Scheduling, Reports. Audit file management: v0.10 condenses M1-M8 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a).
+**Progress as of Session L (2026-05-12):** Modules 1-10 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.11. Cumulative: ~1040 actions, 62 permissions design implications, ~464 acceptance criteria. M10 (Subcontractors): ~75 actions, 13 new tables, 5 status surfaces, WSIB auto-block on expiry (Ontario regulatory) locked as new cross-cutting commitment §0.4 #12, T5018 mandatory tracking (Canada compliance), Trade Contractor lien deadline tracking (Ontario 60-day) with cross-WO dashboard, worker manifest with individual cert verification, skill-based + territory-based contractor matching, versioned labor rates with effective-dating, cross-link with Vendors via is_also_vendor flag, append-only performance ledger with auto-degrade, eight-layer print on contractor MSAs + T5018 + WO PDFs, banking encrypted at rest with audit-on-read. Modules 11-13 pending: Financials (next), Scheduling, Reports. Audit file management: v0.11 condenses M1-M9 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad).
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -154,6 +154,15 @@ migration strategy for replacing the current static `lib/permissions
 - Recurring invoice template linked to Service Contract pattern
 - Multi-currency invoice with exchange rate snapshot pattern
 - Customer credit balance accumulation pattern
+
+**Inputs from Session L** (additions from Module 10 walk):
+- Regulatory expiry auto-block enforcement pattern (insurance + WSIB) as new cross-cutting commitment §0.4 #12
+- Manual override of regulatory block requires A approval + reason + audit
+- Worker manifest project-scoped visibility (PM sees own project workers only)
+- Labor rate snapshot at WO creation for legal durability (extends M5/M8 snapshot pattern)
+- Skill + territory + availability matching algorithm pattern
+- Cross-link banking sync pattern between dual-role entities (vendor + contractor)
+- Worker cert verification with individual cert tracking per worker
 
 ---
 

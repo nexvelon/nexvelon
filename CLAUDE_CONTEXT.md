@@ -12,44 +12,43 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session K CLOSED.**
+**As of 2026-05-12. Session L CLOSED.**
 
-- **Session K focus:** Module 9 of the feature audit (Invoices) — cash collection spine with two parallel flows (AR + AP). Customer payment portal with Stripe integration (CC + EFT + ACH + wire). 3-way match (PO + Receipt + Bill) automated. Separation of duties on AP bill approval + payment runs. T5018 YTD auto-update on AP payments (Canada compliance). Canadian Construction Act holdback release. Eight-layer print on invoice PDFs. Immutable send snapshots. Sidebar refined: Financials becomes parent menu. Fourteen in-session open questions resolved.
-- **Latest commit:** `docs: codify Session K — Module 9 (Invoices) audit + handoff`. See `git log -1 --oneline`.
+- **Session L focus:** Module 10 of the feature audit (Subcontractors) — labor provider master entity. WSIB auto-block on expiry locked as new cross-cutting commitment (§0.4 #12). T5018 mandatory tracking for labor (vs optional for vendors). Trade Contractor lien deadline tracking with cross-WO dashboard. Worker manifest with individual cert verification. Skill-based + territory-based matching. Versioned labor rates with effective-dating. Cross-link with Vendors via is_also_vendor flag. Append-only performance ledger with auto-degrade. Eight in-session open questions resolved.
+- **Latest commit:** `docs: codify Session L — Module 10 (Subcontractors) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 9 of 13 modules walked. Modules 10-13 pending: Subcontractors (next), Financials, Scheduling, Reports.
-- **File size management note:** Through v0.10, M1-M8 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a. Current session module always gets full content in the doc.
+- **Feature audit progress:** 10 of 13 modules walked. Modules 11-13 pending: Financials (next), Scheduling, Reports.
+- **File size management note:** Through v0.11, M1-M9 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad. Current session module always gets full content.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 10-13** — Subcontractors (next), Financials, Scheduling, Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~965 actions across 9 modules) + ten-dimensional model + Session C-K additions.
+  1. **Feature audit Modules 11-13** — Financials (next), Scheduling, Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1040 actions across 10 modules).
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session K:**
-  - **Two parallel invoice flows** — AR (customer invoices) and AP (vendor bills) treated as one module since both share state machine, approval, communication patterns.
-  - **Customer payment portal with Stripe integration** — signed URL pattern (consistent with quote portal), multiple payment methods (CC + EFT + ACH + wire), operator-configurable CC surcharge per client.
-  - **3-way match (PO + Receipt + Bill)** automated with discrepancy flagging. Manual override for no-PO bills requires A/Acc reason capture.
-  - **Separation of duties** — locked as new cross-cutting commitment (§0.4 #11): AP bill creator cannot approve; payment run creator cannot approve. Enforced at action level. Audit captures both parties.
-  - **T5018 YTD auto-update on AP bill payment** to T5018-required vendors. Feeds M8 vendor_t5018_records. Annual report generation in M8.
-  - **Canadian Construction Act compliance** — holdback release invoice auto-generated at 45-day mark after substantial completion; manual approval before send.
-  - **Eight-layer print protection** extended to invoice PDFs, credit notes, statements.
-  - **Immutable send snapshots** — line items, pricing, T&C, billing address captured at send for legal durability per §0.4 #8.
-  - **Multi-currency invoices** — in client's currency from M1 client config; exchange rate snapshot retained.
-  - **Late fee auto-application** per client config with compounding flag (M1 client banking config).
-  - **Customer credit balance tracking** — overpayments + credit notes accumulate as available credit; auto-applied to new invoices on send.
-  - **Recurring invoice templates** linked to Service Contracts from M1.
-  - **AR aging role-scoped visibility** — A/Acc all; PM project-scoped; SR client-scoped.
-  - **Sidebar architecture refined** — Financials becomes parent menu with 12 sub-items spanning M9 (Invoices, Payments, Credit Notes, AP Bills, Payment Runs, Statements, Recurring, AR Aging) + M11 (Chart of Accounts, Bank Reconciliation, GL Journal Entries, Tax Filing).
-  - **Phase 2 deferrals locked:** customer payment plans (installment agreements), multi-entity invoicing, customer self-service credit applications.
+- **Major architectural decisions from Session L:**
+  - **Subcontractors vs Vendors as separate entities** with cross-link flag (is_also_vendor). Labor vs material distinction drives separate workflows.
+  - **WSIB clearance auto-block on expiry** — work order creation blocked at action level when WSIB expired. Manual override requires A approval + reason. Locked as §0.4 #12 (regulatory expiry auto-block enforcement applies to insurance + WSIB across both M8 and M10).
+  - **T5018 mandatory for labor sub-contractors** (vs optional for vendors). Defaults TRUE for Canadian labor sub.
+  - **Trade Contractor lien deadline tracking** (Ontario Construction Act 60-day) per WO. Visible countdown + cross-WO lien dashboard.
+  - **Worker manifest with individual cert verification** — each worker on contractor's crew has individual certs verified, not just contractor entity.
+  - **Skill-based + territory-based contractor matching** for project assignment. Ranks by performance grade, distance, cost, availability.
+  - **Versioned labor rate tables** with effective-dating. Future rates can be scheduled. Rate snapshot captured at WO creation for legal durability.
+  - **Cross-link with Vendors** via is_also_vendor flag (reverse of M8's is_also_contractor). Banking sync between records when cross-linked.
+  - **Append-only contractor performance ledger** with auto-degrade-of-preferred-status (extends M8 pattern). Grade drops C/D → preferred-for-trade flag auto-removed.
+  - **Eight-layer print protection** extended to contractor MSAs + T5018 forms + WO PDFs.
+  - **Banking encrypted at rest with audit-on-read** (extends M1/M8 pattern).
+  - **Worker cert expiry alerts** at 30/60/90 days; expired worker cert blocks worker assignment to WO.
+  - **WSIB form auto-generation** (Form 5 incident report, Form 7 return-to-work) at v1.
+  - **Phase 2 deferrals locked:** contractor portal full version, sub-contractor self-onboarding signup, mobile check-in for worker verification on site, advanced pay-when-paid workflow, contractor scorecard visible to contractor.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session K produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session L produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 
