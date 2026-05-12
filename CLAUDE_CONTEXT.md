@@ -12,43 +12,44 @@
 
 ## Current Session State
 
-**As of 2026-05-12. Session L CLOSED.**
+**As of 2026-05-12. Session M CLOSED.**
 
-- **Session L focus:** Module 10 of the feature audit (Subcontractors) — labor provider master entity. WSIB auto-block on expiry locked as new cross-cutting commitment (§0.4 #12). T5018 mandatory tracking for labor (vs optional for vendors). Trade Contractor lien deadline tracking with cross-WO dashboard. Worker manifest with individual cert verification. Skill-based + territory-based matching. Versioned labor rates with effective-dating. Cross-link with Vendors via is_also_vendor flag. Append-only performance ledger with auto-degrade. Eight in-session open questions resolved.
-- **Latest commit:** `docs: codify Session L — Module 10 (Subcontractors) audit + handoff`. See `git log -1 --oneline`.
+- **Session M focus:** Module 11 of the feature audit (Financials) — GL backbone. Built-in GL with source-back traceability from any GL line to originating module event. Canadian-first tax compliance (HST/GST/PST + T4 + T5018). Period close with separation of duties (soft close Acc → hard close A + Acc co-sign). Period-end FX revaluation. Bank reconciliation. QBO/Xero/Sage 50 export. Project P&L drilling. Recurring journal entries. Holdback payable as separate liability. Nine in-session open questions resolved.
+- **Latest commit:** `docs: codify Session M — Module 11 (Financials) audit + handoff`. See `git log -1 --oneline`.
 - **Auth surface:** ✅ COMPLETE (unchanged from Session B).
 - **Production mode:** ⚠️ LIVE (unchanged). Data preservation rules apply from `8d44ef7` forward.
 - **DB wipe:** `scripts/wipe-test-data.sql` committed but NOT executed (unchanged).
-- **Feature audit progress:** 10 of 13 modules walked. Modules 11-13 pending: Financials (next), Scheduling, Reports.
-- **File size management note:** Through v0.11, M1-M9 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad. Current session module always gets full content.
+- **Feature audit progress:** 11 of 13 modules walked. Modules 12-13 pending: Scheduling (next; major reader of M1+M2+M3+M6+M10 surfaces), Reports.
+- **File size management note:** Through v0.12, M1-M10 sections in the audit doc are condensed to headline stats. Full content for those modules preserved in git history at: M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad, M10 4c0b33b. Current session module always gets full content.
 - **Pending pipeline (in order):**
-  1. **Feature audit Modules 11-13** — Financials (next), Scheduling, Reports.
-  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1040 actions across 10 modules).
+  1. **Feature audit Modules 12-13** — Scheduling (next), Reports.
+  2. **Permissions module — design pass** (ROADMAP item 2). Consumes consolidated action vocabulary (~1130 actions across 11 modules).
   3. **Permissions module — build** (ROADMAP item 3).
   4. **Quotes v1 build** (ROADMAP item 4).
   5. **Projects → Inventory → Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports.**
-- **Major architectural decisions from Session L:**
-  - **Subcontractors vs Vendors as separate entities** with cross-link flag (is_also_vendor). Labor vs material distinction drives separate workflows.
-  - **WSIB clearance auto-block on expiry** — work order creation blocked at action level when WSIB expired. Manual override requires A approval + reason. Locked as §0.4 #12 (regulatory expiry auto-block enforcement applies to insurance + WSIB across both M8 and M10).
-  - **T5018 mandatory for labor sub-contractors** (vs optional for vendors). Defaults TRUE for Canadian labor sub.
-  - **Trade Contractor lien deadline tracking** (Ontario Construction Act 60-day) per WO. Visible countdown + cross-WO lien dashboard.
-  - **Worker manifest with individual cert verification** — each worker on contractor's crew has individual certs verified, not just contractor entity.
-  - **Skill-based + territory-based contractor matching** for project assignment. Ranks by performance grade, distance, cost, availability.
-  - **Versioned labor rate tables** with effective-dating. Future rates can be scheduled. Rate snapshot captured at WO creation for legal durability.
-  - **Cross-link with Vendors** via is_also_vendor flag (reverse of M8's is_also_contractor). Banking sync between records when cross-linked.
-  - **Append-only contractor performance ledger** with auto-degrade-of-preferred-status (extends M8 pattern). Grade drops C/D → preferred-for-trade flag auto-removed.
-  - **Eight-layer print protection** extended to contractor MSAs + T5018 forms + WO PDFs.
-  - **Banking encrypted at rest with audit-on-read** (extends M1/M8 pattern).
-  - **Worker cert expiry alerts** at 30/60/90 days; expired worker cert blocks worker assignment to WO.
-  - **WSIB form auto-generation** (Form 5 incident report, Form 7 return-to-work) at v1.
-  - **Phase 2 deferrals locked:** contractor portal full version, sub-contractor self-onboarding signup, mobile check-in for worker verification on site, advanced pay-when-paid workflow, contractor scorecard visible to contractor.
+- **Major architectural decisions from Session M:**
+  - **Built-in GL** — Nexvelon ships with full GL so operators don't need separate accounting software at v1. But also exports to QBO/Xero/Sage 50 for operators who keep external accounting.
+  - **Source-back traceability** — every GL entry shows its origin module + entity + event. Click GL line → opens source quote/project/invoice/PO. Permission-aware drill-back.
+  - **Canadian-first tax compliance** — HST/GST/PST collected and remitted, T4 (year-end payroll consuming M2), T5018 (annual contractor + vendor reporting consuming M8 + M10).
+  - **Period close with separation of duties** — soft close (Acc) → hard close (A + Acc co-sign per §0.4 #11). Reopen requires A + reason + audit.
+  - **Period-end FX revaluation** for foreign currency balances. Single CAD functional currency; foreign revalued.
+  - **Bank reconciliation** with CSV/OFX import at v1; Plaid bank feed integration Phase 2.
+  - **QBO/Xero/Sage 50 export at v1** — operator can choose internal GL OR external accounting. Bidirectional sync Phase 2.
+  - **Project P&L drilling into M6 costing** — every project shows real revenue/cost flow.
+  - **Cost-centre allocation** consistent with M5 cost-centre framework for departmental P&L.
+  - **Recurring journal entries** for depreciation + monthly accruals.
+  - **Holdback payable as separate liability** (Canadian Construction Act compliance; reverses on holdback release invoice payment from M9).
+  - **Eight-layer print protection** extended to tax filings + financial reports.
+  - **Versioning commitment §0.4 #8 extended** to include GL period locking (GL entries within locked period cannot be edited).
+  - **Separation of duties §0.4 #11 extended** to include GL manual entries (creator ≠ poster) + hard close (A + Acc co-sign).
+  - **Phase 2 deferrals locked:** Plaid live bank feed, bidirectional QBO/Xero sync, multi-entity / multi-company, full report builder, advanced budgeting (rolling forecasts), automated audit-trail report for external auditor review.
 - **Live URL:** https://app.nexvelonglobal.com (unchanged).
 - **GitHub repo:** https://github.com/nexvelon/nexvelon (unchanged).
 - **Admin account:** `jayshah.x@gmail.com` (unchanged).
 
 ### Open In-Flight Items
 
-**None.** Session L produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
+**None.** Session M produced no uncommitted plans. Next session reconstructs full context from the repo cold per the reading order at the top of this file.
 
 ---
 

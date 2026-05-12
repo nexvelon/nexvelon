@@ -42,7 +42,7 @@ Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
 
 **What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
 
-**Progress as of Session L (2026-05-12):** Modules 1-10 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.11. Cumulative: ~1040 actions, 62 permissions design implications, ~464 acceptance criteria. M10 (Subcontractors): ~75 actions, 13 new tables, 5 status surfaces, WSIB auto-block on expiry (Ontario regulatory) locked as new cross-cutting commitment §0.4 #12, T5018 mandatory tracking (Canada compliance), Trade Contractor lien deadline tracking (Ontario 60-day) with cross-WO dashboard, worker manifest with individual cert verification, skill-based + territory-based contractor matching, versioned labor rates with effective-dating, cross-link with Vendors via is_also_vendor flag, append-only performance ledger with auto-degrade, eight-layer print on contractor MSAs + T5018 + WO PDFs, banking encrypted at rest with audit-on-read. Modules 11-13 pending: Financials (next), Scheduling, Reports. Audit file management: v0.11 condenses M1-M9 sections to headline stats; full content preserved in git history at noted commit hashes (M1 073b393, M2 4dc0cc2, M3 87a9fc8, M4 6283d0f, M5 5633e25, M6 bafb708, M7 f7cee0d, M8 f3a763a, M9 681b2ad).
+**Progress as of Session M (2026-05-12):** Modules 1-11 of 13 complete and codified in `NEXVELON_FEATURE_AUDIT.md` v0.12. Cumulative: ~1130 actions, 67 permissions design implications, ~509 acceptance criteria. M11 (Financials): ~90 actions, 12 new tables, 6 status surfaces, built-in GL with source-back traceability from any GL line to originating module event, Canadian-first tax compliance (HST/GST/PST + T4 + T5018 consuming M2/M8/M10), period close with separation of duties (soft close Acc → hard close A + Acc co-sign), period-end FX revaluation, bank reconciliation (CSV/OFX import at v1; Plaid Phase 2), QBO/Xero/Sage 50 export at v1 (bidirectional sync Phase 2), project P&L drilling into M6, cost-centre allocation consistent with M5, recurring journal entries, holdback payable as separate liability (Canadian Construction Act), eight-layer print on tax filings + financial reports. Modules 12-13 pending: Scheduling (next; major reader of M1+M2+M3+M6+M10 surfaces), Reports. Audit file management: v0.12 condenses M1-M10 sections to headline stats; full content preserved in git history at noted commit hashes.
 
 **Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
 
@@ -163,6 +163,15 @@ migration strategy for replacing the current static `lib/permissions
 - Skill + territory + availability matching algorithm pattern
 - Cross-link banking sync pattern between dual-role entities (vendor + contractor)
 - Worker cert verification with individual cert tracking per worker
+
+**Inputs from Session M** (additions from Module 11 walk):
+- GL period locking as new versioning/snapshot pattern (§0.4 #8 extended) — GL entries within locked period cannot be edited
+- Source-back traceability permission-aware drill-back pattern (GL line shows source but drill-back respects target-module permissions)
+- Hard close dual approval pattern (A + Acc co-sign per §0.4 #11 extended)
+- Manual GL entry separation of duties pattern (creator ≠ poster)
+- Bank balance field-level visibility pattern
+- Tax filing PDF eight-layer protection
+- Cross-currency revaluation handling pattern
 
 ---
 
