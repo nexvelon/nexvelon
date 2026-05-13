@@ -9,13 +9,18 @@
 -- NEXVELON_PERMISSIONS_DESIGN.md (Pass 2 / Pass 4 / Pass 5 / Pass 11).
 --
 -- USAGE:
---   psql "$DB_URL" -f supabase/migrations/smoke_chunk_01.sql
+--   · Supabase Dashboard SQL Editor (default per Chunk 1 deploy plan):
+--     paste this entire file into a new query and click Run. Section
+--     labels render as their own one-row result panels.
+--   · Local psql (alternative):
+--     psql "$DB_URL" -f supabase/migrations/smoke_chunk_01.sql
+--
+-- Section labels are emitted as `SELECT '...' AS check_label;` queries
+-- rather than psql `\echo` meta-commands so that the file is valid SQL
+-- in the Supabase Dashboard SQL Editor (which rejects `\` commands).
 -- ============================================================================
 
-\echo
-\echo === Check 1: All 12 tables exist (expect count = 12) ===
-\echo === Includes `roles` per PR #1 Ambiguity 2 resolution ===
-\echo
+SELECT '--- Check 1: All 12 tables exist (expect count = 12; includes `roles` per PR #1 Ambiguity 2 resolution) ---' AS check_label;
 
 SELECT COUNT(*) AS table_count
 FROM information_schema.tables
@@ -35,89 +40,81 @@ WHERE table_schema = 'public'
     'status_transition_definitions'
   );
 
-\echo
-\echo === Check 2: Column-list per table (diff against design doc) ===
-\echo
+SELECT '--- Check 2: Column-list per table (diff against design doc) ---' AS check_label;
 
-\echo --- 2.1 permission_definitions ---
+SELECT '--- 2.1 permission_definitions ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'permission_definitions'
 ORDER BY ordinal_position;
 
-\echo --- 2.2 field_visibility_definitions ---
+SELECT '--- 2.2 field_visibility_definitions ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'field_visibility_definitions'
 ORDER BY ordinal_position;
 
-\echo --- 2.3 data_scope_definitions ---
+SELECT '--- 2.3 data_scope_definitions ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'data_scope_definitions'
 ORDER BY ordinal_position;
 
-\echo --- 2.4 separation_of_duties_constraints ---
+SELECT '--- 2.4 separation_of_duties_constraints ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'separation_of_duties_constraints'
 ORDER BY ordinal_position;
 
-\echo --- 2.5 geolocation_retention_policies ---
+SELECT '--- 2.5 geolocation_retention_policies ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'geolocation_retention_policies'
 ORDER BY ordinal_position;
 
-\echo --- 2.6 feature_flags ---
+SELECT '--- 2.6 feature_flags ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'feature_flags'
 ORDER BY ordinal_position;
 
-\echo --- 2.7 roles ---
+SELECT '--- 2.7 roles ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'roles'
 ORDER BY ordinal_position;
 
-\echo --- 2.8 role_permissions ---
+SELECT '--- 2.8 role_permissions ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'role_permissions'
 ORDER BY ordinal_position;
 
-\echo --- 2.9 role_field_visibility ---
+SELECT '--- 2.9 role_field_visibility ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'role_field_visibility'
 ORDER BY ordinal_position;
 
-\echo --- 2.10 role_data_scopes ---
+SELECT '--- 2.10 role_data_scopes ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'role_data_scopes'
 ORDER BY ordinal_position;
 
-\echo --- 2.11 status_behavior_bindings ---
+SELECT '--- 2.11 status_behavior_bindings ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'status_behavior_bindings'
 ORDER BY ordinal_position;
 
-\echo --- 2.12 status_transition_definitions ---
+SELECT '--- 2.12 status_transition_definitions ---' AS sub_block;
 SELECT column_name, data_type, is_nullable, column_default
 FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'status_transition_definitions'
 ORDER BY ordinal_position;
 
-\echo
-\echo === Check 3: Constraints per table (FKs, CHECKs, UNIQUEs, PKs) ===
-\echo === Confirm `role_id` FK on the three junction tables now points  ===
-\echo === to public.roles(id) ON DELETE CASCADE (PR #1 Decision 2       ===
-\echo === resolution 2026-05-13). Check 7 below verifies the 3 FKs      ===
-\echo === explicitly.                                                    ===
-\echo
+SELECT '--- Check 3: Constraints per table (FKs, CHECKs, UNIQUEs, PKs). The role_id FK on the three junction tables must point to public.roles(id) ON DELETE CASCADE per PR #1 Decision 2 (Check 7 verifies explicitly). ---' AS check_label;
 
 SELECT
   c.conrelid::regclass::text AS table_name,
@@ -150,9 +147,7 @@ WHERE n.nspname = 'public'
   )
 ORDER BY t.relname, c.contype, c.conname;
 
-\echo
-\echo === Check 4: Indexes per table ===
-\echo
+SELECT '--- Check 4: Indexes per table ---' AS check_label;
 
 SELECT tablename, indexname, indexdef
 FROM pg_indexes
@@ -173,9 +168,7 @@ WHERE schemaname = 'public'
   )
 ORDER BY tablename, indexname;
 
-\echo
-\echo === Check 5: Row counts — every table must be 0 (no seed in this chunk) ===
-\echo
+SELECT '--- Check 5: Row counts — every table must be 0 (no seed in this chunk) ---' AS check_label;
 
 SELECT 'permission_definitions'           AS table_name, COUNT(*) AS row_count FROM public.permission_definitions
 UNION ALL SELECT 'field_visibility_definitions',     COUNT(*) FROM public.field_visibility_definitions
@@ -191,10 +184,7 @@ UNION ALL SELECT 'status_behavior_bindings',         COUNT(*) FROM public.status
 UNION ALL SELECT 'status_transition_definitions',    COUNT(*) FROM public.status_transition_definitions
 ORDER BY table_name;
 
-\echo
-\echo === Check 6: No triggers exist on any of the 11 tables ===
-\echo === (Triggers ship in Chunks 3 and 4.)                ===
-\echo
+SELECT '--- Check 6: No triggers exist on any of the 12 tables (triggers ship in Chunks 3 and 4) ---' AS check_label;
 
 SELECT
   event_object_table AS table_name,
@@ -218,12 +208,7 @@ WHERE event_object_schema = 'public'
   );
 -- Expected: 0 rows.
 
-\echo
-\echo === Check 7: Three role_id FKs from PR #1 Decision 2 resolution ===
-\echo === Expect 3 rows: role_permissions, role_field_visibility,    ===
-\echo === role_data_scopes — each referencing public.roles(id) with  ===
-\echo === ON DELETE CASCADE.                                          ===
-\echo
+SELECT '--- Check 7: Three role_id FKs from PR #1 Decision 2 resolution. Expect 3 rows (role_permissions, role_field_visibility, role_data_scopes), each referencing public.roles(id) ON DELETE CASCADE. ---' AS check_label;
 
 SELECT
   c.conrelid::regclass::text AS table_name,
@@ -247,8 +232,4 @@ ORDER BY t.relname;
 -- role_field_visibility   | role_field_visibility_role_id_fkey
 -- role_permissions        | role_permissions_role_id_fkey
 
-\echo
-\echo === Smoke verification complete. ===
-\echo === Diff outputs against NEXVELON_PERMISSIONS_DESIGN.md ===
-\echo === Pass 2 §11.1, §11.2, §11.3, §12.1-2, §13.1-2,      ===
-\echo === §15.1, §15.3; Pass 5 §13.1-2; Pass 11 §13.         ===
+SELECT '--- Smoke verification complete. Diff outputs against NEXVELON_PERMISSIONS_DESIGN.md: Pass 2 §11.1, §11.2, §11.3, §12.1-2, §13.1-2, §15.1, §15.3; Pass 5 §13.1-2; Pass 11 §13. ---' AS closing;
