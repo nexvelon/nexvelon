@@ -11,11 +11,11 @@
 -- and trigger logic, which arrive in Chunks 3-7.
 --
 --   Runtime state (Pass 2 / Pass 4 / Pass 7):
---     1. permission_grants                 (Pass 2 §11.4 — renamed)  [user-spec #2]
---     2. field_visibility_grants           (Pass 2 §12.3 — renamed)  [user-spec #3]
---     3. data_scope_grants                 (Pass 2 §13.3 — renamed)  [user-spec #4]
---     4. admin_access_requests             (Pass 7 §15.3 — renamed)  [user-spec #5]
---     5. user_role_assignments             (Pass 7 §16.4)            [user-spec #1]
+--     1. user_permission_overrides         (Pass 2 §11.4)
+--     2. user_field_visibility_overrides   (Pass 2 §12.3)
+--     3. user_data_scope_overrides         (Pass 2 §13.3)
+--     4. request_admin_access              (Pass 7 §15.3)
+--     5. user_role_assignments             (Pass 7 §16.4)
 --
 --   Cache shells (Pass 5 / Pass 9):
 --     6. effective_permissions_cache       (Pass 2 §11.5 / Pass 9 §25.1)
@@ -24,7 +24,7 @@
 --     9. effective_status_bindings_cache   (Pass 5 §13.3)
 --
 -- Physical CREATE TABLE order follows FK dependency
--- (permission_grants → admin_access_requests → user_role_assignments;
+-- (user_permission_overrides → request_admin_access → user_role_assignments;
 -- definitions tables from Chunk 1 → caches). The user spec's numbered
 -- list is preserved in the section labels above.
 --
@@ -38,26 +38,30 @@
 -- DECISION 2 — `roles(id)` FK is valid  [RATIFIED — Chunk 1]
 --   `public.roles` ships in 0005. All `role_id` FKs land inline here.
 --
--- DECISION 3 — Naming convention `*_grants` / `admin_access_requests`
---   The user-spec ship list renames the design-doc tables:
---     · `user_permission_overrides`         (Pass 2 §11.4)  → `permission_grants`
---     · `user_field_visibility_overrides`   (Pass 2 §12.3)  → `field_visibility_grants`
---     · `user_data_scope_overrides`         (Pass 2 §13.3)  → `data_scope_grants`
---     · `request_admin_access`              (Pass 7 §15.3)  → `admin_access_requests`
---   Functional shape unchanged. The FK in Pass 7 from
---   `request_admin_access.granted_override_id → user_permission_overrides(id)`
---   becomes `admin_access_requests.granted_override_id → permission_grants(id)`.
+-- DECISION 3 — Table naming  [RATIFIED design-doc names — 2026-05-13]
+--   PR #2 review reverted an initial user-spec rename and locked the
+--   design-doc names as canonical going forward. All 4 tables ship under
+--   their Pass 2 / Pass 7 names:
+--     · `user_permission_overrides`         (Pass 2 §11.4)
+--     · `user_field_visibility_overrides`   (Pass 2 §12.3)
+--     · `user_data_scope_overrides`         (Pass 2 §13.3)
+--     · `request_admin_access`              (Pass 7 §15.3)
+--   FK references match the design exactly:
+--   `request_admin_access.granted_override_id → user_permission_overrides(id)`.
+--   All future chunks (5/6/7 seeds, etc.) use these names without
+--   further surfacing.
 --
--- DECISION 4 — Composite PRIMARY KEY on cache tables
+-- DECISION 4 — Composite PRIMARY KEY on cache tables  [ACCEPTED — 2026-05-13]
 --   Pass 2 §11.5 / Pass 9 §25.1 declare each cache table with `id UUID
 --   PRIMARY KEY DEFAULT gen_random_uuid()` plus a separate
---   `UNIQUE (user_id, permission_id)` constraint. The user-spec asks for
---   a composite PRIMARY KEY directly. Functionally identical; the
---   surrogate `id` was load-bearing in neither algorithm nor invalidation
---   trigger. The composite PK doubles as the natural unique constraint
---   and as the hit-path index for lookups by user_id prefix.
+--   `UNIQUE (user_id, permission_id)` constraint. Operator review locked
+--   the simpler composite-PK shape (`PRIMARY KEY (a, b)` with no
+--   surrogate `id`, no separate UNIQUE constraint). Justification: cache
+--   tables receive no inbound FKs, run write-heavy via lazy-fill, and
+--   the natural key uniquely identifies each row; the PK index doubles
+--   as the hit-path index for lookups by user_id prefix.
 --
--- DECISION 5 — Cache shape for field_visibility / data_scope DERIVED
+-- DECISION 5 — Cache shape for field_visibility / data_scope DERIVED  [ACCEPTED — 2026-05-13]
 --   Pass 9 §16.1 names `effective_field_visibility_cache` and
 --   `effective_data_scope_cache` but the design doc contains no explicit
 --   `CREATE TABLE` for either (only `effective_permissions_cache` in
@@ -65,17 +69,23 @@
 --   in Pass 5 §13.3 have full schemas). Shapes here are derived from the
 --   permissions-cache pattern: composite PK on the natural key, FKs
 --   matching the source-table FKs, `computed_at` + nullable `expires_at`
---   timestamps. Surfaced as an ambiguity for design reviewer.
+--   timestamps, plus `resolved_*_state` + `resolution_source` per the
+--   algorithm signature.
+--   This migration file is AUTHORITATIVE for these two cache shapes —
+--   the design doc has a gap to be backfilled later (PR #2 operator
+--   review, 2026-05-13).
 --
--- DECISION 6 — Partial-index predicate substitution
+-- DECISION 6 — Partial-index predicate substitution  [ACCEPTED — 2026-05-13]
 --   The Chunk 2 spec mentions partial indexes
 --   `WHERE expires_at IS NULL OR expires_at > NOW()`, but `NOW()` is a
 --   STABLE (not IMMUTABLE) function and PostgreSQL rejects volatile
 --   expressions in partial-index predicates. The Pass 2 design pattern
 --   is used instead: `WHERE revoked_at IS NULL` for the active-grant
 --   index, and `WHERE expires_at IS NOT NULL AND revoked_at IS NULL`
---   for the expiry-cleanup index on `permission_grants` (mirroring
---   Pass 2 §11.4 exactly).
+--   for the expiry-cleanup index on `user_permission_overrides`
+--   (mirroring Pass 2 §11.4 exactly). Operator review confirmed: the
+--   spec example was technically wrong; the IMMUTABLE-predicate variant
+--   shipped here is canonical.
 --
 -- DECISION 7 — `permission_resolution_view` DEFERRED to Chunk 4
 --   Pass 2 §16 declares this materialized view. Per the Chunk 2 spec,
@@ -101,19 +111,19 @@
 --   DROP TABLE in reverse FK-order: effective_status_bindings_cache,
 --   effective_data_scope_cache, effective_field_visibility_cache,
 --   effective_permissions_cache, user_role_assignments,
---   admin_access_requests, data_scope_grants, field_visibility_grants,
---   permission_grants.
+--   request_admin_access, user_data_scope_overrides, user_field_visibility_overrides,
+--   user_permission_overrides.
 -- ============================================================================
 
 BEGIN;
 
 -- ============================================================================
--- 1. permission_grants  (Pass 2 §11.4 — renamed per Decision 3)
+-- 1. user_permission_overrides  (Pass 2 §11.4)
 -- ============================================================================
--- User-spec table #2. Bidirectional per-user override of role default
+-- Bidirectional per-user override of role default
 -- (§0.4 #1). Mandatory `reason` capture per Pass 2; soft-delete via
 -- `revoked_at` preserves history.
-CREATE TABLE public.permission_grants (
+CREATE TABLE public.user_permission_overrides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign keys
@@ -140,19 +150,19 @@ CREATE TABLE public.permission_grants (
 
   -- Uniqueness — one active row per (user, permission); `revoked_at` in
   -- the unique key lets the same pair be re-granted after revocation.
-  CONSTRAINT permission_grants_unique_active UNIQUE (user_id, permission_id, revoked_at)
+  CONSTRAINT user_permission_overrides_unique_active UNIQUE (user_id, permission_id, revoked_at)
 );
 
-CREATE INDEX idx_permission_grants_user_active   ON public.permission_grants(user_id) WHERE revoked_at IS NULL;
-CREATE INDEX idx_permission_grants_permission    ON public.permission_grants(permission_id);
-CREATE INDEX idx_permission_grants_expires_active ON public.permission_grants(expires_at)
+CREATE INDEX idx_user_permission_overrides_user_active   ON public.user_permission_overrides(user_id) WHERE revoked_at IS NULL;
+CREATE INDEX idx_user_permission_overrides_permission    ON public.user_permission_overrides(permission_id);
+CREATE INDEX idx_user_permission_overrides_expires_active ON public.user_permission_overrides(expires_at)
   WHERE expires_at IS NOT NULL AND revoked_at IS NULL;
 
 -- ============================================================================
--- 2. field_visibility_grants  (Pass 2 §12.3 — renamed per Decision 3)
+-- 2. user_field_visibility_overrides  (Pass 2 §12.3)
 -- ============================================================================
--- User-spec table #3. Per-user override of role-default field visibility.
-CREATE TABLE public.field_visibility_grants (
+-- Per-user override of role-default field visibility.
+CREATE TABLE public.user_field_visibility_overrides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -171,17 +181,16 @@ CREATE TABLE public.field_visibility_grants (
   revoked_at TIMESTAMPTZ,
   revoked_by UUID REFERENCES auth.users(id),
 
-  CONSTRAINT field_visibility_grants_unique_active UNIQUE (user_id, flag_id, revoked_at)
+  CONSTRAINT user_field_visibility_overrides_unique_active UNIQUE (user_id, flag_id, revoked_at)
 );
 
-CREATE INDEX idx_field_visibility_grants_user_active ON public.field_visibility_grants(user_id) WHERE revoked_at IS NULL;
+CREATE INDEX idx_user_field_visibility_overrides_user_active ON public.user_field_visibility_overrides(user_id) WHERE revoked_at IS NULL;
 
 -- ============================================================================
--- 3. data_scope_grants  (Pass 2 §13.3 — renamed per Decision 3)
+-- 3. user_data_scope_overrides  (Pass 2 §13.3)
 -- ============================================================================
--- User-spec table #4. Per-user override of role-default data scope per
--- (user, resource).
-CREATE TABLE public.data_scope_grants (
+-- Per-user override of role-default data scope per (user, resource).
+CREATE TABLE public.user_data_scope_overrides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -196,21 +205,21 @@ CREATE TABLE public.data_scope_grants (
   granted_by UUID NOT NULL REFERENCES auth.users(id),
   revoked_at TIMESTAMPTZ,
 
-  CONSTRAINT data_scope_grants_unique_active UNIQUE (user_id, resource, revoked_at)
+  CONSTRAINT user_data_scope_overrides_unique_active UNIQUE (user_id, resource, revoked_at)
 );
 
-CREATE INDEX idx_data_scope_grants_user_active ON public.data_scope_grants(user_id) WHERE revoked_at IS NULL;
+CREATE INDEX idx_user_data_scope_overrides_user_active ON public.user_data_scope_overrides(user_id) WHERE revoked_at IS NULL;
 
 -- ============================================================================
--- 4. admin_access_requests  (Pass 7 §15.3 — renamed per Decision 3)
+-- 4. request_admin_access  (Pass 7 §15.3)
 -- ============================================================================
--- User-spec table #5. The full Pass 7 state machine — 34 columns covering
+-- The full Pass 7 state machine — 34 columns covering
 -- 4 request types (`permission_grant` / `field_visibility_grant` /
 -- `data_scope_grant` / `role_temporary_assignment`), 7 statuses
 -- (pending/approved/granted/rejected/cancelled/expired/revoked),
 -- polymorphic target columns, dual reasoning capture, forensic metadata,
 -- pending-expiry timer, and usage-tracking counters.
-CREATE TABLE public.admin_access_requests (
+CREATE TABLE public.request_admin_access (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Identity
@@ -271,7 +280,7 @@ CREATE TABLE public.admin_access_requests (
   -- request_type = 'permission_grant'. Field-visibility, data-scope,
   -- and role-temporary-assignment grants record their back-ref on the
   -- grant-side table; see Pass 7 §16 for the per-type flow.)
-  granted_override_id UUID REFERENCES public.permission_grants(id),
+  granted_override_id UUID REFERENCES public.user_permission_overrides(id),
 
   -- Forensic metadata
   request_ip_address INET,
@@ -289,20 +298,20 @@ CREATE TABLE public.admin_access_requests (
   last_used_at  TIMESTAMPTZ
 );
 
-CREATE INDEX idx_admin_access_requests_requester         ON public.admin_access_requests(requester_user_id, requested_at DESC);
-CREATE INDEX idx_admin_access_requests_status_pending    ON public.admin_access_requests(status) WHERE status = 'pending';
-CREATE INDEX idx_admin_access_requests_status_granted    ON public.admin_access_requests(status, end_at) WHERE status = 'granted';
-CREATE INDEX idx_admin_access_requests_decided_by        ON public.admin_access_requests(decided_by_user_id, decided_at DESC);
-CREATE INDEX idx_admin_access_requests_target_permission ON public.admin_access_requests(target_permission_id);
-CREATE INDEX idx_admin_access_requests_pending_expires   ON public.admin_access_requests(pending_expires_at) WHERE status = 'pending';
+CREATE INDEX idx_request_admin_access_requester         ON public.request_admin_access(requester_user_id, requested_at DESC);
+CREATE INDEX idx_request_admin_access_status_pending    ON public.request_admin_access(status) WHERE status = 'pending';
+CREATE INDEX idx_request_admin_access_status_granted    ON public.request_admin_access(status, end_at) WHERE status = 'granted';
+CREATE INDEX idx_request_admin_access_decided_by        ON public.request_admin_access(decided_by_user_id, decided_at DESC);
+CREATE INDEX idx_request_admin_access_target_permission ON public.request_admin_access(target_permission_id);
+CREATE INDEX idx_request_admin_access_pending_expires   ON public.request_admin_access(pending_expires_at) WHERE status = 'pending';
 
 -- ============================================================================
 -- 5. user_role_assignments  (Pass 7 §16.4)
 -- ============================================================================
--- User-spec table #1. Replaces the static `profiles.role` enum with a
+-- Replaces the static `profiles.role` enum with a
 -- multi-row model — each user may have one PRIMARY assignment plus zero
 -- or more additive assignments (e.g. role_temporary_assignment grants
--- from admin_access_requests). A1 resolution unions permissions across
+-- from request_admin_access). A1 resolution unions permissions across
 -- all active assignments for a user.
 --
 -- Pass 7's per-Pass schema does not declare indexes on this table; the
@@ -317,7 +326,7 @@ CREATE TABLE public.user_role_assignments (
 
   is_primary BOOLEAN NOT NULL DEFAULT FALSE,
 
-  granted_by_request_id UUID REFERENCES public.admin_access_requests(id),
+  granted_by_request_id UUID REFERENCES public.request_admin_access(id),
 
   start_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   end_at     TIMESTAMPTZ,
@@ -337,7 +346,7 @@ CREATE INDEX idx_user_role_assignments_role_active ON public.user_role_assignmen
 -- ============================================================================
 -- 6. effective_permissions_cache  (Pass 2 §11.5 / Pass 9 §25.1)
 -- ============================================================================
--- User-spec table #6. A1 hot path. One row per (user, permission). Ships
+-- A1 hot path. One row per (user, permission). Ships
 -- empty; lazy-fills on miss (Pass 9 §17.5). Composite PK per Decision 4.
 CREATE TABLE public.effective_permissions_cache (
   user_id                UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -370,7 +379,7 @@ CREATE INDEX idx_effective_permissions_cache_expires ON public.effective_permiss
 -- ============================================================================
 -- 7. effective_field_visibility_cache  (DERIVED — see Decision 5)
 -- ============================================================================
--- User-spec table #7. A3 hot path. Shape derived from the permissions-
+-- A3 hot path. Shape derived from the permissions-
 -- cache pattern: composite PK on (user_id, flag_id), FKs to source
 -- tables, computed_at + nullable expires_at.
 CREATE TABLE public.effective_field_visibility_cache (
@@ -397,7 +406,7 @@ CREATE INDEX idx_effective_field_visibility_cache_expires ON public.effective_fi
 -- ============================================================================
 -- 8. effective_data_scope_cache  (DERIVED — see Decision 5)
 -- ============================================================================
--- User-spec table #8. A2 hot path. Composite PK on (user_id, resource).
+-- A2 hot path. Composite PK on (user_id, resource).
 -- `resource` is a TEXT identifier (no FK; resource list lives in
 -- permission_definitions.resource, not a separate dimension table).
 CREATE TABLE public.effective_data_scope_cache (
@@ -422,7 +431,7 @@ CREATE INDEX idx_effective_data_scope_cache_expires ON public.effective_data_sco
 -- ============================================================================
 -- 9. effective_status_bindings_cache  (Pass 5 §13.3)
 -- ============================================================================
--- User-spec table #9. Phase 3.3 hot path. Polymorphic — `status_table_name`
+-- Phase 3.3 hot path. Polymorphic — `status_table_name`
 -- + `status_row_id` identifies the source row across all 80 status
 -- surfaces. No FKs (the status rows live in per-module tables that ship
 -- with later module-build chunks).

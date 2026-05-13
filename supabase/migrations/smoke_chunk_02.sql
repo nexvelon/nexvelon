@@ -44,10 +44,10 @@ SELECT
 FROM information_schema.tables
 WHERE table_schema = 'public'
   AND table_name IN (
-    'permission_grants',
-    'field_visibility_grants',
-    'data_scope_grants',
-    'admin_access_requests',
+    'user_permission_overrides',
+    'user_field_visibility_overrides',
+    'user_data_scope_overrides',
+    'request_admin_access',
     'user_role_assignments',
     'effective_permissions_cache',
     'effective_field_visibility_cache',
@@ -60,10 +60,10 @@ WHERE table_schema = 'public'
 -- ----------------------------------------------------------------------------
 INSERT INTO smoke_results
 WITH counts AS (
-  SELECT 'permission_grants'                AS t, COUNT(*) AS n FROM public.permission_grants
-  UNION ALL SELECT 'field_visibility_grants',          COUNT(*) FROM public.field_visibility_grants
-  UNION ALL SELECT 'data_scope_grants',                COUNT(*) FROM public.data_scope_grants
-  UNION ALL SELECT 'admin_access_requests',            COUNT(*) FROM public.admin_access_requests
+  SELECT 'user_permission_overrides'                AS t, COUNT(*) AS n FROM public.user_permission_overrides
+  UNION ALL SELECT 'user_field_visibility_overrides',          COUNT(*) FROM public.user_field_visibility_overrides
+  UNION ALL SELECT 'user_data_scope_overrides',                COUNT(*) FROM public.user_data_scope_overrides
+  UNION ALL SELECT 'request_admin_access',            COUNT(*) FROM public.request_admin_access
   UNION ALL SELECT 'user_role_assignments',            COUNT(*) FROM public.user_role_assignments
   UNION ALL SELECT 'effective_permissions_cache',      COUNT(*) FROM public.effective_permissions_cache
   UNION ALL SELECT 'effective_field_visibility_cache', COUNT(*) FROM public.effective_field_visibility_cache
@@ -93,10 +93,10 @@ SELECT
 FROM information_schema.triggers
 WHERE event_object_schema = 'public'
   AND event_object_table IN (
-    'permission_grants',
-    'field_visibility_grants',
-    'data_scope_grants',
-    'admin_access_requests',
+    'user_permission_overrides',
+    'user_field_visibility_overrides',
+    'user_data_scope_overrides',
+    'request_admin_access',
     'user_role_assignments',
     'effective_permissions_cache',
     'effective_field_visibility_cache',
@@ -106,10 +106,10 @@ WHERE event_object_schema = 'public'
 
 -- ----------------------------------------------------------------------------
 -- Check 4: Total FK count across the 9 tables matches expected
---   permission_grants:             4   (user_id, permission_id, granted_by, revoked_by)
---   field_visibility_grants:       4   (user_id, flag_id, granted_by, revoked_by)
---   data_scope_grants:             3   (user_id, override_scope_id, granted_by)
---   admin_access_requests:         8   (requester, target_permission, target_flag,
+--   user_permission_overrides:             4   (user_id, permission_id, granted_by, revoked_by)
+--   user_field_visibility_overrides:       4   (user_id, flag_id, granted_by, revoked_by)
+--   user_data_scope_overrides:             3   (user_id, override_scope_id, granted_by)
+--   request_admin_access:         8   (requester, target_permission, target_flag,
 --                                       target_scope, target_role, decided_by,
 --                                       revoked_by, granted_override)
 --   user_role_assignments:         4   (user_id, role_id, granted_by_request_id, revoked_by)
@@ -134,10 +134,10 @@ JOIN pg_namespace  n ON n.oid = t.relnamespace
 WHERE n.nspname = 'public'
   AND c.contype = 'f'
   AND t.relname IN (
-    'permission_grants',
-    'field_visibility_grants',
-    'data_scope_grants',
-    'admin_access_requests',
+    'user_permission_overrides',
+    'user_field_visibility_overrides',
+    'user_data_scope_overrides',
+    'request_admin_access',
     'user_role_assignments',
     'effective_permissions_cache',
     'effective_field_visibility_cache',
@@ -147,8 +147,8 @@ WHERE n.nspname = 'public'
 
 -- ----------------------------------------------------------------------------
 -- Check 5: Partial-index presence on the 4 grant/request tables
---   permission_grants, field_visibility_grants, data_scope_grants,
---   admin_access_requests — each must have at least one partial index
+--   user_permission_overrides, user_field_visibility_overrides, user_data_scope_overrides,
+--   request_admin_access — each must have at least one partial index
 --   (pg_index.indpred IS NOT NULL).
 -- ----------------------------------------------------------------------------
 INSERT INTO smoke_results
@@ -159,10 +159,10 @@ WITH partials AS (
   JOIN pg_namespace n ON n.oid = t.relnamespace
   WHERE n.nspname = 'public'
     AND t.relname IN (
-      'permission_grants',
-      'field_visibility_grants',
-      'data_scope_grants',
-      'admin_access_requests'
+      'user_permission_overrides',
+      'user_field_visibility_overrides',
+      'user_data_scope_overrides',
+      'request_admin_access'
     )
     AND i.indpred IS NOT NULL
 )
@@ -206,8 +206,8 @@ SELECT
 FROM composite_pks;
 
 -- ----------------------------------------------------------------------------
--- Check 7: Column listings for spot-diff — admin_access_requests,
---   permission_grants, user_role_assignments. Each row reports the
+-- Check 7: Column listings for spot-diff — request_admin_access,
+--   user_permission_overrides, user_role_assignments. Each row reports the
 --   column count and a comma-joined column-name list for visual diff
 --   against the design doc (Pass 7 §15.3, Pass 2 §11.4, Pass 7 §16.4).
 --   These rows are tagged status = 'REVIEW' (no automated assertion).
@@ -216,23 +216,23 @@ INSERT INTO smoke_results
 SELECT
   7.1,
   'C7.1',
-  'admin_access_requests column list (REVIEW — diff vs Pass 7 §15.3; expect 34 columns)',
+  'request_admin_access column list (REVIEW — diff vs Pass 7 §15.3; expect 34 columns)',
   '34 columns',
   COUNT(*)::TEXT || ' columns: ' || string_agg(column_name, ', ' ORDER BY ordinal_position),
   'REVIEW'
 FROM information_schema.columns
-WHERE table_schema = 'public' AND table_name = 'admin_access_requests';
+WHERE table_schema = 'public' AND table_name = 'request_admin_access';
 
 INSERT INTO smoke_results
 SELECT
   7.2,
   'C7.2',
-  'permission_grants column list (REVIEW — diff vs Pass 2 §11.4 with rename)',
+  'user_permission_overrides column list (REVIEW — diff vs Pass 2 §11.4)',
   '12 columns',
   COUNT(*)::TEXT || ' columns: ' || string_agg(column_name, ', ' ORDER BY ordinal_position),
   'REVIEW'
 FROM information_schema.columns
-WHERE table_schema = 'public' AND table_name = 'permission_grants';
+WHERE table_schema = 'public' AND table_name = 'user_permission_overrides';
 
 INSERT INTO smoke_results
 SELECT
