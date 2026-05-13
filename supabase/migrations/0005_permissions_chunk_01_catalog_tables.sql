@@ -4,7 +4,7 @@
 -- Build phase Chunk 1 of the Permissions module, executing the FIRST step of
 -- Phase 1 (Foundation) from NEXVELON_PERMISSIONS_DESIGN.md v0.11 §12.1.
 --
--- Lands 11 tables in a single atomic transaction:
+-- Lands 12 tables in a single atomic transaction:
 --
 --   Catalog tables (populated in Chunks 5/7):
 --     1. permission_definitions            (Pass 2 §11.1)
@@ -14,39 +14,38 @@
 --     5. geolocation_retention_policies    (Pass 2 §15.3)
 --     6. feature_flags                     (Pass 11 §13)
 --
+--   Identity table (populated in Chunk 6):
+--     7. roles                             (Pass 2 §11.2)
+--
 --   Assignment-shell tables (populated in Chunks 6/7):
---     7. role_permissions                  (Pass 2 §11.3)
---     8. role_field_visibility             (Pass 2 §12.2)
---     9. role_data_scopes                  (Pass 2 §13.2)
---    10. status_behavior_bindings          (Pass 5 §13.1)
---    11. status_transition_definitions     (Pass 5 §13.2)
+--     8. role_permissions                  (Pass 2 §11.3)
+--     9. role_field_visibility             (Pass 2 §12.2)
+--    10. role_data_scopes                  (Pass 2 §13.2)
+--    11. status_behavior_bindings          (Pass 5 §13.1)
+--    12. status_transition_definitions     (Pass 5 §13.2)
 --
 -- ----------------------------------------------------------------------------
 -- Translation decisions (surfaced in PR description)
 -- ----------------------------------------------------------------------------
 --
--- DECISION 1 — `users(id)` → `auth.users(id)`
+-- DECISION 1 — `users(id)` → `auth.users(id)`  [RATIFIED 2026-05-13]
 --   The design doc references `users(id)` as if a `public.users` table
 --   exists. This repo uses `auth.users` (Supabase Auth) plus
 --   `public.profiles` (one row per auth user with a TEXT-enum role column).
 --   All `REFERENCES users(id)` in the design are translated to
 --   `REFERENCES auth.users(id)` to match the established convention in
---   migrations 0001-0004. Name-translation only, not an invention.
+--   migrations 0001-0004. Operator ratified this as a permanent rule for
+--   all subsequent chunks during PR #1 review.
 --
--- DECISION 2 — `roles(id)` FK DEFERRED
---   Pass 2 §11.2 defines a `roles` table that is NOT in this chunk's
---   11-table scope. Three junction tables here carry
---   `role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE` per
---   the design. The Chunk 1 spec is explicit: "Do not add FKs to tables
---   that don't exist yet." Each `role_id` column ships as UUID NOT NULL
---   with NO FK CONSTRAINT in this migration. A later chunk (when `roles`
---   ships) must run:
---       ALTER TABLE role_permissions
---         ADD CONSTRAINT role_permissions_role_id_fkey
---         FOREIGN KEY (role_id) REFERENCES public.roles(id)
---         ON DELETE CASCADE;
---   (and analogous for role_field_visibility, role_data_scopes). Marked
---   with `-- TODO Chunk N: ...` comments below.
+-- DECISION 2 — `roles` table PULLED INTO CHUNK 1  [RESOLVED 2026-05-13]
+--   PR #1 review (2026-05-13) resolved the original v1 deferral by
+--   pulling `public.roles` (Pass 2 §11.2) into this chunk. Migrations
+--   0001-0004 were verified to contain no existing `public.roles` table.
+--   Created here BEFORE the three role_* junction tables so their inline
+--   FKs resolve in dependency order:
+--       role_id UUID NOT NULL REFERENCES public.roles(id) ON DELETE CASCADE
+--   on role_permissions, role_field_visibility, and role_data_scopes.
+--   The `roles` table ships EMPTY — seed data lands in Chunk 6.
 --
 -- DECISION 3 — NO triggers in this chunk
 --   Pass 2 §11.5 specifies cache-invalidation triggers; Pass 6 specifies
@@ -55,8 +54,8 @@
 --   come in Chunks 3 and 4").
 --
 -- DECISION 4 — NO seed data in this chunk
---   `feature_flags` ships here but remains empty. The 10 flag rows seed
---   in Chunk 5 per the spec.
+--   `feature_flags` and `roles` ship here but remain empty. Flag rows
+--   seed in Chunk 5; role rows seed in Chunk 6.
 --
 -- ----------------------------------------------------------------------------
 -- Production safety
@@ -72,7 +71,7 @@
 -- Rollback (post-deploy, if needed):
 --   DROP TABLE in reverse FK-order (status_transition_definitions,
 --   status_behavior_bindings, role_data_scopes, role_field_visibility,
---   role_permissions, feature_flags, geolocation_retention_policies,
+--   role_permissions, roles, feature_flags, geolocation_retention_policies,
 --   separation_of_duties_constraints, data_scope_definitions,
 --   field_visibility_definitions, permission_definitions).
 -- ============================================================================
@@ -281,7 +280,40 @@ CREATE TABLE public.feature_flags (
 );
 
 -- ============================================================================
--- 7. role_permissions  (Pass 2 §11.3)
+-- 7. roles  (Pass 2 §11.2)
+-- ============================================================================
+-- Identity table for the role catalogue. Created here so the three
+-- role_* junction tables below resolve their `role_id` FKs in order.
+-- Ships EMPTY; seeded in Chunk 6 with the 11 system roles (admin,
+-- project_manager, sales_rep, technician, subcontractor, accounting,
+-- view_only, dispatcher, bookkeeper, hr, executive).
+CREATE TABLE public.roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Identity
+  role_code    TEXT NOT NULL UNIQUE,             -- 'admin', 'pm', 'sr', etc.
+  display_name TEXT NOT NULL,
+  description  TEXT,
+
+  -- Categorization
+  is_system_role BOOLEAN NOT NULL DEFAULT FALSE, -- system-defined; cannot be deleted by operator
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+
+  -- Clone tracking (Pass 1 §8: flat model with clone-and-modify)
+  cloned_from_role_id UUID REFERENCES public.roles(id),
+
+  -- Lifecycle
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by  UUID REFERENCES auth.users(id),
+  archived_at TIMESTAMPTZ,
+  archived_by UUID REFERENCES auth.users(id)
+);
+
+CREATE INDEX idx_roles_role_code ON public.roles(role_code);
+CREATE INDEX idx_roles_is_system ON public.roles(is_system_role) WHERE is_active = TRUE;
+
+-- ============================================================================
+-- 8. role_permissions  (Pass 2 §11.3)
 -- ============================================================================
 -- Role × permission junction. The role default grant matrix.
 -- Populated in Chunk 6/7.
@@ -289,10 +321,7 @@ CREATE TABLE public.role_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign keys
-  -- TODO Chunk N: ADD CONSTRAINT role_permissions_role_id_fkey
-  --   FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
-  -- (deferred per Decision 2 above — `roles` ships in a later chunk)
-  role_id       UUID NOT NULL,
+  role_id       UUID NOT NULL REFERENCES public.roles(id) ON DELETE CASCADE,
   permission_id UUID NOT NULL REFERENCES public.permission_definitions(id) ON DELETE CASCADE,
 
   -- Grant state (the three-way: granted, denied, default)
@@ -321,17 +350,14 @@ CREATE INDEX idx_role_permissions_permission  ON public.role_permissions(permiss
 CREATE INDEX idx_role_permissions_grant_state ON public.role_permissions(grant_state);
 
 -- ============================================================================
--- 8. role_field_visibility  (Pass 2 §12.2)
+-- 9. role_field_visibility  (Pass 2 §12.2)
 -- ============================================================================
 -- Role × visibility-flag junction. Populated in Chunk 6/7.
 CREATE TABLE public.role_field_visibility (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Foreign keys
-  -- TODO Chunk N: ADD CONSTRAINT role_field_visibility_role_id_fkey
-  --   FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
-  -- (deferred per Decision 2 above)
-  role_id UUID NOT NULL,
+  role_id UUID NOT NULL REFERENCES public.roles(id) ON DELETE CASCADE,
   flag_id UUID NOT NULL REFERENCES public.field_visibility_definitions(id) ON DELETE CASCADE,
 
   -- Visibility state
@@ -352,16 +378,13 @@ CREATE TABLE public.role_field_visibility (
 CREATE INDEX idx_role_field_visibility_role ON public.role_field_visibility(role_id);
 
 -- ============================================================================
--- 9. role_data_scopes  (Pass 2 §13.2)
+-- 10. role_data_scopes  (Pass 2 §13.2)
 -- ============================================================================
 -- Role × resource × scope junction. Populated in Chunk 6/7.
 CREATE TABLE public.role_data_scopes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- TODO Chunk N: ADD CONSTRAINT role_data_scopes_role_id_fkey
-  --   FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
-  -- (deferred per Decision 2 above)
-  role_id  UUID NOT NULL,
+  role_id  UUID NOT NULL REFERENCES public.roles(id) ON DELETE CASCADE,
   resource TEXT NOT NULL,
   scope_id UUID NOT NULL REFERENCES public.data_scope_definitions(id),
 
@@ -375,7 +398,7 @@ CREATE INDEX idx_role_data_scopes_role     ON public.role_data_scopes(role_id);
 CREATE INDEX idx_role_data_scopes_resource ON public.role_data_scopes(resource);
 
 -- ============================================================================
--- 10. status_behavior_bindings  (Pass 5 §13.1)
+-- 11. status_behavior_bindings  (Pass 5 §13.1)
 -- ============================================================================
 -- Polymorphic — one table for all bindings across all 80 status surfaces.
 -- ~2000 rows seeded in Chunk 7 once the per-module status lookup tables
@@ -424,7 +447,7 @@ CREATE INDEX idx_status_bindings_lookup  ON public.status_behavior_bindings(stat
 CREATE INDEX idx_status_bindings_by_name ON public.status_behavior_bindings(binding_name, status_table_name);
 
 -- ============================================================================
--- 11. status_transition_definitions  (Pass 5 §13.2)
+-- 12. status_transition_definitions  (Pass 5 §13.2)
 -- ============================================================================
 -- The valid state transitions per status surface. ~600 rows seeded in
 -- Chunk 7 once per-module status lookup tables exist.
