@@ -50,3 +50,6 @@ next-env.d.ts
 
 # os
 Thumbs.db
+
+# Smoke test outputs
+tmp/
