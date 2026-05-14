@@ -5,6 +5,7 @@ import type {
   QuoteStatus,
 } from "./types";
 import { products } from "./mock-data/products";
+import { isValidQuoteThemeSlug, type QuoteThemeSlug } from "@/lib/quote-themes";
 
 export const DEFAULT_TAX_RATE = 0.13; // ON HST
 export const DEFAULT_LABOR_RATE = 145;
@@ -176,4 +177,34 @@ export function weightedPipelineValue(quotes: Quote[]): number {
 
 export function totalValue(quotes: Quote[]): number {
   return quotes.reduce((sum, q) => sum + q.total, 0);
+}
+
+// ----------------------------------------------------------------------------
+// Last-used theme persistence (Chunk F)
+//
+// Quotes carry their own themeSlug, but new quotes initialize from the last
+// theme the operator picked across any quote. Stored under a single
+// localStorage key; per-browser only (no DB persistence yet).
+// ----------------------------------------------------------------------------
+
+export const LAST_USED_THEME_KEY = "nexvelon:last-used-theme";
+
+export function readLastUsedThemeSlug(): QuoteThemeSlug | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(LAST_USED_THEME_KEY);
+    if (stored && isValidQuoteThemeSlug(stored)) return stored;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastUsedThemeSlug(slug: QuoteThemeSlug): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAST_USED_THEME_KEY, slug);
+  } catch {
+    // swallow — localStorage may be unavailable in private mode
+  }
 }

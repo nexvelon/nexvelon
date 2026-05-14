@@ -1,19 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Download, FileText, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { QuoteDocument } from "./QuoteDocument";
+import { getQuoteTheme, type QuoteThemeSlug } from "@/lib/quote-themes";
 import {
-  DEFAULT_QUOTE_THEME_SLUG,
-  getQuoteTheme,
-} from "@/lib/quote-themes";
-import {
-  DEFAULT_QUOTE_TEMPLATE_SLUG,
   getQuoteTemplate,
+  type QuoteTemplateSlug,
 } from "@/lib/company-profile";
-import { createDefaultSchedules } from "@/lib/quote-schedules";
+import type { QuoteScheduleInstance } from "@/lib/quote-schedules";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
 const PDFViewer = dynamic(
@@ -44,23 +40,26 @@ interface Props {
   discount: number;
   discountType: "pct" | "amount";
   terms: string;
+  themeSlug: QuoteThemeSlug;
+  templateSlug: QuoteTemplateSlug;
+  schedules: QuoteScheduleInstance[];
+  showUnitPrice: boolean;
 }
 
 export function PdfPreviewPane(props: Props) {
-  // No `quote` object in scope here (this component receives flattened
-  // builder state, not a Quote record). Per Chunk D/E spec, resolve to the
-  // default theme + default template + default schedule list. Chunk F's
-  // picker UI will accept the operator's choices and thread them through.
-  const theme = getQuoteTheme(DEFAULT_QUOTE_THEME_SLUG);
-  const template = getQuoteTemplate(DEFAULT_QUOTE_TEMPLATE_SLUG);
-  const schedules = useMemo(() => createDefaultSchedules(), []);
+  // Chunk F: theme/template/schedules/showUnitPrice are now operator-
+  // controlled via QuoteBuilder's DocumentStyleCard + SchedulesCard.
+  // Resolve full theme + template objects from the slugs and pass through.
+  const { themeSlug, templateSlug, schedules, showUnitPrice, ...rest } = props;
+  const theme = getQuoteTheme(themeSlug);
+  const template = getQuoteTemplate(templateSlug);
   const doc = (
     <QuoteDocument
-      {...props}
+      {...rest}
       theme={theme}
       template={template}
       schedules={schedules}
-      showUnitPrice={false}
+      showUnitPrice={showUnitPrice}
     />
   );
 
