@@ -8,206 +8,224 @@ import {
   View,
 } from "@react-pdf/renderer";
 import { format, parseISO } from "date-fns";
+import "@/lib/quote-fonts";
 import { quoteTotals, sectionSubtotal } from "@/lib/quote-helpers";
-import { COMPANY_PROFILE } from "@/lib/company-profile";
+import type { QuoteTheme } from "@/lib/quote-themes";
+import type { QuoteTemplate } from "@/lib/company-profile";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
-const COLORS = {
-  navy: "#0B1B3B",
-  gold: "#C9A24B",
-  ivory: "#F8F5EE",
-  charcoal: "#1F2937",
-  muted: "#6B7280",
-  border: "#E5DFD2",
-};
+// Derive a mid-grey from theme.ink at 60% alpha — adapts to whatever ink
+// the chosen theme specifies (dark on light themes, light on dark themes).
+function mutedFor(theme: QuoteTheme): string {
+  return `${theme.ink}99`;
+}
 
-const styles = StyleSheet.create({
-  page: {
-    fontFamily: "Helvetica",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 36,
-    paddingVertical: 36,
-    fontSize: 9,
-    color: COLORS.charcoal,
-  },
-  letterhead: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 18,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.gold,
-  },
-  brand: {
-    fontFamily: "Times-Roman",
-    fontSize: 22,
-    color: COLORS.navy,
-    letterSpacing: 1.2,
-  },
-  brandSub: {
-    fontSize: 8,
-    color: COLORS.muted,
-    marginTop: 4,
-  },
-  contactBlock: {
-    fontSize: 8,
-    color: COLORS.muted,
-    textAlign: "right",
-    lineHeight: 1.5,
-  },
-  quotationLabel: {
-    fontFamily: "Times-Roman",
-    fontSize: 26,
-    color: COLORS.navy,
-    letterSpacing: 4,
-    paddingBottom: 4,
-    borderBottomWidth: 1.4,
-    borderBottomColor: COLORS.gold,
-    alignSelf: "flex-start",
-  },
-  metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
-    marginBottom: 18,
-  },
-  metaCol: {
-    width: "48%",
-  },
-  blockTitle: {
-    fontSize: 8,
-    color: COLORS.muted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  metaTitle: {
-    fontSize: 11,
-    color: COLORS.navy,
-    fontFamily: "Times-Roman",
-  },
-  metaText: {
-    fontSize: 9,
-    color: COLORS.charcoal,
-    lineHeight: 1.4,
-  },
-  section: {
-    marginTop: 8,
-  },
-  sectionHeader: {
-    fontFamily: "Times-Roman",
-    fontSize: 11,
-    color: COLORS.navy,
-    backgroundColor: COLORS.ivory,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.gold,
-    marginBottom: 4,
-  },
-  tableRow: {
-    flexDirection: "row",
-    paddingVertical: 4,
-    borderBottomWidth: 0.4,
-    borderBottomColor: COLORS.border,
-  },
-  tableHead: {
-    flexDirection: "row",
-    paddingVertical: 4,
-    borderBottomWidth: 0.6,
-    borderBottomColor: COLORS.navy,
-  },
-  thText: {
-    fontSize: 8,
-    color: COLORS.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  cellDesc: { width: "60%", paddingRight: 6 },
-  cellQty: { width: "10%", textAlign: "right" },
-  cellPrice: { width: "15%", textAlign: "right" },
-  cellTotal: { width: "15%", textAlign: "right" },
-  bodyText: { fontSize: 9, color: COLORS.charcoal },
-  desc: { fontSize: 9, color: COLORS.charcoal },
-  descMuted: { fontSize: 8, color: COLORS.muted, marginTop: 1 },
-  subtotalLine: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingVertical: 3,
-  },
-  subtotalLabel: { fontSize: 8, color: COLORS.muted, marginRight: 12 },
-  subtotalValue: {
-    fontSize: 9,
-    color: COLORS.charcoal,
-    width: 80,
-    textAlign: "right",
-  },
-  totalsBox: {
-    marginTop: 16,
-    marginLeft: "auto",
-    width: 240,
-    paddingTop: 6,
-    borderTopWidth: 0.6,
-    borderTopColor: COLORS.navy,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 3,
-  },
-  totalLabel: { fontSize: 9, color: COLORS.charcoal },
-  totalValue: { fontSize: 9, color: COLORS.charcoal },
-  grandLabel: {
-    fontFamily: "Times-Roman",
-    fontSize: 12,
-    color: COLORS.navy,
-  },
-  grandValue: {
-    fontFamily: "Times-Roman",
-    fontSize: 14,
-    color: COLORS.navy,
-  },
-  termsTitle: {
-    fontFamily: "Times-Roman",
-    fontSize: 11,
-    color: COLORS.navy,
-    marginTop: 22,
-    marginBottom: 6,
-  },
-  terms: {
-    fontSize: 7.5,
-    color: COLORS.muted,
-    lineHeight: 1.45,
-  },
-  signatures: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 32,
-  },
-  sigBlock: { width: "45%" },
-  sigLine: {
-    borderBottomWidth: 0.6,
-    borderBottomColor: COLORS.charcoal,
-    height: 22,
-  },
-  sigLabel: {
-    fontSize: 7,
-    color: COLORS.muted,
-    marginTop: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 18,
-    left: 36,
-    right: 36,
-    textAlign: "center",
-    fontSize: 7,
-    color: COLORS.muted,
-  },
-});
+// Soft hairline border derived from theme.accent at 20% alpha.
+function borderFor(theme: QuoteTheme): string {
+  return `${theme.accent}33`;
+}
+
+// Factory: rebuilds the same StyleSheet shape on every render, parameterised
+// by the active theme. Cost is negligible (one Object.values pass per
+// render) and avoids any global mutable style state.
+function createStyles(theme: QuoteTheme) {
+  return StyleSheet.create({
+    page: {
+      fontFamily: "Inter",
+      backgroundColor: theme.ambience,
+      paddingHorizontal: 36,
+      paddingVertical: 36,
+      fontSize: 9,
+      color: theme.ink,
+    },
+    letterhead: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 18,
+      paddingBottom: 12,
+      borderBottomWidth: 0.5,
+      borderBottomColor: theme.accent,
+    },
+    brand: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 22,
+      color: theme.accent,
+      letterSpacing: 1.2,
+    },
+    brandSub: {
+      fontSize: 8,
+      color: mutedFor(theme),
+      marginTop: 4,
+    },
+    contactBlock: {
+      fontSize: 8,
+      color: mutedFor(theme),
+      textAlign: "right",
+      lineHeight: 1.5,
+    },
+    quotationLabel: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 26,
+      color: theme.accent,
+      letterSpacing: 4,
+      paddingBottom: 4,
+      borderBottomWidth: 1.4,
+      borderBottomColor: theme.accent,
+      alignSelf: "flex-start",
+    },
+    metaRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 14,
+      marginBottom: 18,
+    },
+    metaCol: {
+      width: "48%",
+    },
+    blockTitle: {
+      fontSize: 8,
+      color: mutedFor(theme),
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 4,
+    },
+    metaTitle: {
+      fontSize: 11,
+      color: theme.accent,
+      fontFamily: "Cormorant Garamond",
+    },
+    metaText: {
+      fontSize: 9,
+      color: theme.ink,
+      lineHeight: 1.4,
+    },
+    section: {
+      marginTop: 8,
+    },
+    sectionHeader: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 11,
+      color: theme.accent,
+      backgroundColor: theme.ambience,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderLeftWidth: 2,
+      borderLeftColor: theme.accent,
+      marginBottom: 4,
+    },
+    tableRow: {
+      flexDirection: "row",
+      paddingVertical: 4,
+      borderBottomWidth: 0.4,
+      borderBottomColor: borderFor(theme),
+    },
+    tableHead: {
+      flexDirection: "row",
+      paddingVertical: 4,
+      borderBottomWidth: 0.6,
+      borderBottomColor: theme.accent,
+    },
+    thText: {
+      fontSize: 8,
+      color: mutedFor(theme),
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    cellDesc: { width: "60%", paddingRight: 6 },
+    cellQty: { width: "10%", textAlign: "right" },
+    cellPrice: { width: "15%", textAlign: "right" },
+    cellTotal: { width: "15%", textAlign: "right" },
+    bodyText: { fontSize: 9, color: theme.ink },
+    desc: { fontSize: 9, color: theme.ink },
+    descMuted: { fontSize: 8, color: mutedFor(theme), marginTop: 1 },
+    subtotalLine: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      paddingVertical: 3,
+    },
+    subtotalLabel: { fontSize: 8, color: mutedFor(theme), marginRight: 12 },
+    subtotalValue: {
+      fontSize: 9,
+      color: theme.ink,
+      width: 80,
+      textAlign: "right",
+    },
+    totalsBox: {
+      marginTop: 16,
+      marginLeft: "auto",
+      width: 240,
+      paddingTop: 6,
+      borderTopWidth: 0.6,
+      borderTopColor: theme.accent,
+    },
+    totalRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 3,
+    },
+    totalLabel: { fontSize: 9, color: theme.ink },
+    totalValue: { fontSize: 9, color: theme.ink },
+    grandLabel: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 12,
+      color: theme.accent,
+    },
+    grandValue: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 14,
+      color: theme.accent,
+    },
+    grandRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 3,
+      marginTop: 4,
+      paddingTop: 6,
+      borderTopWidth: 0.6,
+      borderTopColor: theme.accent,
+    },
+    termsTitle: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 11,
+      color: theme.accent,
+      marginTop: 22,
+      marginBottom: 6,
+    },
+    terms: {
+      fontSize: 7.5,
+      color: mutedFor(theme),
+      lineHeight: 1.45,
+    },
+    signatures: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 32,
+    },
+    sigBlock: { width: "45%" },
+    sigLine: {
+      borderBottomWidth: 0.6,
+      borderBottomColor: theme.ink,
+      height: 22,
+    },
+    sigLabel: {
+      fontSize: 7,
+      color: mutedFor(theme),
+      marginTop: 4,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    footer: {
+      position: "absolute",
+      bottom: 18,
+      left: 36,
+      right: 36,
+      textAlign: "center",
+      fontSize: 7,
+      color: mutedFor(theme),
+    },
+  });
+}
 
 const usd = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -232,6 +250,8 @@ interface DocProps {
   discount: number;
   discountType: "pct" | "amount";
   terms: string;
+  theme: QuoteTheme;
+  template: QuoteTemplate;
 }
 
 export function QuoteDocument(props: DocProps) {
@@ -250,33 +270,50 @@ export function QuoteDocument(props: DocProps) {
     discount,
     discountType,
     terms,
+    theme,
+    template,
   } = props;
 
+  const styles = createStyles(theme);
   const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
+  const footerLine =
+    template.footerLong ||
+    `${template.legalName} · HST/GST ${template.hstNumber}`;
 
   return (
     <Document
       title={`Quote ${number}`}
-      author={COMPANY_PROFILE.trade_name}
+      author={template.tradeName}
       subject={name ?? "Security systems quotation"}
     >
       <Page size="LETTER" style={styles.page} wrap>
         <View style={styles.letterhead}>
           <View>
             <Text style={styles.brand}>
-              {COMPANY_PROFILE.trade_name.toUpperCase()}
+              {template.tradeName.toUpperCase()}
             </Text>
-            <Text style={styles.brandSub}>{COMPANY_PROFILE.tagline}</Text>
+            <Text style={styles.brandSub}>{template.tagline}</Text>
           </View>
           <View style={styles.contactBlock}>
-            <Text>{COMPANY_PROFILE.address.line1}</Text>
-            <Text>
-              {COMPANY_PROFILE.address.city}, {COMPANY_PROFILE.address.province}{" "}
-              {COMPANY_PROFILE.address.postal_code}
-            </Text>
-            <Text>{COMPANY_PROFILE.phone}</Text>
-            <Text>{COMPANY_PROFILE.email}</Text>
-            <Text>{COMPANY_PROFILE.website}</Text>
+            {template.address.line1 ? (
+              <Text>{template.address.line1}</Text>
+            ) : null}
+            {template.address.line2 ? (
+              <Text>{template.address.line2}</Text>
+            ) : null}
+            {(template.address.city ||
+              template.address.province ||
+              template.address.postalCode) && (
+              <Text>
+                {template.address.city}
+                {template.address.city && template.address.province ? ", " : ""}
+                {template.address.province}{" "}
+                {template.address.postalCode}
+              </Text>
+            )}
+            {template.phone ? <Text>{template.phone}</Text> : null}
+            {template.email ? <Text>{template.email}</Text> : null}
+            {template.web ? <Text>{template.web}</Text> : null}
           </View>
         </View>
 
@@ -368,7 +405,7 @@ export function QuoteDocument(props: DocProps) {
             </View>
             {s.items.length === 0 && (
               <View style={styles.tableRow}>
-                <Text style={[styles.bodyText, styles.cellDesc, { color: COLORS.muted }]}>
+                <Text style={[styles.bodyText, styles.cellDesc, { color: mutedFor(theme) }]}>
                   No items in this section.
                 </Text>
               </View>
@@ -431,17 +468,7 @@ export function QuoteDocument(props: DocProps) {
             </Text>
             <Text style={styles.totalValue}>{usd(totals.tax)}</Text>
           </View>
-          <View
-            style={[
-              styles.totalRow,
-              {
-                marginTop: 4,
-                paddingTop: 6,
-                borderTopWidth: 0.6,
-                borderTopColor: COLORS.navy,
-              },
-            ]}
-          >
+          <View style={styles.grandRow}>
             <Text style={styles.grandLabel}>Total</Text>
             <Text style={styles.grandValue}>{usd(totals.total)}</Text>
           </View>
@@ -457,14 +484,13 @@ export function QuoteDocument(props: DocProps) {
           </View>
           <View style={styles.sigBlock}>
             <View style={styles.sigLine} />
-            <Text style={styles.sigLabel}>For {COMPANY_PROFILE.trade_name}</Text>
+            <Text style={styles.sigLabel}>For {template.tradeName}</Text>
           </View>
         </View>
 
         <Text style={styles.footer} fixed>
-          {COMPANY_PROFILE.legal_name} · HST/GST: {COMPANY_PROFILE.gst_hst_number}{" "}
-          · {number} · Page rendered {format(new Date(), "MMM d, yyyy")} ·
-          Subject to terms above.
+          {footerLine} · {number} · Page rendered{" "}
+          {format(new Date(), "MMM d, yyyy")} · Subject to terms above.
         </Text>
       </Page>
     </Document>
