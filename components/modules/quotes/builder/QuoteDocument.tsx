@@ -20,6 +20,8 @@ import type {
   ParticularsScheduleInstance,
   QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
+import { parseRichTextBody } from "@/lib/quote-rich-text";
+import type { JSONContent } from "@tiptap/core";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
 // ----------------------------------------------------------------------------
@@ -611,13 +613,49 @@ function createStyles(theme: QuoteTheme) {
       marginTop: 14,
     },
 
-    // ----- Custom page -----
-    customBody: {
+    // ----- Custom page (rich text) -----
+    customParagraph: {
       fontFamily: "Cormorant Garamond",
       fontSize: 10,
       color: theme.ink,
       lineHeight: 1.5,
-      marginBottom: 6,
+      marginVertical: 2,
+    },
+    customHeading2: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 16,
+      fontWeight: "bold",
+      color: theme.accent,
+      lineHeight: 1.3,
+      marginTop: 8,
+      marginBottom: 3,
+    },
+    customHeading3: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 12,
+      fontWeight: "bold",
+      color: theme.ink,
+      lineHeight: 1.3,
+      marginTop: 5,
+      marginBottom: 2,
+    },
+    customList: {
+      marginVertical: 4,
+    },
+    customListItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginVertical: 1,
+    },
+    customListBullet: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 10,
+      color: theme.accent,
+      width: 16,
+      marginRight: 4,
+    },
+    customListContent: {
+      flex: 1,
     },
 
     // ----- Shared footer (fixed at bottom of every page) -----
@@ -1253,6 +1291,79 @@ function AcceptancePage({
   );
 }
 
+// ----------------------------------------------------------------------------
+// Rich-text walker for CustomPage bodies
+// ----------------------------------------------------------------------------
+
+function renderRichTextInline(
+  nodes: JSONContent[] | undefined,
+): React.ReactNode {
+  if (!nodes) return null;
+  return nodes.map((n, i) => {
+    if (n.type !== "text") return null;
+    const text = n.text ?? "";
+    const marks = n.marks ?? [];
+    const inline: { fontWeight?: "bold"; fontStyle?: "italic" } = {};
+    if (marks.some((m) => m.type === "bold")) inline.fontWeight = "bold";
+    if (marks.some((m) => m.type === "italic")) inline.fontStyle = "italic";
+    return (
+      <Text key={i} style={inline}>
+        {text}
+      </Text>
+    );
+  });
+}
+
+function renderRichTextBlock(
+  node: JSONContent,
+  styles: Styles,
+  key: number,
+): React.ReactNode {
+  switch (node.type) {
+    case "paragraph":
+      return (
+        <Text key={key} style={styles.customParagraph}>
+          {renderRichTextInline(node.content)}
+        </Text>
+      );
+    case "heading": {
+      const level = (node.attrs?.level as number) ?? 2;
+      const style = level === 2 ? styles.customHeading2 : styles.customHeading3;
+      return (
+        <Text key={key} style={style}>
+          {renderRichTextInline(node.content)}
+        </Text>
+      );
+    }
+    case "bulletList":
+    case "orderedList": {
+      const ordered = node.type === "orderedList";
+      return (
+        <View key={key} style={styles.customList}>
+          {(node.content ?? []).map((item, i) => (
+            <View key={i} style={styles.customListItem}>
+              <Text style={styles.customListBullet}>
+                {ordered ? `${i + 1}.` : "•"}
+              </Text>
+              <View style={styles.customListContent}>
+                {(item.content ?? []).map((child, j) =>
+                  renderRichTextBlock(child, styles, j),
+                )}
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    default:
+      return (
+        <Text key={key} style={styles.customParagraph}>
+          {renderRichTextInline(node.content)}
+        </Text>
+      );
+  }
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -1267,7 +1378,7 @@ function CustomPage({
   template,
   number,
 }: CustomPageProps) {
-  const lines = (schedule.body ?? "").split("\n");
+  const doc = parseRichTextBody(schedule.body ?? "");
   return (
     <Page size="LETTER" style={styles.page} wrap>
       <PageHeader
@@ -1286,11 +1397,9 @@ function CustomPage({
 
       <RuleWithOrnament styles={styles} ornament={"✦"} sparkle />
 
-      {lines.map((line, i) => (
-        <Text style={styles.customBody} key={i}>
-          {line || " "}
-        </Text>
-      ))}
+      {(doc.content ?? []).map((node, i) =>
+        renderRichTextBlock(node, styles, i),
+      )}
 
       <SharedFooter
         styles={styles}

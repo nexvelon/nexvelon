@@ -24,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RichTextEditor } from "./RichTextEditor";
 import {
   QUOTE_SCHEDULE_DEFINITIONS,
   createCustomSchedule,
@@ -244,20 +245,18 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
               {schedule.kind === "custom" && (
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px]">Body</Label>
-                  <Textarea
+                  <RichTextEditor
                     value={(schedule as CustomScheduleInstance).body}
-                    onChange={(e) =>
+                    onChange={(next) =>
                       patchAt(idx, {
-                        body: e.target.value,
+                        body: next,
                       } as Partial<CustomScheduleInstance>)
                     }
                     disabled={disabled}
-                    rows={6}
-                    placeholder="Free-form body. Each line renders as its own row."
-                    className="text-sm"
                   />
                   <p className="text-muted-foreground text-[11px]">
-                    Plain text for now. Rich text editor coming in next release.
+                    Use headings, lists, bold, and italic for structure.
+                    Renders into the PDF with the chosen theme.
                   </p>
                 </div>
               )}
