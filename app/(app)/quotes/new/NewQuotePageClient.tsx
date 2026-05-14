@@ -17,6 +17,9 @@ import {
   newId,
   nextQuoteNumber,
 } from "@/lib/quote-helpers";
+import { createDefaultSchedules } from "@/lib/quote-schedules";
+import { DEFAULT_QUOTE_THEME_SLUG } from "@/lib/quote-themes";
+import { DEFAULT_QUOTE_TEMPLATE_SLUG } from "@/lib/company-profile";
 import type { Client, Quote, Site, User } from "@/lib/types";
 
 interface Props {
@@ -61,6 +64,13 @@ export function NewQuotePageClient({ clients, sitesByClient, owner }: Props) {
       subtotal: 0,
       tax: 0,
       total: 0,
+      // Chunk C defaults — only applied to freshly-created quotes here. Quotes
+      // already in localStorage will have these as undefined and downstream
+      // consumers (Chunks D/E) fall back via `??`.
+      schedules: createDefaultSchedules(),
+      themeSlug: DEFAULT_QUOTE_THEME_SLUG,
+      templateSlug: DEFAULT_QUOTE_TEMPLATE_SLUG,
+      showUnitPrice: false,
     };
     // initial values are computed once per page mount; allQuotes is read for
     // next-number calculation but the resulting `initial` shouldn't reactively

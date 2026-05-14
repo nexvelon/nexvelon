@@ -1,3 +1,7 @@
+import type { QuoteScheduleInstance } from "@/lib/quote-schedules";
+import type { QuoteThemeSlug } from "@/lib/quote-themes";
+import type { QuoteTemplateSlug } from "@/lib/company-profile";
+
 export type ID = string;
 
 export type ClientType = "Commercial" | "Industrial" | "Residential";
@@ -180,6 +184,13 @@ export interface Quote {
   subtotal: number;
   tax: number;
   total: number;
+  // Chunk C extensions — optional for backward compatibility with quotes
+  // already in localStorage. Consumers in Chunks D/E fall back to defaults
+  // via `??` when undefined.
+  schedules?: QuoteScheduleInstance[];
+  themeSlug?: QuoteThemeSlug;
+  templateSlug?: QuoteTemplateSlug;
+  showUnitPrice?: boolean;
 }
 
 export interface Site {
