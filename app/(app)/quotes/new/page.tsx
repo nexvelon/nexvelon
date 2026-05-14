@@ -1,72 +1,151 @@
-"use client";
+// Server component — fetches real DB clients/sites and the current user's
+// profile, then hands off to the interactive NewQuotePageClient. Path-1
+// patch (feature/quotes-path1-real-data-real-letterhead): pre-Path-1, this
+// route imported mock-data clients directly. The QuoteBuilder + QuoteDocument
+// components stay on the mock-data type contract; we adapt DB rows at this
+// server boundary so the swap is surgical.
+//
+// localStorage save in lib/quote-store.ts is untouched — Path 1 only fixes
+// the input data + letterhead, not durable storage. Real `quotes` table
+// ships with Quotes v1 (NEXVELON_ROADMAP.md item 4).
 
-import { useMemo } from "react";
-import { QuoteBuilder } from "@/components/modules/quotes/builder/QuoteBuilder";
-import { useQuotes } from "@/lib/quote-store";
-import { useRole } from "@/lib/role-context";
-import { hasPermission } from "@/lib/permissions";
-import {
-  DEFAULT_TAX_RATE,
-  DEFAULT_TERMS,
-  emptyLineItem,
-  newId,
-  nextQuoteNumber,
-} from "@/lib/quote-helpers";
-import { users } from "@/lib/mock-data/users";
-import type { Quote } from "@/lib/types";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function NewQuotePage() {
-  const allQuotes = useQuotes();
-  const { role } = useRole();
-  const canCreate = hasPermission(role, "quotes", "create");
+import { getClients, getSitesByClient } from "@/lib/api/clients";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission } from "@/lib/permissions";
+import type {
+  DbClient,
+  DbClientStatus,
+  DbClientType,
+  DbProfile,
+  DbRole,
+  DbSite,
+} from "@/lib/types/database";
+import type {
+  Client,
+  ClientStatus,
+  ClientType,
+  Role,
+  Site,
+  User,
+} from "@/lib/types";
 
-  const initial = useMemo<Quote>(() => {
-    const today = new Date();
-    const expiry = new Date(today);
-    expiry.setDate(expiry.getDate() + 30);
-    const defaultOwner =
-      users.find((u) => u.role === "SalesRep") ??
-      users.find((u) => u.role === "Admin")!;
+import { NewQuotePageClient } from "./NewQuotePageClient";
 
-    return {
-      id: newId("q"),
-      number: nextQuoteNumber(allQuotes),
-      name: "",
-      clientId: "",
-      siteId: "",
-      status: "Draft",
-      createdAt: today.toISOString().slice(0, 10),
-      expiresAt: expiry.toISOString().slice(0, 10),
-      ownerId: defaultOwner.id,
-      paymentTerms: "Net 30",
-      taxRate: DEFAULT_TAX_RATE,
-      projectType: "New Install",
-      sections: [
-        {
-          id: newId("sec"),
-          name: "Access Control Hardware",
-          items: [emptyLineItem()],
-        },
-      ],
-      items: [],
-      terms: DEFAULT_TERMS,
-      internalNotes: "",
-      discount: 0,
-      discountType: "pct",
-      subtotal: 0,
-      tax: 0,
-      total: 0,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+export const dynamic = "force-dynamic";
 
-  if (!canCreate) {
+// ----------------------------------------------------------------------------
+// Adapters — DB shapes (Pass 1 schema) → mock-data shapes that QuoteBuilder /
+// QuoteDocument were built against. Translation only; no inference, no
+// fabrication. Fields the DB doesn't carry (client-level email/phone/
+// address — those live on `contacts` and `sites`) are passed through as
+// empty strings; the PDF renders blank lines for them rather than guessing.
+// ----------------------------------------------------------------------------
+
+function adaptClientType(t: DbClientType | null): ClientType {
+  // DB enum has 7 values; mock enum has 3. Anything outside the mock set
+  // folds to "Commercial" for the cosmetic display only — type is not used
+  // to gate anything in the QuoteBuilder.
+  if (t === "Industrial" || t === "Residential") return t;
+  return "Commercial";
+}
+
+function adaptClientStatus(s: DbClientStatus): ClientStatus {
+  // DB: Active | Inactive | Prospect | Lost. Mock: Active | Prospect | Dormant.
+  if (s === "Prospect") return "Prospect";
+  if (s === "Active") return "Active";
+  return "Dormant";
+}
+
+function adaptClient(c: DbClient): Client {
+  return {
+    id: c.id,
+    name: c.name,
+    type: adaptClientType(c.type),
+    status: adaptClientStatus(c.status),
+    contactName: "", // contacts live on public.contacts; not pulled at v1
+    email: "",
+    phone: "",
+    address: "", // client-level address not stored — site address is the
+    city: "", //    operational address; Bill-To line stays blank.
+    state: "",
+    createdAt: c.created_at,
+    totalRevenue: Number(c.ytd_revenue ?? 0),
+  };
+}
+
+function adaptSite(s: DbSite): Site {
+  const line = [s.address_line1, s.address_line2]
+    .filter((v) => v && v.trim().length > 0)
+    .join(", ");
+  return {
+    id: s.id,
+    clientId: s.client_id,
+    name: s.name,
+    address: line,
+    city: s.city ?? "",
+    state: s.province ?? "",
+  };
+}
+
+// DbRole has 11 values; the mock Role enum has 7. Map values that don't
+// exist in the mock enum to their closest equivalent so the existing
+// permission matrix and UI gates still resolve.
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
+
+function adaptProfileAsOwner(p: DbProfile): User {
+  const displayName =
+    p.display_name?.trim() ||
+    `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() ||
+    p.email;
+  return {
+    id: p.id,
+    name: displayName,
+    email: p.email,
+    role: adaptRole(p.role),
+    phone: p.phone ?? "",
+    hiredAt: p.created_at,
+    avatarColor: "#0B1B3B",
+    active: p.status === "Active" || p.status === "Invited",
+  };
+}
+
+// ----------------------------------------------------------------------------
+
+export default async function NewQuotePage() {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    redirect("/login?next=/quotes/new");
+  }
+
+  // Static permission matrix check; the DB-backed engine landed in Chunk 1/2
+  // is dormant under feature flags and not consulted here.
+  const role = adaptRole(profile.role);
+  if (!hasPermission(role, "quotes", "create")) {
     return (
       <div className="bg-card mx-auto max-w-md rounded-lg border border-[var(--border)] p-8 text-center shadow-sm">
-        <h1 className="text-brand-navy font-serif text-2xl">
-          Not authorized
-        </h1>
+        <h1 className="text-brand-navy font-serif text-2xl">Not authorized</h1>
         <p className="text-muted-foreground mt-2 text-sm">
           Your current role does not have permission to create quotes.
         </p>
@@ -80,5 +159,27 @@ export default function NewQuotePage() {
     );
   }
 
-  return <QuoteBuilder initial={initial} isNew />;
+  const clients = await getClients();
+  const sitesByClient: Record<string, DbSite[]> = {};
+  if (clients.length > 0) {
+    const results = await Promise.all(
+      clients.map(async (c) => ({ id: c.id, sites: await getSitesByClient(c.id) }))
+    );
+    for (const { id, sites } of results) sitesByClient[id] = sites;
+  }
+
+  const adaptedClients: Client[] = clients.map(adaptClient);
+  const adaptedSitesByClient: Record<string, Site[]> = {};
+  for (const cid in sitesByClient) {
+    adaptedSitesByClient[cid] = sitesByClient[cid].map(adaptSite);
+  }
+  const owner = adaptProfileAsOwner(profile);
+
+  return (
+    <NewQuotePageClient
+      clients={adaptedClients}
+      sitesByClient={adaptedSitesByClient}
+      owner={owner}
+    />
+  );
 }

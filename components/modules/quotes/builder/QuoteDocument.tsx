@@ -9,6 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import { format, parseISO } from "date-fns";
 import { quoteTotals, sectionSubtotal } from "@/lib/quote-helpers";
+import { COMPANY_PROFILE } from "@/lib/company-profile";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
 const COLORS = {
@@ -256,25 +257,26 @@ export function QuoteDocument(props: DocProps) {
   return (
     <Document
       title={`Quote ${number}`}
-      author="Nexvelon"
+      author={COMPANY_PROFILE.trade_name}
       subject={name ?? "Security systems quotation"}
     >
       <Page size="LETTER" style={styles.page} wrap>
         <View style={styles.letterhead}>
           <View>
-            <Text style={styles.brand}>NEXVELON</Text>
-            <Text style={styles.brandSub}>Security Systems · Integrated Solutions</Text>
+            <Text style={styles.brand}>
+              {COMPANY_PROFILE.trade_name.toUpperCase()}
+            </Text>
+            <Text style={styles.brandSub}>{COMPANY_PROFILE.tagline}</Text>
           </View>
           <View style={styles.contactBlock}>
-            {/* Contact details pulled from Settings → Company Profile
-                once that pane wires to Supabase. Hardcoded demo values
-                (240 Front Street West / (416) 555-0100 / sales@nexvelon
-                .com / HST 81245-6709) were removed during the 2026-05-11
-                production-readiness cleanup — they were fictitious and
-                would otherwise have appeared on every client-facing PDF
-                quote. Configure your real values in Settings → Company
-                Profile before sending a quote externally. */}
-            <Text>Configure address in Settings → Company Profile</Text>
+            <Text>{COMPANY_PROFILE.address.line1}</Text>
+            <Text>
+              {COMPANY_PROFILE.address.city}, {COMPANY_PROFILE.address.province}{" "}
+              {COMPANY_PROFILE.address.postal_code}
+            </Text>
+            <Text>{COMPANY_PROFILE.phone}</Text>
+            <Text>{COMPANY_PROFILE.email}</Text>
+            <Text>{COMPANY_PROFILE.website}</Text>
           </View>
         </View>
 
@@ -455,13 +457,14 @@ export function QuoteDocument(props: DocProps) {
           </View>
           <View style={styles.sigBlock}>
             <View style={styles.sigLine} />
-            <Text style={styles.sigLabel}>For Nexvelon</Text>
+            <Text style={styles.sigLabel}>For {COMPANY_PROFILE.trade_name}</Text>
           </View>
         </View>
 
         <Text style={styles.footer} fixed>
-          Nexvelon Inc. · {number} · Page rendered{" "}
-          {format(new Date(), "MMM d, yyyy")} · Subject to terms above.
+          {COMPANY_PROFILE.legal_name} · HST/GST: {COMPANY_PROFILE.gst_hst_number}{" "}
+          · {number} · Page rendered {format(new Date(), "MMM d, yyyy")} ·
+          Subject to terms above.
         </Text>
       </Page>
     </Document>

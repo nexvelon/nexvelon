@@ -34,29 +34,64 @@ import {
 } from "@/lib/quote-helpers";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
 import { useReadOnly } from "@/lib/use-read-only";
-import { clients } from "@/lib/mock-data/clients";
-import { sites as ALL_SITES, sitesForClient } from "@/lib/mock-data/sites";
-import { users } from "@/lib/mock-data/users";
+import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
+import {
+  sites as MOCK_SITES,
+  sitesForClient as mockSitesForClient,
+} from "@/lib/mock-data/sites";
+import { users as MOCK_USERS } from "@/lib/mock-data/users";
 import { projects } from "@/lib/mock-data/projects";
 import type {
   BuilderLineItem,
+  Client,
   PaymentTerms,
   Product,
   Quote,
   QuoteProjectType,
   QuoteSection,
   QuoteStatus,
+  Site,
+  User,
 } from "@/lib/types";
 
 interface Props {
   initial: Quote;
   isNew: boolean;
+  // ---------------------------------------------------------------------------
+  // Override props — optional. Path-1 patch (feature/quotes-path1-real-data-
+  // real-letterhead): the New Quote server page now fetches real DB clients +
+  // sites + the current user and passes them in. The edit-existing route
+  // `/quotes/[id]/page.tsx` does NOT pass these and falls back to mock-data,
+  // preserving the existing demo behaviour on that route until Quotes v1
+  // ships full DB persistence.
+  // ---------------------------------------------------------------------------
+  clientsOverride?: Client[];
+  sitesByClientOverride?: Record<string, Site[]>;
+  ownerOverride?: User;
 }
 
-export function QuoteBuilder({ initial, isNew }: Props) {
+export function QuoteBuilder({
+  initial,
+  isNew,
+  clientsOverride,
+  sitesByClientOverride,
+  ownerOverride,
+}: Props) {
   const router = useRouter();
   useQuotes(); // subscribe to store updates so the builder re-renders if state changes elsewhere
   const [saving, setSaving] = useState(false);
+
+  // Resolve picker data sources: real DB data when provided, else mock-data
+  // for the legacy /quotes/[id] edit flow.
+  const clients: Client[] = clientsOverride ?? MOCK_CLIENTS;
+  const allSites: Site[] = sitesByClientOverride
+    ? Object.values(sitesByClientOverride).flat()
+    : MOCK_SITES;
+  const sitesForClient = (cid: string): Site[] =>
+    sitesByClientOverride
+      ? (sitesByClientOverride[cid] ?? [])
+      : mockSitesForClient(cid);
+  const users: User[] = ownerOverride ? [ownerOverride] : MOCK_USERS;
 
   const [number] = useState(initial.number);
   const [status, setStatus] = useState<QuoteStatus>(initial.status);
@@ -94,21 +129,29 @@ export function QuoteBuilder({ initial, isNew }: Props) {
     if (!valid.includes(siteId) && valid.length > 0) {
       setSiteId(valid[0]);
     }
-  }, [clientId, siteId]);
+    // sitesForClient is a stable closure over sitesByClientOverride; depending
+    // on the override (not the function ref) avoids infinite re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, siteId, sitesByClientOverride]);
 
   const client = clients.find((c) => c.id === clientId);
-  const site = ALL_SITES.find((s) => s.id === siteId);
+  const site = allSites.find((s) => s.id === siteId);
   const owner = users.find((u) => u.id === ownerId);
 
   const owners = useMemo(
     () =>
-      users.filter(
-        (u) =>
-          u.role === "SalesRep" ||
-          u.role === "ProjectManager" ||
-          u.role === "Admin"
-      ),
-    []
+      ownerOverride
+        ? // Path-1 patch: server-side already resolved the current user; the
+          // owner dropdown shows only them. Multi-user owner selection
+          // returns with Quotes v1.
+          [ownerOverride]
+        : MOCK_USERS.filter(
+            (u) =>
+              u.role === "SalesRep" ||
+              u.role === "ProjectManager" ||
+              u.role === "Admin"
+          ),
+    [ownerOverride]
   );
 
   const updateSection = (next: QuoteSection) =>
