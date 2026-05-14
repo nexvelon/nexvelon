@@ -4,6 +4,14 @@ import dynamic from "next/dynamic";
 import { Download, FileText, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { QuoteDocument } from "./QuoteDocument";
+import {
+  DEFAULT_QUOTE_THEME_SLUG,
+  getQuoteTheme,
+} from "@/lib/quote-themes";
+import {
+  DEFAULT_QUOTE_TEMPLATE_SLUG,
+  getQuoteTemplate,
+} from "@/lib/company-profile";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
 const PDFViewer = dynamic(
@@ -37,7 +45,13 @@ interface Props {
 }
 
 export function PdfPreviewPane(props: Props) {
-  const doc = <QuoteDocument {...props} />;
+  // No `quote` object in scope here (this component receives flattened
+  // builder state, not a Quote record). Per Chunk D spec, resolve to the
+  // default theme + default template. Chunk E's picker UI will accept the
+  // operator's choices and thread them through.
+  const theme = getQuoteTheme(DEFAULT_QUOTE_THEME_SLUG);
+  const template = getQuoteTemplate(DEFAULT_QUOTE_TEMPLATE_SLUG);
+  const doc = <QuoteDocument {...props} theme={theme} template={template} />;
 
   return (
     <Card className="bg-muted/30 flex h-full flex-col overflow-hidden p-0">
