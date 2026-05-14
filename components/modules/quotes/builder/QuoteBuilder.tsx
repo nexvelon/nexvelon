@@ -16,6 +16,8 @@ import {
 import { BuilderHeader } from "./BuilderHeader";
 import { ClientSiteCard } from "./ClientSiteCard";
 import { QuoteDetailsCard } from "./QuoteDetailsCard";
+import { DocumentStyleCard } from "./DocumentStyleCard";
+import { SchedulesCard } from "./SchedulesCard";
 import { SectionCard } from "./SectionCard";
 import { CommandPalette } from "./CommandPalette";
 import { TotalsBar } from "./TotalsBar";
@@ -30,8 +32,22 @@ import {
   emptyLineItem,
   newId,
   quoteTotals,
+  readLastUsedThemeSlug,
   recalcLineItem,
+  writeLastUsedThemeSlug,
 } from "@/lib/quote-helpers";
+import {
+  DEFAULT_QUOTE_THEME_SLUG,
+  type QuoteThemeSlug,
+} from "@/lib/quote-themes";
+import {
+  DEFAULT_QUOTE_TEMPLATE_SLUG,
+  type QuoteTemplateSlug,
+} from "@/lib/company-profile";
+import {
+  createDefaultSchedules,
+  type QuoteScheduleInstance,
+} from "@/lib/quote-schedules";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
 import { useReadOnly } from "@/lib/use-read-only";
 import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
@@ -119,6 +135,30 @@ export function QuoteBuilder({
     initial.discountType ?? "pct"
   );
   const [presetSection, setPresetSection] = useState<string>(SECTION_PRESETS[0]);
+
+  // Chunk F additions — document style + schedules manager state.
+  // Initial themeSlug honours the last-used theme from localStorage if the
+  // quote draft doesn't already carry one (so a fresh "New Quote" reopens
+  // with the operator's most-recent pick).
+  const [templateSlug, setTemplateSlug] = useState<QuoteTemplateSlug>(
+    initial.templateSlug ?? DEFAULT_QUOTE_TEMPLATE_SLUG
+  );
+  const [themeSlug, setThemeSlug] = useState<QuoteThemeSlug>(() => {
+    if (initial.themeSlug) return initial.themeSlug;
+    const last = readLastUsedThemeSlug();
+    return last ?? DEFAULT_QUOTE_THEME_SLUG;
+  });
+  const [showUnitPrice, setShowUnitPrice] = useState<boolean>(
+    initial.showUnitPrice ?? false
+  );
+  const [schedules, setSchedules] = useState<QuoteScheduleInstance[]>(
+    initial.schedules ?? createDefaultSchedules()
+  );
+
+  const handleThemeChange = (slug: QuoteThemeSlug) => {
+    setThemeSlug(slug);
+    writeLastUsedThemeSlug(slug);
+  };
 
   const ro = useReadOnly(status);
 
@@ -262,6 +302,11 @@ export function QuoteBuilder({
       subtotal: totals.subtotal,
       tax: totals.tax,
       total: totals.total,
+      // Chunk F additions — operator-controlled document style + schedules.
+      themeSlug,
+      templateSlug,
+      showUnitPrice,
+      schedules,
     };
     return out;
   };
@@ -364,6 +409,22 @@ export function QuoteBuilder({
               if (patch.ownerId !== undefined) setOwnerId(patch.ownerId);
               if (patch.projectType !== undefined) setProjectType(patch.projectType);
             }}
+          />
+
+          <DocumentStyleCard
+            templateSlug={templateSlug}
+            themeSlug={themeSlug}
+            showUnitPrice={showUnitPrice}
+            onTemplateChange={setTemplateSlug}
+            onThemeChange={handleThemeChange}
+            onShowUnitPriceChange={setShowUnitPrice}
+            disabled={ro.readOnly}
+          />
+
+          <SchedulesCard
+            schedules={schedules}
+            onChange={setSchedules}
+            disabled={ro.readOnly}
           />
 
           <div className="space-y-4">
@@ -487,6 +548,10 @@ export function QuoteBuilder({
               discount={discount}
               discountType={discountType}
               terms={terms}
+              themeSlug={themeSlug}
+              templateSlug={templateSlug}
+              schedules={schedules}
+              showUnitPrice={showUnitPrice}
             />
           </div>
         </div>
