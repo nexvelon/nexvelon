@@ -16,6 +16,7 @@ import type { QuoteTemplate } from "@/lib/company-profile";
 import type {
   AcceptanceScheduleInstance,
   AgreementScheduleInstance,
+  AssuranceScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
   ParticularsScheduleInstance,
@@ -657,6 +658,52 @@ function createStyles(theme: QuoteTheme) {
     },
     customListContent: {
       flex: 1,
+    },
+
+    // ----- Assurance page (warranty / service tier cards) -----
+    assuranceGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      marginTop: 12,
+    },
+    assuranceCard: {
+      width: "48%",
+      borderWidth: 1,
+      borderColor: theme.accent,
+      borderRadius: 2,
+      paddingVertical: 24,
+      paddingHorizontal: 28,
+      marginBottom: 16,
+      alignItems: "center",
+    },
+    assuranceCardOrnament: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 24,
+      color: theme.accent,
+      marginBottom: 8,
+    },
+    assuranceCardTier: {
+      fontFamily: "Inter",
+      fontSize: 8,
+      color: theme.accent,
+      letterSpacing: 4,
+      marginBottom: 6,
+    },
+    assuranceCardTitle: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 18,
+      fontStyle: "italic",
+      color: theme.ink,
+      marginBottom: 6,
+      textAlign: "center",
+    },
+    assuranceCardDescription: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 10,
+      color: `${theme.ink}CC`,
+      lineHeight: 1.4,
+      textAlign: "center",
     },
 
     // ----- Shared footer (fixed at bottom of every page) -----
@@ -1365,6 +1412,64 @@ function renderRichTextBlock(
   }
 }
 
+interface AssurancePageProps extends CommonPageProps {
+  schedule: AssuranceScheduleInstance;
+}
+
+function AssurancePage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: AssurancePageProps) {
+  const subtitleSuffix = schedule.subtitle || "Warranty & Service";
+  return (
+    <Page size="LETTER" style={styles.page} wrap>
+      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <RuleWithOrnament styles={styles} />
+
+      <Text style={styles.scheduleSubtitle}>
+        Schedule {romanForTitle} · {subtitleSuffix.toUpperCase()}
+      </Text>
+      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+
+      <RuleWithOrnament styles={styles} />
+
+      <View style={styles.assuranceGrid}>
+        {schedule.cards.map((card) => (
+          <View key={card.id} style={styles.assuranceCard} wrap={false}>
+            <Text style={styles.assuranceCardOrnament}>{card.ornament}</Text>
+            <Text style={styles.assuranceCardTier}>{card.tier}</Text>
+            <Text style={styles.assuranceCardTitle}>{card.title}</Text>
+            <Text style={styles.assuranceCardDescription}>
+              {card.description}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -1540,6 +1645,14 @@ export function QuoteDocument(props: DocProps) {
           case "custom":
             return (
               <CustomPage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "assurance":
+            return (
+              <AssurancePage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
