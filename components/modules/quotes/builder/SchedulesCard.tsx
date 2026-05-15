@@ -28,9 +28,12 @@ import { RichTextEditor } from "./RichTextEditor";
 import {
   QUOTE_SCHEDULE_DEFINITIONS,
   createAssuranceSchedule,
+  createCalendarSchedule,
   createCustomSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
+  type CalendarPhase,
+  type CalendarScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
   type QuoteScheduleInstance,
@@ -38,6 +41,7 @@ import {
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { CalendarPhaseEditor } from "./CalendarPhaseEditor";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
@@ -48,6 +52,7 @@ interface Props {
 const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   cover: "Cover",
   particulars: "Particulars",
+  calendar: "Calendar",
   assurance: "Assurance",
   agreement: "Agreement",
   acceptance: "Acceptance",
@@ -57,6 +62,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
+  "calendar",
   "assurance",
   "agreement",
   "acceptance",
@@ -66,6 +72,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
+  if (kind === "calendar") return createCalendarSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
     id: newId("sch"),
@@ -257,6 +264,26 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                       patchAt(idx, {
                         cards: next,
                       } as Partial<AssuranceScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
+              {schedule.kind === "calendar" && (
+                <div className="space-y-1 pt-1">
+                  <CalendarPhaseEditor
+                    phases={(schedule as CalendarScheduleInstance).phases}
+                    caption={(schedule as CalendarScheduleInstance).caption}
+                    onPhasesChange={(next: CalendarPhase[]) =>
+                      patchAt(idx, {
+                        phases: next,
+                      } as Partial<CalendarScheduleInstance>)
+                    }
+                    onCaptionChange={(next) =>
+                      patchAt(idx, {
+                        caption: next,
+                      } as Partial<CalendarScheduleInstance>)
                     }
                     disabled={disabled}
                   />
