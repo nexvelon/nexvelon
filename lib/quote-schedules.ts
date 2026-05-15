@@ -29,6 +29,11 @@ export interface AssuranceCard {
   description: string; // e.g. "36 months · parts & labour · OEM-backed"
 }
 
+export interface ExclusionItem {
+  id: string;
+  text: string;
+}
+
 interface BaseScheduleInstance {
   id: string;
   kind: QuoteScheduleKind;
@@ -48,6 +53,7 @@ export interface ParticularsScheduleInstance extends BaseScheduleInstance {
 
 export interface AgreementScheduleInstance extends BaseScheduleInstance {
   kind: "agreement";
+  exclusions?: ExclusionItem[];
 }
 
 export interface AcceptanceScheduleInstance extends BaseScheduleInstance {
@@ -140,6 +146,17 @@ export const DEFAULT_QUOTE_SCHEDULE_KINDS: QuoteScheduleKind[] = [
   "acceptance",
 ];
 
+export function createDefaultExclusions(): ExclusionItem[] {
+  return [
+    { id: newId("exc"), text: "Conduit, cable trays, and core drilling beyond 4 penetrations" },
+    { id: newId("exc"), text: "120V power, breaker panel work, and any electrical permits" },
+    { id: newId("exc"), text: "Network switches, PoE injectors, and structured cabling backbone" },
+    { id: newId("exc"), text: "Patching, painting, or making good after wall openings" },
+    { id: newId("exc"), text: "After-hours or weekend labour unless specified above" },
+    { id: newId("exc"), text: "Permits, inspections, and authority-having-jurisdiction fees" },
+  ];
+}
+
 export function createAssuranceSchedule(): AssuranceScheduleInstance {
   return {
     id: newId("sch"),
@@ -180,6 +197,7 @@ export function createDefaultSchedules(): QuoteScheduleInstance[] {
       title: QUOTE_SCHEDULE_DEFINITIONS.agreement.defaultTitle,
       subtitle: QUOTE_SCHEDULE_DEFINITIONS.agreement.defaultSubtitle,
       included: true,
+      exclusions: createDefaultExclusions(),
     },
     {
       id: newId("sch"),
