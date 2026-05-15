@@ -6,6 +6,7 @@
 // defaults to slug verbatim.
 
 export type QuoteThemeSlug =
+  | "default_theme_grayish"
   | "solid_white_pista"
   | "solid_white"
   | "light_grey"
@@ -34,6 +35,7 @@ export interface QuoteTheme {
 // Several others nudged for closer fidelity to the sample artwork.
 // `displayName` and `mood` fields preserved verbatim.
 export const QUOTE_THEMES: Record<QuoteThemeSlug, QuoteTheme> = {
+  default_theme_grayish: { slug: "default_theme_grayish", displayName: "default_theme_grayish", ambience: "#1A1F2A", accent: "#B8923E", ink: "#E8DCC2", mood: "default · dark grey" },
   solid_white_pista:     { slug: "solid_white_pista",     displayName: "solid_white_pista",     ambience: "#F0EBE0", accent: "#4A7D4A", ink: "#1F3D2A", mood: "fresh, clean" },
   solid_white:           { slug: "solid_white",           displayName: "solid_white",           ambience: "#F7F3EA", accent: "#A8853D", ink: "#2D2820", mood: "classic neutral" },
   light_grey:            { slug: "light_grey",            displayName: "light_grey",            ambience: "#1A1F2A", accent: "#B8923E", ink: "#E8DCC2", mood: "quiet, refined" },
@@ -50,7 +52,7 @@ export const QUOTE_THEMES: Record<QuoteThemeSlug, QuoteTheme> = {
 
 export const QUOTE_THEME_SLUGS: QuoteThemeSlug[] = Object.keys(QUOTE_THEMES) as QuoteThemeSlug[];
 
-export const DEFAULT_QUOTE_THEME_SLUG: QuoteThemeSlug = "solid_white";
+export const DEFAULT_QUOTE_THEME_SLUG: QuoteThemeSlug = "default_theme_grayish";
 
 export function getQuoteTheme(slug: QuoteThemeSlug): QuoteTheme {
   return QUOTE_THEMES[slug];
