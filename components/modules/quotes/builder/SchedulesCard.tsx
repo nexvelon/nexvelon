@@ -27,13 +27,17 @@ import {
 import { RichTextEditor } from "./RichTextEditor";
 import {
   QUOTE_SCHEDULE_DEFINITIONS,
+  createAssuranceSchedule,
   createCustomSchedule,
+  type AssuranceCard,
+  type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
+import { AssuranceCardEditor } from "./AssuranceCardEditor";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
@@ -44,6 +48,7 @@ interface Props {
 const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   cover: "Cover",
   particulars: "Particulars",
+  assurance: "Assurance",
   agreement: "Agreement",
   acceptance: "Acceptance",
   custom: "Custom",
@@ -52,6 +57,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
+  "assurance",
   "agreement",
   "acceptance",
   "custom",
@@ -59,6 +65,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
 
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
+  if (kind === "assurance") return createAssuranceSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
     id: newId("sch"),
@@ -239,6 +246,20 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                   <p className="text-muted-foreground text-[11px]">
                     Drop-cap paragraph on the cover page. Leave empty to hide.
                   </p>
+                </div>
+              )}
+
+              {schedule.kind === "assurance" && (
+                <div className="space-y-1 pt-1">
+                  <AssuranceCardEditor
+                    cards={(schedule as AssuranceScheduleInstance).cards}
+                    onChange={(next: AssuranceCard[]) =>
+                      patchAt(idx, {
+                        cards: next,
+                      } as Partial<AssuranceScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
                 </div>
               )}
 
