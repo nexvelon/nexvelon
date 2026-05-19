@@ -221,14 +221,14 @@ function createStyles(theme: QuoteTheme) {
       fontFamily: "Inter",
       backgroundColor: theme.ambience,
       paddingHorizontal: 64,
-      paddingVertical: 56,
+      paddingVertical: 80,
       paddingBottom: 80,
       fontSize: 9,
       color: theme.ink,
     },
     coverBrandBlock: {
       alignItems: "center",
-      marginVertical: 10,
+      marginVertical: 24,
     },
     coverBrandMark: {
       fontFamily: "Cormorant Garamond",
@@ -238,11 +238,17 @@ function createStyles(theme: QuoteTheme) {
       letterSpacing: 4,
       textAlign: "center",
     },
+    coverBrandMarkPrimary: {
+      color: theme.brandPrimary ?? theme.accent,
+    },
+    coverBrandMarkSecondary: {
+      color: theme.brandSecondary ?? theme.accent,
+    },
     coverBrandSub: {
       fontFamily: "Inter",
       fontWeight: "medium",
       fontSize: 11,
-      color: theme.accent,
+      color: theme.brandSecondary ?? theme.accent,
       letterSpacing: 6,
       textTransform: "uppercase",
       textAlign: "center",
@@ -259,7 +265,7 @@ function createStyles(theme: QuoteTheme) {
     coverSubtitle: {
       fontFamily: "Inter",
       fontSize: 9,
-      color: theme.accent,
+      color: theme.accentMuted ?? theme.accent,
       letterSpacing: 3,
       textTransform: "uppercase",
       textAlign: "center",
@@ -268,11 +274,11 @@ function createStyles(theme: QuoteTheme) {
     coverTitle: {
       fontFamily: "Cormorant Garamond",
       fontStyle: "italic",
-      fontSize: 48,
+      fontSize: 60,
       color: theme.accent,
       textAlign: "center",
-      marginTop: 4,
-      marginBottom: 6,
+      marginTop: 16,
+      marginBottom: 18,
     },
     coverDateLine: {
       fontFamily: "Cormorant Garamond",
@@ -280,11 +286,11 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 10,
       color: ink70(theme),
       textAlign: "center",
-      marginBottom: 18,
+      marginBottom: 32,
     },
     coverTwoCol: {
       flexDirection: "row",
-      marginVertical: 14,
+      marginVertical: 22,
     },
     coverColLeft: {
       flex: 1,
@@ -326,7 +332,7 @@ function createStyles(theme: QuoteTheme) {
     coverMetaRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      marginVertical: 10,
+      marginVertical: 18,
     },
     coverMetaCol: {
       flex: 1,
@@ -899,7 +905,14 @@ function CoverPage({
       <RuleWithOrnament styles={styles} />
 
       <View style={styles.coverBrandBlock}>
-        <Text style={styles.coverBrandMark}>{template.brandMark}</Text>
+        <Text style={styles.coverBrandMark}>
+          <Text style={styles.coverBrandMarkPrimary}>
+            {template.brandMark.substring(0, 3)}
+          </Text>
+          <Text style={styles.coverBrandMarkSecondary}>
+            {template.brandMark.substring(3)}
+          </Text>
+        </Text>
         <Text style={styles.coverBrandSub}>{template.brandSub}</Text>
         <Text style={styles.coverTagline}>{template.tagline}</Text>
       </View>

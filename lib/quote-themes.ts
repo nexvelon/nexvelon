@@ -27,6 +27,10 @@ export interface QuoteTheme {
   accent: string;
   ink: string;
   mood: string;
+  // NEW (QD-1) — optional; fall back to `accent` when undefined
+  brandPrimary?: string; // First-segment color of the brand mark (e.g. "NEX")
+  brandSecondary?: string; // Second-segment color of the brand mark + sub
+  accentMuted?: string; // Dusty/secondary accent for subtitle text
 }
 
 // Hex values re-derived against Jay's actual 12 sample PDFs (Chunk I,
@@ -35,7 +39,17 @@ export interface QuoteTheme {
 // Several others nudged for closer fidelity to the sample artwork.
 // `displayName` and `mood` fields preserved verbatim.
 export const QUOTE_THEMES: Record<QuoteThemeSlug, QuoteTheme> = {
-  default_theme_grayish: { slug: "default_theme_grayish", displayName: "default_theme_grayish", ambience: "#1A1F2A", accent: "#B8923E", ink: "#E8DCC2", mood: "default · dark grey" },
+  default_theme_grayish: {
+    slug: "default_theme_grayish",
+    displayName: "default_theme_grayish",
+    ambience: "#212327",
+    accent: "#AF9357",
+    ink: "#EFE8D8",
+    mood: "default · dark grey",
+    brandPrimary: "#5EC269",
+    brandSecondary: "#FFFFFF",
+    accentMuted: "#978C73",
+  },
   solid_white_pista:     { slug: "solid_white_pista",     displayName: "solid_white_pista",     ambience: "#F0EBE0", accent: "#4A7D4A", ink: "#1F3D2A", mood: "fresh, clean" },
   solid_white:           { slug: "solid_white",           displayName: "solid_white",           ambience: "#F7F3EA", accent: "#A8853D", ink: "#2D2820", mood: "classic neutral" },
   light_grey:            { slug: "light_grey",            displayName: "light_grey",            ambience: "#1A1F2A", accent: "#B8923E", ink: "#E8DCC2", mood: "quiet, refined" },
