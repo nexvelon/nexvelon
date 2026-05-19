@@ -9,6 +9,7 @@ export const LINE_ITEM_CLASSIFICATIONS: LineItemClassification[] = [
   { name: "Subcontractor Labour", appliesTo: "labor", order: 2 },
   { name: "Technician Labour", appliesTo: "labor", order: 3 },
   { name: "Project Management", appliesTo: "labor", order: 4 },
+  { name: "Misc", appliesTo: "both", order: 5 },
 ];
 
 /** Returns the classifications applicable to a given line type. */

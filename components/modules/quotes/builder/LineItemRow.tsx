@@ -37,6 +37,7 @@ import { classificationsFor } from "@/lib/classifications";
 import type { BuilderLineItem, Product, QuoteSection, Vendor } from "@/lib/types";
 
 const VENDORS: Vendor[] = ["ADI", "Anixter", "Wesco", "CDW"];
+const VENDOR_NONE = "__none__";
 
 interface Props {
   item: BuilderLineItem;
@@ -117,22 +118,39 @@ export function LineItemRow({
       </td>
 
       <td className="w-28 px-1.5 py-1.5">
-        <Select
-          value={item.vendor}
-          onValueChange={(v) => onChange({ ...item, vendor: (v ?? undefined) as Vendor | undefined })}
-          disabled={disabled}
-        >
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue placeholder="Vendor" />
-          </SelectTrigger>
-          <SelectContent>
-            {VENDORS.map((v) => (
-              <SelectItem key={v} value={v}>
-                {v}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isLabor ? (
+          <Input value="" disabled className="text-xs" placeholder="—" />
+        ) : (
+          <Select
+            value={item.vendor ?? VENDOR_NONE}
+            onValueChange={(v) =>
+              onChange({
+                ...item,
+                vendor:
+                  v && v !== VENDOR_NONE ? (v as Vendor) : undefined,
+              })
+            }
+            disabled={disabled}
+          >
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue>
+                {item.vendor ? (
+                  item.vendor
+                ) : (
+                  <span className="text-muted-foreground">Vendor</span>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={VENDOR_NONE}>None</SelectItem>
+              {VENDORS.map((v) => (
+                <SelectItem key={v} value={v}>
+                  {v}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </td>
 
       <td className="w-32 px-1.5">

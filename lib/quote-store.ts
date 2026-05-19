@@ -72,6 +72,14 @@ function readOverrides(): Record<string, Quote> {
             l5.classification =
               l5.type === "labor" ? "Technician Labour" : "Materials";
           }
+          // QB-6: vendor is meaningless on labour lines — clear any stale value.
+          const l6 = li as unknown as {
+            type?: string;
+            vendor?: string;
+          };
+          if (l6.type === "labor" && l6.vendor !== undefined) {
+            l6.vendor = undefined;
+          }
         }
       }
     }
