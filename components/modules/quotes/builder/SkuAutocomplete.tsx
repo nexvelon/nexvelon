@@ -78,37 +78,46 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
         className="font-mono text-xs"
         disabled={disabled}
       />
-      {open && matches.length > 0 && (
+      {open && value.trim().length > 0 && (
         <ul className="bg-card absolute z-30 mt-1 max-h-72 w-[28rem] overflow-y-auto rounded-md border border-[var(--border)] shadow-lg">
-          {matches.map((p, idx) => (
-            <li
-              key={p.id}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onPick(p);
-                setOpen(false);
-              }}
-              onMouseEnter={() => setActiveIdx(idx)}
-              className={cn(
-                "cursor-pointer px-3 py-2 text-xs",
-                idx === activeIdx ? "bg-brand-gold/10" : "hover:bg-muted"
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-brand-navy font-mono font-semibold">
-                  {p.sku}
-                </span>
-                <span className="text-muted-foreground">{p.vendor}</span>
-              </div>
-              <div className="text-brand-charcoal mt-0.5 truncate">
-                {p.name}
-              </div>
-              <div className="text-muted-foreground mt-0.5 flex justify-between">
-                <span>{p.manufacturer} · {p.category}</span>
-                <span className="tabular-nums">cost {formatCurrency(p.cost)}</span>
-              </div>
+          {matches.length > 0 ? (
+            matches.map((p, idx) => (
+              <li
+                key={p.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onPick(p);
+                  setOpen(false);
+                }}
+                onMouseEnter={() => setActiveIdx(idx)}
+                className={cn(
+                  "cursor-pointer px-3 py-2 text-xs",
+                  idx === activeIdx ? "bg-brand-gold/10" : "hover:bg-muted"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-brand-navy font-mono font-semibold">
+                    {p.sku}
+                  </span>
+                  <span className="text-muted-foreground">{p.vendor}</span>
+                </div>
+                <div className="text-brand-charcoal mt-0.5 truncate">
+                  {p.name}
+                </div>
+                <div className="text-muted-foreground mt-0.5 flex justify-between">
+                  <span>{p.manufacturer} · {p.category}</span>
+                  <span className="tabular-nums">
+                    cost {formatCurrency(p.cost)}
+                  </span>
+                </div>
+              </li>
+            ))
+          ) : (
+            <li className="text-muted-foreground px-3 py-2 text-sm">
+              No matches in catalog yet. Type the SKU freely — products can be
+              added to the catalog later.
             </li>
-          ))}
+          )}
         </ul>
       )}
     </div>
