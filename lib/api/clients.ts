@@ -188,6 +188,25 @@ export async function softDeleteClient(id: string): Promise<boolean> {
   return (data?.length ?? 0) > 0;
 }
 
+/**
+ * Restore a soft-deleted client. Clears deleted_at + deleted_by, guarded by
+ * `deleted_at IS NOT NULL` so a restore on a live row is a no-op.
+ *
+ * @returns true if an archived row was restored; false if the client didn't
+ *          exist or was not archived.
+ */
+export async function restoreClient(id: string): Promise<boolean> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("clients")
+    .update({ deleted_at: null, deleted_by: null })
+    .eq("id", id)
+    .not("deleted_at", "is", null)
+    .select("id");
+  if (error) throw new Error(`restoreClient: ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
 // ----------------------------------------------------------------------------
 // Sites
 // ----------------------------------------------------------------------------

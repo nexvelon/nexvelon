@@ -5,8 +5,10 @@ import {
   createClient,
   createContact,
   createSite,
+  getClients,
   getContactsByClient,
   getSitesByClient,
+  restoreClient,
   softDeleteClient,
   softDeleteContact,
   softDeleteSite,
@@ -18,6 +20,7 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import type {
   DbClientInsert,
   DbClientUpdate,
+  DbClientWithCounts,
   DbContact,
   DbContactInsert,
   DbContactUpdate,
@@ -158,6 +161,61 @@ export async function getPrimaryContactAction(
     const contacts = await getContactsByClient(clientId);
     const primary = contacts.find((c) => c.is_primary) ?? null;
     return { ok: true, data: primary };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Asserts the caller is an authenticated active Admin. Mirrors the
+ * requireAdmin() gate in app/(app)/users/actions.ts (the canonical
+ * admin-gate pattern).
+ */
+async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "You're not signed in." };
+  if (me.status !== "Active")
+    return { ok: false, error: "Your account is not active." };
+  if (me.role !== "Admin")
+    return { ok: false, error: "Admin access required." };
+  return { ok: true };
+}
+
+/**
+ * List clients for the view. `includeDeleted` is admin-gated — non-admins
+ * can never pull archived rows even if the flag is forced. Used by the
+ * "Show archived" toggle and to refresh the list after delete/restore.
+ */
+export async function listClientsAction(
+  includeDeleted = false
+): Promise<ActionResult<DbClientWithCounts[]>> {
+  try {
+    if (includeDeleted) {
+      const gate = await requireAdmin();
+      if (!gate.ok) return gate;
+    }
+    const rows = await getClients({ includeDeleted });
+    return { ok: true, data: rows };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Restore a soft-deleted client (admin only). Never touches a live row.
+ */
+export async function restoreClientAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const restored = await restoreClient(id);
+    if (!restored) {
+      return { ok: false, error: "Client not found or not archived" };
+    }
+    revalidatePath("/clients");
+    return { ok: true, data: { id } };
   } catch (e) {
     return fail(e);
   }
