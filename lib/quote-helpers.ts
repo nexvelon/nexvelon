@@ -35,6 +35,7 @@ export function emptyLineItem(): BuilderLineItem {
   return {
     id: newId("li"),
     type: "product",
+    name: "",
     description: "",
     qty: 1,
     unitCost: 0,
@@ -47,35 +48,25 @@ export function laborLineItem(): BuilderLineItem {
   return {
     id: newId("li"),
     type: "labor",
-    description: "On-site installation labor",
-    qty: 1,
-    unitCost: 0,
-    margin: 0,
-    unitPrice: 0,
-    hours: 8,
-    rate: DEFAULT_LABOR_RATE,
+    name: "",
+    description: "",
+    qty: 8, // hours
+    unitCost: 87, // 145 × (1 − 0.40) cost rate per hour
+    margin: 40,
+    unitPrice: 145, // billing rate per hour
   };
 }
 
+// Parts and labour share one model now (QB-3): qty × unitPrice / unitCost.
 export function lineItemTotal(li: BuilderLineItem): number {
-  if (li.type === "labor") {
-    return (li.hours ?? 0) * (li.rate ?? 0);
-  }
   return li.qty * li.unitPrice;
 }
 
 export function lineItemCost(li: BuilderLineItem): number {
-  if (li.type === "labor") {
-    // Labor is mostly margin in this model (~ 35% notional cost).
-    return lineItemTotal(li) * 0.35;
-  }
   return li.qty * li.unitCost;
 }
 
 export function recalcLineItem(li: BuilderLineItem): BuilderLineItem {
-  if (li.type === "labor") {
-    return { ...li };
-  }
   const unitPrice =
     li.margin >= 100
       ? li.unitCost // guard against div-by-zero
@@ -160,6 +151,7 @@ export function ensureSections(q: Quote): QuoteSection[] {
       vendor: product?.vendor,
       productId: it.productId,
       sku: product?.sku ?? "",
+      name: "",
       description: product?.name ?? "Item",
       qty: it.qty,
       unitCost: product?.cost ?? 0,

@@ -146,12 +146,11 @@ export interface BuilderLineItem {
   productId?: ID;
   sku?: string;
   description: string;
+  name: string;
   qty: number;
   unitCost: number;
   margin: number;
   unitPrice: number;
-  hours?: number;
-  rate?: number;
   notes?: string;
 }
 
