@@ -5,6 +5,8 @@ import {
   createClient,
   createContact,
   createSite,
+  getContactsByClient,
+  getSitesByClient,
   softDeleteClient,
   softDeleteContact,
   softDeleteSite,
@@ -16,6 +18,7 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import type {
   DbClientInsert,
   DbClientUpdate,
+  DbContact,
   DbContactInsert,
   DbContactUpdate,
   DbSiteInsert,
@@ -104,6 +107,62 @@ async function validateClientPayload(
   return null;
 }
 
+/**
+ * When billing_same_as_primary_site is set, copy the address off the client's
+ * first non-deleted site into the billing_* fields server-side (Phase 4 spec:
+ * "server action handles the copy"). Returns a payload patch; on create there
+ * is no client id / no sites yet, so this is effectively an edit-mode feature
+ * and a no-op otherwise.
+ */
+async function applyBillingSameAsSite<T extends DbClientInsert | DbClientUpdate>(
+  payload: T,
+  clientId: string | null
+): Promise<T> {
+  if (payload.billing_same_as_primary_site !== true || !clientId) return payload;
+  const sites = await getSitesByClient(clientId);
+  const site = sites[0]; // getSitesByClient already filters deleted + orders
+  if (!site) return payload;
+  return {
+    ...payload,
+    billing_street: site.address_line1 ?? null,
+    billing_unit: site.address_line2 ?? null,
+    billing_city: site.city ?? null,
+    billing_province: site.province ?? null,
+    billing_postal: site.postal_code ?? null,
+    billing_country: site.country ?? null,
+  };
+}
+
+/**
+ * Read helper exposed to the client drawer (a "use client" component can't
+ * import the server-only lib/api). Mirrors the Phase 3 Guardian gate:
+ * getCurrentProfile().role === "Admin".
+ */
+export async function getCurrentUserIsAdminAction(): Promise<
+  ActionResult<{ isAdmin: boolean }>
+> {
+  try {
+    const me = await getCurrentProfile();
+    return { ok: true, data: { isAdmin: me?.role === "Admin" } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The current primary contact for a client (or null), for the drawer's
+ *  Primary Contact section. Wraps the existing getContactsByClient helper. */
+export async function getPrimaryContactAction(
+  clientId: string
+): Promise<ActionResult<DbContact | null>> {
+  try {
+    const contacts = await getContactsByClient(clientId);
+    const primary = contacts.find((c) => c.is_primary) ?? null;
+    return { ok: true, data: primary };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 // ----------------------------------------------------------------------------
 // Clients
 // ----------------------------------------------------------------------------
@@ -114,7 +173,10 @@ export async function createClientAction(
   try {
     const invalid = await validateClientPayload(payload);
     if (invalid) return invalid;
-    const row = await createClient(payload);
+    // No site exists yet on first create, so the billing-copy is a no-op
+    // here; kept for symmetry / future create-with-site flows.
+    const finalPayload = await applyBillingSameAsSite(payload, null);
+    const row = await createClient(finalPayload);
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -129,7 +191,8 @@ export async function updateClientAction(
   try {
     const invalid = await validateClientPayload(payload);
     if (invalid) return invalid;
-    const row = await updateClient(id, payload);
+    const finalPayload = await applyBillingSameAsSite(payload, id);
+    const row = await updateClient(id, finalPayload);
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
