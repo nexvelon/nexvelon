@@ -1,5 +1,5 @@
 // Quote PDF theme registry — 12 locked NEXVELON presets.
-// All themes share Letter page size, 6-page structure, Cormorant × Inter
+// All themes share A4 page size, 6-page structure, Cormorant × Inter
 // typography, and ornaments (❦ ✦ ⚜ ◆). They differ only in ambience
 // (page background), accent (headings/ornaments/"Quotation" word), and
 // ink (body text). `displayName` is admin-editable later via admin UI;
@@ -31,6 +31,10 @@ export interface QuoteTheme {
   brandPrimary?: string; // First-segment color of the brand mark (e.g. "NEX")
   brandSecondary?: string; // Second-segment color of the brand mark + sub
   accentMuted?: string; // Dusty/secondary accent for subtitle text
+  // QD-2 palette extensions (optional — other themes fall back to accent)
+  soft?: string; // dusty cream — secondary surfaces
+  muted?: string; // dusty gold — mid-emphasis text
+  deepMuted?: string; // burnished bronze — low-emphasis text / rules
 }
 
 // Hex values re-derived against Jay's actual 12 sample PDFs (Chunk I,
@@ -42,13 +46,17 @@ export const QUOTE_THEMES: Record<QuoteThemeSlug, QuoteTheme> = {
   default_theme_grayish: {
     slug: "default_theme_grayish",
     displayName: "default_theme_grayish",
-    ambience: "#212327",
-    accent: "#AF9357",
-    ink: "#EFE8D8",
+    ambience: "#121212", // jet — was #212327
+    accent: "#b4924c", // champagne — was #AF9357
+    ink: "#f6f0e2", // bone — was #EFE8D8
     mood: "default · dark grey",
     brandPrimary: "#5EC269",
     brandSecondary: "#FFFFFF",
     accentMuted: "#978C73",
+    // QD-2
+    soft: "#dcd3bb",
+    muted: "#b1a487",
+    deepMuted: "#8c8167",
   },
   solid_white_pista:     { slug: "solid_white_pista",     displayName: "solid_white_pista",     ambience: "#F0EBE0", accent: "#4A7D4A", ink: "#1F3D2A", mood: "fresh, clean" },
   solid_white:           { slug: "solid_white",           displayName: "solid_white",           ambience: "#F7F3EA", accent: "#A8853D", ink: "#2D2820", mood: "classic neutral" },

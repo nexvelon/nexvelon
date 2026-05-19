@@ -133,8 +133,8 @@ function createStyles(theme: QuoteTheme) {
     page: {
       fontFamily: "Inter",
       backgroundColor: theme.ambience,
-      paddingHorizontal: 56,
-      paddingVertical: 56,
+      paddingHorizontal: 64,
+      paddingVertical: 64,
       paddingBottom: 80,
       fontSize: 9,
       color: theme.ink,
@@ -221,7 +221,7 @@ function createStyles(theme: QuoteTheme) {
       fontFamily: "Inter",
       backgroundColor: theme.ambience,
       paddingHorizontal: 64,
-      paddingVertical: 36,
+      paddingVertical: 64,
       paddingBottom: 80,
       fontSize: 9,
       color: theme.ink,
@@ -900,7 +900,7 @@ function CoverPage({
   const dropBody = scope.length > 0 ? scope.slice(1) : "";
 
   return (
-    <Page size="LETTER" style={styles.coverPage} wrap>
+    <Page size="A4" style={styles.coverPage} wrap>
       <LogoSlot variant="cover" styles={styles} />
       <RuleWithOrnament styles={styles} />
 
@@ -1064,7 +1064,7 @@ function ParticularsPage({
   const renderableSections = sections.filter((s) => s.items.length > 0);
 
   return (
-    <Page size="LETTER" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
       <PageHeader
         styles={styles}
         template={template}
@@ -1232,7 +1232,7 @@ function AgreementPage({
   const subtitleSuffix = schedule.subtitle || "Terms & Conditions";
   const lines = terms.split("\n");
   return (
-    <Page size="LETTER" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
       <PageHeader
         styles={styles}
         template={template}
@@ -1295,7 +1295,7 @@ function AcceptancePage({
 }: AcceptancePagePropsExt) {
   const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
   return (
-    <Page size="LETTER" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
       <PageHeader
         styles={styles}
         template={template}
@@ -1468,7 +1468,7 @@ function AssurancePage({
 }: AssurancePageProps) {
   const subtitleSuffix = schedule.subtitle || "Warranty & Service";
   return (
-    <Page size="LETTER" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
       <PageHeader
         styles={styles}
         template={template}
@@ -1526,7 +1526,7 @@ function CustomPage({
 }: CustomPageProps) {
   const doc = parseRichTextBody(schedule.body ?? "");
   return (
-    <Page size="LETTER" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
       <PageHeader
         styles={styles}
         template={template}
