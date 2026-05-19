@@ -33,6 +33,7 @@ import { VENDOR_DIRECTORY } from "@/lib/inventory-data";
 import { auditLog } from "@/lib/mock-data/audit-log";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { MarginTiersTable } from "@/components/modules/settings/MarginTiersTable";
 
 // ─────────────────────────────────────────────────────────────
 // Company Profile
@@ -123,32 +124,7 @@ export function QuoteDefaults() {
         <p className="text-muted-foreground mb-3 text-[11px]">
           Default margin applied per category when a SKU is added to a quote.
         </p>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-[10px] uppercase">Category</TableHead>
-              <TableHead className="text-right text-[10px] uppercase">Tier 1</TableHead>
-              <TableHead className="text-right text-[10px] uppercase">Tier 2</TableHead>
-              <TableHead className="text-right text-[10px] uppercase">Tier 3</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {[
-              ["Access Control", 30, 25, 18],
-              ["CCTV", 32, 26, 20],
-              ["Intrusion", 28, 22, 16],
-              ["Intercom", 30, 24, 18],
-              ["Cabling & Power", 22, 18, 14],
-            ].map(([cat, t1, t2, t3]) => (
-              <TableRow key={cat as string}>
-                <TableCell className="text-xs">{cat}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{t1}%</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{t2}%</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{t3}%</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <MarginTiersTable />
       </Card>
 
       <Card className="bg-card p-6 shadow-sm">
