@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   type DbLineItemClassification,
   createClassification,
+  hardDeleteClassification,
   listClassifications,
   restoreClassification,
   softDeleteClassification,
@@ -118,6 +119,20 @@ export async function restoreClassificationAction(
     const done = await restoreClassification(id);
     revalidate();
     return { ok: true, data: done };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function hardDeleteClassificationAction(
+  id: string
+): Promise<ActionResult<boolean>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const ok = await hardDeleteClassification(id);
+    revalidate();
+    return { ok: true, data: ok };
   } catch (e) {
     return fail(e);
   }

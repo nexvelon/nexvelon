@@ -129,3 +129,20 @@ export async function restoreClassification(id: string): Promise<boolean> {
   if (error) throw new Error(`restoreClassification: ${error.message}`);
   return (data?.length ?? 0) > 0;
 }
+
+/**
+ * Permanently removes a classification row. Unlike softDeleteClassification
+ * this is irreversible. Line items do NOT FK to this table — quotes that
+ * already reference the name keep their snapshotted data unchanged.
+ */
+export async function hardDeleteClassification(id: string): Promise<boolean> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("line_item_classifications")
+    .delete()
+    .eq("id", id);
+  if (error) {
+    throw new Error(`Failed to hard-delete classification: ${error.message}`);
+  }
+  return true;
+}
