@@ -46,6 +46,21 @@ export function emptyLineItem(): BuilderLineItem {
   };
 }
 
+export function miscLineItem(): BuilderLineItem {
+  return {
+    id: newId("li"),
+    type: "misc",
+    name: "",
+    description: "",
+    classification: "Misc",
+    qty: 1,
+    unitCost: 0,
+    margin: 40,
+    unitPrice: 0,
+    // vendor, sku, productId intentionally omitted — all optional, blank by default
+  };
+}
+
 export function laborLineItem(): BuilderLineItem {
   return {
     id: newId("li"),

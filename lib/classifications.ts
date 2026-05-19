@@ -1,6 +1,6 @@
 export interface LineItemClassification {
   name: string;
-  appliesTo: "product" | "labor" | "both";
+  appliesTo: "product" | "labor" | "misc" | "both";
   order: number;
 }
 
@@ -9,12 +9,12 @@ export const LINE_ITEM_CLASSIFICATIONS: LineItemClassification[] = [
   { name: "Subcontractor Labour", appliesTo: "labor", order: 2 },
   { name: "Technician Labour", appliesTo: "labor", order: 3 },
   { name: "Project Management", appliesTo: "labor", order: 4 },
-  { name: "Misc", appliesTo: "both", order: 5 },
+  { name: "Misc", appliesTo: "misc", order: 1 },
 ];
 
 /** Returns the classifications applicable to a given line type. */
 export function classificationsFor(
-  lineType: "product" | "labor"
+  lineType: "product" | "labor" | "misc"
 ): LineItemClassification[] {
   return LINE_ITEM_CLASSIFICATIONS.filter(
     (c) => c.appliesTo === lineType || c.appliesTo === "both"
@@ -23,7 +23,9 @@ export function classificationsFor(
 
 /** Default classification name for a new line of the given type. */
 export function defaultClassificationFor(
-  lineType: "product" | "labor"
+  lineType: "product" | "labor" | "misc"
 ): string {
-  return lineType === "product" ? "Materials" : "Technician Labour";
+  if (lineType === "product") return "Materials";
+  if (lineType === "labor") return "Technician Labour";
+  return "Misc";
 }
