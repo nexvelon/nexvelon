@@ -152,6 +152,16 @@ export function QuoteBuilder({
   const [showUnitPrice, setShowUnitPrice] = useState<boolean>(
     initial.showUnitPrice ?? false
   );
+  const [showVendor, setShowVendor] = useState<boolean>(
+    initial.showVendor ?? false
+  );
+  const [showSku, setShowSku] = useState<boolean>(initial.showSku ?? false);
+  const [showName, setShowName] = useState<boolean>(
+    initial.showName ?? true
+  );
+  const [showDescription, setShowDescription] = useState<boolean>(
+    initial.showDescription ?? true
+  );
   const [schedules, setSchedules] = useState<QuoteScheduleInstance[]>(
     initial.schedules ?? createDefaultSchedules()
   );
@@ -309,6 +319,10 @@ export function QuoteBuilder({
       themeSlug,
       templateSlug,
       showUnitPrice,
+      showVendor,
+      showSku,
+      showName,
+      showDescription,
       schedules,
     };
     return out;
@@ -449,6 +463,14 @@ export function QuoteBuilder({
             templateSlug={templateSlug}
             themeSlug={themeSlug}
             showUnitPrice={showUnitPrice}
+            showVendor={showVendor}
+            onShowVendorChange={setShowVendor}
+            showSku={showSku}
+            onShowSkuChange={setShowSku}
+            showName={showName}
+            onShowNameChange={setShowName}
+            showDescription={showDescription}
+            onShowDescriptionChange={setShowDescription}
             onTemplateChange={setTemplateSlug}
             onThemeChange={handleThemeChange}
             onShowUnitPriceChange={setShowUnitPrice}
@@ -587,6 +609,10 @@ export function QuoteBuilder({
                 templateSlug={templateSlug}
                 schedules={schedules}
                 showUnitPrice={showUnitPrice}
+                showVendor={showVendor}
+                showSku={showSku}
+                showName={showName}
+                showDescription={showDescription}
               />
             </div>
           </div>

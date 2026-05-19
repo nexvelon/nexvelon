@@ -44,6 +44,10 @@ interface Props {
   templateSlug: QuoteTemplateSlug;
   schedules: QuoteScheduleInstance[];
   showUnitPrice: boolean;
+  showVendor?: boolean;
+  showSku?: boolean;
+  showName?: boolean;
+  showDescription?: boolean;
 }
 
 export function PdfPreviewPane(props: Props) {
