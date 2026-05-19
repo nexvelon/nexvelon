@@ -1149,6 +1149,14 @@ function ParticularsPage({
             </Text>
           </View>
         ) : null}
+        {totals.discountAmount > 0 ? (
+          <View style={styles.partTotalsRow}>
+            <Text style={styles.partTotalsLabel}>Adjusted Subtotal</Text>
+            <Text style={styles.partTotalsValue}>
+              {usd(totals.postDiscount)}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.partTotalsRow}>
           <Text style={styles.partTotalsLabel}>
             HST ({taxRatePct.toFixed(2)}%)

@@ -13,7 +13,24 @@ function readOverrides(): Record<string, Quote> {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, Quote>;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    for (const id in parsed) {
+      for (const sec of parsed[id]?.sections ?? []) {
+        for (const li of sec.items ?? []) {
+          // Compat: migrate legacy `markup` field to `margin` (QB-2)
+          const legacy = li as unknown as {
+            markup?: number;
+            margin?: number;
+          };
+          if (legacy.margin === undefined && legacy.markup !== undefined) {
+            const oldMarkup = legacy.markup;
+            legacy.margin = Math.round((oldMarkup / (100 + oldMarkup)) * 100);
+            delete legacy.markup;
+          }
+        }
+      }
+    }
+    return parsed;
   } catch {
     return {};
   }

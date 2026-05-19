@@ -85,7 +85,7 @@ export function LineItemRow({
         vendor: p.vendor,
         description: p.name,
         unitCost: p.cost,
-        markup: item.markup || 30,
+        margin: item.margin || 40,
       })
     );
   };
@@ -257,10 +257,10 @@ export function LineItemRow({
         <td className="w-16 px-1.5">
           <Input
             inputMode="decimal"
-            value={item.markup.toString()}
+            value={item.margin.toString()}
             onChange={(e) => {
               const m = parseFloat(e.target.value);
-              onChange(recalcLineItem({ ...item, markup: isNaN(m) ? 0 : m }));
+              onChange(recalcLineItem({ ...item, margin: isNaN(m) ? 0 : m }));
             }}
             disabled={disabled}
             className="text-right text-xs tabular-nums"

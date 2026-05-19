@@ -38,7 +38,7 @@ export function emptyLineItem(): BuilderLineItem {
     description: "",
     qty: 1,
     unitCost: 0,
-    markup: 30,
+    margin: 40,
     unitPrice: 0,
   };
 }
@@ -50,7 +50,7 @@ export function laborLineItem(): BuilderLineItem {
     description: "On-site installation labor",
     qty: 1,
     unitCost: 0,
-    markup: 0,
+    margin: 0,
     unitPrice: 0,
     hours: 8,
     rate: DEFAULT_LABOR_RATE,
@@ -76,7 +76,10 @@ export function recalcLineItem(li: BuilderLineItem): BuilderLineItem {
   if (li.type === "labor") {
     return { ...li };
   }
-  const unitPrice = round2(li.unitCost * (1 + li.markup / 100));
+  const unitPrice =
+    li.margin >= 100
+      ? li.unitCost // guard against div-by-zero
+      : round2(li.unitCost / (1 - li.margin / 100));
   return { ...li, unitPrice };
 }
 
@@ -106,10 +109,26 @@ export function quoteTotals(
   const discountAmount =
     discountType === "pct" ? round2(subtotal * (discount / 100)) : round2(discount);
   const postDiscount = Math.max(0, subtotal - discountAmount);
-  const tax = round2(postDiscount * taxRate);
+  const tax = roundCRA(postDiscount * taxRate);
   const total = round2(postDiscount + tax);
-  const margin = subtotal === 0 ? 0 : (subtotal - cost) / subtotal;
+  // Margin reflects effective revenue after discount, not list subtotal
+  const margin =
+    postDiscount === 0 ? 0 : (postDiscount - cost) / postDiscount;
   return { subtotal: round2(subtotal), cost, discountAmount, postDiscount, tax, total, margin };
+}
+
+/**
+ * CRA-compliant rounding: look at the 3rd decimal digit only.
+ * ≥5 rounds up at the 2nd decimal; ≤4 rounds down.
+ * Example: 12.345 → 12.35; 12.344 → 12.34
+ */
+function roundCRA(n: number): number {
+  const sign = n < 0 ? -1 : 1;
+  const abs = Math.abs(n);
+  const cents = Math.floor(abs * 100);
+  const thirdDecimal = Math.floor(abs * 1000) % 10;
+  const result = thirdDecimal >= 5 ? cents + 1 : cents;
+  return (sign * result) / 100;
 }
 
 export function round2(n: number): number {
@@ -144,9 +163,11 @@ export function ensureSections(q: Quote): QuoteSection[] {
       description: product?.name ?? "Item",
       qty: it.qty,
       unitCost: product?.cost ?? 0,
-      markup: product
-        ? round2(((it.unitPrice - product.cost) / Math.max(1, product.cost)) * 100)
-        : 0,
+      // Derive margin% = (price − cost) / price × 100 (QB-2 margin model)
+      margin:
+        product && it.unitPrice > 0
+          ? round2(((it.unitPrice - product.cost) / it.unitPrice) * 100)
+          : 0,
       unitPrice: it.unitPrice,
     };
   });

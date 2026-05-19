@@ -258,7 +258,7 @@ export function QuoteBuilder({
                   description: p.name,
                   qty: 1,
                   unitCost: p.cost,
-                  markup: 30,
+                  margin: 40,
                   unitPrice: 0,
                 }),
               ],
