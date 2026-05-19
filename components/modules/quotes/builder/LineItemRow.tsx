@@ -117,7 +117,7 @@ export function LineItemRow({
         </button>
       </td>
 
-      <td className="w-28 px-1.5 py-1.5">
+      <td className="w-24 px-1.5 py-1.5">
         {isLabor ? (
           <Input value="" disabled className="text-xs" placeholder="—" />
         ) : (
@@ -153,7 +153,7 @@ export function LineItemRow({
         )}
       </td>
 
-      <td className="w-32 px-1.5">
+      <td className="w-24 px-1.5">
         {isLabor ? (
           <Input
             value=""
@@ -171,7 +171,7 @@ export function LineItemRow({
         )}
       </td>
 
-      <td className="w-40 px-1.5">
+      <td className="min-w-[10rem] px-1.5">
         <Input
           value={item.name}
           onChange={(e) => onChange({ ...item, name: e.target.value })}
@@ -181,7 +181,7 @@ export function LineItemRow({
         />
       </td>
 
-      <td className="min-w-0 px-1.5">
+      <td className="min-w-[10rem] px-1.5">
         <Input
           value={item.description}
           onChange={(e) => onChange({ ...item, description: e.target.value })}
@@ -191,7 +191,7 @@ export function LineItemRow({
         />
       </td>
 
-      <td className="w-16 px-1.5">
+      <td className="w-14 px-1.5">
         <Input
           inputMode="numeric"
           value={item.qty.toString()}
@@ -218,7 +218,7 @@ export function LineItemRow({
       )}
 
       {showCost && (
-        <td className="w-16 px-1.5">
+        <td className="w-14 px-1.5">
           <Input
             inputMode="decimal"
             value={item.margin.toString()}
