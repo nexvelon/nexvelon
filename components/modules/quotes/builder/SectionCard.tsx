@@ -187,20 +187,42 @@ export function SectionCard({
         <table className="w-full">
           <thead>
             <tr className="text-muted-foreground bg-muted/40 text-[10px] uppercase tracking-wider">
-              <th className="w-7"></th>
-              <th className="w-24 px-1.5 py-2 text-left">Vendor</th>
-              <th className="w-24 px-1.5 py-2 text-left">SKU</th>
-              <th className="min-w-[10rem] px-1.5 py-2 text-left">Name</th>
-              <th className="min-w-[10rem] px-1.5 py-2 text-left">
+              <th className="px-1.5 py-2"></th>
+              <th className="w-20 px-1.5 py-2 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Vendor
+              </th>
+              <th className="w-20 px-1.5 py-2 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Part #
+              </th>
+              <th className="min-w-[10rem] px-1.5 py-2 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Name
+              </th>
+              <th className="min-w-[10rem] px-1.5 py-2 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Description
               </th>
-              <th className="w-14 px-1.5 py-2 text-right">Qty</th>
-              {showCost && <th className="px-1.5 py-2 text-right">Unit cost</th>}
-              {showCost && <th className="w-14 px-1.5 py-2 text-right">Margin</th>}
-              <th className="px-1.5 py-2 text-right">Unit price</th>
-              <th className="px-1.5 py-2 text-right">Line total</th>
-              <th className="px-1.5 py-2 text-left">Type</th>
-              <th className="w-10"></th>
+              <th className="w-12 px-1.5 py-2 text-right align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Qty
+              </th>
+              {showCost && (
+                <th className="w-24 px-1.5 py-2 text-right align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Unit cost
+                </th>
+              )}
+              {showCost && (
+                <th className="w-12 px-1.5 py-2 text-right align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Margin
+                </th>
+              )}
+              <th className="w-24 px-1.5 py-2 text-right align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Unit price
+              </th>
+              <th className="w-24 px-1.5 py-2 text-right align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Line total
+              </th>
+              <th className="w-32 px-1.5 py-2 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Type
+              </th>
+              <th className="px-1.5 py-2"></th>
             </tr>
           </thead>
           <DndContext

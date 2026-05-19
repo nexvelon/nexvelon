@@ -74,7 +74,7 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
             setOpen(false);
           }
         }}
-        placeholder="SKU…"
+        placeholder="Part #…"
         className="font-mono text-xs"
         disabled={disabled}
       />
@@ -114,8 +114,8 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
             ))
           ) : (
             <li className="text-muted-foreground px-3 py-2 text-sm">
-              No matches in catalog yet. Type the SKU freely — products can be
-              added to the catalog later.
+              No matches in catalog yet. Type the part # freely — products can
+              be added to the catalog later.
             </li>
           )}
         </ul>
