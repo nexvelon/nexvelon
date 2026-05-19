@@ -105,21 +105,35 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
     footerLong: "NEXVELON INTEGRATED SOLUTIONS INC. — HST/GST 785486770 RT0001",
   },
   guardian: {
+    // Started as a structural copy of integrated_solutions (QB-1b). slug,
+    // displayName, enabled, legalName, and the footerLong legal-name string
+    // are Guardian-specific. The remaining shared placeholders (tradeName,
+    // address, phone/email/web, hstNumber) are intentionally deferred to
+    // QD-1, which owns document content + the legal-name/colour pass per the
+    // Session AA handoff. hstNumber stays 785486770 RT0001 until Guardian
+    // has its own registration (flagged, non-blocking).
     slug: "guardian",
     displayName: "Guardian",
-    enabled: false,
+    enabled: true,
     legalName: "Nexvelon Guardian Inc.",
-    tradeName: "Nexvelon Guardian",
+    tradeName: "Nexvelon Global",
     brandMark: "NEXVELON",
-    brandSub: "GUARDIAN",
-    tagline: "",
-    address: { line1: "", line2: "", city: "", province: "", postalCode: "", country: "" },
-    phone: "",
-    email: "",
-    web: "",
-    hstNumber: "",
-    footerShort: "NEXVELON · GUARDIAN",
-    footerLong: "",
+    brandSub: "GLOBAL",
+    tagline: "Engineered to Protect Everything That Matters.",
+    address: {
+      line1: "350 Rutherford Rd S, Unit 104, Plaza II",
+      line2: "",
+      city: "Brampton",
+      province: "Ontario",
+      postalCode: "L6W4N6",
+      country: "Canada",
+    },
+    phone: "Toll-Free: 1-855-969-8655",
+    email: "SecurityServices@NexvelonGlobal.com",
+    web: "www.NexvelonGlobal.com",
+    hstNumber: "785486770 RT0001",
+    footerShort: "NEXVELON · GLOBAL",
+    footerLong: "NEXVELON GUARDIAN INC. — HST/GST 785486770 RT0001",
   },
 };
 

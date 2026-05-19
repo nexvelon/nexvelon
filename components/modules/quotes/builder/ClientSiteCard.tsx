@@ -71,7 +71,15 @@ export function ClientSiteCard({
               disabled={disabled}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a client…" />
+                <SelectValue>
+                  {client ? (
+                    client.name
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Select client…
+                    </span>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
@@ -91,11 +99,15 @@ export function ClientSiteCard({
               disabled={disabled || !clientId}
             >
               <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    clientId ? "Select a site…" : "Pick a client first"
-                  }
-                />
+                <SelectValue>
+                  {site ? (
+                    site.name
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {clientId ? "Select site…" : "Pick a client first"}
+                    </span>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {sites.map((s) => (
