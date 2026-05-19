@@ -40,7 +40,7 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { id: "quotes.editSent", module: "Quotes", label: "Edit sent", description: "Modify quotes after they've been sent to a client." },
   { id: "quotes.approve", module: "Quotes", label: "Approve quote", description: "Move a quote into Approved status." },
   { id: "quotes.convert", module: "Quotes", label: "Convert to project", description: "Promote an Approved quote into a live Project.", enforced: true },
-  { id: "quotes.viewMargin", module: "Quotes", label: "View margin", description: "See cost, markup, and gross-margin numbers in the builder.", enforced: true },
+  { id: "quotes.viewMargin", module: "Quotes", label: "View margin", description: "See cost, margin, and gross-margin numbers in the builder.", enforced: true },
   { id: "quotes.viewInternal", module: "Quotes", label: "View internal notes", description: "Read and write the PM-only notes panel.", enforced: true },
   { id: "quotes.delete", module: "Quotes", label: "Delete quote", description: "Hard-delete a quote (cannot be undone)." },
   { id: "quotes.duplicate", module: "Quotes", label: "Duplicate quote", description: "Clone an existing quote as a new Draft." },

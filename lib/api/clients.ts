@@ -134,9 +134,43 @@ export async function getClientById(
 
 export async function createClient(payload: DbClientInsert): Promise<DbClient> {
   const supabase = await db();
+
+  // CL-3a: auto-generate client_code if not provided. Format
+  // C-{OPCO_PREFIX}-{YEAR}-{NNNN}, sequenced per opco+year combo. A
+  // manually-entered code is left untouched (the guard skips it).
+  const finalPayload: DbClientInsert = { ...payload };
+  const OPCO_PREFIX: Record<string, string> = {
+    integrated_solutions: "IS",
+    guardian: "GD",
+  };
+  if (!finalPayload.client_code || finalPayload.client_code.trim() === "") {
+    const year = new Date().getFullYear();
+    const prefix = OPCO_PREFIX[finalPayload.default_opco ?? ""] ?? "XX";
+    const codePrefix = `C-${prefix}-${year}-`;
+
+    const { data: existing } = await supabase
+      .from("clients")
+      .select("client_code")
+      .eq("default_opco", finalPayload.default_opco ?? "")
+      .like("client_code", `${codePrefix}%`)
+      .order("client_code", { ascending: false })
+      .limit(1);
+
+    let nextNum = 1;
+    if (existing && existing.length > 0 && existing[0].client_code) {
+      const lastCode = existing[0].client_code as string;
+      const match = lastCode.match(/-(\d{4})$/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    finalPayload.client_code = `${codePrefix}${String(nextNum).padStart(4, "0")}`;
+  }
+
   const { data, error } = await supabase
     .from("clients")
-    .insert(payload)
+    .insert(finalPayload)
     .select("*")
     .single();
   if (error) throw new Error(`createClient: ${error.message}`);

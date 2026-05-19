@@ -48,7 +48,7 @@ interface Section {
 const SECTIONS: Section[] = [
   { key: "company", label: "Company Profile", description: "Legal name, GST/HST #, ESA, ULC, WSIB, defaults.", icon: Building2 },
   { key: "branding", label: "Branding & Themes", description: "Logo, login background, four theme presets, email signature.", icon: Palette },
-  { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, markup tiers, sections.", icon: FileText },
+  { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
   { key: "numbering", label: "Numbering Schemes", description: "Editable patterns for quotes, projects, invoices, POs.", icon: Hash },
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
