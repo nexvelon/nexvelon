@@ -80,6 +80,16 @@ function readOverrides(): Record<string, Quote> {
           if (l6.type === "labor" && l6.vendor !== undefined) {
             l6.vendor = undefined;
           }
+          // QB-8: lines that were classified as "Misc" under the old "both"
+          // rule migrate to the new "misc" type. Schema rename — preserves
+          // data and economics.
+          const l8 = li as unknown as {
+            classification?: string;
+            type?: string;
+          };
+          if (l8.classification === "Misc" && l8.type !== "misc") {
+            l8.type = "misc";
+          }
         }
       }
     }

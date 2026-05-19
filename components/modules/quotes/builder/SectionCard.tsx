@@ -32,6 +32,7 @@ import { formatCurrency } from "@/lib/format";
 import {
   emptyLineItem,
   laborLineItem,
+  miscLineItem,
   newId,
   sectionSubtotal,
 } from "@/lib/quote-helpers";
@@ -97,6 +98,9 @@ export function SectionCard({
 
   const addLabor = () =>
     onUpdateSection({ ...section, items: [...section.items, laborLineItem()] });
+
+  const addMisc = () =>
+    onUpdateSection({ ...section, items: [...section.items, miscLineItem()] });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -273,6 +277,16 @@ export function SectionCard({
         >
           <HardHat className="mr-1 h-3.5 w-3.5" />
           Labor line
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addMisc}
+          disabled={disabled}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Misc line
         </Button>
       </div>
     </Card>
