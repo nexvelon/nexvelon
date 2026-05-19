@@ -66,11 +66,15 @@ export function TotalsBar({
             disabled={disabled}
           >
             <SelectTrigger className="w-20">
-              <SelectValue />
+              <SelectValue>{discountType === "pct" ? "%" : "$"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="pct">%</SelectItem>
-              <SelectItem value="amount">$</SelectItem>
+              <SelectItem value="pct" aria-label="Percentage discount">
+                %
+              </SelectItem>
+              <SelectItem value="amount" aria-label="Amount discount">
+                $
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
