@@ -33,6 +33,7 @@ import {
   emptyLineItem,
   laborLineItem,
   miscLineItem,
+  serviceLineItem,
   newId,
   sectionSubtotal,
 } from "@/lib/quote-helpers";
@@ -101,6 +102,12 @@ export function SectionCard({
 
   const addLabor = () =>
     onUpdateSection({ ...section, items: [...section.items, laborLineItem()] });
+
+  const addService = () =>
+    onUpdateSection({
+      ...section,
+      items: [...section.items, serviceLineItem()],
+    });
 
   const addMisc = () =>
     onUpdateSection({ ...section, items: [...section.items, miscLineItem()] });
@@ -303,6 +310,16 @@ export function SectionCard({
         >
           <HardHat className="mr-1 h-3.5 w-3.5" />
           Labor line
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addService}
+          disabled={disabled}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Service line
         </Button>
         <Button
           type="button"

@@ -82,6 +82,20 @@ function readOverrides(): Record<string, Quote> {
           if (l8.classification === "Misc" && l8.type !== "misc") {
             l8.type = "misc";
           }
+          // QB-11: Warranty Cost / Service Cost were under type:"labor";
+          // move to type:"service". Transformative migration — preserves
+          // qty, costs, classification name; only the type field changes.
+          const l11 = li as unknown as {
+            classification?: string;
+            type?: string;
+          };
+          if (
+            l11.type === "labor" &&
+            (l11.classification === "Warranty Cost" ||
+              l11.classification === "Service Cost")
+          ) {
+            l11.type = "service";
+          }
         }
       }
     }

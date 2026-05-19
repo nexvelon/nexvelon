@@ -61,6 +61,22 @@ export function miscLineItem(): BuilderLineItem {
   };
 }
 
+export function serviceLineItem(): BuilderLineItem {
+  return {
+    id: newId("li"),
+    type: "service",
+    name: "",
+    description: "",
+    classification: "Warranty Cost",
+    qty: 1,
+    unitCost: 0,
+    margin: 40,
+    unitPrice: 0,
+    // vendor, sku, productId intentionally omitted — all optional. Services
+    // may have a 3rd-party provider; the user can fill vendor/SKU if so.
+  };
+}
+
 export function laborLineItem(): BuilderLineItem {
   return {
     id: newId("li"),

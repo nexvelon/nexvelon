@@ -61,7 +61,7 @@ export async function listClassificationsAction(
 
 export async function createClassificationAction(payload: {
   name: string;
-  applies_to: "product" | "labor" | "misc" | "both";
+  applies_to: "product" | "labor" | "misc" | "both" | "service";
   display_order: number;
   is_active?: boolean;
 }): Promise<ActionResult<DbLineItemClassification>> {
@@ -80,7 +80,7 @@ export async function updateClassificationAction(
   id: string,
   payload: Partial<{
     name: string;
-    applies_to: "product" | "labor" | "misc" | "both";
+    applies_to: "product" | "labor" | "misc" | "both" | "service";
     display_order: number;
     is_active: boolean;
   }>
