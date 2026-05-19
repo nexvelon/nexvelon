@@ -105,13 +105,13 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
     footerLong: "NEXVELON INTEGRATED SOLUTIONS INC. — HST/GST 785486770 RT0001",
   },
   guardian: {
-    // Structural copy of integrated_solutions (QB-1b). Only slug, displayName,
-    // enabled, and legalName differ; every content field is mirrored verbatim
-    // so the Guardian template is selectable and renders. The placeholder
-    // content (tradeName, address, phone/email/web, hstNumber, footer strings
-    // still carrying "Integrated Solutions" / shared HST) is intentionally
-    // deferred to QD-1, which owns document content + the legal-name/colour
-    // pass per the Session AA handoff.
+    // Started as a structural copy of integrated_solutions (QB-1b). slug,
+    // displayName, enabled, legalName, and the footerLong legal-name string
+    // are Guardian-specific. The remaining shared placeholders (tradeName,
+    // address, phone/email/web, hstNumber) are intentionally deferred to
+    // QD-1, which owns document content + the legal-name/colour pass per the
+    // Session AA handoff. hstNumber stays 785486770 RT0001 until Guardian
+    // has its own registration (flagged, non-blocking).
     slug: "guardian",
     displayName: "Guardian",
     enabled: true,
@@ -133,7 +133,7 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
     web: "www.NexvelonGlobal.com",
     hstNumber: "785486770 RT0001",
     footerShort: "NEXVELON · GLOBAL",
-    footerLong: "NEXVELON INTEGRATED SOLUTIONS INC. — HST/GST 785486770 RT0001",
+    footerLong: "NEXVELON GUARDIAN INC. — HST/GST 785486770 RT0001",
   },
 };
 
