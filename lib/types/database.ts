@@ -16,6 +16,28 @@ export type DbClientTier = "Platinum" | "Gold" | "Silver" | "Bronze";
 
 export type DbClientStatus = "Active" | "Inactive" | "Prospect" | "Lost";
 
+// CL-2 expansion (migration 0007) — billing / OpCo / tax / payment /
+// portal fields. Enum aliases shared by the Phase 4 form UI.
+export type DbClientOpco = "integrated_solutions" | "guardian";
+
+export type DbClientPaymentTerms =
+  | "due_on_receipt"
+  | "net_7"
+  | "net_15"
+  | "net_30"
+  | "net_60"
+  | "net_90"
+  | "custom";
+
+export type DbClientPaymentMethod =
+  | "cheque"
+  | "eft"
+  | "credit_card"
+  | "e_transfer"
+  | "wire";
+
+export type DbClientCurrency = "CAD" | "USD";
+
 export type DbSiteStatus =
   | "Active"
   | "In Project"
@@ -41,10 +63,33 @@ export interface DbClient {
   ytd_revenue: number;
   nps_score: number | null;
   last_nps_date: string | null;
+  // CL-2 expansion (migration 0007)
+  billing_street: string | null;
+  billing_unit: string | null;
+  billing_city: string | null;
+  billing_province: string | null;
+  billing_postal: string | null;
+  billing_country: string | null;
+  billing_same_as_primary_site: boolean | null;
+  default_opco: DbClientOpco | null;
+  allowed_opcos: string[] | null;
+  client_hst_gst_number: string | null;
+  tax_exempt: boolean | null;
+  tax_exempt_certificate_number: string | null;
+  payment_terms: DbClientPaymentTerms | null;
+  payment_terms_custom: string | null;
+  preferred_payment_method: DbClientPaymentMethod | null;
+  apply_cc_surcharge: boolean | null;
+  credit_limit: number | null;
+  credit_hold: boolean | null;
+  preferred_currency: DbClientCurrency | null;
+  portal_access_enabled: boolean | null;
+  portal_contact_email: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
   deleted_at: string | null;
+  deleted_by: string | null;
 }
 
 /** Payload for creating a client. id / timestamps / soft-delete are server-managed. */
@@ -63,6 +108,28 @@ export type DbClientInsert = {
   ytd_revenue?: number;
   nps_score?: number | null;
   last_nps_date?: string | null;
+  // CL-2 expansion (migration 0007) — all optional on insert/update.
+  billing_street?: string | null;
+  billing_unit?: string | null;
+  billing_city?: string | null;
+  billing_province?: string | null;
+  billing_postal?: string | null;
+  billing_country?: string | null;
+  billing_same_as_primary_site?: boolean | null;
+  default_opco?: DbClientOpco | null;
+  allowed_opcos?: string[] | null;
+  client_hst_gst_number?: string | null;
+  tax_exempt?: boolean | null;
+  tax_exempt_certificate_number?: string | null;
+  payment_terms?: DbClientPaymentTerms | null;
+  payment_terms_custom?: string | null;
+  preferred_payment_method?: DbClientPaymentMethod | null;
+  apply_cc_surcharge?: boolean | null;
+  credit_limit?: number | null;
+  credit_hold?: boolean | null;
+  preferred_currency?: DbClientCurrency | null;
+  portal_access_enabled?: boolean | null;
+  portal_contact_email?: string | null;
   created_by?: string | null;
 };
 
@@ -185,6 +252,8 @@ export interface ClientListFilters {
   tier?: DbClientTier;
   status?: DbClientStatus;
   type?: DbClientType;
+  /** Admin-only opt-in: include soft-deleted rows. Defaults to false. */
+  includeDeleted?: boolean;
 }
 
 // ============================================================================
