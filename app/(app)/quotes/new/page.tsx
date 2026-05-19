@@ -14,10 +14,7 @@ import { redirect } from "next/navigation";
 
 import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { listClassifications } from "@/lib/api/classifications";
-import {
-  classificationFromDb,
-  type LineItemClassification,
-} from "@/lib/classifications";
+import { classificationFromDb } from "@/lib/classifications";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type {
@@ -180,15 +177,12 @@ export default async function NewQuotePage() {
   }
   const owner = adaptProfileAsOwner(profile);
 
-  // Resilient fetch: if the table/RLS isn't ready (e.g. migration 0008 not
-  // yet applied) or the query fails, fall back to [] so classificationsFor()
-  // uses the hardcoded seed — the builder never renders empty Type dropdowns.
-  let classifications: LineItemClassification[] = [];
-  try {
-    classifications = (await listClassifications()).map(classificationFromDb);
-  } catch {
-    classifications = [];
-  }
+  const dbClassifications = await listClassifications();
+  console.log(
+    `[QB-5b] listClassifications returned ${dbClassifications.length} rows:`,
+    dbClassifications.map((c) => c.name)
+  );
+  const classifications = dbClassifications.map(classificationFromDb);
 
   return (
     <NewQuotePageClient
