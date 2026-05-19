@@ -257,6 +257,7 @@ export function QuoteBuilder({
                   sku: p.sku,
                   name: p.name,
                   description: "",
+                  classification: "Materials",
                   qty: 1,
                   unitCost: p.cost,
                   margin: 40,

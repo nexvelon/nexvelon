@@ -5,6 +5,7 @@ import type {
   QuoteStatus,
 } from "./types";
 import { products } from "./mock-data/products";
+import { defaultClassificationFor } from "./classifications";
 import { isValidQuoteThemeSlug, type QuoteThemeSlug } from "@/lib/quote-themes";
 
 export const DEFAULT_TAX_RATE = 0.13; // ON HST
@@ -37,6 +38,7 @@ export function emptyLineItem(): BuilderLineItem {
     type: "product",
     name: "",
     description: "",
+    classification: "Materials",
     qty: 1,
     unitCost: 0,
     margin: 40,
@@ -50,6 +52,7 @@ export function laborLineItem(): BuilderLineItem {
     type: "labor",
     name: "",
     description: "",
+    classification: "Technician Labour",
     qty: 8, // hours
     unitCost: 87, // 145 × (1 − 0.40) cost rate per hour
     margin: 40,
@@ -153,6 +156,7 @@ export function ensureSections(q: Quote): QuoteSection[] {
       sku: product?.sku ?? "",
       name: "",
       description: product?.name ?? "Item",
+      classification: defaultClassificationFor("product"),
       qty: it.qty,
       unitCost: product?.cost ?? 0,
       // Derive margin% = (price − cost) / price × 100 (QB-2 margin model)
