@@ -75,7 +75,7 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
           }
         }}
         placeholder="Part #…"
-        className="font-mono text-xs"
+        className="text-xs"
         disabled={disabled}
       />
       {open && value.trim().length > 0 && (
