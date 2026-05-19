@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -96,6 +96,7 @@ export function QuoteBuilder({
   const router = useRouter();
   useQuotes(); // subscribe to store updates so the builder re-renders if state changes elsewhere
   const [saving, setSaving] = useState(false);
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
 
   // Resolve picker data sources: real DB data when provided, else mock-data
   // for the legacy /quotes/[id] edit flow.
@@ -383,8 +384,38 @@ export function QuoteBuilder({
 
       <ReadOnlyBanner state={ro} quote={{ ...initial, status, projectId: initial.projectId }} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-10">
-        <div className="flex flex-col gap-5 lg:col-span-7">
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setPreviewCollapsed((c) => !c)}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
+        >
+          {previewCollapsed ? (
+            <>
+              <ChevronLeft className="h-4 w-4" />
+              Show PDF preview
+            </>
+          ) : (
+            <>
+              Hide PDF preview
+              <ChevronRight className="h-4 w-4" />
+            </>
+          )}
+        </button>
+      </div>
+
+      <div
+        className={
+          previewCollapsed ? "" : "grid grid-cols-1 gap-6 lg:grid-cols-5"
+        }
+      >
+        <div
+          className={
+            previewCollapsed
+              ? "flex flex-col gap-5"
+              : "flex flex-col gap-5 lg:col-span-4"
+          }
+        >
           <ClientSiteCard
             clients={clients}
             sites={sitesForClient(clientId)}
@@ -534,30 +565,32 @@ export function QuoteBuilder({
           </p>
         </div>
 
-        <div className="lg:col-span-3" id="pdf-preview-pane">
-          <div className="sticky top-32 h-[calc(100vh-9rem)]">
-            <PdfPreviewPane
-              number={number}
-              name={name}
-              createdAt={initial.createdAt}
-              validUntil={validUntil}
-              paymentTerms={paymentTerms}
-              projectType={projectType}
-              client={client}
-              site={site}
-              owner={owner}
-              sections={sections}
-              taxRatePct={taxRatePct}
-              discount={discount}
-              discountType={discountType}
-              terms={terms}
-              themeSlug={themeSlug}
-              templateSlug={templateSlug}
-              schedules={schedules}
-              showUnitPrice={showUnitPrice}
-            />
+        {!previewCollapsed && (
+          <div className="lg:col-span-1" id="pdf-preview-pane">
+            <div className="sticky top-32 h-[calc(100vh-9rem)]">
+              <PdfPreviewPane
+                number={number}
+                name={name}
+                createdAt={initial.createdAt}
+                validUntil={validUntil}
+                paymentTerms={paymentTerms}
+                projectType={projectType}
+                client={client}
+                site={site}
+                owner={owner}
+                sections={sections}
+                taxRatePct={taxRatePct}
+                discount={discount}
+                discountType={discountType}
+                terms={terms}
+                themeSlug={themeSlug}
+                templateSlug={templateSlug}
+                schedules={schedules}
+                showUnitPrice={showUnitPrice}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
