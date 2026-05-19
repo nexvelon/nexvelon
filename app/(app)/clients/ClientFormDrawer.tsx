@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
 import {
   createClientAction,
   updateClientAction,
@@ -494,9 +495,16 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                 help="On save, billing address is copied from this client's first site."
               />
               <Field label="Street">
-                <Input
+                <AddressAutocomplete
                   value={billStreet}
-                  onChange={(e) => setBillStreet(e.target.value)}
+                  onChange={setBillStreet}
+                  onPlaceSelected={(p) => {
+                    setBillStreet(p.street);
+                    if (p.city) setBillCity(p.city);
+                    if (p.province) setBillProvince(p.province);
+                    if (p.postal) setBillPostal(p.postal);
+                    if (p.country) setBillCountry(p.country);
+                  }}
                   disabled={billSameAsSite}
                   placeholder="350 Bay Street"
                 />
