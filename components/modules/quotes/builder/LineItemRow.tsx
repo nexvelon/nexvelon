@@ -33,7 +33,10 @@ import {
   lineItemTotal,
   recalcLineItem,
 } from "@/lib/quote-helpers";
-import { classificationsFor } from "@/lib/classifications";
+import {
+  classificationsFor,
+  type LineItemClassification,
+} from "@/lib/classifications";
 import type { BuilderLineItem, Product, QuoteSection, Vendor } from "@/lib/types";
 
 const VENDORS: Vendor[] = ["ADI", "Anixter", "Wesco", "CDW"];
@@ -43,6 +46,7 @@ interface Props {
   item: BuilderLineItem;
   sectionId: string;
   sections: QuoteSection[];
+  classifications?: LineItemClassification[];
   showCost: boolean;
   disabled?: boolean;
   onChange: (next: BuilderLineItem) => void;
@@ -56,6 +60,7 @@ export function LineItemRow({
   item,
   sectionId,
   sections,
+  classifications,
   showCost,
   disabled,
   onChange,
@@ -92,7 +97,7 @@ export function LineItemRow({
   };
 
   const total = lineItemTotal(item);
-  const classOptions = classificationsFor(item.type);
+  const classOptions = classificationsFor(classifications, item.type);
   const classValue = classOptions.some((c) => c.name === item.classification)
     ? item.classification
     : undefined;
