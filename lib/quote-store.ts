@@ -63,6 +63,15 @@ function readOverrides(): Record<string, Quote> {
             delete l3.hours;
             delete l3.rate;
           }
+          // QB-5a: backfill classification on any pre-existing line item.
+          const l5 = li as unknown as {
+            classification?: string;
+            type?: string;
+          };
+          if (l5.classification === undefined) {
+            l5.classification =
+              l5.type === "labor" ? "Technician Labour" : "Materials";
+          }
         }
       }
     }

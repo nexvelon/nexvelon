@@ -33,6 +33,7 @@ import {
   lineItemTotal,
   recalcLineItem,
 } from "@/lib/quote-helpers";
+import { classificationsFor } from "@/lib/classifications";
 import type { BuilderLineItem, Product, QuoteSection, Vendor } from "@/lib/types";
 
 const VENDORS: Vendor[] = ["ADI", "Anixter", "Wesco", "CDW"];
@@ -84,11 +85,16 @@ export function LineItemRow({
         vendor: p.vendor,
         unitCost: p.cost,
         margin: item.margin || 40,
+        // classification intentionally omitted to preserve the user's selection
       })
     );
   };
 
   const total = lineItemTotal(item);
+  const classOptions = classificationsFor(item.type);
+  const classValue = classOptions.some((c) => c.name === item.classification)
+    ? item.classification
+    : undefined;
   const isLabor = item.type === "labor";
 
   // Parts and labour share one unified cell layout (QB-3).
@@ -221,6 +227,27 @@ export function LineItemRow({
         <span className="text-brand-navy text-xs font-semibold tabular-nums">
           {formatCurrency(total)}
         </span>
+      </td>
+
+      <td className="w-36 px-1.5">
+        <Select
+          value={classValue}
+          onValueChange={(v) =>
+            onChange({ ...item, classification: v ?? undefined })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue placeholder="Select type…" />
+          </SelectTrigger>
+          <SelectContent>
+            {classOptions.map((c) => (
+              <SelectItem key={c.name} value={c.name}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </td>
 
       <td className="w-10 text-right">

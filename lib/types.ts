@@ -146,6 +146,7 @@ export interface BuilderLineItem {
   productId?: ID;
   sku?: string;
   description: string;
+  classification?: string; // see lib/classifications.ts
   name: string;
   qty: number;
   unitCost: number;

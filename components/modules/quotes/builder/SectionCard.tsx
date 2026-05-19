@@ -193,6 +193,7 @@ export function SectionCard({
               {showCost && <th className="px-1.5 py-2 text-right">Margin</th>}
               <th className="px-1.5 py-2 text-right">Unit price</th>
               <th className="px-1.5 py-2 text-right">Line total</th>
+              <th className="px-1.5 py-2 text-left">Type</th>
               <th className="w-10"></th>
             </tr>
           </thead>
@@ -209,7 +210,7 @@ export function SectionCard({
                 {section.items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={showCost ? 11 : 9}
+                      colSpan={showCost ? 12 : 10}
                       className="text-muted-foreground py-6 text-center text-xs"
                     >
                       Empty section — add a line item below.
