@@ -189,7 +189,7 @@ export function SectionCard({
               <th className="px-1.5 py-2 text-left">Description</th>
               <th className="px-1.5 py-2 text-right">Qty</th>
               {showCost && <th className="px-1.5 py-2 text-right">Unit cost</th>}
-              {showCost && <th className="px-1.5 py-2 text-right">Markup</th>}
+              {showCost && <th className="px-1.5 py-2 text-right">Margin</th>}
               <th className="px-1.5 py-2 text-right">Unit price</th>
               <th className="px-1.5 py-2 text-right">Line total</th>
               <th className="w-10"></th>

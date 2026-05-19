@@ -148,7 +148,7 @@ export interface BuilderLineItem {
   description: string;
   qty: number;
   unitCost: number;
-  markup: number;
+  margin: number;
   unitPrice: number;
   hours?: number;
   rate?: number;

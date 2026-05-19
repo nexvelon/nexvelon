@@ -1,7 +1,8 @@
-const usd0 = new Intl.NumberFormat("en-US", {
+const usd2 = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 const usdCompact = new Intl.NumberFormat("en-US", {
@@ -20,7 +21,7 @@ const pct1 = new Intl.NumberFormat("en-US", {
 });
 
 export function formatCurrency(n: number): string {
-  return usd0.format(n);
+  return usd2.format(n);
 }
 
 export function formatCurrencyCompact(n: number): string {
