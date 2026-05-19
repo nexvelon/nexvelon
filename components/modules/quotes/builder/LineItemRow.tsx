@@ -79,11 +79,9 @@ export function LineItemRow({
     onChange(
       recalcLineItem({
         ...item,
-        type: "product",
-        productId: p.id,
+        name: p.name,
         sku: p.sku,
         vendor: p.vendor,
-        description: p.name,
         unitCost: p.cost,
         margin: item.margin || 40,
       })
@@ -91,86 +89,9 @@ export function LineItemRow({
   };
 
   const total = lineItemTotal(item);
+  const isLabor = item.type === "labor";
 
-  if (item.type === "labor") {
-    return (
-      <tr
-        ref={setNodeRef}
-        style={style}
-        className={cn("border-t border-[var(--border)]", isDragging && "z-10")}
-      >
-        <td className="w-7 align-middle">
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            disabled={disabled}
-            className="text-muted-foreground hover:text-brand-navy disabled:opacity-30 cursor-grab px-1 active:cursor-grabbing"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </td>
-        <td colSpan={2} className="py-1.5 pr-2">
-          <Input
-            value={item.description}
-            onChange={(e) => onChange({ ...item, description: e.target.value })}
-            placeholder="Labor description (e.g. Installation & Programming)"
-            disabled={disabled}
-            className="text-xs"
-          />
-        </td>
-        <td className="px-1.5">
-          <Input
-            inputMode="decimal"
-            value={item.hours?.toString() ?? "0"}
-            onChange={(e) => {
-              const h = parseFloat(e.target.value);
-              onChange({ ...item, hours: isNaN(h) ? 0 : h });
-            }}
-            disabled={disabled}
-            className="text-right text-xs tabular-nums"
-            placeholder="hrs"
-          />
-        </td>
-        <td className="px-1.5">
-          <CurrencyInput
-            value={item.rate ?? 0}
-            onChange={(v) => onChange({ ...item, rate: v })}
-            disabled={disabled}
-            className="text-xs"
-            placeholder="$/hr"
-          />
-        </td>
-        <td className="px-1.5">
-          <span className="text-muted-foreground block text-right text-[11px]">
-            labor
-          </span>
-        </td>
-        <td className="px-1.5">
-          <span className="text-muted-foreground block text-right text-[11px]">
-            —
-          </span>
-        </td>
-        <td className="px-1.5 pl-3 text-right">
-          <span className="text-brand-navy text-xs font-semibold tabular-nums">
-            {formatCurrency(total)}
-          </span>
-        </td>
-        <td className="w-10 text-right">
-          <RowMenu
-            disabled={disabled}
-            sections={sections}
-            sectionId={sectionId}
-            onDuplicate={onDuplicate}
-            onDelete={onDelete}
-            onMoveTo={onMoveTo}
-            onAddNote={onAddNote}
-          />
-        </td>
-      </tr>
-    );
-  }
-
+  // Parts and labour share one unified cell layout (QB-3).
   return (
     <tr
       ref={setNodeRef}
@@ -209,11 +130,30 @@ export function LineItemRow({
       </td>
 
       <td className="w-32 px-1.5">
-        <SkuAutocomplete
-          value={item.sku ?? ""}
-          onChange={handleSkuChange}
-          onPick={handlePick}
+        {isLabor ? (
+          <Input
+            value=""
+            disabled
+            className="text-xs"
+            placeholder="—"
+          />
+        ) : (
+          <SkuAutocomplete
+            value={item.sku ?? ""}
+            onChange={handleSkuChange}
+            onPick={handlePick}
+            disabled={disabled}
+          />
+        )}
+      </td>
+
+      <td className="w-40 px-1.5">
+        <Input
+          value={item.name}
+          onChange={(e) => onChange({ ...item, name: e.target.value })}
           disabled={disabled}
+          className="text-xs"
+          placeholder={isLabor ? "Service name" : "Part name"}
         />
       </td>
 
@@ -223,7 +163,7 @@ export function LineItemRow({
           onChange={(e) => onChange({ ...item, description: e.target.value })}
           disabled={disabled}
           className="text-xs"
-          placeholder="Description"
+          placeholder={isLabor ? "Notes" : "Description"}
         />
       </td>
 

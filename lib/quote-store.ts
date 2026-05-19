@@ -27,6 +27,42 @@ function readOverrides(): Record<string, Quote> {
             legacy.margin = Math.round((oldMarkup / (100 + oldMarkup)) * 100);
             delete legacy.markup;
           }
+          // Compat: migrate legacy labour `hours`/`rate` to unified
+          // qty/unitPrice + add name (QB-3)
+          const l3 = li as unknown as {
+            name?: string;
+            type?: string;
+            qty?: number;
+            unitCost?: number;
+            margin?: number;
+            unitPrice?: number;
+            hours?: number;
+            rate?: number;
+          };
+          if (l3.name === undefined) {
+            l3.name = "";
+          }
+          if (l3.type === "labor") {
+            const legacyHours = l3.hours;
+            const legacyRate = l3.rate;
+            if (
+              legacyHours !== undefined &&
+              (l3.qty === undefined || l3.qty === 1)
+            ) {
+              l3.qty = legacyHours;
+            }
+            if (
+              legacyRate !== undefined &&
+              (!l3.unitPrice || l3.unitPrice === 0)
+            ) {
+              l3.unitPrice = legacyRate;
+              // Derive unitCost from current margin (default 40)
+              const m = l3.margin ?? 40;
+              l3.unitCost = Math.round(legacyRate * (1 - m / 100) * 100) / 100;
+            }
+            delete l3.hours;
+            delete l3.rate;
+          }
         }
       }
     }

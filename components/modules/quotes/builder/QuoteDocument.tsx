@@ -1088,23 +1088,24 @@ function ParticularsPage({
               </Text>
             </View>
             {s.items.map((it, itemIdx) => {
-              const isLabor = it.type === "labor";
-              const amount = isLabor
-                ? (it.hours ?? 0) * (it.rate ?? 0)
-                : it.qty * it.unitPrice;
-              const unit = isLabor ? (it.rate ?? 0) : it.unitPrice;
-              const qty = isLabor
-                ? `${it.hours ?? 0} hrs`
-                : it.qty.toString();
+              // Parts and labour render identically (QB-3).
+              const amount = it.qty * it.unitPrice;
+              const unit = it.unitPrice;
+              const qty = it.qty.toString();
               const ref = `${prefix}.${String(itemIdx + 1).padStart(2, "0")}`;
+              const primary = it.name || it.description || "—";
+              const showDesc = Boolean(it.name && it.description);
               return (
                 <View style={styles.partRow} key={it.id}>
                   <View style={styles.partCellRef}>
                     <Text style={styles.partRefText}>{ref}</Text>
                   </View>
                   <View style={styles.partCellDesc}>
-                    <Text style={styles.partDescText}>{it.description || "—"}</Text>
-                    {!isLabor && it.sku ? (
+                    <Text style={styles.partDescText}>{primary}</Text>
+                    {showDesc ? (
+                      <Text style={styles.partDescSku}>{it.description}</Text>
+                    ) : null}
+                    {it.sku ? (
                       <Text style={styles.partDescSku}>
                         SKU {it.sku}
                         {it.vendor ? ` · ${it.vendor}` : ""}
