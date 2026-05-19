@@ -207,7 +207,7 @@ export function DocumentStyleCard({
                   Show part number
                 </Label>
                 <p className="text-muted-foreground mt-1 text-[11px]">
-                  Adds the SKU / part number to the part info line.
+                  Adds the part number to the part info line.
                 </p>
               </div>
               <Button

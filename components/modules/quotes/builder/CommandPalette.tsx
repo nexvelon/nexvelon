@@ -42,7 +42,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
       title="Add line item"
       description="Search the catalog by SKU, name, or manufacturer. Press Enter to add to the first section."
     >
-      <CommandInput placeholder="Search SKU, manufacturer, or product name…" />
+      <CommandInput placeholder="Search Part #, manufacturer, or product name…" />
       <CommandList>
         <CommandEmpty>No matching products.</CommandEmpty>
         {sections.length > 1 && (

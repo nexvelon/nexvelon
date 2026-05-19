@@ -41,11 +41,35 @@ Compat shims in client code must be **non-destructive normalization**:
 
 Going forward, schema changes that need to mutate persisted records require **explicit one-time Supabase migration scripts with rollback plans** — not silent client-side wipes.
 
-### 3.2 Page size: A4 (overrides previous Letter lock — Session AA's lock supersedes)
+### 3.2 Snapshot Principle (universal — locked)
+
+Any record in the catalog / master-data layer — classifications, parts, products, vendors, clients, sites, contacts, labour rates, services, anything templated — is a **template** for new transactions. The moment data flows from a template into a transaction record (a quote, a project, a service job, an invoice, a work order, or anything that captures a past or in-flight event), the relevant values are **copied as a snapshot** onto that record.
+
+After that moment:
+
+- Edits to the template never propagate back into existing transaction records.
+- Soft-deleting (deactivating) a template hides it from new dropdowns; existing records keep their data verbatim.
+- Hard-deleting a template removes it from the catalog entirely; existing records still keep their data verbatim.
+- Past quotes, past projects, past invoices — all render and read exactly as they were at the moment they were saved.
+
+**Current enforcement (status):**
+
+- ✅ Classifications: line item stores `classification` as a string value, not as FK to `line_item_classifications`. Verified in QB-5b / Phase 3b (hard delete).
+- ✅ Vendors, SKU, name, description, qty, unitCost, margin, unitPrice: stored as fields on the line item, not as FKs.
+- ✅ Operating company (Integrated Solutions / Guardian) and template (theme): stored on the Quote record.
+- ⚠ Client name / Site name: currently looked up live from `clientId` / `siteId` on the quote. Edits to client/site names DO currently rewrite historical quotes' display. Flagged for Quotes-v1 DB persistence sprint: at that point, line_items will be `text` columns and client_name_snapshot / site_name_snapshot will be added to the Quote table.
+
+**Future enforcement (locked):**
+
+- INV-4 (allocation): unit_cost will be locked to the line item from the chosen lot at allocation time. Subsequent lot cost changes never propagate.
+- INV-6 (catalog browser in builder): selecting a part from catalog COPIES the catalog row's values onto the line item; subsequent catalog edits never reach back.
+- All future migration / refactor work treats this as non-negotiable.
+
+### 3.3 Page size: A4 (overrides previous Letter lock — Session AA's lock supersedes)
 
 Per Claude Designer handoff. QD-2 work migrates from Letter (8.5×11) to A4 (210×297mm). All 6 pages, all schedule layouts, and the print CSS (`@page { size: A4; margin: 0 }`) affected. Note: this **overrides** the Letter lock recorded in Session AA's architecture-locks list.
 
-### 3.3 Inventory: specific-identification cost tracking (NEW — locked)
+### 3.4 Inventory: specific-identification cost tracking (NEW — locked)
 
 Each purchase-order receipt creates an "inventory lot" with its own `unit_cost`. Catalog views show **all lots** per product (qty + cost breakdown). Allocating inventory to a job requires explicit lot selection; the allocation's cost-per-unit is **locked at allocation time** from the selected lot. Enables precise quoted-vs-actual cost analysis per job.
 
