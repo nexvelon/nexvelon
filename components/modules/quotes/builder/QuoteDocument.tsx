@@ -712,6 +712,63 @@ function createStyles(theme: QuoteTheme) {
       textAlign: "center",
     },
 
+    // ----- Agreement page: "Pray Observe · Not Included" block -----
+    prayObserveBlock: {
+      alignItems: "center",
+      marginBottom: 24,
+    },
+    prayObserveOrnament: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 12,
+      color: theme.accent,
+      marginBottom: 6,
+    },
+    prayObserveHeader: {
+      fontFamily: "Inter",
+      fontSize: 9,
+      color: theme.accent,
+      letterSpacing: 4,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    prayObserveSubtitle: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 9,
+      fontStyle: "italic",
+      color: `${theme.ink}AA`,
+      textAlign: "center",
+      marginBottom: 14,
+    },
+    prayObserveGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      width: "100%",
+    },
+    prayObserveItem: {
+      width: "48%",
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 8,
+    },
+    prayObserveX: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 10,
+      color: theme.accent,
+      marginRight: 6,
+      marginTop: 1,
+    },
+    prayObserveText: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 10,
+      color: theme.ink,
+      lineHeight: 1.4,
+      flex: 1,
+    },
+    prayObserveSpacer: {
+      height: 16,
+    },
+
     // ----- Shared footer (fixed at bottom of every page) -----
     sharedFooter: {
       position: "absolute",
@@ -1231,6 +1288,7 @@ function AgreementPage({
 }: AgreementPageProps) {
   const subtitleSuffix = schedule.subtitle || "Terms & Conditions";
   const lines = terms.split("\n");
+  const exclusions = schedule.exclusions ?? [];
   return (
     <Page size="LETTER" style={styles.page} wrap>
       <PageHeader
@@ -1240,6 +1298,28 @@ function AgreementPage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
+
+      {exclusions.length > 0 && (
+        <View style={styles.prayObserveBlock}>
+          <Text style={styles.prayObserveOrnament}>{"◆"}</Text>
+          <Text style={styles.prayObserveHeader}>
+            PRAY OBSERVE · NOT INCLUDED IN THIS QUOTATION
+          </Text>
+          <Text style={styles.prayObserveSubtitle}>
+            The following are by others unless added in writing.
+          </Text>
+          <View style={styles.prayObserveGrid}>
+            {exclusions.map((ex) => (
+              <View key={ex.id} style={styles.prayObserveItem}>
+                <Text style={styles.prayObserveX}>{"×"}</Text>
+                <Text style={styles.prayObserveText}>{ex.text}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.prayObserveSpacer} />
+        </View>
+      )}
+
       <RuleWithOrnament styles={styles} />
 
       <Text style={styles.scheduleSubtitle}>

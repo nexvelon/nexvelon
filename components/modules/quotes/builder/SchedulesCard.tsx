@@ -29,15 +29,18 @@ import {
   QUOTE_SCHEDULE_DEFINITIONS,
   createAssuranceSchedule,
   createCustomSchedule,
+  type AgreementScheduleInstance,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
+  type ExclusionItem,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { ExclusionsEditor } from "./ExclusionsEditor";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
@@ -257,6 +260,22 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                       patchAt(idx, {
                         cards: next,
                       } as Partial<AssuranceScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
+              {schedule.kind === "agreement" && (
+                <div className="space-y-1 pt-1">
+                  <ExclusionsEditor
+                    exclusions={
+                      (schedule as AgreementScheduleInstance).exclusions ?? []
+                    }
+                    onChange={(next: ExclusionItem[]) =>
+                      patchAt(idx, {
+                        exclusions: next,
+                      } as Partial<AgreementScheduleInstance>)
                     }
                     disabled={disabled}
                   />
