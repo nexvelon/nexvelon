@@ -184,13 +184,15 @@ export function SectionCard({
           <thead>
             <tr className="text-muted-foreground bg-muted/40 text-[10px] uppercase tracking-wider">
               <th className="w-7"></th>
-              <th className="px-1.5 py-2 text-left">Vendor</th>
-              <th className="px-1.5 py-2 text-left">SKU</th>
-              <th className="px-1.5 py-2 text-left">Name</th>
-              <th className="px-1.5 py-2 text-left">Description</th>
-              <th className="px-1.5 py-2 text-right">Qty</th>
+              <th className="w-24 px-1.5 py-2 text-left">Vendor</th>
+              <th className="w-24 px-1.5 py-2 text-left">SKU</th>
+              <th className="min-w-[10rem] px-1.5 py-2 text-left">Name</th>
+              <th className="min-w-[10rem] px-1.5 py-2 text-left">
+                Description
+              </th>
+              <th className="w-14 px-1.5 py-2 text-right">Qty</th>
               {showCost && <th className="px-1.5 py-2 text-right">Unit cost</th>}
-              {showCost && <th className="px-1.5 py-2 text-right">Margin</th>}
+              {showCost && <th className="w-14 px-1.5 py-2 text-right">Margin</th>}
               <th className="px-1.5 py-2 text-right">Unit price</th>
               <th className="px-1.5 py-2 text-right">Line total</th>
               <th className="px-1.5 py-2 text-left">Type</th>

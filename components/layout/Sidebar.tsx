@@ -13,7 +13,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r"
+      className="fixed inset-y-0 left-0 z-30 flex w-52 flex-col border-r"
       style={{
         background: "var(--brand-primary)",
         borderColor: "var(--brand-sidebar-border)",
@@ -52,7 +52,7 @@ export function Sidebar() {
         ── Operations
       </p>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5">
         {NAV_ITEMS.map((item) => {
           const allowed = canViewRoute(role, item.resource);
           const isActive =
@@ -63,7 +63,7 @@ export function Sidebar() {
             return (
               <div
                 key={item.href}
-                className="flex cursor-not-allowed items-center gap-3 rounded-sm px-3 py-2 text-[13px]"
+                className="flex cursor-not-allowed items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px]"
                 style={{ color: "rgba(245,241,232,0.25)" }}
                 title="Not available for this role"
               >
@@ -78,7 +78,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex items-center gap-3 rounded-sm px-3 py-2 text-[13px] transition-colors"
+                "group relative flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] transition-colors"
               )}
               style={{
                 color: isActive ? "#FFFFFF" : "rgba(245,241,232,0.7)",

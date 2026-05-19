@@ -383,8 +383,8 @@ export function QuoteBuilder({
 
       <ReadOnlyBanner state={ro} quote={{ ...initial, status, projectId: initial.projectId }} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="flex flex-col gap-5 lg:col-span-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-10">
+        <div className="flex flex-col gap-5 lg:col-span-7">
           <ClientSiteCard
             clients={clients}
             sites={sitesForClient(clientId)}
@@ -534,7 +534,7 @@ export function QuoteBuilder({
           </p>
         </div>
 
-        <div className="lg:col-span-2" id="pdf-preview-pane">
+        <div className="lg:col-span-3" id="pdf-preview-pane">
           <div className="sticky top-32 h-[calc(100vh-9rem)]">
             <PdfPreviewPane
               number={number}
