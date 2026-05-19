@@ -103,7 +103,10 @@ export function LineItemRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={cn("border-t border-[var(--border)]", isDragging && "z-10")}
+      className={cn(
+        "border-t border-[var(--border)] align-middle",
+        isDragging && "z-10"
+      )}
     >
       <td className="w-7 align-middle">
         <button
@@ -117,7 +120,7 @@ export function LineItemRow({
         </button>
       </td>
 
-      <td className="w-24 px-1.5 py-1.5">
+      <td className="w-20 px-1.5 py-1.5">
         {isLabor ? (
           <Input value="" disabled className="text-xs" placeholder="—" />
         ) : (
@@ -153,7 +156,7 @@ export function LineItemRow({
         )}
       </td>
 
-      <td className="w-24 px-1.5">
+      <td className="w-20 px-1.5">
         {isLabor ? (
           <Input
             value=""
@@ -191,7 +194,7 @@ export function LineItemRow({
         />
       </td>
 
-      <td className="w-14 px-1.5">
+      <td className="w-12 px-1.5 text-right">
         <Input
           inputMode="numeric"
           value={item.qty.toString()}
@@ -205,7 +208,7 @@ export function LineItemRow({
       </td>
 
       {showCost && (
-        <td className="w-24 px-1.5">
+        <td className="w-24 px-1.5 text-right">
           <CurrencyInput
             value={item.unitCost}
             onChange={(v) =>
@@ -218,7 +221,7 @@ export function LineItemRow({
       )}
 
       {showCost && (
-        <td className="w-14 px-1.5">
+        <td className="w-12 px-1.5 text-right">
           <Input
             inputMode="decimal"
             value={item.margin.toString()}
@@ -232,7 +235,7 @@ export function LineItemRow({
         </td>
       )}
 
-      <td className="w-24 px-1.5">
+      <td className="w-24 px-1.5 text-right">
         <CurrencyInput
           value={item.unitPrice}
           onChange={(v) => onChange({ ...item, unitPrice: v })}
@@ -247,7 +250,7 @@ export function LineItemRow({
         </span>
       </td>
 
-      <td className="w-36 px-1.5">
+      <td className="w-32 px-1.5">
         <Select
           value={classValue}
           onValueChange={(v) =>
@@ -255,7 +258,7 @@ export function LineItemRow({
           }
           disabled={disabled}
         >
-          <SelectTrigger className="h-7 text-xs">
+          <SelectTrigger className="h-7 truncate text-xs">
             <SelectValue placeholder="Select type…" />
           </SelectTrigger>
           <SelectContent>
