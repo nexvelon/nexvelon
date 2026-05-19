@@ -221,21 +221,21 @@ function createStyles(theme: QuoteTheme) {
       fontFamily: "Inter",
       backgroundColor: theme.ambience,
       paddingHorizontal: 64,
-      paddingVertical: 80,
+      paddingVertical: 36,
       paddingBottom: 80,
       fontSize: 9,
       color: theme.ink,
     },
     coverBrandBlock: {
       alignItems: "center",
-      marginVertical: 24,
+      marginVertical: 6,
     },
     coverBrandMark: {
       fontFamily: "Cormorant Garamond",
       fontWeight: "bold",
-      fontSize: 36,
+      fontSize: 64,
       color: theme.accent,
-      letterSpacing: 4,
+      letterSpacing: 14,
       textAlign: "center",
     },
     coverBrandMarkPrimary: {
@@ -247,12 +247,12 @@ function createStyles(theme: QuoteTheme) {
     coverBrandSub: {
       fontFamily: "Inter",
       fontWeight: "medium",
-      fontSize: 11,
+      fontSize: 14,
       color: theme.brandSecondary ?? theme.accent,
-      letterSpacing: 6,
+      letterSpacing: 12,
       textTransform: "uppercase",
       textAlign: "center",
-      marginTop: 6,
+      marginTop: 8,
     },
     coverTagline: {
       fontFamily: "Cormorant Garamond",
@@ -260,7 +260,7 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 10,
       color: ink70(theme),
       textAlign: "center",
-      marginTop: 6,
+      marginTop: 10,
     },
     coverSubtitle: {
       fontFamily: "Inter",
@@ -269,7 +269,7 @@ function createStyles(theme: QuoteTheme) {
       letterSpacing: 3,
       textTransform: "uppercase",
       textAlign: "center",
-      marginTop: 4,
+      marginTop: 6,
     },
     coverTitle: {
       fontFamily: "Cormorant Garamond",
@@ -277,8 +277,8 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 60,
       color: theme.accent,
       textAlign: "center",
-      marginTop: 16,
-      marginBottom: 18,
+      marginTop: 6,
+      marginBottom: 8,
     },
     coverDateLine: {
       fontFamily: "Cormorant Garamond",
@@ -286,11 +286,11 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 10,
       color: ink70(theme),
       textAlign: "center",
-      marginBottom: 32,
+      marginBottom: 14,
     },
     coverTwoCol: {
       flexDirection: "row",
-      marginVertical: 22,
+      marginVertical: 12,
     },
     coverColLeft: {
       flex: 1,
@@ -332,7 +332,7 @@ function createStyles(theme: QuoteTheme) {
     coverMetaRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      marginVertical: 18,
+      marginVertical: 10,
     },
     coverMetaCol: {
       flex: 1,
