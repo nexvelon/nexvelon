@@ -16,12 +16,12 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { sitesForClient } from "@/lib/mock-data/sites";
-import type { Client } from "@/lib/types";
+import type { Client, Site } from "@/lib/types";
 import { toast } from "sonner";
 
 interface Props {
   clients: Client[];
+  sites: Site[];
   clientId: string;
   siteId: string;
   onClientChange: (id: string) => void;
@@ -31,6 +31,7 @@ interface Props {
 
 export function ClientSiteCard({
   clients,
+  sites,
   clientId,
   siteId,
   onClientChange,
@@ -38,7 +39,6 @@ export function ClientSiteCard({
   disabled,
 }: Props) {
   const client = clients.find((c) => c.id === clientId);
-  const sites = clientId ? sitesForClient(clientId) : [];
   const site = sites.find((s) => s.id === siteId);
 
   return (

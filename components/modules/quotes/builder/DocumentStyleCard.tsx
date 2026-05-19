@@ -45,6 +45,8 @@ export function DocumentStyleCard({
   onShowUnitPriceChange,
   disabled,
 }: Props) {
+  const selectedTemplate = templateSlug ? QUOTE_TEMPLATES[templateSlug] : null;
+
   return (
     <Card>
       <CardHeader>
@@ -64,7 +66,15 @@ export function DocumentStyleCard({
             disabled={disabled}
           >
             <SelectTrigger id="quote-template" className="h-9 text-sm">
-              <SelectValue />
+              <SelectValue>
+                {selectedTemplate ? (
+                  selectedTemplate.displayName
+                ) : (
+                  <span className="text-muted-foreground">
+                    Select template…
+                  </span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {QUOTE_TEMPLATE_SLUGS.map((slug) => {

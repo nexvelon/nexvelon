@@ -59,6 +59,8 @@ export function QuoteDetailsCard({
   onChange,
   disabled,
 }: Props) {
+  const selectedOwner = ownerId ? owners.find((u) => u.id === ownerId) : null;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -154,7 +156,15 @@ export function QuoteDetailsCard({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select owner…" />
+              <SelectValue>
+                {selectedOwner ? (
+                  `${selectedOwner.name} · ${selectedOwner.role}`
+                ) : (
+                  <span className="text-muted-foreground">
+                    Select sales rep…
+                  </span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {owners.map((u) => (

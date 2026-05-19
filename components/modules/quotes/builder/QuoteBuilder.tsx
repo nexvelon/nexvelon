@@ -385,6 +385,7 @@ export function QuoteBuilder({
         <div className="flex flex-col gap-5 lg:col-span-3">
           <ClientSiteCard
             clients={clients}
+            sites={sitesForClient(clientId)}
             clientId={clientId}
             siteId={siteId}
             onClientChange={setClientId}

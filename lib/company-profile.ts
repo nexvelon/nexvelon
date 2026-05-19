@@ -82,7 +82,7 @@ export interface QuoteTemplate {
 export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
   integrated_solutions: {
     slug: "integrated_solutions",
-    displayName: "integrated_solutions",
+    displayName: "Integrated Solutions",
     enabled: true,
     legalName: "Nexvelon Integrated Solutions Inc.",
     tradeName: "Nexvelon Global",
@@ -106,7 +106,7 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
   },
   guardian: {
     slug: "guardian",
-    displayName: "guardian",
+    displayName: "Guardian",
     enabled: false,
     legalName: "Nexvelon Guardian Inc.",
     tradeName: "Nexvelon Guardian",
