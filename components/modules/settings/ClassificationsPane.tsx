@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { Pencil, Plus, ToggleLeft, ToggleRight } from "lucide-react";
+import { Pencil, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -31,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   createClassificationAction,
+  hardDeleteClassificationAction,
   listClassificationsAction,
   restoreClassificationAction,
   softDeleteClassificationAction,
@@ -73,6 +82,8 @@ export function ClassificationsPane() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("create");
   const [editing, setEditing] = useState<DbLineItemClassification | null>(null);
+  const [confirmDelete, setConfirmDelete] =
+    useState<DbLineItemClassification | null>(null);
 
   const [name, setName] = useState("");
   const [appliesTo, setAppliesTo] = useState<AppliesTo>("product");
@@ -177,6 +188,21 @@ export function ClassificationsPane() {
             ? "Classification deactivated"
             : "Classification reactivated"
         );
+        load();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  };
+
+  const performHardDelete = () => {
+    if (!confirmDelete) return;
+    const target = confirmDelete;
+    startTransition(async () => {
+      const result = await hardDeleteClassificationAction(target.id);
+      if (result.ok) {
+        toast.success("Classification deleted");
+        setConfirmDelete(null);
         load();
       } else {
         toast.error(result.error);
@@ -303,6 +329,15 @@ export function ClassificationsPane() {
                           <ToggleLeft className="h-4 w-4" />
                         )}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(row)}
+                        disabled={isMutating}
+                        aria-label={`Delete ${row.name} permanently`}
+                        className="text-muted-foreground hover:bg-muted inline-flex h-7 w-7 items-center justify-center rounded hover:text-red-600 disabled:opacity-30"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -427,6 +462,47 @@ export function ClassificationsPane() {
           </form>
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={!!confirmDelete}
+        onOpenChange={(o) => {
+          if (!o && !isMutating) setConfirmDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              Delete classification permanently?
+            </DialogTitle>
+            <DialogDescription>
+              This permanently removes &ldquo;{confirmDelete?.name}&rdquo;
+              from the catalog. Quotes that already use this classification
+              will keep their data unchanged (the classification name, qty,
+              costs, and pricing stay on the line item). New line items will
+              no longer see this option in the Type dropdown. This action
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(null)}
+              disabled={isMutating}
+              className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={performHardDelete}
+              disabled={isMutating}
+              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+            >
+              {isMutating ? "Deleting…" : "Delete permanently"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
