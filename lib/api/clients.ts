@@ -45,8 +45,12 @@ export async function getClients(
   let query = supabase
     .from("clients")
     .select("*")
-    .is("deleted_at", null)
     .order("name", { ascending: true });
+
+  // Soft-delete filter is on by default; admin views opt in via includeDeleted.
+  if (!filters.includeDeleted) {
+    query = query.is("deleted_at", null);
+  }
 
   if (filters.search?.trim()) {
     const q = filters.search.trim();
@@ -107,15 +111,15 @@ export interface ClientWithRelations {
 }
 
 export async function getClientById(
-  id: string
+  id: string,
+  includeDeleted = false
 ): Promise<ClientWithRelations | null> {
   const supabase = await db();
-  const { data: client, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", id)
-    .is("deleted_at", null)
-    .maybeSingle();
+  let query = supabase.from("clients").select("*").eq("id", id);
+  if (!includeDeleted) {
+    query = query.is("deleted_at", null);
+  }
+  const { data: client, error } = await query.maybeSingle();
 
   if (error) throw new Error(`getClientById: ${error.message}`);
   if (!client) return null;
@@ -154,13 +158,53 @@ export async function updateClient(
   return data as DbClient;
 }
 
-export async function softDeleteClient(id: string): Promise<void> {
+/**
+ * Soft-delete a client. Never hard-deletes.
+ *
+ * Stamps deleted_at + deleted_by (resolved from the caller's Supabase Auth
+ * session — the JS query builder can't call SQL `auth.uid()` directly, so we
+ * resolve the uid in-process and pass it). Guarded by `deleted_at IS NULL`
+ * so a second delete on an already-deleted row is a no-op.
+ *
+ * @returns true if a live row was soft-deleted; false if the client didn't
+ *          exist or was already deleted.
+ */
+export async function softDeleteClient(id: string): Promise<boolean> {
   const supabase = await db();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: user?.id ?? null,
+    })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id");
   if (error) throw new Error(`softDeleteClient: ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Restore a soft-deleted client. Clears deleted_at + deleted_by, guarded by
+ * `deleted_at IS NOT NULL` so a restore on a live row is a no-op.
+ *
+ * @returns true if an archived row was restored; false if the client didn't
+ *          exist or was not archived.
+ */
+export async function restoreClient(id: string): Promise<boolean> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("clients")
+    .update({ deleted_at: null, deleted_by: null })
+    .eq("id", id)
+    .not("deleted_at", "is", null)
+    .select("id");
+  if (error) throw new Error(`restoreClient: ${error.message}`);
+  return (data?.length ?? 0) > 0;
 }
 
 // ----------------------------------------------------------------------------

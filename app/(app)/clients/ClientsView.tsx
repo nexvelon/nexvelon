@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import {
   Building2,
   Download,
   Edit3,
   Mail,
+  MoreHorizontal,
   Phone,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
 } from "lucide-react";
@@ -17,6 +19,20 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
@@ -26,6 +42,9 @@ import {
   deleteClientAction,
   deleteContactAction,
   deleteSiteAction,
+  getCurrentUserIsAdminAction,
+  listClientsAction,
+  restoreClientAction,
 } from "./actions";
 import type {
   DbClient,
@@ -73,10 +92,40 @@ interface Props {
 
 export function ClientsView({ clients, sitesByClient, contactsByClient }: Props) {
   const [search, setSearch] = useState("");
+  // Local source of truth, seeded from SSR props. Mutations refresh it via
+  // listClientsAction so the archived toggle stays coherent (router.refresh
+  // would only re-fetch the default active-only set).
+  const [rows, setRows] = useState<DbClientWithCounts[]>(clients);
   const [activeId, setActiveId] = useState<string | null>(
     clients[0]?.id ?? null
   );
   const [tab, setTab] = useState<TabKey>("Sites");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<DbClient | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUserIsAdminAction().then((r) => {
+      if (!cancelled && r.ok) setIsAdmin(r.data.isAdmin);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const reload = async (archived: boolean) => {
+    const r = await listClientsAction(archived);
+    if (r.ok) setRows(r.data);
+    else toast.error(r.error);
+  };
+
+  const toggleArchived = () => {
+    const next = !showArchived;
+    setShowArchived(next);
+    void reload(next);
+  };
 
   // Drawer state
   const [clientDrawer, setClientDrawer] = useState<
@@ -96,18 +145,21 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
   >({ open: false });
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return clients;
+    if (!search.trim()) return rows;
     const q = search.toLowerCase();
-    return clients.filter(
+    return rows.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         (c.legal_name?.toLowerCase().includes(q) ?? false) ||
         (c.client_code?.toLowerCase().includes(q) ?? false)
     );
-  }, [clients, search]);
+  }, [rows, search]);
 
   const selected =
-    clients.find((c) => c.id === activeId) ?? clients[0] ?? null;
+    rows.find((c) => c.id === activeId) ??
+    rows.find((c) => !c.deleted_at) ??
+    rows[0] ??
+    null;
 
   const totalSites = Object.values(sitesByClient).reduce(
     (s, arr) => s + arr.length,
@@ -115,7 +167,9 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
   );
 
   // ─── Empty state ─────────────────────────────────────────────────────────
-  if (clients.length === 0) {
+  const activeCount = rows.filter((c) => !c.deleted_at).length;
+
+  if (rows.length === 0) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -177,7 +231,7 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`${clients.length} active client${clients.length === 1 ? "" : "s"} · ${totalSites} site${totalSites === 1 ? "" : "s"}`}
+        eyebrow={`${activeCount} active client${activeCount === 1 ? "" : "s"} · ${totalSites} site${totalSites === 1 ? "" : "s"}`}
         title="Clients & Sites"
         description="Master directory · contracts · service history"
         actions={
@@ -219,9 +273,27 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
             />
           </div>
 
-          <p className="nx-eyebrow-soft">
-            A–Z · {filtered.length} of {clients.length}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="nx-eyebrow-soft">
+              A–Z · {filtered.length} of {rows.length}
+            </p>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={toggleArchived}
+                aria-pressed={showArchived}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                  showArchived
+                    ? "bg-muted text-brand-charcoal"
+                    : "text-muted-foreground hover:bg-muted/40"
+                )}
+                style={{ borderColor: "var(--brand-border)" }}
+              >
+                {showArchived ? "Hide archived" : "Show archived"}
+              </button>
+            )}
+          </div>
 
           <ul className="space-y-2">
             {filtered.map((c) => (
@@ -229,11 +301,13 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
                 key={c.id}
                 client={c}
                 active={c.id === activeId}
+                archived={!!c.deleted_at}
                 onSelect={() => setActiveId(c.id)}
                 onEdit={() =>
                   setClientDrawer({ open: true, mode: "edit", client: c })
                 }
-                onDelete={() => handleDeleteClient(c)}
+                onDelete={() => setConfirmDelete(c)}
+                onRestore={() => handleRestoreClient(c)}
               />
             ))}
           </ul>
@@ -351,16 +425,71 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
           }
         />
       )}
+
+      <Dialog
+        open={!!confirmDelete}
+        onOpenChange={(o) => {
+          if (!o && !deleting) setConfirmDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Delete client?</DialogTitle>
+            <DialogDescription>
+              {confirmDelete?.name} will be hidden from the active list. An
+              admin can restore it later from the archived view. This will
+              not permanently remove the client&apos;s records.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(null)}
+              disabled={deleting}
+              className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={performDeleteClient}
+              disabled={deleting}
+              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
-  // ─── Delete handlers ─────────────────────────────────────────────────────
-  function handleDeleteClient(c: DbClient) {
-    if (!confirm(`Soft-delete ${c.name}? It will be hidden from the list.`))
-      return;
+  // ─── Delete / restore handlers ───────────────────────────────────────────
+  function performDeleteClient() {
+    if (!confirmDelete) return;
+    const c = confirmDelete;
+    setDeleting(true);
     deleteClientAction(c.id).then((r) => {
-      if (r.ok) toast.success(`Deleted ${c.name}`);
-      else toast.error(r.error);
+      setDeleting(false);
+      if (r.ok) {
+        setConfirmDelete(null);
+        toast.success("Client deleted");
+        void reload(showArchived);
+      } else {
+        // Keep the modal open + Delete button enabled so the user can retry.
+        toast.error(r.error);
+      }
+    });
+  }
+
+  function handleRestoreClient(c: DbClient) {
+    restoreClientAction(c.id).then((r) => {
+      if (r.ok) {
+        toast.success(`Restored ${c.name}`);
+        void reload(showArchived);
+      } else {
+        toast.error(r.error);
+      }
     });
   }
 
@@ -387,15 +516,19 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
 function ClientRow({
   client,
   active,
+  archived,
   onSelect,
   onEdit,
   onDelete,
+  onRestore,
 }: {
   client: DbClientWithCounts;
   active: boolean;
+  archived: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRestore: () => void;
 }) {
   const tier = client.tier;
   const badge = tier ? TIER_BADGE[tier] : TIER_BADGE.Bronze;
@@ -430,7 +563,10 @@ function ClientRow({
           </span>
           <div className="min-w-0 flex-1">
             <p
-              className="font-serif text-sm font-medium leading-tight truncate"
+              className={cn(
+                "font-serif text-sm font-medium leading-tight truncate",
+                archived && "line-through opacity-60"
+              )}
               style={{ color: "var(--brand-primary)" }}
             >
               {client.name}
@@ -444,6 +580,14 @@ function ClientRow({
             </p>
           </div>
         </button>
+        {archived && (
+          <span
+            className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+            title="Soft-deleted — restore from this menu"
+          >
+            Archived
+          </span>
+        )}
         {tier && (
           <span
             className="flex h-6 w-6 items-center justify-center rounded-sm font-mono text-[10px] font-bold"
@@ -454,22 +598,42 @@ function ClientRow({
           </span>
         )}
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal rounded p-1"
-            aria-label="Edit"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="text-muted-foreground hover:bg-muted rounded p-1 hover:text-red-600"
-            aria-label="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {!archived && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal rounded p-1"
+              aria-label="Edit"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Row actions"
+              className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal inline-flex items-center justify-center rounded p-1"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {archived ? (
+                <DropdownMenuItem onClick={onRestore}>
+                  <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                  Restore client
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={onDelete}
+                  className="text-red-600 data-highlighted:text-red-600"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  Delete client
+                </DropdownMenuItem>
+              )}
+              {/* Future row actions (Archive, Duplicate, …) slot in here
+                  without restructuring the menu. */}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </li>
