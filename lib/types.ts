@@ -137,7 +137,7 @@ export interface QuoteLineItem {
   unitPrice: number;
 }
 
-export type BuilderLineItemType = "product" | "labor" | "misc";
+export type BuilderLineItemType = "product" | "labor" | "misc" | "service";
 
 export interface BuilderLineItem {
   id: ID;

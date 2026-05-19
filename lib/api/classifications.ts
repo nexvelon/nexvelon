@@ -9,7 +9,7 @@ async function db() {
 export interface DbLineItemClassification {
   id: string;
   name: string;
-  applies_to: "product" | "labor" | "misc" | "both";
+  applies_to: "product" | "labor" | "misc" | "both" | "service";
   display_order: number;
   is_active: boolean;
   created_at: string;
@@ -42,7 +42,7 @@ export async function listClassifications(
 
 export async function createClassification(payload: {
   name: string;
-  applies_to: "product" | "labor" | "misc" | "both";
+  applies_to: "product" | "labor" | "misc" | "both" | "service";
   display_order: number;
   is_active?: boolean;
 }): Promise<DbLineItemClassification> {
@@ -70,7 +70,7 @@ export async function updateClassification(
   id: string,
   payload: Partial<{
     name: string;
-    applies_to: "product" | "labor" | "misc" | "both";
+    applies_to: "product" | "labor" | "misc" | "both" | "service";
     display_order: number;
     is_active: boolean;
   }>

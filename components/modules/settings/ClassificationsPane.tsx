@@ -49,11 +49,12 @@ import {
 // lib/api/classifications.ts never executes in the client bundle.
 import type { DbLineItemClassification } from "@/lib/api/classifications";
 
-type AppliesTo = "product" | "labor" | "misc" | "both";
+type AppliesTo = "product" | "labor" | "misc" | "both" | "service";
 
 const APPLIES_OPTIONS: { value: AppliesTo; label: string }[] = [
   { value: "product", label: "Product" },
   { value: "labor", label: "Labour" },
+  { value: "service", label: "Service" },
   { value: "misc", label: "Misc" },
   { value: "both", label: "Both" },
 ];
@@ -61,6 +62,7 @@ const APPLIES_OPTIONS: { value: AppliesTo; label: string }[] = [
 const APPLIES_LABEL: Record<AppliesTo, string> = {
   product: "Product",
   labor: "Labour",
+  service: "Service",
   misc: "Misc",
   both: "Both",
 };
@@ -68,6 +70,7 @@ const APPLIES_LABEL: Record<AppliesTo, string> = {
 const APPLIES_BADGE: Record<AppliesTo, string> = {
   product: "bg-blue-100 text-blue-800",
   labor: "bg-orange-100 text-orange-800",
+  service: "bg-teal-100 text-teal-800",
   misc: "bg-gray-100 text-gray-700",
   both: "bg-purple-100 text-purple-800",
 };

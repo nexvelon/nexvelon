@@ -1,6 +1,6 @@
 export interface LineItemClassification {
   name: string;
-  appliesTo: "product" | "labor" | "misc" | "both";
+  appliesTo: "product" | "labor" | "misc" | "both" | "service";
   order: number;
 }
 
@@ -20,7 +20,7 @@ export const LINE_ITEM_CLASSIFICATIONS: LineItemClassification[] = [
  */
 export function classificationsFor(
   list: LineItemClassification[] | undefined,
-  lineType: "product" | "labor" | "misc"
+  lineType: "product" | "labor" | "misc" | "service"
 ): LineItemClassification[] {
   const source = list && list.length > 0 ? list : LINE_ITEM_CLASSIFICATIONS;
   return source
@@ -30,10 +30,11 @@ export function classificationsFor(
 
 /** Default classification name for a new line of the given type. */
 export function defaultClassificationFor(
-  lineType: "product" | "labor" | "misc"
+  lineType: "product" | "labor" | "misc" | "service"
 ): string {
   if (lineType === "product") return "Materials";
   if (lineType === "labor") return "Technician Labour";
+  if (lineType === "service") return "Warranty Cost";
   return "Misc";
 }
 
@@ -43,7 +44,7 @@ export function defaultClassificationFor(
  */
 export function classificationFromDb(row: {
   name: string;
-  applies_to: "product" | "labor" | "misc" | "both";
+  applies_to: "product" | "labor" | "misc" | "both" | "service";
   display_order: number;
 }): LineItemClassification {
   return { name: row.name, appliesTo: row.applies_to, order: row.display_order };
