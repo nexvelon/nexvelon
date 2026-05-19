@@ -191,6 +191,10 @@ export interface Quote {
   themeSlug?: QuoteThemeSlug;
   templateSlug?: QuoteTemplateSlug;
   showUnitPrice?: boolean;
+  showVendor?: boolean; // QB-4: visibility toggle
+  showSku?: boolean; // QB-4
+  showName?: boolean; // QB-4
+  showDescription?: boolean; // QB-4
 }
 
 export interface Site {

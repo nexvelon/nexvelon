@@ -1034,6 +1034,10 @@ interface ParticularsPageProps extends CommonPageProps {
   discount: number;
   discountType: "pct" | "amount";
   showUnitPrice: boolean;
+  showVendor: boolean;
+  showSku: boolean;
+  showName: boolean;
+  showDescription: boolean;
 }
 
 function ParticularsPage({
@@ -1050,6 +1054,10 @@ function ParticularsPage({
   discount,
   discountType,
   showUnitPrice,
+  showVendor,
+  showSku,
+  showName,
+  showDescription,
 }: ParticularsPageProps) {
   const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
   const subtitleSuffix = schedule.subtitle || "Bill of Materials";
@@ -1106,8 +1114,17 @@ function ParticularsPage({
               const unit = it.unitPrice;
               const qty = it.qty.toString();
               const ref = `${prefix}.${String(itemIdx + 1).padStart(2, "0")}`;
-              const primary = it.name || it.description || "—";
-              const showDesc = Boolean(it.name && it.description);
+              const primary =
+                showName && it.name
+                  ? it.name
+                  : showDescription && it.description
+                    ? it.description
+                    : "—";
+              const showSecondaryDesc =
+                showName && it.name && showDescription && it.description;
+              const showSkuPart = showSku && it.sku;
+              const showVendorPart = showVendor && it.vendor;
+              const showTertiaryLine = showSkuPart || showVendorPart;
               return (
                 <View style={styles.partRow} key={it.id}>
                   <View style={styles.partCellRef}>
@@ -1115,13 +1132,14 @@ function ParticularsPage({
                   </View>
                   <View style={styles.partCellDesc}>
                     <Text style={styles.partDescText}>{primary}</Text>
-                    {showDesc ? (
+                    {showSecondaryDesc ? (
                       <Text style={styles.partDescSku}>{it.description}</Text>
                     ) : null}
-                    {it.sku ? (
+                    {showTertiaryLine ? (
                       <Text style={styles.partDescSku}>
-                        SKU {it.sku}
-                        {it.vendor ? ` · ${it.vendor}` : ""}
+                        {showSkuPart ? `SKU ${it.sku}` : ""}
+                        {showSkuPart && showVendorPart ? " · " : ""}
+                        {showVendorPart ? it.vendor : ""}
                       </Text>
                     ) : null}
                   </View>
@@ -1564,6 +1582,10 @@ interface DocProps {
   template: QuoteTemplate;
   schedules: QuoteScheduleInstance[];
   showUnitPrice: boolean;
+  showVendor?: boolean;
+  showSku?: boolean;
+  showName?: boolean;
+  showDescription?: boolean;
 }
 
 export function QuoteDocument(props: DocProps) {
@@ -1585,6 +1607,10 @@ export function QuoteDocument(props: DocProps) {
     discountType,
     terms,
     showUnitPrice,
+    showVendor = false,
+    showSku = false,
+    showName = true,
+    showDescription = true,
   } = props;
 
   const styles = createStyles(theme);
@@ -1638,6 +1664,10 @@ export function QuoteDocument(props: DocProps) {
                 discount={discount}
                 discountType={discountType}
                 showUnitPrice={showUnitPrice}
+                showVendor={showVendor}
+                showSku={showSku}
+                showName={showName}
+                showDescription={showDescription}
               />
             );
           case "agreement":

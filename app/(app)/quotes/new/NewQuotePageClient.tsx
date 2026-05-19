@@ -71,6 +71,10 @@ export function NewQuotePageClient({ clients, sitesByClient, owner }: Props) {
       themeSlug: DEFAULT_QUOTE_THEME_SLUG,
       templateSlug: DEFAULT_QUOTE_TEMPLATE_SLUG,
       showUnitPrice: false,
+      showVendor: false, // QB-4 default OFF
+      showSku: false, // QB-4 default OFF
+      showName: true, // QB-4 default ON
+      showDescription: true, // QB-4 default ON
     };
     // initial values are computed once per page mount; allQuotes is read for
     // next-number calculation but the resulting `initial` shouldn't reactively

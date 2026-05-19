@@ -30,6 +30,14 @@ interface Props {
   templateSlug: QuoteTemplateSlug;
   themeSlug: QuoteThemeSlug;
   showUnitPrice: boolean;
+  showVendor: boolean;
+  onShowVendorChange: (value: boolean) => void;
+  showSku: boolean;
+  onShowSkuChange: (value: boolean) => void;
+  showName: boolean;
+  onShowNameChange: (value: boolean) => void;
+  showDescription: boolean;
+  onShowDescriptionChange: (value: boolean) => void;
   onTemplateChange: (slug: QuoteTemplateSlug) => void;
   onThemeChange: (slug: QuoteThemeSlug) => void;
   onShowUnitPriceChange: (value: boolean) => void;
@@ -40,6 +48,14 @@ export function DocumentStyleCard({
   templateSlug,
   themeSlug,
   showUnitPrice,
+  showVendor,
+  onShowVendorChange,
+  showSku,
+  onShowSkuChange,
+  showName,
+  onShowNameChange,
+  showDescription,
+  onShowDescriptionChange,
   onTemplateChange,
   onThemeChange,
   onShowUnitPriceChange,
@@ -148,6 +164,118 @@ export function DocumentStyleCard({
             >
               {showUnitPrice ? "On" : "Off"}
             </Button>
+          </div>
+        </div>
+
+        {/* PDF visibility group */}
+        <div className="space-y-3">
+          <Label className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
+            PDF visibility
+          </Label>
+
+          {/* Show vendor toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-vendor" className="text-xs">
+                  Show vendor name
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Adds vendor name to the part info line.
+                </p>
+              </div>
+              <Button
+                id="quote-show-vendor"
+                type="button"
+                size="sm"
+                variant={showVendor ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowVendorChange(!showVendor)}
+                aria-pressed={showVendor}
+                className="min-w-[3.5rem]"
+              >
+                {showVendor ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Show SKU / part # toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-sku" className="text-xs">
+                  Show part number
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Adds the SKU / part number to the part info line.
+                </p>
+              </div>
+              <Button
+                id="quote-show-sku"
+                type="button"
+                size="sm"
+                variant={showSku ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowSkuChange(!showSku)}
+                aria-pressed={showSku}
+                className="min-w-[3.5rem]"
+              >
+                {showSku ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Show part name toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-name" className="text-xs">
+                  Show part name
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Shows the part name as the primary description line.
+                </p>
+              </div>
+              <Button
+                id="quote-show-name"
+                type="button"
+                size="sm"
+                variant={showName ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowNameChange(!showName)}
+                aria-pressed={showName}
+                className="min-w-[3.5rem]"
+              >
+                {showName ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Show part description toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-description" className="text-xs">
+                  Show part description
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Shows the description (as primary if name is hidden,
+                  otherwise secondary).
+                </p>
+              </div>
+              <Button
+                id="quote-show-description"
+                type="button"
+                size="sm"
+                variant={showDescription ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowDescriptionChange(!showDescription)}
+                aria-pressed={showDescription}
+                className="min-w-[3.5rem]"
+              >
+                {showDescription ? "On" : "Off"}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
