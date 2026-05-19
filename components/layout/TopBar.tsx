@@ -1,19 +1,20 @@
 "use client";
 
-import { Suspense } from "react";
-import { Mail, Shield } from "lucide-react";
+import { Suspense, useState } from "react";
+import { Mail, Search, Shield } from "lucide-react";
 import { NotificationsBell } from "./NotificationsBell";
 import { AvatarMenu } from "./AvatarMenu";
 import { GoldBreadcrumbs } from "./Breadcrumbs";
+import { GlobalSearch } from "./GlobalSearch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { useAuth } from "@/components/auth/AuthProvider";
 
-// The center search bar that triggered the global ⌘K command palette was
-// removed — it was crashing on focus/click because GlobalCommandPalette
-// references mock-data tables that haven't been wired to the DB yet, and
-// there's nothing real to search across modules until they migrate. Will
-// be reintroduced in a future session once the modules ship real data.
+// SEARCH-1: the center search trigger is restored. It opens <GlobalSearch>
+// (a fresh component wired to real data only — DB clients + local quotes +
+// nav links), built on the CMDK-FIX-patched Command primitives. The old
+// dead-code components/layout/GlobalCommandPalette.tsx is intentionally NOT
+// reused (mock-data baggage) and is left for a separate housekeeping chunk.
 
 const ROLE_DISPLAY: Record<string, string> = {
   Admin: "Operations Director",
@@ -36,6 +37,7 @@ function initials(name: string): string {
 
 export function TopBar() {
   const { user } = useAuth();
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const role = user?.role ?? "ViewOnly";
   const displayName = user?.name ?? "—";
@@ -50,7 +52,7 @@ export function TopBar() {
       }}
     >
       {/* Left — gold uppercase breadcrumbs */}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-shrink-0">
         <Suspense
           fallback={
             <span className="text-muted-foreground text-[10px] tracking-[0.2em] uppercase">
@@ -61,6 +63,24 @@ export function TopBar() {
           <GoldBreadcrumbs />
         </Suspense>
       </div>
+
+      {/* Center — global search trigger */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="hover:bg-muted/60 bg-muted/40 text-muted-foreground flex w-full max-w-md items-center gap-3 rounded-md border px-3 py-1.5 text-sm transition"
+        >
+          <Search className="h-4 w-4" />
+          <span className="flex-1 text-left">
+            Search clients, quotes, navigation…
+          </span>
+          <kbd className="bg-background text-muted-foreground hidden items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
       {/* Right — actions + role + user */}
       <div className="flex items-center gap-3">
