@@ -37,10 +37,12 @@ import {
   sectionSubtotal,
 } from "@/lib/quote-helpers";
 import type { BuilderLineItem, QuoteSection } from "@/lib/types";
+import type { LineItemClassification } from "@/lib/classifications";
 
 interface Props {
   section: QuoteSection;
   sections: QuoteSection[];
+  classifications?: LineItemClassification[];
   showCost: boolean;
   disabled?: boolean;
   onUpdateSection: (next: QuoteSection) => void;
@@ -54,6 +56,7 @@ interface Props {
 export function SectionCard({
   section,
   sections,
+  classifications,
   showCost,
   disabled,
   onUpdateSection,
@@ -251,6 +254,7 @@ export function SectionCard({
                     item={item}
                     sectionId={section.id}
                     sections={sections}
+                    classifications={classifications}
                     showCost={showCost}
                     disabled={disabled}
                     onChange={updateItem}

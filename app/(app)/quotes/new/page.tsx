@@ -13,6 +13,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getClients, getSitesByClient } from "@/lib/api/clients";
+import { listClassifications } from "@/lib/api/classifications";
+import {
+  classificationFromDb,
+  type LineItemClassification,
+} from "@/lib/classifications";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type {
@@ -175,11 +180,22 @@ export default async function NewQuotePage() {
   }
   const owner = adaptProfileAsOwner(profile);
 
+  // Resilient fetch: if the table/RLS isn't ready (e.g. migration 0008 not
+  // yet applied) or the query fails, fall back to [] so classificationsFor()
+  // uses the hardcoded seed — the builder never renders empty Type dropdowns.
+  let classifications: LineItemClassification[] = [];
+  try {
+    classifications = (await listClassifications()).map(classificationFromDb);
+  } catch {
+    classifications = [];
+  }
+
   return (
     <NewQuotePageClient
       clients={adaptedClients}
       sitesByClient={adaptedSitesByClient}
       owner={owner}
+      classifications={classifications}
     />
   );
 }

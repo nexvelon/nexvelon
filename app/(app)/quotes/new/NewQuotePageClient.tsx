@@ -20,15 +20,22 @@ import {
 import { createDefaultSchedules } from "@/lib/quote-schedules";
 import { DEFAULT_QUOTE_THEME_SLUG } from "@/lib/quote-themes";
 import { DEFAULT_QUOTE_TEMPLATE_SLUG } from "@/lib/company-profile";
+import type { LineItemClassification } from "@/lib/classifications";
 import type { Client, Quote, Site, User } from "@/lib/types";
 
 interface Props {
   clients: Client[];
   sitesByClient: Record<string, Site[]>;
   owner: User;
+  classifications: LineItemClassification[];
 }
 
-export function NewQuotePageClient({ clients, sitesByClient, owner }: Props) {
+export function NewQuotePageClient({
+  clients,
+  sitesByClient,
+  owner,
+  classifications,
+}: Props) {
   const allQuotes = useQuotes();
 
   const initial = useMemo<Quote>(() => {
@@ -89,6 +96,7 @@ export function NewQuotePageClient({ clients, sitesByClient, owner }: Props) {
       clientsOverride={clients}
       sitesByClientOverride={sitesByClient}
       ownerOverride={owner}
+      classifications={classifications}
     />
   );
 }

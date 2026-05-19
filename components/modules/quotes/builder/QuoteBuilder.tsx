@@ -69,6 +69,7 @@ import type {
   Site,
   User,
 } from "@/lib/types";
+import type { LineItemClassification } from "@/lib/classifications";
 
 interface Props {
   initial: Quote;
@@ -84,6 +85,10 @@ interface Props {
   clientsOverride?: Client[];
   sitesByClientOverride?: Record<string, Site[]>;
   ownerOverride?: User;
+  // QB-5b: DB-backed classifications, prop-drilled from the /quotes/new RSC.
+  // Optional — the /quotes/[id] client route doesn't supply it and the
+  // synchronous classificationsFor() falls back to the hardcoded seed.
+  classifications?: LineItemClassification[];
 }
 
 export function QuoteBuilder({
@@ -92,6 +97,7 @@ export function QuoteBuilder({
   clientsOverride,
   sitesByClientOverride,
   ownerOverride,
+  classifications,
 }: Props) {
   const router = useRouter();
   useQuotes(); // subscribe to store updates so the builder re-renders if state changes elsewhere
@@ -547,6 +553,7 @@ export function QuoteBuilder({
                 key={s.id}
                 section={s}
                 sections={sections}
+                classifications={classifications}
                 showCost
                 disabled={ro.readOnly}
                 onUpdateSection={updateSection}
