@@ -46,7 +46,7 @@ export const QUOTE_THEMES: Record<QuoteThemeSlug, QuoteTheme> = {
   default_theme_grayish: {
     slug: "default_theme_grayish",
     displayName: "default_theme_grayish",
-    ambience: "#121212", // jet — was #212327
+    ambience: "#2B2E33", // softer dark gray (RGB 43,46,51) — was #121212 (jet, too harsh)
     accent: "#b4924c", // champagne — was #AF9357
     ink: "#f6f0e2", // bone — was #EFE8D8
     mood: "default · dark grey",
