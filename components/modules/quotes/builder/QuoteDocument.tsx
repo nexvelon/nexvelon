@@ -226,94 +226,6 @@ function createStyles(theme: QuoteTheme) {
       letterSpacing: 0.15, // ≈0.015em at 10pt
     },
 
-    // QD-2 Phase 4 — glossy overlay (composed solid-color layers, no
-    // gradients per Designer constraint). Mounted as the first child of
-    // every Page so all content renders on top.
-    glossLayer: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-    },
-    // Top sheen — single light band hugging the top edge.
-    glossTopSheen: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 50,
-      backgroundColor: "rgba(255, 255, 255, 0.025)",
-    },
-    // Specular sweep — 4 stepped bands at varying X offsets + opacities
-    // give a stair-stepped diagonal sheen without relying on View rotation
-    // (which is unreliable in react-pdf).
-    glossSpecularBand1: {
-      position: "absolute",
-      top: 80,
-      left: 60,
-      width: 280,
-      height: 6,
-      backgroundColor: "rgba(255, 255, 255, 0.010)",
-    },
-    glossSpecularBand2: {
-      position: "absolute",
-      top: 90,
-      left: 90,
-      width: 280,
-      height: 8,
-      backgroundColor: "rgba(255, 255, 255, 0.015)",
-    },
-    glossSpecularBand3: {
-      position: "absolute",
-      top: 102,
-      left: 130,
-      width: 280,
-      height: 10,
-      backgroundColor: "rgba(255, 255, 255, 0.018)",
-    },
-    glossSpecularBand4: {
-      position: "absolute",
-      top: 116,
-      left: 180,
-      width: 280,
-      height: 6,
-      backgroundColor: "rgba(255, 255, 255, 0.010)",
-    },
-    // Edge vignette — thin solid bars hugging each edge.
-    glossVignetteTop: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 20,
-      backgroundColor: "rgba(0, 0, 0, 0.15)",
-    },
-    glossVignetteBottom: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 20,
-      backgroundColor: "rgba(0, 0, 0, 0.15)",
-    },
-    glossVignetteLeft: {
-      position: "absolute",
-      top: 0,
-      bottom: 0,
-      left: 0,
-      width: 14,
-      backgroundColor: "rgba(0, 0, 0, 0.12)",
-    },
-    glossVignetteRight: {
-      position: "absolute",
-      top: 0,
-      bottom: 0,
-      right: 0,
-      width: 14,
-      backgroundColor: "rgba(0, 0, 0, 0.12)",
-    },
-
     // ----- Cover page -----
     coverPage: {
       fontFamily: "Inter",
@@ -998,29 +910,6 @@ function SignatureBlock({
   );
 }
 
-// QD-2 Phase 4 — glossy overlay. Mount as the FIRST child of each Page so
-// all subsequent content renders on top (react-pdf renders children in
-// document order, back to front). Strictly stacked semi-transparent solid
-// Views (rgba alpha) — no SVG gradients, no transforms, no animations.
-function GlossOverlay({ styles }: { styles: Styles }) {
-  return (
-    <View style={styles.glossLayer}>
-      {/* Top sheen */}
-      <View style={styles.glossTopSheen} />
-      {/* Specular sweep — 4 stepped bands */}
-      <View style={styles.glossSpecularBand1} />
-      <View style={styles.glossSpecularBand2} />
-      <View style={styles.glossSpecularBand3} />
-      <View style={styles.glossSpecularBand4} />
-      {/* Edge vignette */}
-      <View style={styles.glossVignetteTop} />
-      <View style={styles.glossVignetteBottom} />
-      <View style={styles.glossVignetteLeft} />
-      <View style={styles.glossVignetteRight} />
-    </View>
-  );
-}
-
 function PageHeader({
   styles,
   template,
@@ -1131,9 +1020,7 @@ function CoverPage({
   const dropBody = scope.length > 0 ? scope.slice(1) : "";
 
   return (
-    <Page size="A4" style={styles.coverPage} wrap>
-      <GlossOverlay styles={styles} />
-      <LogoSlot variant="cover" styles={styles} />
+    <Page size="A4" style={styles.coverPage} wrap>      <LogoSlot variant="cover" styles={styles} />
       <RuleWithOrnament styles={styles} />
 
       <View style={styles.coverBrandBlock}>
@@ -1296,9 +1183,7 @@ function ParticularsPage({
   const renderableSections = sections.filter((s) => s.items.length > 0);
 
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <GlossOverlay styles={styles} />
-      <PageHeader
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
@@ -1465,9 +1350,7 @@ function AgreementPage({
   const subtitleSuffix = schedule.subtitle || "Terms & Conditions";
   const lines = terms.split("\n");
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <GlossOverlay styles={styles} />
-      <PageHeader
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
@@ -1526,9 +1409,7 @@ function AcceptancePage({
 }: AcceptancePagePropsExt) {
   const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <GlossOverlay styles={styles} />
-      <PageHeader
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
@@ -1664,9 +1545,7 @@ function AssurancePage({
 }: AssurancePageProps) {
   const subtitleSuffix = schedule.subtitle || "Warranty & Service";
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <GlossOverlay styles={styles} />
-      <PageHeader
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
@@ -1722,9 +1601,7 @@ function CustomPage({
 }: CustomPageProps) {
   const doc = parseRichTextBody(schedule.body ?? "");
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <GlossOverlay styles={styles} />
-      <PageHeader
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
