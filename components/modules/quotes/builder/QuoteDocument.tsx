@@ -17,6 +17,8 @@ import type {
   AcceptanceScheduleInstance,
   AgreementScheduleInstance,
   AssuranceScheduleInstance,
+  CalendarPhase,
+  CalendarScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
   ParticularsScheduleInstance,
@@ -770,6 +772,135 @@ function createStyles(theme: QuoteTheme) {
       color: `${theme.ink}CC`,
       lineHeight: 1.4,
       textAlign: "center",
+    },
+
+    // ----- Calendar page (phase cards + Gantt chart) -----
+    calendarPhaseRow: {
+      flexDirection: "row",
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    calendarPhaseCard: {
+      flex: 1,
+      paddingHorizontal: 8,
+      alignItems: "center",
+    },
+    calendarPhaseCardDivider: {
+      borderRightWidth: 1,
+      borderRightColor: `${theme.accent}55`,
+    },
+    calendarPhaseRoman: {
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      fontSize: 28,
+      color: theme.accent,
+      marginBottom: 8,
+    },
+    calendarPhaseName: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 11,
+      color: theme.ink,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    calendarPhaseWeek: {
+      fontFamily: "Inter",
+      fontSize: 8,
+      color: theme.accent,
+      letterSpacing: 2,
+      marginBottom: 4,
+    },
+    calendarPhasePredecessor: {
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      fontSize: 8,
+      color: `${theme.ink}99`,
+      textAlign: "center",
+    },
+    ganttHeaderRow: {
+      flexDirection: "row",
+      marginTop: 16,
+      marginBottom: 8,
+      alignItems: "center",
+    },
+    ganttLabelCol: {
+      width: "22%",
+      paddingRight: 8,
+    },
+    ganttHeaderLabel: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      color: theme.accent,
+      letterSpacing: 3,
+    },
+    ganttTrackHeader: {
+      width: "78%",
+      height: 16,
+      position: "relative",
+    },
+    ganttWeekHeader: {
+      position: "absolute",
+      top: 0,
+      height: 16,
+      alignItems: "center",
+    },
+    ganttWeekNum: {
+      fontFamily: "Inter",
+      fontSize: 8,
+      color: `${theme.ink}CC`,
+    },
+    ganttRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 4,
+      minHeight: 18,
+    },
+    ganttRowLabel: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 10,
+      color: theme.ink,
+    },
+    ganttRowRoman: {
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      color: theme.accent,
+    },
+    ganttTrack: {
+      width: "78%",
+      height: 16,
+      position: "relative",
+    },
+    ganttGridLine: {
+      position: "absolute",
+      top: 0,
+      height: 16,
+      borderRightWidth: 0.5,
+      borderRightColor: `${theme.ink}22`,
+    },
+    ganttBar: {
+      position: "absolute",
+      top: 2,
+      height: 12,
+      backgroundColor: theme.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 1,
+    },
+    ganttBarRoman: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      color: theme.ambience,
+      letterSpacing: 1,
+      fontWeight: "bold",
+    },
+    calendarCaption: {
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      fontSize: 9,
+      color: `${theme.ink}CC`,
+      textAlign: "center",
+      lineHeight: 1.5,
+      marginTop: 12,
     },
 
     // ----- Shared footer (fixed at bottom of every page) -----
@@ -1590,6 +1721,166 @@ function AssurancePage({
   );
 }
 
+// ----------------------------------------------------------------------------
+// Calendar page helpers
+// ----------------------------------------------------------------------------
+
+function formatWeekRange(p: CalendarPhase): string {
+  return p.startWeek === p.endWeek
+    ? `WK ${p.startWeek}`
+    : `WK ${p.startWeek}–${p.endWeek}`;
+}
+
+function predecessorLabel(idx: number): string {
+  if (idx === 0) return "— first phase —";
+  return `follows ${toRomanNumeral(idx)}`;
+}
+
+interface CalendarPageProps extends CommonPageProps {
+  schedule: CalendarScheduleInstance;
+}
+
+function CalendarPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: CalendarPageProps) {
+  const subtitleSuffix = schedule.subtitle || "Programme of Works";
+  const phases = schedule.phases;
+  const totalWeeks = Math.max(...phases.map((p) => p.endWeek), 1);
+  const trackWeekWidth = 100 / totalWeeks;
+
+  return (
+    <Page size="LETTER" style={styles.page} wrap>
+      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <RuleWithOrnament styles={styles} />
+
+      <Text style={styles.scheduleSubtitle}>
+        Schedule {romanForTitle} · {subtitleSuffix.toUpperCase()}
+      </Text>
+      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+
+      <View style={styles.partRule} />
+
+      {/* Phase cards row */}
+      <View style={styles.calendarPhaseRow}>
+        {phases.map((p, i) => (
+          <View
+            key={p.id}
+            style={[
+              styles.calendarPhaseCard,
+              ...(i < phases.length - 1
+                ? [styles.calendarPhaseCardDivider]
+                : []),
+            ]}
+          >
+            <Text style={styles.calendarPhaseRoman}>
+              {toRomanNumeral(i + 1)}
+            </Text>
+            <Text style={styles.calendarPhaseName}>{p.name}</Text>
+            <Text style={styles.calendarPhaseWeek}>{formatWeekRange(p)}</Text>
+            <Text style={styles.calendarPhasePredecessor}>
+              {predecessorLabel(i)}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.partRule} />
+
+      <Text style={[styles.scheduleSubtitle, { marginTop: 12 }]}>
+        FIG. 02 — PROGRAMME & DEPENDENCIES
+      </Text>
+
+      {/* Gantt header row */}
+      <View style={styles.ganttHeaderRow}>
+        <View style={styles.ganttLabelCol}>
+          <Text style={styles.ganttHeaderLabel}>PHASE / WK</Text>
+        </View>
+        <View style={styles.ganttTrackHeader}>
+          {Array.from({ length: totalWeeks }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.ganttWeekHeader,
+                {
+                  left: `${i * trackWeekWidth}%`,
+                  width: `${trackWeekWidth}%`,
+                },
+              ]}
+            >
+              <Text style={styles.ganttWeekNum}>{i + 1}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Gantt body — one row per phase */}
+      {phases.map((p, i) => (
+        <View key={p.id} style={styles.ganttRow} wrap={false}>
+          <View style={styles.ganttLabelCol}>
+            <Text style={styles.ganttRowLabel}>
+              <Text style={styles.ganttRowRoman}>{toRomanNumeral(i + 1)}.</Text>{" "}
+              {p.name}
+            </Text>
+          </View>
+          <View style={styles.ganttTrack}>
+            {/* Grid lines */}
+            {Array.from({ length: totalWeeks }).map((_, gi) => (
+              <View
+                key={`grid-${gi}`}
+                style={[
+                  styles.ganttGridLine,
+                  {
+                    left: `${gi * trackWeekWidth}%`,
+                    width: `${trackWeekWidth}%`,
+                  },
+                ]}
+              />
+            ))}
+            {/* The bar */}
+            <View
+              style={[
+                styles.ganttBar,
+                {
+                  left: `${(p.startWeek - 1) * trackWeekWidth}%`,
+                  width: `${(p.endWeek - p.startWeek + 1) * trackWeekWidth}%`,
+                },
+              ]}
+            >
+              <Text style={styles.ganttBarRoman}>{toRomanNumeral(i + 1)}</Text>
+            </View>
+          </View>
+        </View>
+      ))}
+
+      {schedule.caption ? (
+        <Text style={styles.calendarCaption}>{schedule.caption}</Text>
+      ) : null}
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -1784,6 +2075,14 @@ export function QuoteDocument(props: DocProps) {
           case "assurance":
             return (
               <AssurancePage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "calendar":
+            return (
+              <CalendarPage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
