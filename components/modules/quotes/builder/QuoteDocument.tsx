@@ -197,23 +197,33 @@ function createStyles(theme: QuoteTheme) {
     },
 
     // ----- Schedule title pair (subtitle + giant title) -----
-    scheduleSubtitle: {
+    // QD-2 Phase 3 — section-title pattern (eyebrow + italic display)
+    sectionEyebrow: {
       fontFamily: "Inter",
-      fontSize: 9,
+      fontSize: 10,
+      fontWeight: 500,
       color: theme.accent,
-      letterSpacing: 3,
+      letterSpacing: 5, // 0.5em at 10pt
       textTransform: "uppercase",
       textAlign: "center",
-      marginTop: 4,
-      marginBottom: 6,
+      marginTop: 6,
+      marginBottom: 8,
     },
-    scheduleTitle: {
+    sectionDisplay: {
       fontFamily: "Cormorant Garamond",
       fontStyle: "italic",
-      fontSize: 48,
+      fontSize: 42,
       color: theme.accent,
       textAlign: "center",
-      marginBottom: 12,
+      marginBottom: 16,
+    },
+    // QD-2 Phase 3 — lining figures for all numeric sites (non-italic,
+    // weight 500, tight letter-spacing). Composed onto existing styles.
+    numText: {
+      fontFamily: "Inter",
+      fontStyle: "normal",
+      fontWeight: 500,
+      letterSpacing: 0.15, // ≈0.015em at 10pt
     },
 
     // ----- Cover page -----
@@ -615,6 +625,56 @@ function createStyles(theme: QuoteTheme) {
       color: ink70(theme),
       marginTop: 12,
     },
+    // QD-2 Phase 3 — SignatureBlock dual-line component
+    signatureBlock: {
+      marginTop: 24,
+      marginBottom: 24,
+    },
+    signatureRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 48,
+      marginBottom: 6,
+    },
+    signatureColumn: {
+      flex: 1,
+    },
+    signatureLine: {
+      borderBottomWidth: 1, // 1px ink — signature row
+      borderBottomColor: theme.ink,
+      height: 28,
+      marginBottom: 4,
+    },
+    signatureLabel: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      fontWeight: 500,
+      color: theme.accent,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      marginBottom: 12,
+    },
+    signaturePrintedLine: {
+      borderBottomWidth: 0.5, // 0.5px accent — printed name row
+      borderBottomColor: theme.accent,
+      height: 18,
+      marginBottom: 4,
+    },
+    signaturePrintedLabel: {
+      fontFamily: "Inter",
+      fontSize: 6.5,
+      color: theme.accent,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    signatureDateLabel: {
+      fontFamily: "Inter",
+      fontSize: 6.5,
+      color: theme.accentMuted ?? theme.accent,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      marginTop: 12,
+    },
     acceptRule: {
       borderBottomWidth: 0.6,
       borderBottomColor: theme.accent,
@@ -790,6 +850,66 @@ function RuleWithOrnament({
   );
 }
 
+// QD-2 Phase 3 — shared section-title pattern (rule + ❦ + eyebrow +
+// italic display). `title` is optional so pages without a big display
+// title (e.g. AcceptancePage's "For Acceptance" eyebrow only) can pass
+// just the eyebrow string.
+function SectionTitle({
+  eyebrow,
+  title,
+  styles,
+}: {
+  eyebrow: string;
+  title?: string;
+  styles: Styles;
+}) {
+  return (
+    <View style={{ alignItems: "center", marginBottom: 16 }}>
+      <RuleWithOrnament styles={styles} ornament="❦" />
+      <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
+      {title ? <Text style={styles.sectionDisplay}>{title}</Text> : null}
+    </View>
+  );
+}
+
+// QD-2 Phase 3 — dual-line signature block (1px ink for signature row,
+// 0.5px accent for printed name & title).
+function SignatureBlock({
+  leftLabel,
+  rightLabel,
+  styles,
+}: {
+  leftLabel: string;
+  rightLabel: string;
+  styles: Styles;
+}) {
+  return (
+    <View style={styles.signatureBlock}>
+      <View style={styles.signatureRow}>
+        <View style={styles.signatureColumn}>
+          <View style={styles.signatureLine} />
+          <Text style={styles.signatureLabel}>{leftLabel}</Text>
+          <View style={styles.signaturePrintedLine} />
+          <Text style={styles.signaturePrintedLabel}>
+            Printed name &amp; title
+          </Text>
+        </View>
+        <View style={styles.signatureColumn}>
+          <View style={styles.signatureLine} />
+          <Text style={styles.signatureLabel}>{rightLabel}</Text>
+          <View style={styles.signaturePrintedLine} />
+          <Text style={styles.signaturePrintedLabel}>
+            Printed name &amp; title
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.signatureDateLabel}>
+        Date: ____________________________
+      </Text>
+    </View>
+  );
+}
+
 function PageHeader({
   styles,
   template,
@@ -807,7 +927,7 @@ function PageHeader({
     <View style={styles.pageHeader} fixed>
       <Text style={styles.pageHeaderText}>{template.footerShort}</Text>
       <Text style={styles.pageHeaderCenter}>{"❦"}</Text>
-      <Text style={styles.pageHeaderText}>
+      <Text style={[styles.pageHeaderText, styles.numText]}>
         {number} · {pageStamp(pageNumber, totalPages)}
       </Text>
     </View>
@@ -838,7 +958,7 @@ function SharedFooter({
   return (
     <>
       {legalLine ? (
-        <Text style={styles.footerLegalLine} fixed>
+        <Text style={[styles.footerLegalLine, styles.numText]} fixed>
           {legalLine}
         </Text>
       ) : null}
@@ -848,7 +968,7 @@ function SharedFooter({
           <Text style={styles.footerCenter}>{"❦"}</Text>
           <LogoSlot variant="footer-mark" styles={styles} />
         </View>
-        <Text style={styles.footerRight}>{right}</Text>
+        <Text style={[styles.footerRight, styles.numText]}>{right}</Text>
       </View>
     </>
   );
@@ -921,7 +1041,7 @@ function CoverPage({
 
       <Text style={styles.coverSubtitle}>{schedule.subtitle}</Text>
       <Text style={styles.coverTitle}>{schedule.title}</Text>
-      <Text style={styles.coverDateLine}>
+      <Text style={[styles.coverDateLine, styles.numText]}>
         numbered {number}, dated {safeFormat(createdAt, "MMMM d, yyyy")}
       </Text>
 
@@ -983,23 +1103,23 @@ function CoverPage({
       <View style={styles.coverMetaRow}>
         <View style={styles.coverMetaCol}>
           <Text style={styles.coverMetaLabel}>Issued</Text>
-          <Text style={styles.coverMetaValue}>
+          <Text style={[styles.coverMetaValue, styles.numText]}>
             {safeFormat(createdAt, "MMMM d, yyyy")}
           </Text>
         </View>
         <View style={styles.coverMetaCol}>
           <Text style={styles.coverMetaLabel}>Valid Until</Text>
-          <Text style={styles.coverMetaValue}>
+          <Text style={[styles.coverMetaValue, styles.numText]}>
             {safeFormat(validUntil, "MMMM d, yyyy")}
           </Text>
         </View>
         <View style={styles.coverMetaCol}>
           <Text style={styles.coverMetaLabel}>Terms</Text>
-          <Text style={styles.coverMetaValue}>{paymentTerms}</Text>
+          <Text style={[styles.coverMetaValue, styles.numText]}>{paymentTerms}</Text>
         </View>
         <View style={styles.coverMetaCol}>
           <Text style={styles.coverMetaLabel}>Prepared By</Text>
-          <Text style={styles.coverMetaValue}>{owner?.name ?? "—"}</Text>
+          <Text style={[styles.coverMetaValue, styles.numText]}>{owner?.name ?? "—"}</Text>
         </View>
       </View>
 
@@ -1072,12 +1192,11 @@ function ParticularsPage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-      <RuleWithOrnament styles={styles} />
-
-      <Text style={styles.scheduleSubtitle}>
-        Schedule {romanForTitle} · {subtitleSuffix}
-      </Text>
-      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
 
       <RuleWithOrnament styles={styles} ornament={"✦"} sparkle />
 
@@ -1143,9 +1262,9 @@ function ParticularsPage({
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={[styles.partNumText, styles.partCellQty]}>{qty}</Text>
+                  <Text style={[styles.partNumText, styles.partCellQty, styles.numText]}>{qty}</Text>
                   {showUnitPrice ? (
-                    <Text style={[styles.partNumText, styles.partCellUnitPrice]}>
+                    <Text style={[styles.partNumText, styles.partCellUnitPrice, styles.numText]}>
                       {usd(unit)}
                     </Text>
                   ) : null}
@@ -1155,6 +1274,7 @@ function ParticularsPage({
                       showUnitPrice
                         ? styles.partCellAmountWithUnit
                         : styles.partCellAmount,
+                      styles.numText,
                     ]}
                   >
                     {usd(amount)}
@@ -1171,12 +1291,12 @@ function ParticularsPage({
       <View style={styles.partTotalsBlock}>
         <View style={styles.partTotalsRow}>
           <Text style={styles.partTotalsLabel}>Subtotal</Text>
-          <Text style={styles.partTotalsValue}>{usd(totals.subtotal)}</Text>
+          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.subtotal)}</Text>
         </View>
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
             <Text style={styles.partTotalsLabel}>Discount</Text>
-            <Text style={styles.partTotalsValue}>
+            <Text style={[styles.partTotalsValue, styles.numText]}>
               −{usd(totals.discountAmount)}
             </Text>
           </View>
@@ -1184,7 +1304,7 @@ function ParticularsPage({
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
             <Text style={styles.partTotalsLabel}>Adjusted Subtotal</Text>
-            <Text style={styles.partTotalsValue}>
+            <Text style={[styles.partTotalsValue, styles.numText]}>
               {usd(totals.postDiscount)}
             </Text>
           </View>
@@ -1193,11 +1313,11 @@ function ParticularsPage({
           <Text style={styles.partTotalsLabel}>
             HST ({taxRatePct.toFixed(2)}%)
           </Text>
-          <Text style={styles.partTotalsValue}>{usd(totals.tax)}</Text>
+          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.tax)}</Text>
         </View>
         <View style={styles.partGrandRow}>
           <Text style={styles.partGrandLabel}>Total, in Canadian Dollars</Text>
-          <Text style={styles.partGrandValue}>{usd(totals.total)}</Text>
+          <Text style={[styles.partGrandValue, styles.numText]}>{usd(totals.total)}</Text>
         </View>
       </View>
 
@@ -1240,12 +1360,11 @@ function AgreementPage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-      <RuleWithOrnament styles={styles} />
-
-      <Text style={styles.scheduleSubtitle}>
-        Schedule {romanForTitle} · {subtitleSuffix}
-      </Text>
-      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
 
       <RuleWithOrnament styles={styles} />
 
@@ -1285,8 +1404,6 @@ function AcceptancePage({
   styles,
   template,
   number,
-  client,
-  owner,
   validUntil,
   sections,
   taxRatePct,
@@ -1303,66 +1420,30 @@ function AcceptancePage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-      <RuleWithOrnament styles={styles} />
-
-      <Text style={styles.scheduleSubtitle}>For Acceptance</Text>
+      <SectionTitle eyebrow="For Acceptance" styles={styles} />
 
       <View style={styles.acceptBox}>
         <View style={styles.acceptBoxLeft}>
-          <Text style={styles.acceptQuoteLine}>Quotation {number}</Text>
-          <Text style={styles.acceptValidLine}>
+          <Text style={[styles.acceptQuoteLine, styles.numText]}>Quotation {number}</Text>
+          <Text style={[styles.acceptValidLine, styles.numText]}>
             valid until {safeFormat(validUntil, "MMMM d, yyyy")}
           </Text>
         </View>
         <View style={styles.acceptBoxRight}>
           <Text style={styles.acceptTotalLabel}>Total · CAD</Text>
-          <Text style={styles.acceptTotalValue}>{usd(totals.total)}</Text>
+          <Text style={[styles.acceptTotalValue, styles.numText]}>{usd(totals.total)}</Text>
         </View>
       </View>
 
       <RuleWithOrnament styles={styles} />
 
-      <Text style={styles.acceptHeading}>Witnessed & Agreed</Text>
+      <Text style={styles.acceptHeading}>Witnessed &amp; Agreed</Text>
 
-      <View style={styles.acceptSigRow}>
-        <View style={styles.acceptSigCol}>
-          <Text style={styles.acceptSigColTitle}>For the Client</Text>
-          <Text style={styles.acceptSigClientName}>
-            {client?.name ?? "—"}
-          </Text>
-          <View style={styles.acceptSigLineRow}>
-            <View style={styles.acceptSigLine} />
-            <View style={styles.acceptSigDateLine} />
-          </View>
-          <View style={styles.acceptSigLineLabels}>
-            <Text style={styles.acceptSigLabel}>Signature</Text>
-            <Text style={styles.acceptSigLabel}>Date</Text>
-          </View>
-          <Text style={styles.acceptSigSubLine}>Printed Name</Text>
-          <Text style={styles.acceptSigSubLine}>Title</Text>
-        </View>
-
-        <View style={styles.acceptSigCol}>
-          <Text style={styles.acceptSigColTitle}>For the House of</Text>
-          <Text style={styles.acceptSigHouse}>
-            {template.footerShort.toUpperCase()}
-          </Text>
-          <View style={styles.acceptSigLineRow}>
-            <View style={styles.acceptSigLine} />
-            <View style={styles.acceptSigDateLine} />
-          </View>
-          <View style={styles.acceptSigLineLabels}>
-            <Text style={styles.acceptSigLabel}>Signature</Text>
-            <Text style={styles.acceptSigLabel}>Date</Text>
-          </View>
-          <Text style={styles.acceptSigSubLine}>
-            {owner?.name ?? "Printed Name"}
-          </Text>
-          <Text style={styles.acceptSigSubLine}>
-            Vice President, {template.legalName}
-          </Text>
-        </View>
-      </View>
+      <SignatureBlock
+        leftLabel="Client signature"
+        rightLabel={`${template.legalName} signature`}
+        styles={styles}
+      />
 
       <View style={styles.acceptRule} />
 
@@ -1476,12 +1557,11 @@ function AssurancePage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-      <RuleWithOrnament styles={styles} />
-
-      <Text style={styles.scheduleSubtitle}>
-        Schedule {romanForTitle} · {subtitleSuffix.toUpperCase()}
-      </Text>
-      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix.toUpperCase()}`}
+        title={schedule.title}
+        styles={styles}
+      />
 
       <RuleWithOrnament styles={styles} />
 
@@ -1534,12 +1614,11 @@ function CustomPage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-      <RuleWithOrnament styles={styles} />
-
-      <Text style={styles.scheduleSubtitle}>
-        Schedule {romanForTitle} · {(schedule.subtitle || "").toUpperCase()}
-      </Text>
-      <Text style={styles.scheduleTitle}>{schedule.title}</Text>
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${(schedule.subtitle || "").toUpperCase()}`}
+        title={schedule.title}
+        styles={styles}
+      />
 
       <RuleWithOrnament styles={styles} ornament={"✦"} sparkle />
 
