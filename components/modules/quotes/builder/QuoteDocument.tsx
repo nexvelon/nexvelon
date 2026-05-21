@@ -10,7 +10,7 @@ import {
 } from "@react-pdf/renderer";
 import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
-import { quoteTotals } from "@/lib/quote-helpers";
+import { quoteTotals, takeoffGroups } from "@/lib/quote-helpers";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
 import type {
@@ -19,6 +19,7 @@ import type {
   AssuranceScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
+  DrawingsScheduleInstance,
   ParticularsScheduleInstance,
   QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
@@ -224,6 +225,114 @@ function createStyles(theme: QuoteTheme) {
       fontStyle: "normal",
       fontWeight: 500,
       letterSpacing: 0.15, // ≈0.015em at 10pt
+    },
+
+    // ----- QD-2 Phase 5a — Drawings & Take-off -----
+    drawingsTitleBlock: {
+      flexDirection: "row",
+      borderTopWidth: 0.5,
+      borderTopColor: theme.accent,
+      borderBottomWidth: 0.5,
+      borderBottomColor: theme.accent,
+      paddingVertical: 8,
+      marginVertical: 14,
+    },
+    drawingsTitleCell: {
+      flex: 1,
+      paddingHorizontal: 10,
+      borderRightWidth: 0.5,
+      borderRightColor: theme.accent,
+    },
+    drawingsTitleCellLast: {
+      flex: 1,
+      paddingHorizontal: 10,
+    },
+    drawingsTitleLabel: {
+      fontFamily: "Inter",
+      fontSize: 6.5,
+      fontWeight: 500,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: theme.accent,
+      marginBottom: 3,
+    },
+    drawingsTitleValue: {
+      fontFamily: "Inter",
+      fontSize: 9,
+      color: theme.ink,
+    },
+    // Drawing area — bounded rectangle with dot grid background
+    drawingsArea: {
+      height: 400,
+      borderWidth: 0.5,
+      borderColor: theme.accent,
+      position: "relative",
+      marginBottom: 20,
+      overflow: "hidden",
+    },
+    drawingsAreaPlaceholder: {
+      position: "absolute",
+      top: "50%",
+      left: 0,
+      right: 0,
+      textAlign: "center",
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      fontSize: 11,
+      color: theme.accentMuted ?? theme.accent,
+    },
+    drawingsDot: {
+      position: "absolute",
+      width: 1.2,
+      height: 1.2,
+      backgroundColor: theme.accent,
+      opacity: 0.35,
+    },
+    // Take-off chips section
+    takeoffHeading: {
+      fontFamily: "Inter",
+      fontSize: 9,
+      fontWeight: 500,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: theme.accent,
+      marginTop: 8,
+      marginBottom: 10,
+    },
+    takeoffGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    takeoffChip: {
+      flexBasis: "31%",
+      minHeight: 48,
+      borderWidth: 0.5,
+      borderColor: theme.accent,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: "rgba(255,255,255,0.02)",
+    },
+    takeoffChipClass: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      fontWeight: 500,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: theme.accentMuted ?? theme.accent,
+      marginBottom: 3,
+    },
+    takeoffChipQty: {
+      fontFamily: "Cormorant Garamond",
+      fontStyle: "italic",
+      fontSize: 18,
+      color: theme.ink,
+    },
+    takeoffChipLines: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      color: theme.accentMuted ?? theme.accent,
+      marginTop: 2,
     },
 
     // ----- Cover page -----
@@ -1633,6 +1742,141 @@ function CustomPage({
 }
 
 // ----------------------------------------------------------------------------
+// Drawings & Take-off page (QD-2 Phase 5a)
+// ----------------------------------------------------------------------------
+
+function DrawingsDotGrid({
+  styles,
+  width,
+  height,
+  pitch = 24,
+}: {
+  styles: Styles;
+  width: number;
+  height: number;
+  pitch?: number;
+}) {
+  const dots: { x: number; y: number }[] = [];
+  for (let y = pitch; y < height; y += pitch) {
+    for (let x = pitch; x < width; x += pitch) {
+      dots.push({ x, y });
+    }
+  }
+  return (
+    <>
+      {dots.map((d, i) => (
+        <View key={i} style={[styles.drawingsDot, { left: d.x, top: d.y }]} />
+      ))}
+    </>
+  );
+}
+
+interface DrawingsPageProps extends CommonPageProps {
+  schedule: DrawingsScheduleInstance;
+  sections: QuoteSection[];
+  name: string; // project name (from quote.name or client name)
+  siteName?: string;
+  createdAt: string; // pre-formatted display string
+}
+
+function DrawingsPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+  sections,
+  name,
+  siteName,
+  createdAt,
+}: DrawingsPageProps) {
+  const groups = takeoffGroups(sections);
+  return (
+    <Page size="A4" style={styles.page} wrap>
+      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${(schedule.subtitle || "").toUpperCase()}`}
+        title={schedule.title}
+        styles={styles}
+      />
+      <RuleWithOrnament styles={styles} ornament={"❦"} />
+
+      {/* Title block */}
+      <View style={styles.drawingsTitleBlock}>
+        <View style={styles.drawingsTitleCell}>
+          <Text style={styles.drawingsTitleLabel}>Project</Text>
+          <Text style={styles.drawingsTitleValue}>{name || "—"}</Text>
+        </View>
+        <View style={styles.drawingsTitleCell}>
+          <Text style={styles.drawingsTitleLabel}>Site</Text>
+          <Text style={styles.drawingsTitleValue}>{siteName || "—"}</Text>
+        </View>
+        <View style={styles.drawingsTitleCell}>
+          <Text style={styles.drawingsTitleLabel}>Quote #</Text>
+          <Text style={[styles.drawingsTitleValue, styles.numText]}>{number}</Text>
+        </View>
+        <View style={styles.drawingsTitleCell}>
+          <Text style={styles.drawingsTitleLabel}>Scale</Text>
+          <Text style={styles.drawingsTitleValue}>{schedule.scale || "N.T.S."}</Text>
+        </View>
+        <View style={styles.drawingsTitleCellLast}>
+          <Text style={styles.drawingsTitleLabel}>Date</Text>
+          <Text style={[styles.drawingsTitleValue, styles.numText]}>{createdAt}</Text>
+        </View>
+      </View>
+
+      {/* Drawing area — bounded rectangle with dot grid */}
+      <View style={styles.drawingsArea}>
+        <DrawingsDotGrid styles={styles} width={467} height={400} pitch={24} />
+        <Text style={styles.drawingsAreaPlaceholder}>
+          Drawings to be attached separately
+        </Text>
+      </View>
+
+      {/* Take-off chips */}
+      {groups.length > 0 && (
+        <>
+          <Text style={styles.takeoffHeading}>
+            Bill of Materials — Take-off Summary
+          </Text>
+          <View style={styles.takeoffGrid}>
+            {groups.map((g, i) => (
+              <View key={i} style={styles.takeoffChip}>
+                <Text style={styles.takeoffChipClass}>{g.classification}</Text>
+                <Text style={[styles.takeoffChipQty, styles.numText]}>
+                  {g.totalQty}
+                </Text>
+                <Text style={styles.takeoffChipLines}>
+                  {g.lineCount} {g.lineCount === 1 ? "line item" : "line items"}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
+// ----------------------------------------------------------------------------
 // Orchestrator
 // ----------------------------------------------------------------------------
 
@@ -1741,6 +1985,18 @@ export function QuoteDocument(props: DocProps) {
                 showSku={showSku}
                 showName={showName}
                 showDescription={showDescription}
+              />
+            );
+          case "drawings":
+            return (
+              <DrawingsPage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+                sections={sections}
+                name={name || client?.name || ""}
+                siteName={site?.name}
+                createdAt={safeFormat(createdAt, "MMMM d, yyyy")}
               />
             );
           case "agreement":

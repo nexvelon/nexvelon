@@ -29,6 +29,7 @@ import {
   QUOTE_SCHEDULE_DEFINITIONS,
   createAssuranceSchedule,
   createCustomSchedule,
+  createDrawingsSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
@@ -48,6 +49,7 @@ interface Props {
 const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   cover: "Cover",
   particulars: "Particulars",
+  drawings: "Drawings & Take-off",
   assurance: "Assurance",
   agreement: "Agreement",
   acceptance: "Acceptance",
@@ -58,6 +60,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
   "assurance",
+  "drawings",
   "agreement",
   "acceptance",
   "custom",
@@ -66,6 +69,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
+  if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
     id: newId("sch"),
