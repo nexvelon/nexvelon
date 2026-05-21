@@ -24,6 +24,7 @@ import {
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
 import {
   createClientAction,
+  createSiteAction,
   updateClientAction,
   getCurrentUserIsAdminAction,
   getPrimaryContactAction,
@@ -173,6 +174,26 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   // --- Section 8: Notes ---
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
+  // --- CL-3b: Initial Site (create-mode only) ---
+  const [initialSite, setInitialSite] = useState({
+    name: "",
+    address_line1: "",
+    address_line2: "",
+    city: "",
+    province: "",
+    postal_code: "",
+    country: "Canada",
+  });
+
+  // The Initial Site section is "active" once any field has content.
+  const isInitialSiteActive =
+    initialSite.name.trim() !== "" ||
+    initialSite.address_line1.trim() !== "" ||
+    initialSite.address_line2.trim() !== "" ||
+    initialSite.city.trim() !== "" ||
+    initialSite.province.trim() !== "" ||
+    initialSite.postal_code.trim() !== "";
+
   const [pending, startTransition] = useTransition();
 
   // Resolve admin flag (Guardian gate) on open.
@@ -222,6 +243,10 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     errors.paymentTermsCustom = "Custom terms text is required.";
   if (!allowedOpcos.includes(defaultOpco))
     errors.allowedOpcos = "Allowed operating companies must include the default.";
+  // CL-3b: when the Initial Site section has content, a site name is required.
+  if (isInitialSiteActive && !initialSite.name.trim())
+    errors.initialSiteName =
+      "Site name is required when adding an initial site.";
   const isInvalid = Object.keys(errors).length > 0;
 
   const toggleAllowedOpco = (oc: DbClientOpco) => {
@@ -296,12 +321,41 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           ? await updateClientAction(existing.id, payload)
           : await createClientAction(payload);
 
-      if (result.ok) {
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      // Edit mode, or create with no initial site → original success path.
+      if (isEdit || !isInitialSiteActive) {
         toast.success(isEdit ? `Updated ${tradeName}` : `Added ${tradeName}`);
         onClose();
-      } else {
-        toast.error(result.error);
+        return;
       }
+
+      // CL-3b: create mode + initial site active → chain the site insert.
+      const siteName = initialSite.name.trim();
+      const siteRes = await createSiteAction({
+        client_id: result.data.id,
+        name: siteName,
+        address_line1: initialSite.address_line1.trim() || null,
+        address_line2: initialSite.address_line2.trim() || null,
+        city: initialSite.city.trim() || null,
+        province: initialSite.province.trim() || null,
+        postal_code: initialSite.postal_code.trim() || null,
+        country: initialSite.country.trim() || "Canada",
+      });
+
+      if (siteRes.ok) {
+        toast.success(`Added ${tradeName} · site “${siteName}” added`);
+      } else {
+        // Partial success — the client exists; the site can be added later.
+        // No rollback: there is no transaction across the two server actions.
+        toast.warning(
+          `${tradeName} created, but the initial site couldn't be added: ${siteRes.error}. You can add it later from the Clients list.`
+        );
+      }
+      onClose();
     });
   };
 
@@ -554,6 +608,112 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                 </Field>
               </div>
             </Section>
+
+            {/* CL-3b — Initial Site (create-mode only) */}
+            {!isEdit && (
+              <Section
+                title="Initial Site (optional)"
+                error={errors.initialSiteName}
+              >
+                <p className="text-muted-foreground text-xs">
+                  Add the client&apos;s first site now. Skip this section if no
+                  specific site applies yet — you can add sites anytime from the
+                  Clients list.
+                </p>
+
+                <Field label="Site name" error={errors.initialSiteName}>
+                  <Input
+                    value={initialSite.name}
+                    onChange={(e) =>
+                      setInitialSite({ ...initialSite, name: e.target.value })
+                    }
+                    placeholder="e.g. Main Office, Downtown Branch"
+                  />
+                </Field>
+
+                <Field label="Address — line 1">
+                  <AddressAutocomplete
+                    value={initialSite.address_line1}
+                    onChange={(value) =>
+                      setInitialSite({ ...initialSite, address_line1: value })
+                    }
+                    onPlaceSelected={(p) =>
+                      setInitialSite({
+                        ...initialSite,
+                        address_line1: p.street || initialSite.address_line1,
+                        city: p.city || initialSite.city,
+                        province: p.province || initialSite.province,
+                        postal_code: p.postal || initialSite.postal_code,
+                        country: p.country || initialSite.country,
+                      })
+                    }
+                    placeholder="Start typing an address…"
+                  />
+                </Field>
+
+                <Field label="Address — line 2">
+                  <Input
+                    value={initialSite.address_line2}
+                    onChange={(e) =>
+                      setInitialSite({
+                        ...initialSite,
+                        address_line2: e.target.value,
+                      })
+                    }
+                    placeholder="Unit / suite / floor (optional)"
+                  />
+                </Field>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="City">
+                    <Input
+                      value={initialSite.city}
+                      onChange={(e) =>
+                        setInitialSite({
+                          ...initialSite,
+                          city: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Province">
+                    <Input
+                      value={initialSite.province}
+                      onChange={(e) =>
+                        setInitialSite({
+                          ...initialSite,
+                          province: e.target.value,
+                        })
+                      }
+                      placeholder="ON"
+                    />
+                  </Field>
+                  <Field label="Postal code">
+                    <Input
+                      value={initialSite.postal_code}
+                      onChange={(e) =>
+                        setInitialSite({
+                          ...initialSite,
+                          postal_code: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Country">
+                  <Input
+                    value={initialSite.country}
+                    onChange={(e) =>
+                      setInitialSite({
+                        ...initialSite,
+                        country: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+              </Section>
+            )}
 
             {/* SECTION 4 */}
             <Section title="Operating Company" error={errors.allowedOpcos}>
