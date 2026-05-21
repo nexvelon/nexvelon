@@ -29,18 +29,32 @@ const STATUSES: DbSiteStatus[] = [
   "Decommissioned",
 ];
 
-type Mode = { kind: "create"; clientId: string } | { kind: "edit"; site: DbSite };
+type Mode =
+  | { kind: "create"; clientId?: string }
+  | { kind: "edit"; site: DbSite };
+
+interface SiteClientOption {
+  id: string;
+  name: string;
+  client_code: string | null;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
   mode: Mode;
+  // SITES-1 — required when the create drawer is opened without a clientId
+  // (the /sites page): a client picker is shown. Unused by ClientsView, which
+  // always supplies the clientId.
+  clients?: SiteClientOption[];
 }
 
-export function SiteFormDrawer({ open, onClose, mode }: Props) {
+export function SiteFormDrawer({ open, onClose, mode, clients }: Props) {
   const isEdit = mode.kind === "edit";
   const existing = isEdit ? mode.site : null;
-  const clientId = isEdit ? mode.site.client_id : mode.clientId;
+  const presetClientId = isEdit ? mode.site.client_id : mode.clientId;
+  const needsClientPicker = !isEdit && !presetClientId;
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
 
   const [name, setName] = useState(existing?.name ?? "");
   const [siteCode, setSiteCode] = useState(existing?.site_code ?? "");
@@ -63,13 +77,18 @@ export function SiteFormDrawer({ open, onClose, mode }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const clientIdToUse = presetClientId ?? selectedClientId;
+    if (!clientIdToUse) {
+      toast.error("Client is required.");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Site name is required.");
       return;
     }
 
     const payload = {
-      client_id: clientId,
+      client_id: clientIdToUse,
       name: name.trim(),
       site_code: siteCode.trim() || null,
       address_line1: address1.trim() || null,
@@ -116,6 +135,27 @@ export function SiteFormDrawer({ open, onClose, mode }: Props) {
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-4 py-4">
+          {needsClientPicker && (
+            <Field label="Client *" required>
+              <Select
+                value={selectedClientId}
+                onValueChange={(v) => setSelectedClientId(v ?? "")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a client…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(clients ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                      {c.client_code ? ` (${c.client_code})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
           <Field label="Site name *" required>
             <Input
               value={name}

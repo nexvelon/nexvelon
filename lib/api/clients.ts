@@ -12,7 +12,9 @@ import type {
   DbContactUpdate,
   DbSite,
   DbSiteInsert,
+  DbSiteStatus,
   DbSiteUpdate,
+  DbSiteWithClient,
 } from "@/lib/types/database";
 
 // ============================================================================
@@ -257,11 +259,82 @@ export async function getSitesByClient(clientId: string): Promise<DbSite[]> {
   return (data ?? []) as DbSite[];
 }
 
+/**
+ * SITES-1 — cross-client site list joined with a thin client slice. Optional
+ * filters by client, status, and a name/site_code search. Soft-deleted rows
+ * are always excluded.
+ */
+export async function listSites(
+  filters: {
+    clientId?: string;
+    status?: DbSiteStatus;
+    search?: string;
+  } = {}
+): Promise<DbSiteWithClient[]> {
+  const supabase = await db();
+  let query = supabase
+    .from("sites")
+    .select("*, client:clients(id,name,client_code,default_opco)")
+    .is("deleted_at", null);
+
+  if (filters.clientId) {
+    query = query.eq("client_id", filters.clientId);
+  }
+  if (filters.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters.search?.trim()) {
+    const q = filters.search.trim();
+    query = query.or(`name.ilike.%${q}%,site_code.ilike.%${q}%`);
+  }
+
+  const { data, error } = await query.order("site_code", { ascending: true });
+  if (error) throw new Error(`listSites: ${error.message}`);
+  return (data ?? []) as DbSiteWithClient[];
+}
+
 export async function createSite(payload: DbSiteInsert): Promise<DbSite> {
   const supabase = await db();
+
+  // SITES-1: auto-generate site_code if not provided. Format
+  // S-{client_code}-{NNN}, sequenced per client. A manually-entered code is
+  // left untouched. Mirrors the createClient code-generation pattern.
+  let finalPayload: DbSiteInsert = payload;
+  if (!payload.site_code) {
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("client_code")
+      .eq("id", payload.client_id)
+      .single();
+
+    const clientCode = clientRow?.client_code;
+    if (clientCode) {
+      const prefix = `S-${clientCode}-`;
+      const { data: existing } = await supabase
+        .from("sites")
+        .select("site_code")
+        .like("site_code", `${prefix}%`)
+        .order("site_code", { ascending: false })
+        .limit(1);
+
+      let next = 1;
+      if (existing && existing.length > 0 && existing[0].site_code) {
+        const match = (existing[0].site_code as string).match(/-(\d+)$/);
+        if (match) {
+          next = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      finalPayload = {
+        ...payload,
+        site_code: `${prefix}${next.toString().padStart(3, "0")}`,
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from("sites")
-    .insert(payload)
+    .insert(finalPayload)
     .select("*")
     .single();
   if (error) throw new Error(`createSite: ${error.message}`);

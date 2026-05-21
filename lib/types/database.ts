@@ -193,6 +193,17 @@ export type DbSiteInsert = {
 
 export type DbSiteUpdate = Partial<DbSiteInsert>;
 
+// SITES-1 — a site row joined with a thin slice of its parent client, so the
+// cross-client Sites page can show the client column without an N+1 query.
+export interface DbSiteWithClient extends DbSite {
+  client: {
+    id: string;
+    name: string;
+    client_code: string | null;
+    default_opco: DbClientOpco | null;
+  };
+}
+
 // ----------------------------------------------------------------------------
 // public.contacts
 // ----------------------------------------------------------------------------
