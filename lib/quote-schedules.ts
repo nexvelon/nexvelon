@@ -51,6 +51,11 @@ export interface DrawingsScheduleInstance extends BaseScheduleInstance {
   kind: "drawings";
   scale?: string;      // optional — defaults to "N.T.S." (Not to Scale) when rendering
   notes?: string;      // optional — defaults undefined; future polish chunk may surface a UI for this
+  // Phase 5b — uploaded PDF reference
+  pdfPath?: string;        // Storage path: "{user_id}/{timestamp}-{filename}.pdf"
+  pdfFilename?: string;    // Original filename for display
+  pdfSize?: number;        // Bytes — for UI display
+  pdfUploadedAt?: string;  // ISO timestamp of upload
 }
 
 export interface AgreementScheduleInstance extends BaseScheduleInstance {
