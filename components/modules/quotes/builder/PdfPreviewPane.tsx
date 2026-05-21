@@ -48,13 +48,22 @@ interface Props {
   showSku?: boolean;
   showName?: boolean;
   showDescription?: boolean;
+  // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.
+  drawingsImagesByPath: Record<string, string[]>;
 }
 
 export function PdfPreviewPane(props: Props) {
   // Chunk F: theme/template/schedules/showUnitPrice are now operator-
   // controlled via QuoteBuilder's DocumentStyleCard + SchedulesCard.
   // Resolve full theme + template objects from the slugs and pass through.
-  const { themeSlug, templateSlug, schedules, showUnitPrice, ...rest } = props;
+  const {
+    themeSlug,
+    templateSlug,
+    schedules,
+    showUnitPrice,
+    drawingsImagesByPath,
+    ...rest
+  } = props;
   const theme = getQuoteTheme(themeSlug);
   const template = getQuoteTemplate(templateSlug);
   const doc = (
@@ -64,6 +73,7 @@ export function PdfPreviewPane(props: Props) {
       template={template}
       schedules={schedules}
       showUnitPrice={showUnitPrice}
+      drawingsImagesByPath={drawingsImagesByPath}
     />
   );
 
