@@ -1390,7 +1390,7 @@ function ParticularsPage({
                     ) : null}
                     {showTertiaryLine ? (
                       <Text style={styles.partDescSku}>
-                        {showSkuPart ? `SKU ${it.sku}` : ""}
+                        {showSkuPart ? `Part # ${it.sku}` : ""}
                         {showSkuPart && showVendorPart ? " · " : ""}
                         {showVendorPart ? it.vendor : ""}
                       </Text>
