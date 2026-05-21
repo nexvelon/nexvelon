@@ -256,3 +256,48 @@ export function writeLastUsedThemeSlug(slug: QuoteThemeSlug): void {
     // swallow — localStorage may be unavailable in private mode
   }
 }
+
+// ----------------------------------------------------------------------------
+// Take-off aggregation (QD-2 Phase 5a)
+//
+// The Drawings & Take-off schedule page renders a summary chip per line-item
+// classification. takeoffGroups() flattens every section's items and groups
+// them by classification, summing quantities. Pure / SSR-safe.
+// ----------------------------------------------------------------------------
+
+export interface TakeoffGroup {
+  classification: string;
+  totalQty: number;
+  lineCount: number;
+  items: BuilderLineItem[];
+}
+
+/**
+ * Aggregate all line items across all sections, grouped by classification.
+ * Used by the Drawings & Take-off page to render summary chips.
+ * Pure / SSR-safe. Returns groups sorted by classification name (alphabetical).
+ */
+export function takeoffGroups(sections: QuoteSection[]): TakeoffGroup[] {
+  const map = new Map<string, TakeoffGroup>();
+  for (const section of sections) {
+    for (const item of section.items) {
+      const key = item.classification ?? "Unclassified";
+      const existing = map.get(key);
+      if (existing) {
+        existing.totalQty += item.qty;
+        existing.lineCount += 1;
+        existing.items.push(item);
+      } else {
+        map.set(key, {
+          classification: key,
+          totalQty: item.qty,
+          lineCount: 1,
+          items: [item],
+        });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    a.classification.localeCompare(b.classification)
+  );
+}
