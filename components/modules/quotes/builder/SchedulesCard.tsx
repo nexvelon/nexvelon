@@ -1,13 +1,19 @@
 "use client";
 
+import { useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Eye,
   EyeOff,
+  FileText,
+  Loader2,
   Plus,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -34,10 +40,12 @@ import {
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
+  type DrawingsScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
+import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
 
 interface Props {
@@ -89,7 +97,17 @@ function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   }
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function SchedulesCard({ schedules, onChange, disabled }: Props) {
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  // Hidden <input type=file> refs, keyed by stable schedule id (survives reorder).
+  const fileInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+
   const patchAt = (
     idx: number,
     patch: Partial<QuoteScheduleInstance>
@@ -100,6 +118,40 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
       )
     );
   };
+
+  async function handleUpload(idx: number, file?: File) {
+    if (!file) return;
+    setUploadingIdx(idx);
+    try {
+      const uploaded = await uploadDrawingsPdf(file);
+      patchAt(idx, {
+        pdfPath: uploaded.path,
+        pdfFilename: uploaded.filename,
+        pdfSize: uploaded.size,
+        pdfUploadedAt: uploaded.uploadedAt,
+      } as Partial<DrawingsScheduleInstance>);
+      toast.success("Drawings PDF uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingIdx(null);
+    }
+  }
+
+  async function handleRemove(idx: number, path: string) {
+    try {
+      await deleteDrawingsPdf(path);
+      patchAt(idx, {
+        pdfPath: undefined,
+        pdfFilename: undefined,
+        pdfSize: undefined,
+        pdfUploadedAt: undefined,
+      } as Partial<DrawingsScheduleInstance>);
+      toast.success("Drawings PDF removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Remove failed");
+    }
+  }
 
   const move = (idx: number, dir: "up" | "down") => {
     const target = dir === "up" ? idx - 1 : idx + 1;
@@ -282,6 +334,75 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                   <p className="text-muted-foreground text-[11px]">
                     Use headings, lists, bold, and italic for structure.
                     Renders into the PDF with the chosen theme.
+                  </p>
+                </div>
+              )}
+
+              {schedule.kind === "drawings" && (
+                <div className="space-y-1 pt-1">
+                  <Label className="text-[11px]">Drawings PDF</Label>
+                  {schedule.pdfPath ? (
+                    <div className="bg-muted/30 flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2">
+                      <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs">
+                          {schedule.pdfFilename}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          {formatBytes(schedule.pdfSize ?? 0)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
+                        disabled={disabled}
+                        onClick={() => handleRemove(idx, schedule.pdfPath!)}
+                        aria-label="Remove drawings PDF"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="bg-muted/30 flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2">
+                      <input
+                        ref={(el) => {
+                          fileInputRefs.current.set(schedule.id, el);
+                        }}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          handleUpload(idx, file);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-2 text-xs"
+                        disabled={disabled || uploadingIdx === idx}
+                        onClick={() =>
+                          fileInputRefs.current.get(schedule.id)?.click()
+                        }
+                      >
+                        {uploadingIdx === idx ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        {uploadingIdx === idx
+                          ? "Uploading…"
+                          : "Upload drawings PDF"}
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-muted-foreground text-[11px]">
+                    PDF only · max 20 MB. Embedded into the quote PDF in a
+                    later phase.
                   </p>
                 </div>
               )}
