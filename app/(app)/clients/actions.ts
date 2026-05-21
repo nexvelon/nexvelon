@@ -8,6 +8,7 @@ import {
   getClients,
   getContactsByClient,
   getSitesByClient,
+  listSites,
   restoreClient,
   softDeleteClient,
   softDeleteContact,
@@ -25,7 +26,9 @@ import type {
   DbContactInsert,
   DbContactUpdate,
   DbSiteInsert,
+  DbSiteStatus,
   DbSiteUpdate,
+  DbSiteWithClient,
 } from "@/lib/types/database";
 
 // Server actions return a uniform { ok, ... } shape so client callers can
@@ -276,6 +279,20 @@ export async function deleteClientAction(
 // ----------------------------------------------------------------------------
 // Sites
 // ----------------------------------------------------------------------------
+
+/**
+ * SITES-1 — cross-client site list for the dedicated /sites page. No
+ * requireAdmin gate (general-purpose read, mirrors listClientsAction).
+ */
+export async function listSitesAction(
+  filters?: { clientId?: string; status?: DbSiteStatus; search?: string }
+): Promise<ActionResult<DbSiteWithClient[]>> {
+  try {
+    return { ok: true, data: await listSites(filters ?? {}) };
+  } catch (e) {
+    return fail(e);
+  }
+}
 
 export async function createSiteAction(
   payload: DbSiteInsert

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  Building2,
   Calendar,
   FileText,
   FolderKanban,
@@ -36,7 +37,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, resource: "dashboard" },
   { href: "/quotes", label: "Quotes", icon: FileText, resource: "quotes" },
   { href: "/projects", label: "Projects", icon: FolderKanban, resource: "projects" },
-  { href: "/clients", label: "Clients & Sites", icon: Users, resource: "clients" },
+  { href: "/clients", label: "Clients", icon: Users, resource: "clients" },
+  { href: "/sites", label: "Sites", icon: Building2, resource: "clients" },
   { href: "/inventory", label: "Inventory", icon: Boxes, resource: "inventory" },
   { href: "/scheduling", label: "Scheduling", icon: Calendar, resource: "scheduling" },
   { href: "/financials", label: "Financials", icon: Receipt, resource: "financials" },
