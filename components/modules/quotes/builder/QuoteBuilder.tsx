@@ -46,6 +46,7 @@ import {
 } from "@/lib/company-profile";
 import {
   createDefaultSchedules,
+  type DrawingsScheduleInstance,
   type QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
@@ -172,6 +173,16 @@ export function QuoteBuilder({
     initial.schedules ?? createDefaultSchedules()
   );
 
+  // QD-2 Phase 5c — ephemeral cache of rendered drawing-PDF pages, keyed by
+  // Storage path. NOT persisted (data URLs are 1–3 MB each; would blow the
+  // ~5 MB localStorage cap). Re-derived on mount from the schedule's pdfPath.
+  const [drawingsImagesByPath, setDrawingsImagesByPath] = useState<
+    Record<string, string[]>
+  >({});
+  const [drawingsLoadingPaths, setDrawingsLoadingPaths] = useState<Set<string>>(
+    new Set()
+  );
+
   const handleThemeChange = (slug: QuoteThemeSlug) => {
     setThemeSlug(slug);
     writeLastUsedThemeSlug(slug);
@@ -190,6 +201,49 @@ export function QuoteBuilder({
     // on the override (not the function ref) avoids infinite re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, siteId, sitesByClientOverride]);
+
+  // QD-2 Phase 5c — render any drawings schedule's uploaded PDF to images.
+  // Watches `schedules`; renders each pdfPath once (skips cached + in-flight).
+  useEffect(() => {
+    const drawingsSchedules = schedules.filter(
+      (s): s is DrawingsScheduleInstance => s.kind === "drawings"
+    );
+    const toRender = drawingsSchedules.filter(
+      (s) =>
+        s.pdfPath &&
+        !drawingsImagesByPath[s.pdfPath] &&
+        !drawingsLoadingPaths.has(s.pdfPath)
+    );
+    if (toRender.length === 0) return;
+
+    toRender.forEach(async (schedule) => {
+      const path = schedule.pdfPath!;
+      setDrawingsLoadingPaths((prev) => new Set(prev).add(path));
+      try {
+        const { getSignedDrawingsUrl } = await import("@/lib/api/drawings");
+        const { renderPdfToImages } = await import(
+          "@/lib/quote-drawings-render"
+        );
+        const signedUrl = await getSignedDrawingsUrl(path);
+        const images = await renderPdfToImages(signedUrl);
+        setDrawingsImagesByPath((prev) => ({ ...prev, [path]: images }));
+      } catch (e) {
+        console.error("[Drawings] Failed to render PDF:", e);
+        toast.error(
+          e instanceof Error ? e.message : "Failed to load drawings"
+        );
+      } finally {
+        setDrawingsLoadingPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
+    });
+    // drawingsImagesByPath / drawingsLoadingPaths are read as latest-snapshot
+    // guards; keying only on `schedules` is intentional (avoids re-run loops).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules]);
 
   const client = clients.find((c) => c.id === clientId);
   const site = allSites.find((s) => s.id === siteId);
@@ -620,6 +674,7 @@ export function QuoteBuilder({
                 showSku={showSku}
                 showName={showName}
                 showDescription={showDescription}
+                drawingsImagesByPath={drawingsImagesByPath}
               />
             </div>
           </div>

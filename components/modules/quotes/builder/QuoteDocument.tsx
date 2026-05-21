@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Document,
+  Image,
   Page,
   StyleSheet,
   Text,
@@ -333,6 +334,30 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 7,
       color: theme.accentMuted ?? theme.accent,
       marginTop: 2,
+    },
+
+    // ----- QD-2 Phase 5c — embedded drawing image pages -----
+    drawingsImageCaption: {
+      fontFamily: "Inter",
+      fontSize: 7,
+      fontWeight: 500,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: theme.accentMuted ?? theme.accent,
+      textAlign: "center",
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    drawingsImageContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 4,
+    },
+    drawingsImage: {
+      maxWidth: 467, // A4 width minus 64px padding each side
+      maxHeight: 580, // generous vertical space minus header/caption/footer
+      objectFit: "contain", // preserve aspect ratio
     },
 
     // ----- Cover page -----
@@ -1771,15 +1796,16 @@ function DrawingsDotGrid({
   );
 }
 
-interface DrawingsPageProps extends CommonPageProps {
+interface DrawingsSummaryPageProps extends CommonPageProps {
   schedule: DrawingsScheduleInstance;
   sections: QuoteSection[];
   name: string; // project name (from quote.name or client name)
   siteName?: string;
   createdAt: string; // pre-formatted display string
+  hasImages: boolean; // true when uploaded PDF pages follow this summary
 }
 
-function DrawingsPage({
+function DrawingsSummaryPage({
   schedule,
   pageNumber,
   totalPages,
@@ -1792,7 +1818,8 @@ function DrawingsPage({
   name,
   siteName,
   createdAt,
-}: DrawingsPageProps) {
+  hasImages,
+}: DrawingsSummaryPageProps) {
   const groups = takeoffGroups(sections);
   return (
     <Page size="A4" style={styles.page} wrap>
@@ -1838,7 +1865,9 @@ function DrawingsPage({
       <View style={styles.drawingsArea}>
         <DrawingsDotGrid styles={styles} width={467} height={400} pitch={24} />
         <Text style={styles.drawingsAreaPlaceholder}>
-          Drawings to be attached separately
+          {hasImages
+            ? "Drawings attached — see following page(s)"
+            : "Drawings to be attached separately"}
         </Text>
       </View>
 
@@ -1876,6 +1905,53 @@ function DrawingsPage({
   );
 }
 
+interface DrawingsImagePageProps extends CommonPageProps {
+  imageSrc: string; // PNG data URL
+  imageIndex: number; // 0-based
+  totalImages: number; // total uploaded pages
+}
+
+function DrawingsImagePage({
+  imageSrc,
+  imageIndex,
+  totalImages,
+  pageNumber,
+  totalPages,
+  styles,
+  template,
+  number,
+}: DrawingsImagePageProps) {
+  return (
+    <Page size="A4" style={styles.page} wrap>
+      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+
+      <Text style={styles.drawingsImageCaption}>
+        Drawing {imageIndex + 1} of {totalImages}
+      </Text>
+
+      <View style={styles.drawingsImageContainer}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf <Image> is a PDF primitive, not an HTML <img>; it has no alt prop */}
+        <Image src={imageSrc} style={styles.drawingsImage} />
+      </View>
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel="Drawings"
+      />
+    </Page>
+  );
+}
+
 // ----------------------------------------------------------------------------
 // Orchestrator
 // ----------------------------------------------------------------------------
@@ -1903,6 +1979,24 @@ interface DocProps {
   showSku?: boolean;
   showName?: boolean;
   showDescription?: boolean;
+  // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.
+  // Ephemeral (never persisted); absent slots fall back to the placeholder.
+  drawingsImagesByPath?: Record<string, string[]>;
+}
+
+// QD-2 Phase 5c — how many rendered pages a schedule contributes. Every kind
+// is 1 page except a drawings schedule, which is 1 summary page + N image
+// pages (N = rendered uploaded-PDF pages, 0 while loading or with no upload).
+function pageCountOf(
+  schedule: QuoteScheduleInstance,
+  drawingsImagesByPath: Record<string, string[]>
+): number {
+  if (schedule.kind === "drawings") {
+    if (!schedule.pdfPath) return 1; // summary only
+    const images = drawingsImagesByPath[schedule.pdfPath];
+    return 1 + (images?.length ?? 0); // summary + N image pages
+  }
+  return 1;
 }
 
 export function QuoteDocument(props: DocProps) {
@@ -1928,11 +2022,21 @@ export function QuoteDocument(props: DocProps) {
     showSku = false,
     showName = true,
     showDescription = true,
+    drawingsImagesByPath = {},
   } = props;
 
   const styles = createStyles(theme);
   const included = schedules.filter((s) => s.included);
-  const totalPages = included.length;
+  // QD-2 Phase 5c — a drawings schedule expands to 1 + N pages, so the total
+  // is the sum of each schedule's page count rather than included.length.
+  const totalPages = included.reduce(
+    (sum, s) => sum + pageCountOf(s, drawingsImagesByPath),
+    0
+  );
+
+  // Running page counter — advances by 1 for normal schedules and by
+  // 1 + N for a drawings schedule.
+  let pageCounter = 0;
 
   return (
     <Document
@@ -1940,12 +2044,67 @@ export function QuoteDocument(props: DocProps) {
       author={template.tradeName}
       subject={name ?? "Quotation"}
     >
-      {included.map((schedule, idx) => {
-        const pageNumber = idx + 1;
+      {included.flatMap((schedule, idx) => {
         const footerLabel = getScheduleFooterLabel(included, idx);
         const romanForTitle = getScheduleRomanForIndex(included, idx);
+
+        // Drawings — 1 summary page + N embedded uploaded-PDF image pages.
+        if (schedule.kind === "drawings") {
+          const images = schedule.pdfPath
+            ? drawingsImagesByPath[schedule.pdfPath]
+            : undefined;
+          const hasImages = !!(images && images.length > 0);
+          const pages: React.ReactElement[] = [];
+
+          pageCounter += 1;
+          pages.push(
+            <DrawingsSummaryPage
+              key={`${schedule.id}-summary`}
+              pageNumber={pageCounter}
+              totalPages={totalPages}
+              footerLabel={footerLabel}
+              romanForTitle={romanForTitle}
+              theme={theme}
+              template={template}
+              styles={styles}
+              number={number}
+              schedule={schedule}
+              hasImages={hasImages}
+              sections={sections}
+              name={name || client?.name || ""}
+              siteName={site?.name}
+              createdAt={safeFormat(createdAt, "MMMM d, yyyy")}
+            />
+          );
+
+          if (images) {
+            images.forEach((src, imageIdx) => {
+              pageCounter += 1;
+              pages.push(
+                <DrawingsImagePage
+                  key={`${schedule.id}-img-${imageIdx}`}
+                  pageNumber={pageCounter}
+                  totalPages={totalPages}
+                  footerLabel={footerLabel}
+                  romanForTitle={romanForTitle}
+                  theme={theme}
+                  template={template}
+                  styles={styles}
+                  number={number}
+                  imageSrc={src}
+                  imageIndex={imageIdx}
+                  totalImages={images.length}
+                />
+              );
+            });
+          }
+          return pages;
+        }
+
+        // All other kinds — exactly one page each.
+        pageCounter += 1;
         const common = {
-          pageNumber,
+          pageNumber: pageCounter,
           totalPages,
           footerLabel,
           romanForTitle,
@@ -1985,18 +2144,6 @@ export function QuoteDocument(props: DocProps) {
                 showSku={showSku}
                 showName={showName}
                 showDescription={showDescription}
-              />
-            );
-          case "drawings":
-            return (
-              <DrawingsPage
-                key={schedule.id}
-                {...common}
-                schedule={schedule}
-                sections={sections}
-                name={name || client?.name || ""}
-                siteName={site?.name}
-                createdAt={safeFormat(createdAt, "MMMM d, yyyy")}
               />
             );
           case "agreement":
