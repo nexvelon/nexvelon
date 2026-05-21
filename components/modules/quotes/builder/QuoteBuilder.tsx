@@ -644,7 +644,7 @@ export function QuoteBuilder({
 
           <p className="text-muted-foreground text-center text-[11px]">
             Press <kbd className="bg-muted rounded border px-1 text-[10px]">⌘K</kbd>{" "}
-            to add line items by SKU. Drag rows to reorder. Currency formats on blur.
+            to add line items by Part #. Drag rows to reorder. Currency formats on blur.
           </p>
         </div>
 

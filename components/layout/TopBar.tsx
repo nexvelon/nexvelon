@@ -12,9 +12,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 // SEARCH-1: the center search trigger is restored. It opens <GlobalSearch>
 // (a fresh component wired to real data only — DB clients + local quotes +
-// nav links), built on the CMDK-FIX-patched Command primitives. The old
-// dead-code components/layout/GlobalCommandPalette.tsx is intentionally NOT
-// reused (mock-data baggage) and is left for a separate housekeeping chunk.
+// nav links), built on the CMDK-FIX-patched Command primitives.
 
 const ROLE_DISPLAY: Record<string, string> = {
   Admin: "Operations Director",

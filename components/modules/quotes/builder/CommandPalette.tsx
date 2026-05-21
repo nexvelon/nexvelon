@@ -40,7 +40,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
       open={open}
       onOpenChange={setOpen}
       title="Add line item"
-      description="Search the catalog by SKU, name, or manufacturer. Press Enter to add to the first section."
+      description="Search the catalog by Part #, name, or manufacturer. Press Enter to add to the first section."
     >
       <CommandInput placeholder="Search Part #, manufacturer, or product name…" />
       <CommandList>
