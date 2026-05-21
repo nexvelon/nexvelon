@@ -337,17 +337,6 @@ function createStyles(theme: QuoteTheme) {
     },
 
     // ----- QD-2 Phase 5c — embedded drawing image pages -----
-    drawingsImageCaption: {
-      fontFamily: "Inter",
-      fontSize: 7,
-      fontWeight: 500,
-      letterSpacing: 0.8,
-      textTransform: "uppercase",
-      color: theme.accentMuted ?? theme.accent,
-      textAlign: "center",
-      marginTop: 8,
-      marginBottom: 8,
-    },
     drawingsImageContainer: {
       flex: 1,
       alignItems: "center",
@@ -356,8 +345,21 @@ function createStyles(theme: QuoteTheme) {
     },
     drawingsImage: {
       maxWidth: 467, // A4 width minus 64px padding each side
-      maxHeight: 580, // generous vertical space minus header/caption/footer
+      maxHeight: 580, // generous vertical space minus header/footer
       objectFit: "contain", // preserve aspect ratio
+    },
+    // First drawing shares the summary page below the title block, so it gets
+    // less vertical room than a standalone image page.
+    drawingsFirstImageContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      marginTop: 8,
+    },
+    drawingsFirstImage: {
+      maxWidth: 467,
+      maxHeight: 420, // smaller than a full-page image — title block sits above
+      objectFit: "contain",
     },
 
     // ----- Cover page -----
@@ -1802,7 +1804,8 @@ interface DrawingsSummaryPageProps extends CommonPageProps {
   name: string; // project name (from quote.name or client name)
   siteName?: string;
   createdAt: string; // pre-formatted display string
-  hasImages: boolean; // true when uploaded PDF pages follow this summary
+  firstImageSrc?: string; // when present, render this drawing instead of placeholder + chips
+  totalImageCount?: number; // total uploaded image count; undefined when no upload
 }
 
 function DrawingsSummaryPage({
@@ -1818,9 +1821,11 @@ function DrawingsSummaryPage({
   name,
   siteName,
   createdAt,
-  hasImages,
+  firstImageSrc,
 }: DrawingsSummaryPageProps) {
-  const groups = takeoffGroups(sections);
+  const hasImages = !!firstImageSrc;
+  // Skip the take-off chips when actual drawings are attached.
+  const groups = hasImages ? [] : takeoffGroups(sections);
   return (
     <Page size="A4" style={styles.page} wrap>
       <PageHeader
@@ -1861,35 +1866,45 @@ function DrawingsSummaryPage({
         </View>
       </View>
 
-      {/* Drawing area — bounded rectangle with dot grid */}
-      <View style={styles.drawingsArea}>
-        <DrawingsDotGrid styles={styles} width={467} height={400} pitch={24} />
-        <Text style={styles.drawingsAreaPlaceholder}>
-          {hasImages
-            ? "Drawings attached — see following page(s)"
-            : "Drawings to be attached separately"}
-        </Text>
-      </View>
-
-      {/* Take-off chips */}
-      {groups.length > 0 && (
+      {hasImages ? (
+        /* Drawings attached — render the first drawing on this page */
+        <View style={styles.drawingsFirstImageContainer}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf <Image> is a PDF primitive, not an HTML <img>; it has no alt prop */}
+          <Image src={firstImageSrc!} style={styles.drawingsFirstImage} />
+        </View>
+      ) : (
         <>
-          <Text style={styles.takeoffHeading}>
-            Bill of Materials — Take-off Summary
-          </Text>
-          <View style={styles.takeoffGrid}>
-            {groups.map((g, i) => (
-              <View key={i} style={styles.takeoffChip}>
-                <Text style={styles.takeoffChipClass}>{g.classification}</Text>
-                <Text style={[styles.takeoffChipQty, styles.numText]}>
-                  {g.totalQty}
-                </Text>
-                <Text style={styles.takeoffChipLines}>
-                  {g.lineCount} {g.lineCount === 1 ? "line item" : "line items"}
-                </Text>
-              </View>
-            ))}
+          {/* No drawings uploaded — Phase 5a placeholder + take-off chips */}
+          <View style={styles.drawingsArea}>
+            <DrawingsDotGrid styles={styles} width={467} height={400} pitch={24} />
+            <Text style={styles.drawingsAreaPlaceholder}>
+              Drawings to be attached separately
+            </Text>
           </View>
+
+          {groups.length > 0 && (
+            <>
+              <Text style={styles.takeoffHeading}>
+                Bill of Materials — Take-off Summary
+              </Text>
+              <View style={styles.takeoffGrid}>
+                {groups.map((g, i) => (
+                  <View key={i} style={styles.takeoffChip}>
+                    <Text style={styles.takeoffChipClass}>
+                      {g.classification}
+                    </Text>
+                    <Text style={[styles.takeoffChipQty, styles.numText]}>
+                      {g.totalQty}
+                    </Text>
+                    <Text style={styles.takeoffChipLines}>
+                      {g.lineCount}{" "}
+                      {g.lineCount === 1 ? "line item" : "line items"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
         </>
       )}
 
@@ -1913,8 +1928,6 @@ interface DrawingsImagePageProps extends CommonPageProps {
 
 function DrawingsImagePage({
   imageSrc,
-  imageIndex,
-  totalImages,
   pageNumber,
   totalPages,
   styles,
@@ -1930,10 +1943,6 @@ function DrawingsImagePage({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
-
-      <Text style={styles.drawingsImageCaption}>
-        Drawing {imageIndex + 1} of {totalImages}
-      </Text>
 
       <View style={styles.drawingsImageContainer}>
         {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf <Image> is a PDF primitive, not an HTML <img>; it has no alt prop */}
@@ -1985,16 +1994,17 @@ interface DocProps {
 }
 
 // QD-2 Phase 5c — how many rendered pages a schedule contributes. Every kind
-// is 1 page except a drawings schedule, which is 1 summary page + N image
-// pages (N = rendered uploaded-PDF pages, 0 while loading or with no upload).
+// is 1 page except a drawings schedule with an uploaded PDF: it emits one page
+// per uploaded page (the first page also carries the title block).
 function pageCountOf(
   schedule: QuoteScheduleInstance,
   drawingsImagesByPath: Record<string, string[]>
 ): number {
   if (schedule.kind === "drawings") {
-    if (!schedule.pdfPath) return 1; // summary only
+    if (!schedule.pdfPath) return 1; // no upload → 1 placeholder summary page
     const images = drawingsImagesByPath[schedule.pdfPath];
-    return 1 + (images?.length ?? 0); // summary + N image pages
+    if (!images || images.length === 0) return 1; // loading → 1 placeholder page
+    return images.length; // each image = 1 page; first page carries the title block
   }
   return 1;
 }
@@ -2048,14 +2058,15 @@ export function QuoteDocument(props: DocProps) {
         const footerLabel = getScheduleFooterLabel(included, idx);
         const romanForTitle = getScheduleRomanForIndex(included, idx);
 
-        // Drawings — 1 summary page + N embedded uploaded-PDF image pages.
+        // Drawings — the summary page carries the first drawing; any further
+        // uploaded pages get their own image-only pages.
         if (schedule.kind === "drawings") {
           const images = schedule.pdfPath
             ? drawingsImagesByPath[schedule.pdfPath]
             : undefined;
-          const hasImages = !!(images && images.length > 0);
           const pages: React.ReactElement[] = [];
 
+          // Summary page — title block + first drawing (or placeholder + chips).
           pageCounter += 1;
           pages.push(
             <DrawingsSummaryPage
@@ -2069,16 +2080,18 @@ export function QuoteDocument(props: DocProps) {
               styles={styles}
               number={number}
               schedule={schedule}
-              hasImages={hasImages}
               sections={sections}
               name={name || client?.name || ""}
               siteName={site?.name}
               createdAt={safeFormat(createdAt, "MMMM d, yyyy")}
+              firstImageSrc={images?.[0]}
+              totalImageCount={images?.length}
             />
           );
 
-          if (images) {
-            images.forEach((src, imageIdx) => {
+          // Images 1..N-1 — image 0 already sits on the summary page above.
+          if (images && images.length > 1) {
+            for (let imageIdx = 1; imageIdx < images.length; imageIdx++) {
               pageCounter += 1;
               pages.push(
                 <DrawingsImagePage
@@ -2091,12 +2104,12 @@ export function QuoteDocument(props: DocProps) {
                   template={template}
                   styles={styles}
                   number={number}
-                  imageSrc={src}
+                  imageSrc={images[imageIdx]}
                   imageIndex={imageIdx}
                   totalImages={images.length}
                 />
               );
-            });
+            }
           }
           return pages;
         }
