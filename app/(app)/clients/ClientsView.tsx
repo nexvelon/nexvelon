@@ -1063,6 +1063,37 @@ function SiteStat({
   );
 }
 
+// CONTACTS-1 — render a pill for each role boolean a contact has toggled on.
+// The three flags (is_primary / is_billing / is_emergency) have existed since
+// CL-3a but only "Primary" was ever displayed.
+function RoleBadges({ contact }: { contact: DbContact }) {
+  const badges: Array<{ label: string; cls: string }> = [];
+  if (contact.is_primary) {
+    badges.push({ label: "Primary", cls: "bg-brand-gold/15 text-amber-800" });
+  }
+  if (contact.is_billing) {
+    badges.push({ label: "Billing", cls: "bg-emerald-100 text-emerald-800" });
+  }
+  if (contact.is_emergency) {
+    badges.push({ label: "Emergency", cls: "bg-red-100 text-red-800" });
+  }
+
+  if (badges.length === 0) return null;
+
+  return (
+    <span className="ml-2 inline-flex gap-1">
+      {badges.map((b) => (
+        <span
+          key={b.label}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}
+        >
+          {b.label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function ContactsCard({
   contacts,
   onAdd,
@@ -1083,7 +1114,7 @@ function ContactsCard({
       }}
     >
       <div className="mb-2 flex items-center justify-between">
-        <p className="nx-eyebrow">Primary contacts</p>
+        <p className="nx-eyebrow">Contacts</p>
         <button
           type="button"
           onClick={onAdd}
@@ -1116,6 +1147,7 @@ function ContactsCard({
               <div className="min-w-0 flex-1">
                 <p className="text-brand-text text-xs font-medium leading-tight truncate">
                   {c.first_name} {c.last_name}
+                  <RoleBadges contact={c} />
                 </p>
                 <p className="text-muted-foreground text-[10px] leading-tight truncate">
                   {c.title ?? c.department ?? c.email ?? "—"}
@@ -1212,11 +1244,7 @@ function ContactsPane({
             <div className="min-w-0 flex-1">
               <p className="text-brand-text text-sm font-medium leading-tight">
                 {c.first_name} {c.last_name}
-                {c.is_primary && (
-                  <span className="bg-brand-gold/15 ml-2 inline-block rounded-sm px-1 text-[9px] font-bold uppercase tracking-wider text-amber-800">
-                    Primary
-                  </span>
-                )}
+                <RoleBadges contact={c} />
               </p>
               <p className="text-muted-foreground text-[11px]">
                 {[c.title, c.department].filter(Boolean).join(" · ") || "—"}
