@@ -1,8 +1,11 @@
 "use client";
 
+import type { Worksheet } from "exceljs";
+
 // CL-4 — client onboarding Excel template. This file holds the generator
-// (Phase 2a) and will hold the parser (Phase 2b). exceljs is dynamic-imported
-// inside each function so the ~1 MB library never lands in the main bundle.
+// (Phase 2a) and the parser (Phase 2b). exceljs is dynamic-imported inside
+// each function so the ~1 MB library never lands in the main bundle. The
+// `import type` above is erased at compile — it carries no runtime cost.
 
 // Phase 2b will populate this from the parser.
 export interface ParsedClientTemplate {
@@ -10,7 +13,7 @@ export interface ParsedClientTemplate {
     legal_name: string;
     name: string; // trade name (the field's setter is setName)
     hst_gst_number: string;
-    tax_exempt: boolean;
+    tax_exempt: boolean | null; // null = cell was empty (don't override)
     tax_exempt_cert: string;
   };
   billing: {
@@ -212,4 +215,129 @@ export async function generateClientTemplate(): Promise<Blob> {
   return new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+}
+
+// ── Phase 2b — parser ──────────────────────────────────────────────────────
+
+/** Normalize a label for matching: lowercase, trim, strip asterisks. */
+function normalizeLabel(s: string): string {
+  return s.trim().toLowerCase().replace(/\*/g, "").trim();
+}
+
+/**
+ * Find a value in a 2-column label/value sheet by matching the label in
+ * column 1. Returns the trimmed string from column 2, or "" if not found.
+ * Label-based lookup is robust to clients adding blank rows or reordering
+ * rows within a sheet, as long as the labels themselves are preserved.
+ */
+function findValueByLabel(sheet: Worksheet, label: string): string {
+  const target = normalizeLabel(label);
+  let result = "";
+  sheet.eachRow((row) => {
+    const cellLabel = row.getCell(1).value?.toString() ?? "";
+    if (normalizeLabel(cellLabel) === target) {
+      const v = row.getCell(2).value;
+      result = v == null ? "" : String(v);
+    }
+  });
+  return result.trim();
+}
+
+/** Find a contact row by matching the role name in column 1. */
+function findContactByRole(
+  sheet: Worksheet,
+  role: string
+): { first_name: string; last_name: string; phone: string; email: string } {
+  const target = role.trim().toLowerCase();
+  let result = { first_name: "", last_name: "", phone: "", email: "" };
+  sheet.eachRow((row) => {
+    const cellRole =
+      row.getCell(1).value?.toString().trim().toLowerCase() ?? "";
+    if (cellRole === target) {
+      const cell = (i: number) => {
+        const v = row.getCell(i).value;
+        return v == null ? "" : String(v).trim();
+      };
+      result = {
+        first_name: cell(2),
+        last_name: cell(3),
+        phone: cell(4),
+        email: cell(5),
+      };
+    }
+  });
+  return result;
+}
+
+/** Parse a yes/no cell into a boolean, or null when the cell is empty. */
+function parseBooleanCell(raw: string): boolean | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  return v === "yes" || v === "true" || v === "y" || v === "1";
+}
+
+/**
+ * Parse a filled Excel template back into structured data. Used by the
+ * Upload button in ClientFormDrawer. Lenient by design — values populate
+ * as-is and the form's own validation catches issues on submit.
+ */
+export async function parseClientTemplate(
+  file: File
+): Promise<ParsedClientTemplate> {
+  const ExcelJS = await import("exceljs");
+  const buffer = await file.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const clientSheet = workbook.getWorksheet("Client & Billing");
+  const contactsSheet = workbook.getWorksheet("Contacts");
+  const siteSheet = workbook.getWorksheet("Site");
+
+  if (!clientSheet)
+    throw new Error(
+      "This doesn't look like a Nexvelon template — 'Client & Billing' sheet is missing."
+    );
+  if (!contactsSheet)
+    throw new Error(
+      "This doesn't look like a Nexvelon template — 'Contacts' sheet is missing."
+    );
+  if (!siteSheet)
+    throw new Error(
+      "This doesn't look like a Nexvelon template — 'Site' sheet is missing."
+    );
+
+  const taxExemptRaw = findValueByLabel(clientSheet, "Tax Exempt? (yes/no)");
+
+  return {
+    client: {
+      legal_name: findValueByLabel(clientSheet, "Legal Name"),
+      name: findValueByLabel(clientSheet, "Trade / Display Name"),
+      hst_gst_number: findValueByLabel(clientSheet, "HST/GST Number"),
+      tax_exempt: parseBooleanCell(taxExemptRaw),
+      tax_exempt_cert: findValueByLabel(
+        clientSheet,
+        "Tax Exempt Certificate Number (if applicable)"
+      ),
+    },
+    billing: {
+      street: findValueByLabel(clientSheet, "Street"),
+      unit: findValueByLabel(clientSheet, "Unit / Suite"),
+      city: findValueByLabel(clientSheet, "City"),
+      province: findValueByLabel(clientSheet, "Province"),
+      postal: findValueByLabel(clientSheet, "Postal Code"),
+      country: findValueByLabel(clientSheet, "Country"),
+    },
+    mainContact: findContactByRole(contactsSheet, "Main Contact"),
+    apContact: findContactByRole(contactsSheet, "Accounts Payable"),
+    additionalContact: findContactByRole(contactsSheet, "Additional Contact"),
+    initialSite: {
+      name: findValueByLabel(siteSheet, "Site Name"),
+      address_line1: findValueByLabel(siteSheet, "Address Line 1"),
+      address_line2: findValueByLabel(siteSheet, "Address Line 2"),
+      city: findValueByLabel(siteSheet, "City"),
+      province: findValueByLabel(siteSheet, "Province"),
+      postal_code: findValueByLabel(siteSheet, "Postal Code"),
+      country: findValueByLabel(siteSheet, "Country"),
+    },
+  };
 }
