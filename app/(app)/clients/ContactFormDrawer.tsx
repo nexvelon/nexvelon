@@ -44,8 +44,15 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
   const [title, setTitle] = useState(existing?.title ?? "");
   const [department, setDepartment] = useState(existing?.department ?? "");
   const [email, setEmail] = useState(existing?.email ?? "");
-  const [phone, setPhone] = useState(existing?.phone ?? "");
-  const [mobile, setMobile] = useState(existing?.mobile ?? "");
+  // CL-5c: phone/mobile are now entries in the phones JSONB. This drawer keeps
+  // its existing 2-field UX for now (Phone + Mobile by label); the full
+  // dynamic multi-phone editor lands in CL-5c Phase 2b.
+  const [phone, setPhone] = useState(
+    existing?.phones?.find((p) => p.label === "Phone")?.number ?? ""
+  );
+  const [mobile, setMobile] = useState(
+    existing?.phones?.find((p) => p.label === "Mobile")?.number ?? ""
+  );
   const [siteId, setSiteId] = useState<string>(existing?.site_id ?? "none");
   const [isPrimary, setIsPrimary] = useState(existing?.is_primary ?? true);
   const [isBilling, setIsBilling] = useState(existing?.is_billing ?? false);
@@ -68,8 +75,15 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
       title: title.trim() || null,
       department: department.trim() || null,
       email: email.trim() || null,
-      phone: phone.trim() || null,
-      mobile: mobile.trim() || null,
+      // CL-5c: rebuild the phones JSONB from the 2 fields, preserving any
+      // phones with other labels (Office/Fax/etc.) so an edit-save isn't lossy.
+      phones: [
+        ...(phone.trim() ? [{ label: "Phone", number: phone.trim() }] : []),
+        ...(mobile.trim() ? [{ label: "Mobile", number: mobile.trim() }] : []),
+        ...(existing?.phones ?? []).filter(
+          (p) => p.label !== "Phone" && p.label !== "Mobile"
+        ),
+      ],
       is_primary: isPrimary,
       is_billing: isBilling,
       is_emergency: isEmergency,
