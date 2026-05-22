@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronDown, ChevronRight, Download, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -38,6 +45,7 @@ import type {
   DbClientTier,
   DbClientType,
   DbContactInsert,
+  ContactPhone,
 } from "@/lib/types/database";
 
 const TYPES: DbClientType[] = [
@@ -83,6 +91,32 @@ interface Props {
   open: boolean;
   onClose: () => void;
   mode: Mode;
+}
+
+// CL-5c — one row in the dynamic Contact Information section. `role` maps to
+// the DbContact.title column (the UI just labels it "Role").
+type ContactRowState = {
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+  phones: ContactPhone[];
+  is_primary: boolean;
+  is_billing: boolean;
+  is_emergency: boolean;
+};
+
+function newEmptyContact(): ContactRowState {
+  return {
+    first_name: "",
+    last_name: "",
+    role: "",
+    email: "",
+    phones: [{ label: "Phone", number: "" }],
+    is_primary: false,
+    is_billing: false,
+    is_emergency: false,
+  };
 }
 
 export function ClientFormDrawer({ open, onClose, mode }: Props) {
@@ -176,42 +210,16 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   // --- Section 8: Notes ---
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
-  // --- CL-3c: Initial Contacts (create-mode only) — 3 fixed-role slots ---
-  const [mainContact, setMainContact] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    email: "",
-  });
-  const [apContact, setApContact] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    email: "",
-  });
-  const [additionalContact, setAdditionalContact] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    email: "",
-  });
+  // --- CL-5c: Contact Information (create-mode only) — dynamic rows ---
+  const [contacts, setContacts] = useState<ContactRowState[]>([]);
 
-  // A contact slot is "active" once any of its fields has content.
-  const isMainContactActive =
-    mainContact.first_name.trim() !== "" ||
-    mainContact.last_name.trim() !== "" ||
-    mainContact.phone.trim() !== "" ||
-    mainContact.email.trim() !== "";
-  const isApContactActive =
-    apContact.first_name.trim() !== "" ||
-    apContact.last_name.trim() !== "" ||
-    apContact.phone.trim() !== "" ||
-    apContact.email.trim() !== "";
-  const isAdditionalContactActive =
-    additionalContact.first_name.trim() !== "" ||
-    additionalContact.last_name.trim() !== "" ||
-    additionalContact.phone.trim() !== "" ||
-    additionalContact.email.trim() !== "";
+  // A contact row is "active" once any of its fields has content.
+  const isContactActive = (c: ContactRowState) =>
+    c.first_name.trim() !== "" ||
+    c.last_name.trim() !== "" ||
+    c.role.trim() !== "" ||
+    c.email.trim() !== "" ||
+    c.phones.some((p) => p.number.trim() !== "");
 
   const [pending, startTransition] = useTransition();
 
@@ -252,25 +260,15 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     errors.paymentTermsCustom = "Custom terms text is required.";
   if (!allowedOpcos.includes(defaultOpco))
     errors.allowedOpcos = "Allowed operating companies must include the default.";
-  // CL-3c: each active contact slot needs first + last name (NOT NULL schema).
-  if (isMainContactActive) {
-    if (!mainContact.first_name.trim())
-      errors.mainContactFirstName = "First name is required";
-    if (!mainContact.last_name.trim())
-      errors.mainContactLastName = "Last name is required";
-  }
-  if (isApContactActive) {
-    if (!apContact.first_name.trim())
-      errors.apContactFirstName = "First name is required";
-    if (!apContact.last_name.trim())
-      errors.apContactLastName = "Last name is required";
-  }
-  if (isAdditionalContactActive) {
-    if (!additionalContact.first_name.trim())
-      errors.additionalContactFirstName = "First name is required";
-    if (!additionalContact.last_name.trim())
-      errors.additionalContactLastName = "Last name is required";
-  }
+  // CL-5c: each active contact row needs first + last name (NOT NULL schema).
+  contacts.forEach((c, i) => {
+    if (isContactActive(c)) {
+      if (!c.first_name.trim())
+        errors[`contact${i}FirstName`] = "First name is required";
+      if (!c.last_name.trim())
+        errors[`contact${i}LastName`] = "Last name is required";
+    }
+  });
   const isInvalid = Object.keys(errors).length > 0;
 
   const toggleAllowedOpco = (oc: DbClientOpco) => {
@@ -329,19 +327,44 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
       if (parsed.billing.country) setBillCountry(parsed.billing.country);
 
-      // Contacts — only when a name has content (mirrors CL-3c "active" gating).
-      if (parsed.mainContact.first_name || parsed.mainContact.last_name) {
-        setMainContact(parsed.mainContact);
-      }
-      if (parsed.apContact.first_name || parsed.apContact.last_name) {
-        setApContact(parsed.apContact);
-      }
-      if (
-        parsed.additionalContact.first_name ||
-        parsed.additionalContact.last_name
-      ) {
-        setAdditionalContact(parsed.additionalContact);
-      }
+      // CL-5c: build dynamic contact rows from the template's three fixed
+      // slots. Main → primary, Accounts Payable → billing, Additional → none.
+      const tplContacts: ContactRowState[] = [];
+      const pushTpl = (
+        tc: {
+          first_name: string;
+          last_name: string;
+          phone: string;
+          email: string;
+        },
+        roles: { is_primary: boolean; is_billing: boolean }
+      ) => {
+        if (
+          !tc.first_name.trim() &&
+          !tc.last_name.trim() &&
+          !tc.phone.trim() &&
+          !tc.email.trim()
+        ) {
+          return;
+        }
+        tplContacts.push({
+          first_name: tc.first_name,
+          last_name: tc.last_name,
+          role: "",
+          email: tc.email,
+          phones: [{ label: "Phone", number: tc.phone }],
+          is_primary: roles.is_primary,
+          is_billing: roles.is_billing,
+          is_emergency: false,
+        });
+      };
+      pushTpl(parsed.mainContact, { is_primary: true, is_billing: false });
+      pushTpl(parsed.apContact, { is_primary: false, is_billing: true });
+      pushTpl(parsed.additionalContact, {
+        is_primary: false,
+        is_billing: false,
+      });
+      if (tplContacts.length > 0) setContacts(tplContacts);
 
       // CL-5a removed the Initial Site section — the template's Site sheet is
       // still parsed but no longer populates a form field (sites are added on
@@ -446,51 +469,27 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
       const newClientId = result.data.id;
 
-      // CL-3c: chain up to 3 contact inserts (in parallel). Roles are fixed
-      // per slot — Main → primary, Accounts Payable → billing, Additional → none.
-      const contactsToCreate: DbContactInsert[] = [];
-      if (isMainContactActive) {
-        contactsToCreate.push({
-          client_id: newClientId,
-          first_name: mainContact.first_name.trim(),
-          last_name: mainContact.last_name.trim(),
-          phone: mainContact.phone.trim() || null,
-          email: mainContact.email.trim() || null,
-          is_primary: true,
-          is_billing: false,
-          is_emergency: false,
-        });
-      }
-      if (isApContactActive) {
-        contactsToCreate.push({
-          client_id: newClientId,
-          first_name: apContact.first_name.trim(),
-          last_name: apContact.last_name.trim(),
-          phone: apContact.phone.trim() || null,
-          email: apContact.email.trim() || null,
-          is_primary: false,
-          is_billing: true,
-          is_emergency: false,
-        });
-      }
-      if (isAdditionalContactActive) {
-        contactsToCreate.push({
-          client_id: newClientId,
-          first_name: additionalContact.first_name.trim(),
-          last_name: additionalContact.last_name.trim(),
-          phone: additionalContact.phone.trim() || null,
-          email: additionalContact.email.trim() || null,
-          is_primary: false,
-          is_billing: false,
-          is_emergency: false,
-        });
-      }
-
+      // CL-5c: create every active contact in parallel. `role` maps to the
+      // title column; empty phone rows are dropped from the phones payload.
+      const activeContacts = contacts.filter(isContactActive);
       let contactSuccessCount = 0;
       let contactFailCount = 0;
-      if (contactsToCreate.length > 0) {
+      if (activeContacts.length > 0) {
+        const contactPayloads: DbContactInsert[] = activeContacts.map((c) => ({
+          client_id: newClientId,
+          first_name: c.first_name.trim(),
+          last_name: c.last_name.trim(),
+          title: c.role.trim() || null,
+          email: c.email.trim() || null,
+          phones: c.phones
+            .filter((p) => p.number.trim() !== "")
+            .map((p) => ({ label: p.label, number: p.number.trim() })),
+          is_primary: c.is_primary,
+          is_billing: c.is_billing,
+          is_emergency: c.is_emergency,
+        }));
         const results = await Promise.all(
-          contactsToCreate.map((p) => createContactAction(p))
+          contactPayloads.map((p) => createContactAction(p))
         );
         contactSuccessCount = results.filter((r) => r.ok).length;
         contactFailCount = results.length - contactSuccessCount;
@@ -811,199 +810,274 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
               </div>
             </Section>
 
-            {/* CL-3c — Initial Contacts (create-mode only) */}
+            {/* CL-5c — Contact Information (create-mode only) */}
             {!isEdit && (
-              <Section
-                title="Initial Contacts (optional)"
-                error={
-                  errors.mainContactFirstName ||
-                  errors.mainContactLastName ||
-                  errors.apContactFirstName ||
-                  errors.apContactLastName ||
-                  errors.additionalContactFirstName ||
-                  errors.additionalContactLastName
-                }
-              >
+              <Section title="Contact Information (optional)">
                 <p className="text-muted-foreground text-xs">
-                  Add up to 3 contacts now. Each contact needs at least a first
-                  and last name. You can add more anytime from the client
-                  detail page.
+                  Add contacts now or anytime later from the client detail
+                  page. Each contact needs at least a first and last name.
                 </p>
 
-                {/* ---- MAIN CONTACT ---- */}
-                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
-                  <p className="nx-eyebrow-soft text-[10px]">Main Contact</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="First name" error={errors.mainContactFirstName}>
-                      <Input
-                        value={mainContact.first_name}
-                        onChange={(e) =>
-                          setMainContact({
-                            ...mainContact,
-                            first_name: e.target.value,
-                          })
+                {contacts.map((c, idx) => (
+                  <div
+                    key={idx}
+                    className="space-y-3 rounded-md border border-[var(--border)] p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="nx-eyebrow-soft text-[10px]">
+                        Contact {idx + 1}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                        aria-label="Remove contact"
+                        onClick={() =>
+                          setContacts(contacts.filter((_, i) => i !== idx))
                         }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field
+                        label="First name *"
+                        error={errors[`contact${idx}FirstName`]}
+                      >
+                        <Input
+                          value={c.first_name}
+                          onChange={(e) =>
+                            setContacts(
+                              contacts.map((x, i) =>
+                                i === idx
+                                  ? { ...x, first_name: e.target.value }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field
+                        label="Last name *"
+                        error={errors[`contact${idx}LastName`]}
+                      >
+                        <Input
+                          value={c.last_name}
+                          onChange={(e) =>
+                            setContacts(
+                              contacts.map((x, i) =>
+                                i === idx
+                                  ? { ...x, last_name: e.target.value }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+
+                    <Field label="Role">
+                      <Input
+                        value={c.role}
+                        onChange={(e) =>
+                          setContacts(
+                            contacts.map((x, i) =>
+                              i === idx ? { ...x, role: e.target.value } : x
+                            )
+                          )
+                        }
+                        placeholder="e.g. CFO, Operations Manager, Facilities Director"
                       />
                     </Field>
-                    <Field label="Last name" error={errors.mainContactLastName}>
-                      <Input
-                        value={mainContact.last_name}
-                        onChange={(e) =>
-                          setMainContact({
-                            ...mainContact,
-                            last_name: e.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Phone">
-                      <Input
-                        type="tel"
-                        value={mainContact.phone}
-                        onChange={(e) =>
-                          setMainContact({
-                            ...mainContact,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. (416) 555-0100"
-                      />
-                    </Field>
+
                     <Field label="Email">
                       <Input
                         type="email"
-                        value={mainContact.email}
+                        value={c.email}
                         onChange={(e) =>
-                          setMainContact({
-                            ...mainContact,
-                            email: e.target.value,
-                          })
+                          setContacts(
+                            contacts.map((x, i) =>
+                              i === idx ? { ...x, email: e.target.value } : x
+                            )
+                          )
                         }
                         placeholder="name@example.com"
                       />
                     </Field>
-                  </div>
-                </div>
 
-                {/* ---- ACCOUNTS PAYABLE CONTACT ---- */}
-                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
-                  <p className="nx-eyebrow-soft text-[10px]">
-                    Accounts Payable Contact
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="First name" error={errors.apContactFirstName}>
-                      <Input
-                        value={apContact.first_name}
-                        onChange={(e) =>
-                          setApContact({
-                            ...apContact,
-                            first_name: e.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field label="Last name" error={errors.apContactLastName}>
-                      <Input
-                        value={apContact.last_name}
-                        onChange={(e) =>
-                          setApContact({
-                            ...apContact,
-                            last_name: e.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Phone">
-                      <Input
-                        type="tel"
-                        value={apContact.phone}
-                        onChange={(e) =>
-                          setApContact({ ...apContact, phone: e.target.value })
-                        }
-                        placeholder="e.g. (416) 555-0100"
-                      />
-                    </Field>
-                    <Field label="Email">
-                      <Input
-                        type="email"
-                        value={apContact.email}
-                        onChange={(e) =>
-                          setApContact({ ...apContact, email: e.target.value })
-                        }
-                        placeholder="ap@example.com"
-                      />
-                    </Field>
-                  </div>
-                </div>
+                    {/* Phones */}
+                    <div className="space-y-2">
+                      <p className="nx-eyebrow-soft text-[10px]">Phones</p>
+                      {c.phones.map((p, phoneIdx) => (
+                        <div
+                          key={phoneIdx}
+                          className="grid grid-cols-[110px_1fr_auto] gap-2"
+                        >
+                          <select
+                            aria-label="Phone type"
+                            value={p.label}
+                            onChange={(e) => {
+                              const nextPhones = c.phones.map((pp, pi) =>
+                                pi === phoneIdx
+                                  ? { ...pp, label: e.target.value }
+                                  : pp
+                              );
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, phones: nextPhones }
+                                    : x
+                                )
+                              );
+                            }}
+                            className="bg-card rounded-md border border-[var(--border)] px-2 py-1 text-xs"
+                          >
+                            <option value="Office">Office</option>
+                            <option value="Personal">Personal</option>
+                            <option value="Mobile">Mobile</option>
+                            <option value="Emergency">Emergency</option>
+                            <option value="Fax">Fax</option>
+                            <option value="Phone">Phone</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <Input
+                            value={p.number}
+                            onChange={(e) => {
+                              const nextPhones = c.phones.map((pp, pi) =>
+                                pi === phoneIdx
+                                  ? { ...pp, number: e.target.value }
+                                  : pp
+                              );
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, phones: nextPhones }
+                                    : x
+                                )
+                              );
+                            }}
+                            placeholder="(416) 555-0100"
+                          />
+                          {c.phones.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                              aria-label="Remove phone"
+                              onClick={() => {
+                                const nextPhones = c.phones.filter(
+                                  (_, pi) => pi !== phoneIdx
+                                );
+                                setContacts(
+                                  contacts.map((x, i) =>
+                                    i === idx
+                                      ? { ...x, phones: nextPhones }
+                                      : x
+                                  )
+                                );
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-xs"
+                        onClick={() => {
+                          const nextPhones = [
+                            ...c.phones,
+                            { label: "Office", number: "" },
+                          ];
+                          setContacts(
+                            contacts.map((x, i) =>
+                              i === idx ? { ...x, phones: nextPhones } : x
+                            )
+                          );
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add phone
+                      </Button>
+                    </div>
 
-                {/* ---- ADDITIONAL CONTACT ---- */}
-                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
-                  <p className="nx-eyebrow-soft text-[10px]">
-                    Additional Contact (optional)
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field
-                      label="First name"
-                      error={errors.additionalContactFirstName}
-                    >
-                      <Input
-                        value={additionalContact.first_name}
-                        onChange={(e) =>
-                          setAdditionalContact({
-                            ...additionalContact,
-                            first_name: e.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field
-                      label="Last name"
-                      error={errors.additionalContactLastName}
-                    >
-                      <Input
-                        value={additionalContact.last_name}
-                        onChange={(e) =>
-                          setAdditionalContact({
-                            ...additionalContact,
-                            last_name: e.target.value,
-                          })
-                        }
-                      />
-                    </Field>
+                    {/* Contact type */}
+                    <div className="space-y-1.5">
+                      <p className="nx-eyebrow-soft text-[10px]">
+                        Contact type
+                      </p>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={c.is_primary}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, is_primary: e.target.checked }
+                                    : x
+                                )
+                              )
+                            }
+                          />
+                          Primary
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={c.is_billing}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, is_billing: e.target.checked }
+                                    : x
+                                )
+                              )
+                            }
+                          />
+                          Billing
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={c.is_emergency}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, is_emergency: e.target.checked }
+                                    : x
+                                )
+                              )
+                            }
+                          />
+                          Emergency
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Phone">
-                      <Input
-                        type="tel"
-                        value={additionalContact.phone}
-                        onChange={(e) =>
-                          setAdditionalContact({
-                            ...additionalContact,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. (416) 555-0100"
-                      />
-                    </Field>
-                    <Field label="Email">
-                      <Input
-                        type="email"
-                        value={additionalContact.email}
-                        onChange={(e) =>
-                          setAdditionalContact({
-                            ...additionalContact,
-                            email: e.target.value,
-                          })
-                        }
-                        placeholder="name@example.com"
-                      />
-                    </Field>
-                  </div>
-                </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
+                  onClick={() =>
+                    setContacts([...contacts, newEmptyContact()])
+                  }
+                >
+                  <Plus className="h-3 w-3" />
+                  Add contact
+                </Button>
               </Section>
             )}
 

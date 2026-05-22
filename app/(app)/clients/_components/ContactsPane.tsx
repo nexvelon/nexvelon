@@ -200,10 +200,10 @@ export function ContactsPane({
                   {c.email}
                 </span>
               )}
-              {c.phone && (
+              {c.phones.length > 0 && c.phones[0].number && (
                 <span className="inline-flex items-center gap-1">
                   <Phone className="h-3 w-3" />
-                  {c.phone}
+                  {c.phones[0].number}
                 </span>
               )}
             </div>

@@ -223,6 +223,13 @@ export interface DbSiteWithClient extends DbSite {
 // ----------------------------------------------------------------------------
 // public.contacts
 // ----------------------------------------------------------------------------
+
+// CL-5c (migration 0013): per-contact phone with a label.
+export interface ContactPhone {
+  label: string; // "Office" | "Personal" | "Mobile" | "Emergency" | "Fax" | "Other"
+  number: string;
+}
+
 export interface DbContact {
   id: string;
   client_id: string | null;
@@ -232,8 +239,7 @@ export interface DbContact {
   title: string | null;
   department: string | null;
   email: string | null;
-  phone: string | null;
-  mobile: string | null;
+  phones: ContactPhone[];
   is_primary: boolean;
   is_billing: boolean;
   is_emergency: boolean;
@@ -251,8 +257,7 @@ export type DbContactInsert = {
   title?: string | null;
   department?: string | null;
   email?: string | null;
-  phone?: string | null;
-  mobile?: string | null;
+  phones?: ContactPhone[];
   is_primary?: boolean;
   is_billing?: boolean;
   is_emergency?: boolean;
