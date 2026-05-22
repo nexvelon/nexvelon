@@ -24,6 +24,7 @@ import {
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
 import {
   createClientAction,
+  createContactAction,
   createSiteAction,
   updateClientAction,
   getCurrentUserIsAdminAction,
@@ -40,6 +41,7 @@ import type {
   DbClientTier,
   DbClientType,
   DbContact,
+  DbContactInsert,
 } from "@/lib/types/database";
 
 const TYPES: DbClientType[] = [
@@ -194,6 +196,43 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     initialSite.province.trim() !== "" ||
     initialSite.postal_code.trim() !== "";
 
+  // --- CL-3c: Initial Contacts (create-mode only) — 3 fixed-role slots ---
+  const [mainContact, setMainContact] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+    email: "",
+  });
+  const [apContact, setApContact] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+    email: "",
+  });
+  const [additionalContact, setAdditionalContact] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+    email: "",
+  });
+
+  // A contact slot is "active" once any of its fields has content.
+  const isMainContactActive =
+    mainContact.first_name.trim() !== "" ||
+    mainContact.last_name.trim() !== "" ||
+    mainContact.phone.trim() !== "" ||
+    mainContact.email.trim() !== "";
+  const isApContactActive =
+    apContact.first_name.trim() !== "" ||
+    apContact.last_name.trim() !== "" ||
+    apContact.phone.trim() !== "" ||
+    apContact.email.trim() !== "";
+  const isAdditionalContactActive =
+    additionalContact.first_name.trim() !== "" ||
+    additionalContact.last_name.trim() !== "" ||
+    additionalContact.phone.trim() !== "" ||
+    additionalContact.email.trim() !== "";
+
   const [pending, startTransition] = useTransition();
 
   // Resolve admin flag (Guardian gate) on open.
@@ -247,6 +286,25 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   if (isInitialSiteActive && !initialSite.name.trim())
     errors.initialSiteName =
       "Site name is required when adding an initial site.";
+  // CL-3c: each active contact slot needs first + last name (NOT NULL schema).
+  if (isMainContactActive) {
+    if (!mainContact.first_name.trim())
+      errors.mainContactFirstName = "First name is required";
+    if (!mainContact.last_name.trim())
+      errors.mainContactLastName = "Last name is required";
+  }
+  if (isApContactActive) {
+    if (!apContact.first_name.trim())
+      errors.apContactFirstName = "First name is required";
+    if (!apContact.last_name.trim())
+      errors.apContactLastName = "Last name is required";
+  }
+  if (isAdditionalContactActive) {
+    if (!additionalContact.first_name.trim())
+      errors.additionalContactFirstName = "First name is required";
+    if (!additionalContact.last_name.trim())
+      errors.additionalContactLastName = "Last name is required";
+  }
   const isInvalid = Object.keys(errors).length > 0;
 
   const toggleAllowedOpco = (oc: DbClientOpco) => {
@@ -326,35 +384,110 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
         return;
       }
 
-      // Edit mode, or create with no initial site → original success path.
-      if (isEdit || !isInitialSiteActive) {
-        toast.success(isEdit ? `Updated ${tradeName}` : `Added ${tradeName}`);
+      // Edit mode → original success path (no inline site/contacts in edit).
+      if (isEdit) {
+        toast.success(`Updated ${tradeName}`);
         onClose();
         return;
       }
 
-      // CL-3b: create mode + initial site active → chain the site insert.
-      const siteName = initialSite.name.trim();
-      const siteRes = await createSiteAction({
-        client_id: result.data.id,
-        name: siteName,
-        address_line1: initialSite.address_line1.trim() || null,
-        address_line2: initialSite.address_line2.trim() || null,
-        city: initialSite.city.trim() || null,
-        province: initialSite.province.trim() || null,
-        postal_code: initialSite.postal_code.trim() || null,
-        country: initialSite.country.trim() || "Canada",
-      });
+      const newClientId = result.data.id;
 
-      if (siteRes.ok) {
-        toast.success(`Added ${tradeName} · site “${siteName}” added`);
-      } else {
-        // Partial success — the client exists; the site can be added later.
-        // No rollback: there is no transaction across the two server actions.
+      // CL-3b: chain the initial-site insert when that section is active.
+      let siteSuccess = false;
+      let siteName = "";
+      if (isInitialSiteActive) {
+        const siteRes = await createSiteAction({
+          client_id: newClientId,
+          name: initialSite.name.trim(),
+          address_line1: initialSite.address_line1.trim() || null,
+          address_line2: initialSite.address_line2.trim() || null,
+          city: initialSite.city.trim() || null,
+          province: initialSite.province.trim() || null,
+          postal_code: initialSite.postal_code.trim() || null,
+          country: initialSite.country.trim() || "Canada",
+        });
+        if (siteRes.ok) {
+          siteSuccess = true;
+          siteName = initialSite.name.trim();
+        } else {
+          // Partial success — the client exists; the site can be added later.
+          toast.warning(
+            `${tradeName} created, but the initial site couldn't be added: ${siteRes.error}. You can add it later from the client detail page.`
+          );
+        }
+      }
+
+      // CL-3c: chain up to 3 contact inserts (in parallel). Roles are fixed
+      // per slot — Main → primary, Accounts Payable → billing, Additional → none.
+      const contactsToCreate: DbContactInsert[] = [];
+      if (isMainContactActive) {
+        contactsToCreate.push({
+          client_id: newClientId,
+          first_name: mainContact.first_name.trim(),
+          last_name: mainContact.last_name.trim(),
+          phone: mainContact.phone.trim() || null,
+          email: mainContact.email.trim() || null,
+          is_primary: true,
+          is_billing: false,
+          is_emergency: false,
+        });
+      }
+      if (isApContactActive) {
+        contactsToCreate.push({
+          client_id: newClientId,
+          first_name: apContact.first_name.trim(),
+          last_name: apContact.last_name.trim(),
+          phone: apContact.phone.trim() || null,
+          email: apContact.email.trim() || null,
+          is_primary: false,
+          is_billing: true,
+          is_emergency: false,
+        });
+      }
+      if (isAdditionalContactActive) {
+        contactsToCreate.push({
+          client_id: newClientId,
+          first_name: additionalContact.first_name.trim(),
+          last_name: additionalContact.last_name.trim(),
+          phone: additionalContact.phone.trim() || null,
+          email: additionalContact.email.trim() || null,
+          is_primary: false,
+          is_billing: false,
+          is_emergency: false,
+        });
+      }
+
+      let contactSuccessCount = 0;
+      let contactFailCount = 0;
+      if (contactsToCreate.length > 0) {
+        const results = await Promise.all(
+          contactsToCreate.map((p) => createContactAction(p))
+        );
+        contactSuccessCount = results.filter((r) => r.ok).length;
+        contactFailCount = results.length - contactSuccessCount;
+      }
+
+      // Combined success toast — client + site + contact counts.
+      let toastMsg = `Added ${tradeName}`;
+      if (siteSuccess) toastMsg += ` · site “${siteName}” added`;
+      if (contactSuccessCount > 0) {
+        toastMsg += ` · ${contactSuccessCount} contact${
+          contactSuccessCount > 1 ? "s" : ""
+        } added`;
+      }
+      toast.success(toastMsg);
+
+      if (contactFailCount > 0) {
+        // Partial success — the client exists; failed contacts can be added
+        // later. No rollback across the chained server actions.
         toast.warning(
-          `${tradeName} created, but the initial site couldn't be added: ${siteRes.error}. You can add it later from the Clients list.`
+          `${contactFailCount} contact${
+            contactFailCount > 1 ? "s" : ""
+          } couldn't be added. You can add them later from the client detail page.`
         );
       }
+
       onClose();
     });
   };
@@ -712,6 +845,202 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                     }
                   />
                 </Field>
+              </Section>
+            )}
+
+            {/* CL-3c — Initial Contacts (create-mode only) */}
+            {!isEdit && (
+              <Section
+                title="Initial Contacts (optional)"
+                error={
+                  errors.mainContactFirstName ||
+                  errors.mainContactLastName ||
+                  errors.apContactFirstName ||
+                  errors.apContactLastName ||
+                  errors.additionalContactFirstName ||
+                  errors.additionalContactLastName
+                }
+              >
+                <p className="text-muted-foreground text-xs">
+                  Add up to 3 contacts now. Each contact needs at least a first
+                  and last name. You can add more anytime from the client
+                  detail page.
+                </p>
+
+                {/* ---- MAIN CONTACT ---- */}
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <p className="nx-eyebrow-soft text-[10px]">Main Contact</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="First name" error={errors.mainContactFirstName}>
+                      <Input
+                        value={mainContact.first_name}
+                        onChange={(e) =>
+                          setMainContact({
+                            ...mainContact,
+                            first_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Last name" error={errors.mainContactLastName}>
+                      <Input
+                        value={mainContact.last_name}
+                        onChange={(e) =>
+                          setMainContact({
+                            ...mainContact,
+                            last_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Phone">
+                      <Input
+                        type="tel"
+                        value={mainContact.phone}
+                        onChange={(e) =>
+                          setMainContact({
+                            ...mainContact,
+                            phone: e.target.value,
+                          })
+                        }
+                        placeholder="e.g. (416) 555-0100"
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <Input
+                        type="email"
+                        value={mainContact.email}
+                        onChange={(e) =>
+                          setMainContact({
+                            ...mainContact,
+                            email: e.target.value,
+                          })
+                        }
+                        placeholder="name@example.com"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* ---- ACCOUNTS PAYABLE CONTACT ---- */}
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <p className="nx-eyebrow-soft text-[10px]">
+                    Accounts Payable Contact
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="First name" error={errors.apContactFirstName}>
+                      <Input
+                        value={apContact.first_name}
+                        onChange={(e) =>
+                          setApContact({
+                            ...apContact,
+                            first_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Last name" error={errors.apContactLastName}>
+                      <Input
+                        value={apContact.last_name}
+                        onChange={(e) =>
+                          setApContact({
+                            ...apContact,
+                            last_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Phone">
+                      <Input
+                        type="tel"
+                        value={apContact.phone}
+                        onChange={(e) =>
+                          setApContact({ ...apContact, phone: e.target.value })
+                        }
+                        placeholder="e.g. (416) 555-0100"
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <Input
+                        type="email"
+                        value={apContact.email}
+                        onChange={(e) =>
+                          setApContact({ ...apContact, email: e.target.value })
+                        }
+                        placeholder="ap@example.com"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                {/* ---- ADDITIONAL CONTACT ---- */}
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <p className="nx-eyebrow-soft text-[10px]">
+                    Additional Contact (optional)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field
+                      label="First name"
+                      error={errors.additionalContactFirstName}
+                    >
+                      <Input
+                        value={additionalContact.first_name}
+                        onChange={(e) =>
+                          setAdditionalContact({
+                            ...additionalContact,
+                            first_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Last name"
+                      error={errors.additionalContactLastName}
+                    >
+                      <Input
+                        value={additionalContact.last_name}
+                        onChange={(e) =>
+                          setAdditionalContact({
+                            ...additionalContact,
+                            last_name: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Phone">
+                      <Input
+                        type="tel"
+                        value={additionalContact.phone}
+                        onChange={(e) =>
+                          setAdditionalContact({
+                            ...additionalContact,
+                            phone: e.target.value,
+                          })
+                        }
+                        placeholder="e.g. (416) 555-0100"
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <Input
+                        type="email"
+                        value={additionalContact.email}
+                        onChange={(e) =>
+                          setAdditionalContact({
+                            ...additionalContact,
+                            email: e.target.value,
+                          })
+                        }
+                        placeholder="name@example.com"
+                      />
+                    </Field>
+                  </div>
+                </div>
               </Section>
             )}
 
