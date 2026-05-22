@@ -95,6 +95,20 @@ export function ContactsCard({
                 <p className="text-muted-foreground text-[10px] leading-tight truncate">
                   {c.title ?? c.department ?? c.email ?? "—"}
                 </p>
+                {c.phones.length > 0 && (
+                  <div className="text-muted-foreground text-[10px] leading-tight">
+                    {c.phones.slice(0, 2).map((p, idx) => (
+                      <span key={idx} className="block truncate">
+                        {p.label}: {p.number}
+                      </span>
+                    ))}
+                    {c.phones.length > 2 && (
+                      <span className="block italic">
+                        +{c.phones.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               {c.email && <Mail className="text-muted-foreground h-3.5 w-3.5" />}
               <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -200,11 +214,19 @@ export function ContactsPane({
                   {c.email}
                 </span>
               )}
-              {c.phones.length > 0 && c.phones[0].number && (
-                <span className="inline-flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {c.phones[0].number}
-                </span>
+              {c.phones.length > 0 && (
+                <div className="space-y-0.5">
+                  {c.phones.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="inline-flex items-center gap-1.5"
+                    >
+                      <Phone className="h-3 w-3" />
+                      <span>{p.label}:</span>
+                      <span className="text-brand-text">{p.number}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

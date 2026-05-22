@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createContactAction, updateContactAction } from "./actions";
-import type { DbContact, DbSite } from "@/lib/types/database";
+import { PhonesEditor } from "./_components/PhonesEditor";
+import type { ContactPhone, DbContact, DbSite } from "@/lib/types/database";
 
 type Mode =
   | { kind: "create"; clientId: string }
@@ -44,14 +45,9 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
   const [title, setTitle] = useState(existing?.title ?? "");
   const [department, setDepartment] = useState(existing?.department ?? "");
   const [email, setEmail] = useState(existing?.email ?? "");
-  // CL-5c: phone/mobile are now entries in the phones JSONB. This drawer keeps
-  // its existing 2-field UX for now (Phone + Mobile by label); the full
-  // dynamic multi-phone editor lands in CL-5c Phase 2b.
-  const [phone, setPhone] = useState(
-    existing?.phones?.find((p) => p.label === "Phone")?.number ?? ""
-  );
-  const [mobile, setMobile] = useState(
-    existing?.phones?.find((p) => p.label === "Mobile")?.number ?? ""
+  // CL-5c: dynamic multi-phone list (a fresh contact starts with one empty row).
+  const [phones, setPhones] = useState<ContactPhone[]>(
+    existing?.phones ?? [{ label: "Phone", number: "" }]
   );
   const [siteId, setSiteId] = useState<string>(existing?.site_id ?? "none");
   const [isPrimary, setIsPrimary] = useState(existing?.is_primary ?? true);
@@ -75,15 +71,10 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
       title: title.trim() || null,
       department: department.trim() || null,
       email: email.trim() || null,
-      // CL-5c: rebuild the phones JSONB from the 2 fields, preserving any
-      // phones with other labels (Office/Fax/etc.) so an edit-save isn't lossy.
-      phones: [
-        ...(phone.trim() ? [{ label: "Phone", number: phone.trim() }] : []),
-        ...(mobile.trim() ? [{ label: "Mobile", number: mobile.trim() }] : []),
-        ...(existing?.phones ?? []).filter(
-          (p) => p.label !== "Phone" && p.label !== "Mobile"
-        ),
-      ],
+      // CL-5c: drop empty phone rows before persisting.
+      phones: phones
+        .filter((p) => p.number.trim() !== "")
+        .map((p) => ({ label: p.label, number: p.number.trim() })),
       is_primary: isPrimary,
       is_billing: isBilling,
       is_emergency: isEmergency,
@@ -138,11 +129,11 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
             </Field>
           </div>
 
-          <Field label="Title">
+          <Field label="Role">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Director of Facilities"
+              placeholder="Director of Facilities, CFO, Operations Manager"
             />
           </Field>
 
@@ -162,14 +153,9 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Phone">
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </Field>
-            <Field label="Mobile">
-              <Input value={mobile} onChange={(e) => setMobile(e.target.value)} />
-            </Field>
-          </div>
+          <Field label="Phones">
+            <PhonesEditor phones={phones} onChange={setPhones} />
+          </Field>
 
           {sites.length > 0 && (
             <Field label="Site">

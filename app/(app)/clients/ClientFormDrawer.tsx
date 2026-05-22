@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
+import { PhonesEditor } from "./_components/PhonesEditor";
 import {
   createClientAction,
   createContactAction,
@@ -910,101 +911,16 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                     {/* Phones */}
                     <div className="space-y-2">
                       <p className="nx-eyebrow-soft text-[10px]">Phones</p>
-                      {c.phones.map((p, phoneIdx) => (
-                        <div
-                          key={phoneIdx}
-                          className="grid grid-cols-[110px_1fr_auto] gap-2"
-                        >
-                          <select
-                            aria-label="Phone type"
-                            value={p.label}
-                            onChange={(e) => {
-                              const nextPhones = c.phones.map((pp, pi) =>
-                                pi === phoneIdx
-                                  ? { ...pp, label: e.target.value }
-                                  : pp
-                              );
-                              setContacts(
-                                contacts.map((x, i) =>
-                                  i === idx
-                                    ? { ...x, phones: nextPhones }
-                                    : x
-                                )
-                              );
-                            }}
-                            className="bg-card rounded-md border border-[var(--border)] px-2 py-1 text-xs"
-                          >
-                            <option value="Office">Office</option>
-                            <option value="Personal">Personal</option>
-                            <option value="Mobile">Mobile</option>
-                            <option value="Emergency">Emergency</option>
-                            <option value="Fax">Fax</option>
-                            <option value="Phone">Phone</option>
-                            <option value="Other">Other</option>
-                          </select>
-                          <Input
-                            value={p.number}
-                            onChange={(e) => {
-                              const nextPhones = c.phones.map((pp, pi) =>
-                                pi === phoneIdx
-                                  ? { ...pp, number: e.target.value }
-                                  : pp
-                              );
-                              setContacts(
-                                contacts.map((x, i) =>
-                                  i === idx
-                                    ? { ...x, phones: nextPhones }
-                                    : x
-                                )
-                              );
-                            }}
-                            placeholder="(416) 555-0100"
-                          />
-                          {c.phones.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                              aria-label="Remove phone"
-                              onClick={() => {
-                                const nextPhones = c.phones.filter(
-                                  (_, pi) => pi !== phoneIdx
-                                );
-                                setContacts(
-                                  contacts.map((x, i) =>
-                                    i === idx
-                                      ? { ...x, phones: nextPhones }
-                                      : x
-                                  )
-                                );
-                              }}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1 text-xs"
-                        onClick={() => {
-                          const nextPhones = [
-                            ...c.phones,
-                            { label: "Office", number: "" },
-                          ];
+                      <PhonesEditor
+                        phones={c.phones}
+                        onChange={(nextPhones) =>
                           setContacts(
                             contacts.map((x, i) =>
                               i === idx ? { ...x, phones: nextPhones } : x
                             )
-                          );
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add phone
-                      </Button>
+                          )
+                        }
+                      />
                     </div>
 
                     {/* Contact type */}
