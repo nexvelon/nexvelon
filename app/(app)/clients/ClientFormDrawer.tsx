@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -313,6 +313,29 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     );
   };
 
+  // CL-4: build the onboarding Excel template and trigger a browser download.
+  // generateClientTemplate dynamic-imports exceljs, so the lib only loads here.
+  async function handleDownloadTemplate() {
+    try {
+      const { generateClientTemplate } = await import(
+        "@/lib/client-onboarding-template"
+      );
+      const blob = await generateClientTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Nexvelon-Client-Onboarding-Template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Template downloaded");
+    } catch (e) {
+      console.error("[CL-4] Template generation failed:", e);
+      toast.error("Failed to generate template");
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isInvalid) {
@@ -511,6 +534,37 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-3 px-4 py-4">
+            {/* CL-4 — onboarding template (create-mode only) */}
+            {!isEdit && (
+              <div className="space-y-2 rounded-md border border-[var(--border)] bg-muted/30 p-3">
+                <p className="text-muted-foreground text-xs">
+                  Send the template to your client to fill out, then upload it
+                  here to auto-populate the form.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadTemplate}
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    Download template
+                  </Button>
+                  {/* Upload button placeholder — Phase 2b will wire it up */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    title="Coming soon"
+                  >
+                    Upload filled template
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* SECTION 1 */}
             <Section title="Identity & Classification" defaultOpen>
               <Field label="Legal name *" error={errors.legalName}>
