@@ -25,12 +25,9 @@ import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
 import {
   createClientAction,
   createContactAction,
-  createSiteAction,
   updateClientAction,
   getCurrentUserIsAdminAction,
-  getPrimaryContactAction,
 } from "./actions";
-import { ContactFormDrawer } from "./ContactFormDrawer";
 import type {
   DbClient,
   DbClientCurrency,
@@ -40,7 +37,6 @@ import type {
   DbClientStatus,
   DbClientTier,
   DbClientType,
-  DbContact,
   DbContactInsert,
 } from "@/lib/types/database";
 
@@ -98,20 +94,12 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   const [name, setName] = useState(existing?.name ?? "");
   const [clientCode] = useState(existing?.client_code ?? "");
   const [status, setStatus] = useState<DbClientStatus>(
-    existing?.status ?? "Active"
+    existing?.status ?? "Prospect"
   );
   const [type, setType] = useState<DbClientType | "">(existing?.type ?? "");
   const [tier, setTier] = useState<DbClientTier | "">(existing?.tier ?? "");
   const [industry, setIndustry] = useState(existing?.industry ?? "");
   const [tags, setTags] = useState((existing?.tags ?? []).join(", "));
-
-  // --- Section 2: Primary Contact (edit-mode only) ---
-  const [primaryContact, setPrimaryContact] = useState<DbContact | null>(null);
-  const [contactDrawer, setContactDrawer] = useState<
-    | { kind: "create"; clientId: string }
-    | { kind: "edit"; contact: DbContact }
-    | null
-  >(null);
 
   // --- Section 3: Billing Address ---
   const [billStreet, setBillStreet] = useState(existing?.billing_street ?? "");
@@ -123,9 +111,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   const [billPostal, setBillPostal] = useState(existing?.billing_postal ?? "");
   const [billCountry, setBillCountry] = useState(
     existing?.billing_country ?? "Canada"
-  );
-  const [billSameAsSite, setBillSameAsSite] = useState(
-    existing?.billing_same_as_primary_site ?? false
   );
 
   // --- Section 4: Operating Company ---
@@ -175,26 +160,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
   // --- Section 8: Notes ---
   const [notes, setNotes] = useState(existing?.notes ?? "");
-
-  // --- CL-3b: Initial Site (create-mode only) ---
-  const [initialSite, setInitialSite] = useState({
-    name: "",
-    address_line1: "",
-    address_line2: "",
-    city: "",
-    province: "",
-    postal_code: "",
-    country: "Canada",
-  });
-
-  // The Initial Site section is "active" once any field has content.
-  const isInitialSiteActive =
-    initialSite.name.trim() !== "" ||
-    initialSite.address_line1.trim() !== "" ||
-    initialSite.address_line2.trim() !== "" ||
-    initialSite.city.trim() !== "" ||
-    initialSite.province.trim() !== "" ||
-    initialSite.postal_code.trim() !== "";
 
   // --- CL-3c: Initial Contacts (create-mode only) — 3 fixed-role slots ---
   const [mainContact, setMainContact] = useState({
@@ -250,19 +215,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     };
   }, [open]);
 
-  // Fetch the primary contact (edit mode only — needs a persisted client id).
-  const refreshPrimaryContact = () => {
-    if (!existing) return;
-    getPrimaryContactAction(existing.id).then((r) => {
-      if (r.ok) setPrimaryContact(r.data);
-    });
-  };
-  useEffect(() => {
-    if (!open || !existing) return;
-    refreshPrimaryContact();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, existing?.id]);
-
   // Keep allowed_opcos a superset of default_opco.
   useEffect(() => {
     setAllowedOpcos((prev) =>
@@ -285,10 +237,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     errors.paymentTermsCustom = "Custom terms text is required.";
   if (!allowedOpcos.includes(defaultOpco))
     errors.allowedOpcos = "Allowed operating companies must include the default.";
-  // CL-3b: when the Initial Site section has content, a site name is required.
-  if (isInitialSiteActive && !initialSite.name.trim())
-    errors.initialSiteName =
-      "Site name is required when adding an initial site.";
   // CL-3c: each active contact slot needs first + last name (NOT NULL schema).
   if (isMainContactActive) {
     if (!mainContact.first_name.trim())
@@ -380,10 +328,9 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
         setAdditionalContact(parsed.additionalContact);
       }
 
-      // Initial site — only when a name has content (mirrors CL-3b gating).
-      if (parsed.initialSite.name) {
-        setInitialSite(parsed.initialSite);
-      }
+      // CL-5a removed the Initial Site section — the template's Site sheet is
+      // still parsed but no longer populates a form field (sites are added on
+      // the client detail page now).
 
       toast.success("Template loaded — review the form below before saving");
     } catch (e) {
@@ -428,7 +375,7 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       billing_province: billProvince.trim() || null,
       billing_postal: billPostal.trim() || null,
       billing_country: billCountry.trim() || null,
-      billing_same_as_primary_site: billSameAsSite,
+      billing_same_as_primary_site: false,
       default_opco: defaultOpco,
       allowed_opcos: allowedOpcos,
       client_hst_gst_number: hstGst.trim() || null,
@@ -473,31 +420,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       }
 
       const newClientId = result.data.id;
-
-      // CL-3b: chain the initial-site insert when that section is active.
-      let siteSuccess = false;
-      let siteName = "";
-      if (isInitialSiteActive) {
-        const siteRes = await createSiteAction({
-          client_id: newClientId,
-          name: initialSite.name.trim(),
-          address_line1: initialSite.address_line1.trim() || null,
-          address_line2: initialSite.address_line2.trim() || null,
-          city: initialSite.city.trim() || null,
-          province: initialSite.province.trim() || null,
-          postal_code: initialSite.postal_code.trim() || null,
-          country: initialSite.country.trim() || "Canada",
-        });
-        if (siteRes.ok) {
-          siteSuccess = true;
-          siteName = initialSite.name.trim();
-        } else {
-          // Partial success — the client exists; the site can be added later.
-          toast.warning(
-            `${tradeName} created, but the initial site couldn't be added: ${siteRes.error}. You can add it later from the client detail page.`
-          );
-        }
-      }
 
       // CL-3c: chain up to 3 contact inserts (in parallel). Roles are fixed
       // per slot — Main → primary, Accounts Payable → billing, Additional → none.
@@ -549,9 +471,8 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
         contactFailCount = results.length - contactSuccessCount;
       }
 
-      // Combined success toast — client + site + contact counts.
+      // Combined success toast — client + contact counts.
       let toastMsg = `Added ${tradeName}`;
-      if (siteSuccess) toastMsg += ` · site “${siteName}” added`;
       if (contactSuccessCount > 0) {
         toastMsg += ` · ${contactSuccessCount} contact${
           contactSuccessCount > 1 ? "s" : ""
@@ -635,7 +556,7 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
             {/* SECTION 1 */}
             <Section title="Identity & Classification" defaultOpen>
-              <Field label="Legal name *" error={errors.legalName}>
+              <Field label="Company legal name *" error={errors.legalName}>
                 <Input
                   value={legalName}
                   onChange={(e) => setLegalName(e.target.value)}
@@ -643,7 +564,7 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                   placeholder="e.g. Meridian Capital Plaza Holdings Inc."
                 />
               </Field>
-              <Field label="Trade / display name">
+              <Field label="Company trade / display name">
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -739,70 +660,8 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
               </Field>
             </Section>
 
-            {/* SECTION 2 */}
-            <Section title="Primary Contact" defaultOpen>
-              {!existing ? (
-                <p className="text-muted-foreground text-xs italic">
-                  Create client first, then add a primary contact.
-                </p>
-              ) : primaryContact ? (
-                <div className="space-y-1 rounded-md border border-[var(--border)] p-3">
-                  <p className="text-sm font-medium">
-                    {primaryContact.first_name} {primaryContact.last_name}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    {primaryContact.email ?? "—"} ·{" "}
-                    {primaryContact.phone ?? "—"}
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() =>
-                      setContactDrawer({
-                        kind: "edit",
-                        contact: primaryContact,
-                      })
-                    }
-                  >
-                    Edit
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-muted-foreground text-xs">
-                    No primary contact set.
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setContactDrawer({
-                        kind: "create",
-                        clientId: existing.id,
-                      })
-                    }
-                  >
-                    Create primary contact
-                  </Button>
-                  <p className="text-muted-foreground text-[11px] italic">
-                    Toggle “Primary contact” inside the contact form — the
-                    contact drawer does not yet accept a primary default.
-                  </p>
-                </div>
-              )}
-            </Section>
-
             {/* SECTION 3 */}
             <Section title="Billing Address">
-              <Toggle
-                label="Same as primary site address"
-                value={billSameAsSite}
-                onChange={setBillSameAsSite}
-                help="On save, billing address is copied from this client's first site."
-              />
               <Field label="Street">
                 <AddressAutocomplete
                   value={billStreet}
@@ -813,34 +672,26 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                     if (p.province) setBillProvince(p.province);
                     if (p.postal) setBillPostal(p.postal);
                     if (p.country) setBillCountry(p.country);
-                  }}
-                  disabled={billSameAsSite}
-                  placeholder="350 Bay Street"
+                  }}                  placeholder="350 Bay Street"
                 />
               </Field>
               <Field label="Unit / Suite">
                 <Input
                   value={billUnit}
-                  onChange={(e) => setBillUnit(e.target.value)}
-                  disabled={billSameAsSite}
-                  placeholder="Suite 1200"
+                  onChange={(e) => setBillUnit(e.target.value)}                  placeholder="Suite 1200"
                 />
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="City">
                   <Input
                     value={billCity}
-                    onChange={(e) => setBillCity(e.target.value)}
-                    disabled={billSameAsSite}
-                    placeholder="Toronto"
+                    onChange={(e) => setBillCity(e.target.value)}                    placeholder="Toronto"
                   />
                 </Field>
                 <Field label="Province">
                   <Input
                     value={billProvince}
-                    onChange={(e) => setBillProvince(e.target.value)}
-                    disabled={billSameAsSite}
-                    placeholder="ON"
+                    onChange={(e) => setBillProvince(e.target.value)}                    placeholder="ON"
                   />
                 </Field>
               </div>
@@ -848,127 +699,17 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                 <Field label="Postal code">
                   <Input
                     value={billPostal}
-                    onChange={(e) => setBillPostal(e.target.value)}
-                    disabled={billSameAsSite}
-                    placeholder="M5H 2S6"
+                    onChange={(e) => setBillPostal(e.target.value)}                    placeholder="M5H 2S6"
                   />
                 </Field>
                 <Field label="Country">
                   <Input
                     value={billCountry}
-                    onChange={(e) => setBillCountry(e.target.value)}
-                    disabled={billSameAsSite}
-                    placeholder="Canada"
+                    onChange={(e) => setBillCountry(e.target.value)}                    placeholder="Canada"
                   />
                 </Field>
               </div>
             </Section>
-
-            {/* CL-3b — Initial Site (create-mode only) */}
-            {!isEdit && (
-              <Section
-                title="Initial Site (optional)"
-                error={errors.initialSiteName}
-              >
-                <p className="text-muted-foreground text-xs">
-                  Add the client&apos;s first site now. Skip this section if no
-                  specific site applies yet — you can add sites anytime from the
-                  Clients list.
-                </p>
-
-                <Field label="Site name" error={errors.initialSiteName}>
-                  <Input
-                    value={initialSite.name}
-                    onChange={(e) =>
-                      setInitialSite({ ...initialSite, name: e.target.value })
-                    }
-                    placeholder="e.g. Main Office, Downtown Branch"
-                  />
-                </Field>
-
-                <Field label="Address — line 1">
-                  <AddressAutocomplete
-                    value={initialSite.address_line1}
-                    onChange={(value) =>
-                      setInitialSite({ ...initialSite, address_line1: value })
-                    }
-                    onPlaceSelected={(p) =>
-                      setInitialSite({
-                        ...initialSite,
-                        address_line1: p.street || initialSite.address_line1,
-                        city: p.city || initialSite.city,
-                        province: p.province || initialSite.province,
-                        postal_code: p.postal || initialSite.postal_code,
-                        country: p.country || initialSite.country,
-                      })
-                    }
-                    placeholder="Start typing an address…"
-                  />
-                </Field>
-
-                <Field label="Address — line 2">
-                  <Input
-                    value={initialSite.address_line2}
-                    onChange={(e) =>
-                      setInitialSite({
-                        ...initialSite,
-                        address_line2: e.target.value,
-                      })
-                    }
-                    placeholder="Unit / suite / floor (optional)"
-                  />
-                </Field>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="City">
-                    <Input
-                      value={initialSite.city}
-                      onChange={(e) =>
-                        setInitialSite({
-                          ...initialSite,
-                          city: e.target.value,
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Province">
-                    <Input
-                      value={initialSite.province}
-                      onChange={(e) =>
-                        setInitialSite({
-                          ...initialSite,
-                          province: e.target.value,
-                        })
-                      }
-                      placeholder="ON"
-                    />
-                  </Field>
-                  <Field label="Postal code">
-                    <Input
-                      value={initialSite.postal_code}
-                      onChange={(e) =>
-                        setInitialSite({
-                          ...initialSite,
-                          postal_code: e.target.value,
-                        })
-                      }
-                    />
-                  </Field>
-                </div>
-
-                <Field label="Country">
-                  <Input
-                    value={initialSite.country}
-                    onChange={(e) =>
-                      setInitialSite({
-                        ...initialSite,
-                        country: e.target.value,
-                      })
-                    }
-                  />
-                </Field>
-              </Section>
-            )}
 
             {/* CL-3c — Initial Contacts (create-mode only) */}
             {!isEdit && (
@@ -1425,17 +1166,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           </form>
         </SheetContent>
       </Sheet>
-
-      {contactDrawer && (
-        <ContactFormDrawer
-          open={!!contactDrawer}
-          onClose={() => {
-            setContactDrawer(null);
-            refreshPrimaryContact();
-          }}
-          mode={contactDrawer}
-        />
-      )}
     </>
   );
 }
