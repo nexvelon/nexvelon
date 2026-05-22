@@ -1,16 +1,10 @@
-// Server component — fetches Supabase data, then hands off to the
-// interactive ClientsView (client component) for render + drawers.
+// Server component — fetches clients, then hands off to the interactive
+// ClientsView (client component) for the list + the add/edit client drawer.
+// Per-client sites + contacts are no longer pre-fetched here — they load on
+// demand on the /clients/[id] detail page (no N+1 fan-out on the list).
 
 import { ClientsView } from "./ClientsView";
-import {
-  getClients,
-  getContactsByClient,
-  getSitesByClient,
-} from "@/lib/api/clients";
-import type {
-  DbContact,
-  DbSite,
-} from "@/lib/types/database";
+import { getClients } from "@/lib/api/clients";
 
 // Always run fresh — server actions revalidate this path on mutation but a
 // `force-dynamic` guard means we never accidentally serve stale data from
@@ -19,33 +13,5 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
   const clients = await getClients();
-
-  // Pre-fetch sites + contacts for every client so the detail panel can
-  // switch instantly. Cost is bounded — each fetch is one indexed query.
-  const sitesByClient: Record<string, DbSite[]> = {};
-  const contactsByClient: Record<string, DbContact[]> = {};
-
-  if (clients.length > 0) {
-    const results = await Promise.all(
-      clients.map(async (c) => {
-        const [sites, contacts] = await Promise.all([
-          getSitesByClient(c.id),
-          getContactsByClient(c.id),
-        ]);
-        return { id: c.id, sites, contacts };
-      })
-    );
-    for (const { id, sites, contacts } of results) {
-      sitesByClient[id] = sites;
-      contactsByClient[id] = contacts;
-    }
-  }
-
-  return (
-    <ClientsView
-      clients={clients}
-      sitesByClient={sitesByClient}
-      contactsByClient={contactsByClient}
-    />
-  );
+  return <ClientsView clients={clients} />;
 }
