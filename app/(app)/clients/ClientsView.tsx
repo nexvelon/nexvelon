@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Download,
@@ -32,45 +33,26 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
-import { SiteFormDrawer } from "./SiteFormDrawer";
-import { ContactFormDrawer } from "./ContactFormDrawer";
-import { ClientHeader, ClientStatsRow } from "./_components/ClientHeader";
-import { TabBar, type TabKey } from "./_components/TabBar";
-import { SitesPane } from "./_components/SitesPane";
-import { ContactsPane } from "./_components/ContactsPane";
-import { PlaceholderPane } from "./_components/PlaceholderPane";
 import { TIER_BADGE, initials } from "./_components/shared";
 import {
   deleteClientAction,
-  deleteContactAction,
-  deleteSiteAction,
   getCurrentUserIsAdminAction,
   listClientsAction,
   restoreClientAction,
 } from "./actions";
-import type {
-  DbClient,
-  DbClientWithCounts,
-  DbContact,
-  DbSite,
-} from "@/lib/types/database";
+import type { DbClient, DbClientWithCounts } from "@/lib/types/database";
 
 interface Props {
   clients: DbClientWithCounts[];
-  sitesByClient: Record<string, DbSite[]>;
-  contactsByClient: Record<string, DbContact[]>;
 }
 
-export function ClientsView({ clients, sitesByClient, contactsByClient }: Props) {
+export function ClientsView({ clients }: Props) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   // Local source of truth, seeded from SSR props. Mutations refresh it via
   // listClientsAction so the archived toggle stays coherent (router.refresh
   // would only re-fetch the default active-only set).
   const [rows, setRows] = useState<DbClientWithCounts[]>(clients);
-  const [activeId, setActiveId] = useState<string | null>(
-    clients[0]?.id ?? null
-  );
-  const [tab, setTab] = useState<TabKey>("Sites");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<DbClient | null>(null);
@@ -98,21 +80,12 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
     void reload(next);
   };
 
-  // Drawer state
+  // Drawer state — the list only owns the client create / edit drawer.
+  // Per-client site / contact operations now live on /clients/[id].
   const [clientDrawer, setClientDrawer] = useState<
     | { open: false }
     | { open: true; mode: "create" }
     | { open: true; mode: "edit"; client: DbClient }
-  >({ open: false });
-  const [siteDrawer, setSiteDrawer] = useState<
-    | { open: false }
-    | { open: true; mode: "create"; clientId: string }
-    | { open: true; mode: "edit"; site: DbSite }
-  >({ open: false });
-  const [contactDrawer, setContactDrawer] = useState<
-    | { open: false }
-    | { open: true; mode: "create"; clientId: string }
-    | { open: true; mode: "edit"; contact: DbContact }
   >({ open: false });
 
   const filtered = useMemo(() => {
@@ -126,17 +99,6 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
     );
   }, [rows, search]);
 
-  const selected =
-    rows.find((c) => c.id === activeId) ??
-    rows.find((c) => !c.deleted_at) ??
-    rows[0] ??
-    null;
-
-  const totalSites = Object.values(sitesByClient).reduce(
-    (s, arr) => s + arr.length,
-    0
-  );
-
   // ─── Empty state ─────────────────────────────────────────────────────────
   const activeCount = rows.filter((c) => !c.deleted_at).length;
 
@@ -144,7 +106,7 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="0 active clients · 0 sites"
+          eyebrow="0 active clients"
           title="Clients & Sites"
           description="Master directory · contracts · service history"
         />
@@ -202,7 +164,7 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`${activeCount} active client${activeCount === 1 ? "" : "s"} · ${totalSites} site${totalSites === 1 ? "" : "s"}`}
+        eyebrow={`${activeCount} active client${activeCount === 1 ? "" : "s"}`}
         title="Clients & Sites"
         description="Master directory · contracts · service history"
         actions={
@@ -232,134 +194,55 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-4 space-y-3">
-          <div className="relative">
-            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-            <Input
-              placeholder="Search clients…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <p className="nx-eyebrow-soft">
-              A–Z · {filtered.length} of {rows.length}
-            </p>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={toggleArchived}
-                aria-pressed={showArchived}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                  showArchived
-                    ? "bg-muted text-brand-charcoal"
-                    : "text-muted-foreground hover:bg-muted/40"
-                )}
-                style={{ borderColor: "var(--brand-border)" }}
-              >
-                {showArchived ? "Hide archived" : "Show archived"}
-              </button>
-            )}
-          </div>
-
-          <ul className="space-y-2">
-            {filtered.map((c) => (
-              <ClientRow
-                key={c.id}
-                client={c}
-                active={c.id === activeId}
-                archived={!!c.deleted_at}
-                onSelect={() => setActiveId(c.id)}
-                onEdit={() =>
-                  setClientDrawer({ open: true, mode: "edit", client: c })
-                }
-                onDelete={() => setConfirmDelete(c)}
-                onRestore={() => handleRestoreClient(c)}
-              />
-            ))}
-          </ul>
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+          <Input
+            placeholder="Search clients…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
 
-        <div className="lg:col-span-8 space-y-5">
-          {selected && (
-            <>
-              <ClientHeader
-                client={selected}
-                sites={sitesByClient[selected.id] ?? []}
-                onEdit={() =>
-                  setClientDrawer({ open: true, mode: "edit", client: selected })
-                }
-                onAddSite={() =>
-                  setSiteDrawer({
-                    open: true,
-                    mode: "create",
-                    clientId: selected.id,
-                  })
-                }
-              />
-              <ClientStatsRow client={selected} />
-              <TabBar
-                tab={tab}
-                onChange={setTab}
-                sitesCount={(sitesByClient[selected.id] ?? []).length}
-                contactsCount={(contactsByClient[selected.id] ?? []).length}
-              />
-              {tab === "Sites" && (
-                <SitesPane
-                  client={selected}
-                  sites={sitesByClient[selected.id] ?? []}
-                  contacts={contactsByClient[selected.id] ?? []}
-                  onAddSite={() =>
-                    setSiteDrawer({
-                      open: true,
-                      mode: "create",
-                      clientId: selected.id,
-                    })
-                  }
-                  onEditSite={(s) =>
-                    setSiteDrawer({ open: true, mode: "edit", site: s })
-                  }
-                  onDeleteSite={handleDeleteSite}
-                  onAddContact={() =>
-                    setContactDrawer({
-                      open: true,
-                      mode: "create",
-                      clientId: selected.id,
-                    })
-                  }
-                  onEditContact={(c) =>
-                    setContactDrawer({ open: true, mode: "edit", contact: c })
-                  }
-                  onDeleteContact={handleDeleteContact}
-                />
+        <div className="flex items-center justify-between">
+          <p className="nx-eyebrow-soft">
+            A–Z · {filtered.length} of {rows.length}
+          </p>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={toggleArchived}
+              aria-pressed={showArchived}
+              className={cn(
+                "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                showArchived
+                  ? "bg-muted text-brand-charcoal"
+                  : "text-muted-foreground hover:bg-muted/40"
               )}
-              {tab === "Contacts" && (
-                <ContactsPane
-                  contacts={contactsByClient[selected.id] ?? []}
-                  onAdd={() =>
-                    setContactDrawer({
-                      open: true,
-                      mode: "create",
-                      clientId: selected.id,
-                    })
-                  }
-                  onEdit={(c) =>
-                    setContactDrawer({ open: true, mode: "edit", contact: c })
-                  }
-                  onDelete={handleDeleteContact}
-                />
-              )}
-              {tab === "Contracts" && <PlaceholderPane label="Contracts" />}
-              {tab === "Service History" && <PlaceholderPane label="Service history" />}
-              {tab === "Documents" && <PlaceholderPane label="Documents" />}
-              {tab === "Activity" && <PlaceholderPane label="Activity" />}
-            </>
+              style={{ borderColor: "var(--brand-border)" }}
+            >
+              {showArchived ? "Hide archived" : "Show archived"}
+            </button>
           )}
         </div>
+
+        <ul className="space-y-2">
+          {filtered.map((c) => (
+            <ClientRow
+              key={c.id}
+              client={c}
+              active={false}
+              archived={!!c.deleted_at}
+              onSelect={() => router.push(`/clients/${c.id}`)}
+              onEdit={() =>
+                setClientDrawer({ open: true, mode: "edit", client: c })
+              }
+              onDelete={() => setConfirmDelete(c)}
+              onRestore={() => handleRestoreClient(c)}
+            />
+          ))}
+        </ul>
       </div>
 
       {clientDrawer.open && (
@@ -370,29 +253,6 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
             clientDrawer.mode === "edit"
               ? { kind: "edit", client: clientDrawer.client }
               : { kind: "create" }
-          }
-        />
-      )}
-      {siteDrawer.open && (
-        <SiteFormDrawer
-          open
-          onClose={() => setSiteDrawer({ open: false })}
-          mode={
-            siteDrawer.mode === "edit"
-              ? { kind: "edit", site: siteDrawer.site }
-              : { kind: "create", clientId: siteDrawer.clientId }
-          }
-        />
-      )}
-      {contactDrawer.open && (
-        <ContactFormDrawer
-          open
-          onClose={() => setContactDrawer({ open: false })}
-          sites={selected ? sitesByClient[selected.id] ?? [] : []}
-          mode={
-            contactDrawer.mode === "edit"
-              ? { kind: "edit", contact: contactDrawer.contact }
-              : { kind: "create", clientId: contactDrawer.clientId }
           }
         />
       )}
@@ -461,23 +321,6 @@ export function ClientsView({ clients, sitesByClient, contactsByClient }: Props)
       } else {
         toast.error(r.error);
       }
-    });
-  }
-
-  function handleDeleteSite(s: DbSite) {
-    if (!confirm(`Soft-delete site "${s.name}"?`)) return;
-    deleteSiteAction(s.id).then((r) => {
-      if (r.ok) toast.success(`Deleted ${s.name}`);
-      else toast.error(r.error);
-    });
-  }
-
-  function handleDeleteContact(c: DbContact) {
-    const fullName = `${c.first_name} ${c.last_name}`;
-    if (!confirm(`Soft-delete ${fullName}?`)) return;
-    deleteContactAction(c.id).then((r) => {
-      if (r.ok) toast.success(`Deleted ${fullName}`);
-      else toast.error(r.error);
     });
   }
 }
