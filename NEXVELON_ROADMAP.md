@@ -285,11 +285,18 @@ continuity.
 
 ## 6. Inventory v1
 
-**🚀 NEXT SPRINT as of Session AC (2026-05-22):** The Quote, Client,
-Sites, and Contacts builder surfaces are now complete through PR #63
-(CL-4 Phase 2b — client onboarding Excel template). Session AC shipped
-PRs #53–#63; see `NEXVELON_SESSION_AC_HANDOFF.md` §1 for the full recap
-and §5 for the Inventory Sprint plan. Inventory is the next sprint. It
+**🚀 UPCOMING SPRINT as of Session AD (2026-05-22):** The Quote, Client,
+Sites, and Contacts builder surfaces are complete. Session AC shipped
+PRs #53–#63 (see `NEXVELON_SESSION_AC_HANDOFF.md`); Session AD shipped
+PRs #65–#68 — the CL-5 trilogy (CL-5a client form cleanup, CL-5b mailing
+address, CL-5c dynamic multi-phone contacts). The latest authoritative
+handoff is `NEXVELON_SESSION_AD_HANDOFF.md` — its §5 details the **CL-6
+sprint** (8 PRs: client polish, contact-type expansion, Excel
+single-sheet, full-screen client/site forms, site schema expansion, site
+attachments, activity log) which runs **before** Inventory. Migrations
+0012–0017 are consumed by the CL-5 + CL-6 sprints, so the INV-1 migration
+number below is renumbered to the next free slot (≈0018) when that work
+begins. Inventory remains the sprint after CL-6. It
 implements the specific-identification per-lot cost model locked in §2.4
 of the AC handoff (each `inventory_lot` carries its own `unit_cost`;
 allocations snapshot `unit_cost_locked` at allocation time per the

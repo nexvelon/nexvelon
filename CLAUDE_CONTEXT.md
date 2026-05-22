@@ -3,10 +3,11 @@
 > **Single source of truth for the Nexvelon project.**
 > A fresh Claude Code session reads, in order:
 >   1. **`NEXVELON_PRINCIPLES.md`** — the six non-negotiables (incl. §6 Extensibility).
->   2. **`NEXVELON_SESSION_AC_HANDOFF.md`** — the LATEST session handoff and the
+>   2. **`NEXVELON_SESSION_AD_HANDOFF.md`** — the LATEST session handoff and the
 >      authoritative source for current project state (Quote / Client / Sites /
->      Contacts modules complete through PR #63; Inventory Sprint next). Read this
->      first for current reality.
+>      Contacts modules complete through PR #68; CL-5 trilogy shipped; the CL-6
+>      sprint then the Inventory Sprint next). Read this first for current
+>      reality. `NEXVELON_SESSION_AC_HANDOFF.md` is the prior session handoff.
 >   3. The `## Current Session State` block immediately below.
 >   4. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
 >   5. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
