@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { ChevronDown, ChevronRight, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -235,6 +235,9 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
   const [pending, startTransition] = useTransition();
 
+  // CL-4: hidden file input for the "Upload filled template" button.
+  const templateFileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Resolve admin flag (Guardian gate) on open.
   useEffect(() => {
     if (!open) return;
@@ -333,6 +336,61 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     } catch (e) {
       console.error("[CL-4] Template generation failed:", e);
       toast.error("Failed to generate template");
+    }
+  }
+
+  // CL-4: parse a filled template and auto-populate the drawer. Only sets
+  // fields that have content — values Jay already typed are preserved.
+  async function handleUploadTemplate(file: File) {
+    try {
+      const { parseClientTemplate } = await import(
+        "@/lib/client-onboarding-template"
+      );
+      const parsed = await parseClientTemplate(file);
+
+      // Client info
+      if (parsed.client.legal_name) setLegalName(parsed.client.legal_name);
+      if (parsed.client.name) setName(parsed.client.name);
+      if (parsed.client.hst_gst_number)
+        setHstGst(parsed.client.hst_gst_number);
+      if (parsed.client.tax_exempt !== null)
+        setTaxExempt(parsed.client.tax_exempt);
+      if (parsed.client.tax_exempt_cert)
+        setTaxCert(parsed.client.tax_exempt_cert);
+
+      // Billing address
+      if (parsed.billing.street) setBillStreet(parsed.billing.street);
+      if (parsed.billing.unit) setBillUnit(parsed.billing.unit);
+      if (parsed.billing.city) setBillCity(parsed.billing.city);
+      if (parsed.billing.province) setBillProvince(parsed.billing.province);
+      if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
+      if (parsed.billing.country) setBillCountry(parsed.billing.country);
+
+      // Contacts — only when a name has content (mirrors CL-3c "active" gating).
+      if (parsed.mainContact.first_name || parsed.mainContact.last_name) {
+        setMainContact(parsed.mainContact);
+      }
+      if (parsed.apContact.first_name || parsed.apContact.last_name) {
+        setApContact(parsed.apContact);
+      }
+      if (
+        parsed.additionalContact.first_name ||
+        parsed.additionalContact.last_name
+      ) {
+        setAdditionalContact(parsed.additionalContact);
+      }
+
+      // Initial site — only when a name has content (mirrors CL-3b gating).
+      if (parsed.initialSite.name) {
+        setInitialSite(parsed.initialSite);
+      }
+
+      toast.success("Template loaded — review the form below before saving");
+    } catch (e) {
+      console.error("[CL-4] Template parse failed:", e);
+      toast.error(
+        e instanceof Error ? e.message : "Failed to parse template"
+      );
     }
   }
 
@@ -551,14 +609,24 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                     <Download className="mr-1.5 h-3.5 w-3.5" />
                     Download template
                   </Button>
-                  {/* Upload button placeholder — Phase 2b will wire it up */}
+                  <input
+                    ref={templateFileInputRef}
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = ""; // allow re-selecting the same file
+                      if (file) handleUploadTemplate(file);
+                    }}
+                  />
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled
-                    title="Coming soon"
+                    onClick={() => templateFileInputRef.current?.click()}
                   >
+                    <Upload className="mr-1.5 h-3.5 w-3.5" />
                     Upload filled template
                   </Button>
                 </div>
