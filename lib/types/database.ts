@@ -71,6 +71,14 @@ export interface DbClient {
   billing_postal: string | null;
   billing_country: string | null;
   billing_same_as_primary_site: boolean | null;
+  // CL-5b (migration 0012):
+  mailing_street: string | null;
+  mailing_unit: string | null;
+  mailing_city: string | null;
+  mailing_province: string | null;
+  mailing_postal: string | null;
+  mailing_country: string | null;
+  mailing_same_as_billing: boolean | null;
   default_opco: DbClientOpco | null;
   allowed_opcos: string[] | null;
   client_hst_gst_number: string | null;
@@ -116,6 +124,14 @@ export type DbClientInsert = {
   billing_postal?: string | null;
   billing_country?: string | null;
   billing_same_as_primary_site?: boolean | null;
+  // CL-5b (migration 0012):
+  mailing_street?: string | null;
+  mailing_unit?: string | null;
+  mailing_city?: string | null;
+  mailing_province?: string | null;
+  mailing_postal?: string | null;
+  mailing_country?: string | null;
+  mailing_same_as_billing?: boolean | null;
   default_opco?: DbClientOpco | null;
   allowed_opcos?: string[] | null;
   client_hst_gst_number?: string | null;
