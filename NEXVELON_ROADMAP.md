@@ -285,6 +285,35 @@ continuity.
 
 ## 6. Inventory v1
 
+**🚀 NEXT SPRINT as of Session AC (2026-05-22):** The Quote, Client,
+Sites, and Contacts builder surfaces are now complete through PR #63
+(CL-4 Phase 2b — client onboarding Excel template). Session AC shipped
+PRs #53–#63; see `NEXVELON_SESSION_AC_HANDOFF.md` §1 for the full recap
+and §5 for the Inventory Sprint plan. Inventory is the next sprint. It
+implements the specific-identification per-lot cost model locked in §2.4
+of the AC handoff (each `inventory_lot` carries its own `unit_cost`;
+allocations snapshot `unit_cost_locked` at allocation time per the
+Snapshot Principle). Broken into six chunks:
+- **INV-1** — Schema migration 0012: five tables (`product_categories`,
+  `vendors`, `products`, `inventory_lots`, `inventory_allocations`) +
+  seed + paired smoke SQL. Phase 1 inspect first to map the current
+  `/inventory` placeholder.
+- **INV-2** — Products catalog page: proper `/inventory` UI (table +
+  filters + `ProductFormDrawer`; Categories + Vendors panes).
+- **INV-3** — Receive flow: PO → one `inventory_lot` per receipt
+  (qty + unit_cost + optional PO number + received_at).
+- **INV-4** — Allocation with lot-picker: choose a lot (or FIFO-default);
+  `unit_cost_locked` snapshotted; lot `qty_remaining` decrements.
+- **INV-5** — Physical counts / adjustments (theft, damage, write-offs,
+  recounts) + adjustment audit log.
+- **INV-6** — "From catalog" button in the Quote builder line-item row —
+  the integration point wiring inventory into quotes.
+
+Phase 1 of INV-1 must first resolve: flat vs. hierarchical categories;
+vendor scope (name+contact vs. full PO-history module); SKU vs.
+part_number (one field or two); partial-receipt support; single- vs.
+multi-warehouse.
+
 **What:** The stock surface — products, warehouse locations,
 allocations (to projects), stock movements ledger, low-stock alerts,
 per-vendor reorder rules. Vendors are referenced here but get their
