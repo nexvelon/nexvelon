@@ -3,10 +3,14 @@
 > **Single source of truth for the Nexvelon project.**
 > A fresh Claude Code session reads, in order:
 >   1. **`NEXVELON_PRINCIPLES.md`** — the six non-negotiables (incl. §6 Extensibility).
->   2. The `## Current Session State` block immediately below.
->   3. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
->   4. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
->   5. `NEXVELON_SESSION_A_HANDOFF.md` — historical auth-surface reference.
+>   2. **`NEXVELON_SESSION_AC_HANDOFF.md`** — the LATEST session handoff and the
+>      authoritative source for current project state (Quote / Client / Sites /
+>      Contacts modules complete through PR #63; Inventory Sprint next). Read this
+>      first for current reality.
+>   3. The `## Current Session State` block immediately below.
+>   4. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
+>   5. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
+>   6. `NEXVELON_SESSION_A_HANDOFF.md` — historical auth-surface reference.
 
 ---
 
