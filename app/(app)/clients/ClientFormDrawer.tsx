@@ -113,6 +113,21 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     existing?.billing_country ?? "Canada"
   );
 
+  // --- Section 3.5: Mailing Address (CL-5b) ---
+  const [mailStreet, setMailStreet] = useState(existing?.mailing_street ?? "");
+  const [mailUnit, setMailUnit] = useState(existing?.mailing_unit ?? "");
+  const [mailCity, setMailCity] = useState(existing?.mailing_city ?? "");
+  const [mailProvince, setMailProvince] = useState(
+    existing?.mailing_province ?? "ON"
+  );
+  const [mailPostal, setMailPostal] = useState(existing?.mailing_postal ?? "");
+  const [mailCountry, setMailCountry] = useState(
+    existing?.mailing_country ?? "Canada"
+  );
+  const [mailSameAsBilling, setMailSameAsBilling] = useState(
+    existing?.mailing_same_as_billing ?? false
+  );
+
   // --- Section 4: Operating Company ---
   const [defaultOpco, setDefaultOpco] = useState<DbClientOpco>(
     existing?.default_opco ?? "integrated_solutions"
@@ -376,6 +391,16 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       billing_postal: billPostal.trim() || null,
       billing_country: billCountry.trim() || null,
       billing_same_as_primary_site: false,
+      // CL-5b: Mailing address (eager copy when same-as-billing)
+      mailing_street: (mailSameAsBilling ? billStreet : mailStreet).trim() || null,
+      mailing_unit: (mailSameAsBilling ? billUnit : mailUnit).trim() || null,
+      mailing_city: (mailSameAsBilling ? billCity : mailCity).trim() || null,
+      mailing_province:
+        (mailSameAsBilling ? billProvince : mailProvince).trim() || null,
+      mailing_postal: (mailSameAsBilling ? billPostal : mailPostal).trim() || null,
+      mailing_country:
+        (mailSameAsBilling ? billCountry : mailCountry).trim() || null,
+      mailing_same_as_billing: mailSameAsBilling,
       default_opco: defaultOpco,
       allowed_opcos: allowedOpcos,
       client_hst_gst_number: hstGst.trim() || null,
@@ -672,26 +697,30 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                     if (p.province) setBillProvince(p.province);
                     if (p.postal) setBillPostal(p.postal);
                     if (p.country) setBillCountry(p.country);
-                  }}                  placeholder="350 Bay Street"
+                  }}
+                  placeholder="350 Bay Street"
                 />
               </Field>
               <Field label="Unit / Suite">
                 <Input
                   value={billUnit}
-                  onChange={(e) => setBillUnit(e.target.value)}                  placeholder="Suite 1200"
+                  onChange={(e) => setBillUnit(e.target.value)}
+                  placeholder="Suite 1200"
                 />
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="City">
                   <Input
                     value={billCity}
-                    onChange={(e) => setBillCity(e.target.value)}                    placeholder="Toronto"
+                    onChange={(e) => setBillCity(e.target.value)}
+                    placeholder="Toronto"
                   />
                 </Field>
                 <Field label="Province">
                   <Input
                     value={billProvince}
-                    onChange={(e) => setBillProvince(e.target.value)}                    placeholder="ON"
+                    onChange={(e) => setBillProvince(e.target.value)}
+                    placeholder="ON"
                   />
                 </Field>
               </div>
@@ -699,13 +728,84 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                 <Field label="Postal code">
                   <Input
                     value={billPostal}
-                    onChange={(e) => setBillPostal(e.target.value)}                    placeholder="M5H 2S6"
+                    onChange={(e) => setBillPostal(e.target.value)}
+                    placeholder="M5H 2S6"
                   />
                 </Field>
                 <Field label="Country">
                   <Input
                     value={billCountry}
-                    onChange={(e) => setBillCountry(e.target.value)}                    placeholder="Canada"
+                    onChange={(e) => setBillCountry(e.target.value)}
+                    placeholder="Canada"
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            {/* SECTION 3.5: Mailing Address (CL-5b) */}
+            <Section title="Mailing Address">
+              <Toggle
+                label="Same as billing address"
+                value={mailSameAsBilling}
+                onChange={setMailSameAsBilling}
+                help="On save, mailing address is copied from this client's billing address."
+              />
+              <Field label="Street">
+                <AddressAutocomplete
+                  value={mailSameAsBilling ? billStreet : mailStreet}
+                  onChange={setMailStreet}
+                  onPlaceSelected={(p) => {
+                    setMailStreet(p.street);
+                    if (p.city) setMailCity(p.city);
+                    if (p.province) setMailProvince(p.province);
+                    if (p.postal) setMailPostal(p.postal);
+                    if (p.country) setMailCountry(p.country);
+                  }}
+                  placeholder="350 Bay Street"
+                  disabled={mailSameAsBilling}
+                />
+              </Field>
+              <Field label="Unit / Suite">
+                <Input
+                  value={mailSameAsBilling ? billUnit : mailUnit}
+                  onChange={(e) => setMailUnit(e.target.value)}
+                  placeholder="Suite 1200"
+                  disabled={mailSameAsBilling}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="City">
+                  <Input
+                    value={mailSameAsBilling ? billCity : mailCity}
+                    onChange={(e) => setMailCity(e.target.value)}
+                    placeholder="Toronto"
+                    disabled={mailSameAsBilling}
+                  />
+                </Field>
+                <Field label="Province">
+                  <Input
+                    value={mailSameAsBilling ? billProvince : mailProvince}
+                    onChange={(e) => setMailProvince(e.target.value)}
+                    placeholder="ON"
+                    disabled={mailSameAsBilling}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Postal code">
+                  <Input
+                    value={mailSameAsBilling ? billPostal : mailPostal}
+                    onChange={(e) => setMailPostal(e.target.value)}
+                    placeholder="M5H 2S6"
+                    disabled={mailSameAsBilling}
+                  />
+                </Field>
+                <Field label="Country">
+                  <Input
+                    value={mailSameAsBilling ? billCountry : mailCountry}
+                    onChange={(e) => setMailCountry(e.target.value)}
+                    placeholder="Canada"
+                    disabled={mailSameAsBilling}
                   />
                 </Field>
               </div>
