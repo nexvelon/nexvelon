@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -34,12 +35,10 @@ import {
   createClientAction,
   createContactAction,
   updateClientAction,
-  getCurrentUserIsAdminAction,
 } from "./actions";
 import type {
   DbClient,
   DbClientCurrency,
-  DbClientOpco,
   DbClientPaymentMethod,
   DbClientPaymentTerms,
   DbClientStatus,
@@ -60,11 +59,6 @@ const TYPES: DbClientType[] = [
 ];
 const TIERS: DbClientTier[] = ["Platinum", "Gold", "Silver", "Bronze"];
 const STATUSES: DbClientStatus[] = ["Active", "Inactive", "Prospect", "Lost"];
-
-const OPCOS: { value: DbClientOpco; label: string }[] = [
-  { value: "integrated_solutions", label: "Integrated Solutions" },
-  { value: "guardian", label: "Guardian" },
-];
 
 const PAYMENT_TERMS: { value: DbClientPaymentTerms; label: string }[] = [
   { value: "due_on_receipt", label: "Due on receipt" },
@@ -159,18 +153,11 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   const [mailCountry, setMailCountry] = useState(
     existing?.mailing_country ?? "Canada"
   );
+  // CL-6: default flipped to true — new clients use the billing address for
+  // mailing unless the operator explicitly picks "Different address".
   const [mailSameAsBilling, setMailSameAsBilling] = useState(
-    existing?.mailing_same_as_billing ?? false
+    existing?.mailing_same_as_billing ?? true
   );
-
-  // --- Section 4: Operating Company ---
-  const [defaultOpco, setDefaultOpco] = useState<DbClientOpco>(
-    existing?.default_opco ?? "integrated_solutions"
-  );
-  const [allowedOpcos, setAllowedOpcos] = useState<DbClientOpco[]>(
-    (existing?.allowed_opcos as DbClientOpco[] | null) ?? ["integrated_solutions"]
-  );
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // --- Section 5: Tax ---
   const [hstGst, setHstGst] = useState(existing?.client_hst_gst_number ?? "");
@@ -227,25 +214,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   // CL-4: hidden file input for the "Upload filled template" button.
   const templateFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Resolve admin flag (Guardian gate) on open.
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    getCurrentUserIsAdminAction().then((r) => {
-      if (!cancelled && r.ok) setIsAdmin(r.data.isAdmin);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
-  // Keep allowed_opcos a superset of default_opco.
-  useEffect(() => {
-    setAllowedOpcos((prev) =>
-      prev.includes(defaultOpco) ? prev : [...prev, defaultOpco]
-    );
-  }, [defaultOpco]);
-
   // ---- Client-side validation (mirrors the Phase 3 server rules) ----
   const errors: Record<string, string> = {};
   if (!legalName.trim()) errors.legalName = "Legal name is required.";
@@ -259,8 +227,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
   }
   if (paymentTerms === "custom" && !paymentTermsCustom.trim())
     errors.paymentTermsCustom = "Custom terms text is required.";
-  if (!allowedOpcos.includes(defaultOpco))
-    errors.allowedOpcos = "Allowed operating companies must include the default.";
   // CL-5c: each active contact row needs first + last name (NOT NULL schema).
   contacts.forEach((c, i) => {
     if (isContactActive(c)) {
@@ -271,12 +237,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     }
   });
   const isInvalid = Object.keys(errors).length > 0;
-
-  const toggleAllowedOpco = (oc: DbClientOpco) => {
-    setAllowedOpcos((prev) =>
-      prev.includes(oc) ? prev.filter((x) => x !== oc) : [...prev, oc]
-    );
-  };
 
   // CL-4: build the onboarding Excel template and trigger a browser download.
   // generateClientTemplate dynamic-imports exceljs, so the lib only loads here.
@@ -425,8 +385,12 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       mailing_country:
         (mailSameAsBilling ? billCountry : mailCountry).trim() || null,
       mailing_same_as_billing: mailSameAsBilling,
-      default_opco: defaultOpco,
-      allowed_opcos: allowedOpcos,
+      // CL-6 removed the Operating Company form section. Hardcoded here so
+      // (a) createClient's client_code prefix resolves to "IS" (omitting the
+      // field would produce "C-XX-…") and (b) the row matches what the DB
+      // default would have set anyway.
+      default_opco: "integrated_solutions" as const,
+      allowed_opcos: ["integrated_solutions"],
       client_hst_gst_number: hstGst.trim() || null,
       tax_exempt: taxExempt,
       tax_exempt_certificate_number: taxExempt
@@ -577,6 +541,14 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                   </Button>
                 </div>
               </div>
+            )}
+
+            {/* CL-6: edit-mode-only created-on line */}
+            {isEdit && existing && (
+              <p className="text-muted-foreground text-xs">
+                Client created on{" "}
+                {format(parseISO(existing.created_at), "MMMM d, yyyy")}
+              </p>
             )}
 
             {/* SECTION 1 */}
@@ -744,12 +716,35 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
             {/* SECTION 3.5: Mailing Address (CL-5b) */}
             <Section title="Mailing Address">
-              <Toggle
-                label="Same as billing address"
-                value={mailSameAsBilling}
-                onChange={setMailSameAsBilling}
-                help="On save, mailing address is copied from this client's billing address."
-              />
+              {/* CL-6: 2-option radio replaces the old Toggle. Default = Same. */}
+              <div className="space-y-2">
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="mailing_same_as_billing"
+                      checked={mailSameAsBilling}
+                      onChange={() => setMailSameAsBilling(true)}
+                    />
+                    Same as billing address
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="mailing_same_as_billing"
+                      checked={!mailSameAsBilling}
+                      onChange={() => setMailSameAsBilling(false)}
+                    />
+                    Different address
+                  </label>
+                </div>
+                {mailSameAsBilling && (
+                  <p className="text-muted-foreground text-[11px]">
+                    On save, mailing address is copied from this client&apos;s
+                    billing address.
+                  </p>
+                )}
+              </div>
               <Field label="Street">
                 <AddressAutocomplete
                   value={mailSameAsBilling ? billStreet : mailStreet}
@@ -813,7 +808,7 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
 
             {/* CL-5c — Contact Information (create-mode only) */}
             {!isEdit && (
-              <Section title="Contact Information (optional)">
+              <Section title="Contact Information">
                 <p className="text-muted-foreground text-xs">
                   Add contacts now or anytime later from the client detail
                   page. Each contact needs at least a first and last name.
@@ -996,81 +991,6 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                 </Button>
               </Section>
             )}
-
-            {/* SECTION 4 */}
-            <Section title="Operating Company" error={errors.allowedOpcos}>
-              <Field label="Default operating company">
-                <div className="flex flex-col gap-1.5">
-                  {OPCOS.map((oc) => {
-                    const guardianLocked =
-                      oc.value === "guardian" && !isAdmin;
-                    return (
-                      <label
-                        key={oc.value}
-                        className="flex items-center gap-2 text-sm"
-                        title={
-                          guardianLocked
-                            ? "Admin-only — contact admin to enable Guardian access"
-                            : undefined
-                        }
-                      >
-                        <input
-                          type="radio"
-                          name="default_opco"
-                          checked={defaultOpco === oc.value}
-                          disabled={guardianLocked}
-                          onChange={() => setDefaultOpco(oc.value)}
-                        />
-                        <span
-                          className={
-                            guardianLocked
-                              ? "text-muted-foreground"
-                              : undefined
-                          }
-                        >
-                          {oc.label}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </Field>
-              <Field label="Allowed operating companies">
-                <div className="flex flex-col gap-1.5">
-                  {OPCOS.map((oc) => {
-                    const guardianLocked =
-                      oc.value === "guardian" && !isAdmin;
-                    return (
-                      <label
-                        key={oc.value}
-                        className="flex items-center gap-2 text-sm"
-                        title={
-                          guardianLocked
-                            ? "Admin-only — contact admin to enable Guardian access"
-                            : undefined
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={allowedOpcos.includes(oc.value)}
-                          disabled={guardianLocked}
-                          onChange={() => toggleAllowedOpco(oc.value)}
-                        />
-                        <span
-                          className={
-                            guardianLocked
-                              ? "text-muted-foreground"
-                              : undefined
-                          }
-                        >
-                          {oc.label}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </Field>
-            </Section>
 
             {/* SECTION 5 */}
             <Section title="Tax">
