@@ -243,6 +243,9 @@ export interface DbContact {
   is_primary: boolean;
   is_billing: boolean;
   is_emergency: boolean;
+  // CL-7 (migration 0014)
+  is_accounts_payable: boolean;
+  contact_type_custom: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -261,6 +264,9 @@ export type DbContactInsert = {
   is_primary?: boolean;
   is_billing?: boolean;
   is_emergency?: boolean;
+  // CL-7 (migration 0014)
+  is_accounts_payable?: boolean;
+  contact_type_custom?: string | null;
   notes?: string | null;
 };
 

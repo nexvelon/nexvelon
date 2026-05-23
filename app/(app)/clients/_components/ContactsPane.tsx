@@ -6,11 +6,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { DbContact } from "@/lib/types/database";
 import { initials } from "./shared";
 
-// CONTACTS-1 — render a pill for each role boolean a contact has toggled on.
-// The three flags (is_primary / is_billing / is_emergency) have existed since
-// CL-3a but only "Primary" was ever displayed.
+// CONTACTS-1 / CL-7 — render a pill for each contact-type flag set. The 3
+// original flags (is_primary / is_billing / is_emergency) gained 2 more in
+// CL-7: is_accounts_payable + contact_type_custom (text). The Custom badge
+// gates on the text value (not just a boolean), shows the trimmed text
+// (truncated to 20 chars), and exposes the full text via title on hover.
 function RoleBadges({ contact }: { contact: DbContact }) {
-  const badges: Array<{ label: string; cls: string }> = [];
+  const badges: Array<{ label: string; cls: string; fullText?: string }> = [];
   if (contact.is_primary) {
     badges.push({ label: "Primary", cls: "bg-brand-gold/15 text-amber-800" });
   }
@@ -19,6 +21,17 @@ function RoleBadges({ contact }: { contact: DbContact }) {
   }
   if (contact.is_emergency) {
     badges.push({ label: "Emergency", cls: "bg-red-100 text-red-800" });
+  }
+  if (contact.is_accounts_payable) {
+    badges.push({ label: "AP", cls: "bg-blue-100 text-blue-800" });
+  }
+  if (contact.contact_type_custom && contact.contact_type_custom.trim()) {
+    const customText = contact.contact_type_custom.trim();
+    badges.push({
+      label: customText.slice(0, 20),
+      cls: "bg-purple-100 text-purple-800",
+      fullText: customText,
+    });
   }
 
   if (badges.length === 0) return null;
@@ -29,6 +42,7 @@ function RoleBadges({ contact }: { contact: DbContact }) {
         <span
           key={b.label}
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}
+          title={b.fullText ?? b.label}
         >
           {b.label}
         </span>
