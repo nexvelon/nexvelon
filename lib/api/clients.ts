@@ -49,10 +49,9 @@ export async function getClients(
     .select("*")
     .order("name", { ascending: true });
 
-  // Soft-delete filter is on by default; admin views opt in via includeDeleted.
-  if (!filters.includeDeleted) {
-    query = query.is("deleted_at", null);
-  }
+  // FIX-1: hard-delete model — soft-delete filter dropped (deleted rows no
+  // longer exist in the table). The deleted_at column stays in the schema
+  // per §2.1 past-data preservation but is no longer written or read.
 
   if (filters.search?.trim()) {
     const q = filters.search.trim();
@@ -72,16 +71,16 @@ export async function getClients(
   // N+1 against postgres).
   const ids = clients.map((c) => c.id);
 
+  // FIX-1: dropped `is("deleted_at", null)` from these count rollups.
+  // Hard delete means deleted rows don't exist; the filter is moot.
   const [sitesRes, contactsRes] = await Promise.all([
     supabase
       .from("sites")
       .select("client_id")
-      .is("deleted_at", null)
       .in("client_id", ids),
     supabase
       .from("contacts")
       .select("client_id")
-      .is("deleted_at", null)
       .in("client_id", ids),
   ]);
 
@@ -113,15 +112,16 @@ export interface ClientWithRelations {
 }
 
 export async function getClientById(
-  id: string,
-  includeDeleted = false
+  id: string
 ): Promise<ClientWithRelations | null> {
   const supabase = await db();
-  let query = supabase.from("clients").select("*").eq("id", id);
-  if (!includeDeleted) {
-    query = query.is("deleted_at", null);
-  }
-  const { data: client, error } = await query.maybeSingle();
+  // FIX-1: hard-delete model — `includeDeleted` param dropped; the
+  // deleted_at filter is moot because deleted rows don't exist.
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
   if (error) throw new Error(`getClientById: ${error.message}`);
   if (!client) return null;
@@ -195,51 +195,26 @@ export async function updateClient(
 }
 
 /**
- * Soft-delete a client. Never hard-deletes.
+ * FIX-1: hard-delete a client. Replaces softDeleteClient (which stamped
+ * deleted_at + deleted_by). The deleted_at + deleted_by columns remain
+ * in the schema per §2.1 past-data preservation but are no longer
+ * written. Sites + contacts cascade-delete via FK ON DELETE CASCADE on
+ * their client_id (defined in 0001_clients_schema.sql).
  *
- * Stamps deleted_at + deleted_by (resolved from the caller's Supabase Auth
- * session — the JS query builder can't call SQL `auth.uid()` directly, so we
- * resolve the uid in-process and pass it). Guarded by `deleted_at IS NULL`
- * so a second delete on an already-deleted row is a no-op.
+ * Activity-log rows for the deleted entity SURVIVE per ACT-1 design
+ * (no FK on activity_log.entity_id).
  *
- * @returns true if a live row was soft-deleted; false if the client didn't
- *          exist or was already deleted.
+ * @returns true when a row was actually removed; false when the id
+ *          didn't match any client.
  */
-export async function softDeleteClient(id: string): Promise<boolean> {
-  const supabase = await db();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data, error } = await supabase
-    .from("clients")
-    .update({
-      deleted_at: new Date().toISOString(),
-      deleted_by: user?.id ?? null,
-    })
-    .eq("id", id)
-    .is("deleted_at", null)
-    .select("id");
-  if (error) throw new Error(`softDeleteClient: ${error.message}`);
-  return (data?.length ?? 0) > 0;
-}
-
-/**
- * Restore a soft-deleted client. Clears deleted_at + deleted_by, guarded by
- * `deleted_at IS NOT NULL` so a restore on a live row is a no-op.
- *
- * @returns true if an archived row was restored; false if the client didn't
- *          exist or was not archived.
- */
-export async function restoreClient(id: string): Promise<boolean> {
+export async function deleteClient(id: string): Promise<boolean> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: null, deleted_by: null })
+    .delete()
     .eq("id", id)
-    .not("deleted_at", "is", null)
     .select("id");
-  if (error) throw new Error(`restoreClient: ${error.message}`);
+  if (error) throw new Error(`deleteClient: ${error.message}`);
   return (data?.length ?? 0) > 0;
 }
 
@@ -249,20 +224,22 @@ export async function restoreClient(id: string): Promise<boolean> {
 
 export async function getSitesByClient(clientId: string): Promise<DbSite[]> {
   const supabase = await db();
+  // FIX-1: deleted_at filter dropped (hard-delete model).
   const { data, error } = await supabase
     .from("sites")
     .select("*")
     .eq("client_id", clientId)
-    .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`getSitesByClient: ${error.message}`);
   return (data ?? []) as DbSite[];
 }
 
 /**
- * SITES-1 — cross-client site list joined with a thin client slice. Optional
- * filters by client, status, and a name/site_code search. Soft-deleted rows
- * are always excluded.
+ * SITES-1 — cross-client site list joined with a thin client slice.
+ * Optional filters by client, status, and a name/site_code search.
+ *
+ * FIX-1: dropped the `is("deleted_at", null)` filter — hard-delete model
+ * means deleted rows don't exist.
  */
 export async function listSites(
   filters: {
@@ -274,8 +251,7 @@ export async function listSites(
   const supabase = await db();
   let query = supabase
     .from("sites")
-    .select("*, client:clients(id,name,client_code,default_opco)")
-    .is("deleted_at", null);
+    .select("*, client:clients(id,name,client_code,default_opco)");
 
   if (filters.clientId) {
     query = query.eq("client_id", filters.clientId);
@@ -356,13 +332,20 @@ export async function updateSite(
   return data as DbSite;
 }
 
-export async function softDeleteSite(id: string): Promise<void> {
+/**
+ * FIX-1: hard-delete a site. Contacts referencing this site via
+ * site_id stay (their site_id flips to NULL via FK ON DELETE SET NULL,
+ * preserving the contact at client-level).
+ */
+export async function deleteSite(id: string): Promise<boolean> {
   const supabase = await db();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("sites")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw new Error(`softDeleteSite: ${error.message}`);
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(`deleteSite: ${error.message}`);
+  return (data?.length ?? 0) > 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -373,11 +356,11 @@ export async function getContactsByClient(
   clientId: string
 ): Promise<DbContact[]> {
   const supabase = await db();
+  // FIX-1: deleted_at filter dropped (hard-delete model).
   const { data, error } = await supabase
     .from("contacts")
     .select("*")
     .eq("client_id", clientId)
-    .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("last_name", { ascending: true });
   if (error) throw new Error(`getContactsByClient: ${error.message}`);
@@ -412,11 +395,16 @@ export async function updateContact(
   return data as DbContact;
 }
 
-export async function softDeleteContact(id: string): Promise<void> {
+/**
+ * FIX-1: hard-delete a contact.
+ */
+export async function deleteContact(id: string): Promise<boolean> {
   const supabase = await db();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("contacts")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw new Error(`softDeleteContact: ${error.message}`);
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(`deleteContact: ${error.message}`);
+  return (data?.length ?? 0) > 0;
 }
