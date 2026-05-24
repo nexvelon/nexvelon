@@ -80,12 +80,12 @@ export function ClientsView({ clients }: Props) {
     void reload(next);
   };
 
-  // Drawer state — the list only owns the client create / edit drawer.
-  // Per-client site / contact operations now live on /clients/[id].
-  const [clientDrawer, setClientDrawer] = useState<
-    | { open: false }
-    | { open: true; mode: "create" }
-    | { open: true; mode: "edit"; client: DbClient }
+  // CL-9: the list owns the EDIT drawer only. Create now navigates to the
+  // full-screen page at /clients/new. Per-client site / contact operations
+  // live on /clients/[id]. The drawer state mirrors that narrowing — no
+  // mode discriminator anymore, just an open flag + the client being edited.
+  const [editDrawer, setEditDrawer] = useState<
+    { open: false } | { open: true; client: DbClient }
   >({ open: false });
 
   const filtered = useMemo(() => {
@@ -132,7 +132,7 @@ export function ClientsView({ clients }: Props) {
           </p>
           <button
             type="button"
-            onClick={() => setClientDrawer({ open: true, mode: "create" })}
+            onClick={() => router.push("/clients/new")}
             className="mt-6 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold tracking-wide shadow-sm transition-shadow hover:shadow-md"
             style={{
               background: "var(--brand-accent)",
@@ -145,17 +145,7 @@ export function ClientsView({ clients }: Props) {
           </button>
         </Card>
 
-        {clientDrawer.open && (
-          <ClientFormDrawer
-            open
-            onClose={() => setClientDrawer({ open: false })}
-            mode={
-              clientDrawer.mode === "edit"
-                ? { kind: "edit", client: clientDrawer.client }
-                : { kind: "create" }
-            }
-          />
-        )}
+        {/* CL-9: empty-state has no rows → no edit drawer to render here. */}
       </div>
     );
   }
@@ -183,7 +173,7 @@ export function ClientsView({ clients }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => setClientDrawer({ open: true, mode: "create" })}
+              onClick={() => router.push("/clients/new")}
               className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
               style={{ background: "var(--brand-primary)" }}
             >
@@ -235,9 +225,7 @@ export function ClientsView({ clients }: Props) {
               active={false}
               archived={!!c.deleted_at}
               onSelect={() => router.push(`/clients/${c.id}`)}
-              onEdit={() =>
-                setClientDrawer({ open: true, mode: "edit", client: c })
-              }
+              onEdit={() => setEditDrawer({ open: true, client: c })}
               onDelete={() => setConfirmDelete(c)}
               onRestore={() => handleRestoreClient(c)}
             />
@@ -245,15 +233,11 @@ export function ClientsView({ clients }: Props) {
         </ul>
       </div>
 
-      {clientDrawer.open && (
+      {editDrawer.open && (
         <ClientFormDrawer
           open
-          onClose={() => setClientDrawer({ open: false })}
-          mode={
-            clientDrawer.mode === "edit"
-              ? { kind: "edit", client: clientDrawer.client }
-              : { kind: "create" }
-          }
+          onClose={() => setEditDrawer({ open: false })}
+          mode={{ kind: "edit", client: editDrawer.client }}
         />
       )}
 
