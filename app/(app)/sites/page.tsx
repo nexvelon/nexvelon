@@ -1,6 +1,8 @@
 // SITES-1 — server component for the dedicated /sites page. Fetches every
-// site across all clients (joined with a thin client slice) plus the client
-// list for the create-drawer picker, then hands off to the interactive view.
+// site across all clients (joined with a thin client slice) plus the full
+// client list (SITES-2b: full DbClient rows, not just id/name/code — the
+// edit drawer needs the parent client's billing/payment/portal fields to
+// render inheritance), then hands off to the interactive view.
 
 import { listClientsAction, listSitesAction } from "../clients/actions";
 import { SitesView } from "./SitesView";
@@ -16,13 +18,10 @@ export default async function SitesPage() {
   ]);
 
   const initialSites = sitesRes.ok ? sitesRes.data : [];
-  const clients = clientsRes.ok
-    ? clientsRes.data.map((c) => ({
-        id: c.id,
-        name: c.name,
-        client_code: c.client_code,
-      }))
-    : [];
+  // listClientsAction returns DbClientWithCounts[] — a superset of DbClient
+  // including site_count/contact_count. SitesView types `clients` as
+  // DbClient[]; the structural-typing cascade handles the extra fields.
+  const clients = clientsRes.ok ? clientsRes.data : [];
 
   return <SitesView initialSites={initialSites} clients={clients} />;
 }

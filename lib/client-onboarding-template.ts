@@ -1,6 +1,7 @@
 "use client";
 
 import type { Cell, Worksheet } from "exceljs";
+import { PROVINCE_CODES } from "./canada-provinces";
 
 // CL-8 — single-sheet client onboarding Excel template.
 // Replaces the CL-4 4-sheet layout (Instructions / Client+Billing / Contacts /
@@ -95,21 +96,10 @@ const VALUE_BORDER = {
 } as const;
 
 const STATUS_OPTIONS = ["Prospect", "Active", "Inactive"];
-const PROVINCE_OPTIONS = [
-  "ON",
-  "BC",
-  "AB",
-  "SK",
-  "MB",
-  "QC",
-  "NB",
-  "NS",
-  "PE",
-  "NL",
-  "YT",
-  "NT",
-  "NU",
-];
+// PROVINCE_OPTIONS — lifted to lib/canada-provinces.ts (SITES-2b).
+// PROVINCE_CODES is a `readonly ProvinceCode[]` which the exceljs
+// `formulae` API accepts wherever a string[] was accepted before.
+const PROVINCE_OPTIONS: readonly string[] = PROVINCE_CODES;
 const YES_NO_OPTIONS = ["Yes", "No"];
 const PAYMENT_TERMS_LABELS = [
   "Due on receipt",
