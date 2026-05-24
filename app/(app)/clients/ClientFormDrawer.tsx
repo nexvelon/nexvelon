@@ -99,6 +99,10 @@ type ContactRowState = {
   is_primary: boolean;
   is_billing: boolean;
   is_emergency: boolean;
+  // CL-7
+  is_accounts_payable: boolean;
+  contact_type_custom: string;
+  has_custom_type: boolean; // UI-only — not persisted
 };
 
 function newEmptyContact(): ContactRowState {
@@ -111,6 +115,9 @@ function newEmptyContact(): ContactRowState {
     is_primary: false,
     is_billing: false,
     is_emergency: false,
+    is_accounts_payable: false,
+    contact_type_custom: "",
+    has_custom_type: false,
   };
 }
 
@@ -288,8 +295,11 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
       if (parsed.billing.country) setBillCountry(parsed.billing.country);
 
-      // CL-5c: build dynamic contact rows from the template's three fixed
-      // slots. Main → primary, Accounts Payable → billing, Additional → none.
+      // CL-5c/CL-7: build dynamic contact rows from the template's three fixed
+      // slots. Main → primary, Accounts Payable → billing + AP (CL-7 — both
+      // flags kept; AP is the new explicit flag, is_billing stays for
+      // back-compat), Additional → none. CL-7 fields default to empty/false;
+      // the template gains no new columns until CL-8's single-sheet refactor.
       const tplContacts: ContactRowState[] = [];
       const pushTpl = (
         tc: {
@@ -298,7 +308,11 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           phone: string;
           email: string;
         },
-        roles: { is_primary: boolean; is_billing: boolean }
+        roles: {
+          is_primary: boolean;
+          is_billing: boolean;
+          is_accounts_payable: boolean;
+        }
       ) => {
         if (
           !tc.first_name.trim() &&
@@ -317,13 +331,25 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           is_primary: roles.is_primary,
           is_billing: roles.is_billing,
           is_emergency: false,
+          is_accounts_payable: roles.is_accounts_payable,
+          contact_type_custom: "",
+          has_custom_type: false,
         });
       };
-      pushTpl(parsed.mainContact, { is_primary: true, is_billing: false });
-      pushTpl(parsed.apContact, { is_primary: false, is_billing: true });
+      pushTpl(parsed.mainContact, {
+        is_primary: true,
+        is_billing: false,
+        is_accounts_payable: false,
+      });
+      pushTpl(parsed.apContact, {
+        is_primary: false,
+        is_billing: true,
+        is_accounts_payable: true,
+      });
       pushTpl(parsed.additionalContact, {
         is_primary: false,
         is_billing: false,
+        is_accounts_payable: false,
       });
       if (tplContacts.length > 0) setContacts(tplContacts);
 
@@ -452,6 +478,14 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
           is_primary: c.is_primary,
           is_billing: c.is_billing,
           is_emergency: c.is_emergency,
+          // CL-7: Custom badge gates on the text value (not the checkbox), so
+          // a checked-but-empty Custom row writes null. has_custom_type is
+          // UI-only — not persisted.
+          is_accounts_payable: c.is_accounts_payable,
+          contact_type_custom:
+            c.has_custom_type && c.contact_type_custom.trim()
+              ? c.contact_type_custom.trim()
+              : null,
         }));
         const results = await Promise.all(
           contactPayloads.map((p) => createContactAction(p))
@@ -972,7 +1006,68 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
                           />
                           Emergency
                         </label>
+                        <label className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={c.is_accounts_payable}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? {
+                                        ...x,
+                                        is_accounts_payable: e.target.checked,
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                          />
+                          AP
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={c.has_custom_type}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? {
+                                        ...x,
+                                        has_custom_type: e.target.checked,
+                                        contact_type_custom: e.target.checked
+                                          ? x.contact_type_custom
+                                          : "",
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                          />
+                          Custom
+                        </label>
                       </div>
+                      {c.has_custom_type && (
+                        <Field label="Custom type label">
+                          <Input
+                            value={c.contact_type_custom}
+                            onChange={(e) =>
+                              setContacts(
+                                contacts.map((x, i) =>
+                                  i === idx
+                                    ? {
+                                        ...x,
+                                        contact_type_custom: e.target.value,
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                            placeholder="e.g. HR Lead, Vendor Coordinator"
+                          />
+                        </Field>
+                      )}
                     </div>
                   </div>
                 ))}

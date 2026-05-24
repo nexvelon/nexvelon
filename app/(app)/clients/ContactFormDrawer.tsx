@@ -53,6 +53,16 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
   const [isPrimary, setIsPrimary] = useState(existing?.is_primary ?? true);
   const [isBilling, setIsBilling] = useState(existing?.is_billing ?? false);
   const [isEmergency, setIsEmergency] = useState(existing?.is_emergency ?? false);
+  // CL-7
+  const [isAccountsPayable, setIsAccountsPayable] = useState(
+    existing?.is_accounts_payable ?? false
+  );
+  const [contactTypeCustom, setContactTypeCustom] = useState(
+    existing?.contact_type_custom ?? ""
+  );
+  const [showCustom, setShowCustom] = useState(
+    existing?.contact_type_custom != null && existing.contact_type_custom !== ""
+  );
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [pending, startTransition] = useTransition();
 
@@ -78,6 +88,12 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
       is_primary: isPrimary,
       is_billing: isBilling,
       is_emergency: isEmergency,
+      // CL-7: Custom badge gates on the text value, not the toggle state.
+      is_accounts_payable: isAccountsPayable,
+      contact_type_custom:
+        showCustom && contactTypeCustom.trim()
+          ? contactTypeCustom.trim()
+          : null,
       notes: notes.trim() || null,
     };
 
@@ -180,6 +196,28 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
             <Toggle label="Primary contact" value={isPrimary} onChange={setIsPrimary} />
             <Toggle label="Billing contact" value={isBilling} onChange={setIsBilling} />
             <Toggle label="Emergency contact" value={isEmergency} onChange={setIsEmergency} />
+            <Toggle
+              label="Accounts payable contact"
+              value={isAccountsPayable}
+              onChange={setIsAccountsPayable}
+            />
+            <Toggle
+              label="Custom contact type"
+              value={showCustom}
+              onChange={(on) => {
+                setShowCustom(on);
+                if (!on) setContactTypeCustom("");
+              }}
+            />
+            {showCustom && (
+              <Field label="Custom type label">
+                <Input
+                  value={contactTypeCustom}
+                  onChange={(e) => setContactTypeCustom(e.target.value)}
+                  placeholder="e.g. HR Lead, Vendor Coordinator"
+                />
+              </Field>
+            )}
           </div>
 
           <Field label="Notes">
