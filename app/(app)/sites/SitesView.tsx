@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Building2, Edit3, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ import {
 import { SiteFormDrawer } from "../clients/SiteFormDrawer";
 import { deleteSiteAction, listSitesAction } from "../clients/actions";
 import type {
+  DbClient,
   DbClientOpco,
   DbSite,
   DbSiteStatus,
@@ -65,26 +67,26 @@ const STATUS_STYLE: Record<DbSiteStatus, { bg: string; text: string }> = {
   },
 };
 
-interface SiteClientOption {
-  id: string;
-  name: string;
-  client_code: string | null;
-}
-
 interface Props {
   initialSites: DbSiteWithClient[];
-  clients: SiteClientOption[];
+  /**
+   * Full DbClient rows — used both for the filter dropdown AND passed
+   * through to SiteFormDrawer so the edit drawer can render inheritance
+   * (it needs the parent client's billing/payment/portal fields).
+   */
+  clients: DbClient[];
 }
 
 export function SitesView({ initialSites, clients }: Props) {
+  const router = useRouter();
   const [sites, setSites] = useState<DbSiteWithClient[]>(initialSites);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DbSiteStatus | "all">("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
-  const [drawer, setDrawer] = useState<
-    | { open: false }
-    | { open: true; mode: "create" }
-    | { open: true; mode: "edit"; site: DbSite }
+  // SITES-2b: drawer state narrows to EDIT-only — create now navigates to
+  // /sites/new (full-screen).
+  const [editDrawer, setEditDrawer] = useState<
+    { open: false } | { open: true; site: DbSite }
   >({ open: false });
   const [confirmDelete, setConfirmDelete] = useState<DbSite | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -135,7 +137,7 @@ export function SitesView({ initialSites, clients }: Props) {
         actions={
           <button
             type="button"
-            onClick={() => setDrawer({ open: true, mode: "create" })}
+            onClick={() => router.push("/sites/new")}
             className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
             style={{ background: "var(--brand-primary)" }}
           >
@@ -217,9 +219,7 @@ export function SitesView({ initialSites, clients }: Props) {
                 <SiteRow
                   key={s.id}
                   site={s}
-                  onEdit={() =>
-                    setDrawer({ open: true, mode: "edit", site: s })
-                  }
+                  onEdit={() => setEditDrawer({ open: true, site: s })}
                   onDelete={() => setConfirmDelete(s)}
                 />
               ))}
@@ -228,19 +228,15 @@ export function SitesView({ initialSites, clients }: Props) {
         </Card>
       )}
 
-      {drawer.open && (
+      {editDrawer.open && (
         <SiteFormDrawer
           open
           onClose={() => {
-            setDrawer({ open: false });
+            setEditDrawer({ open: false });
             void refresh();
           }}
           clients={clients}
-          mode={
-            drawer.mode === "edit"
-              ? { kind: "edit", site: drawer.site }
-              : { kind: "create" }
-          }
+          mode={{ kind: "edit", site: editDrawer.site }}
         />
       )}
 

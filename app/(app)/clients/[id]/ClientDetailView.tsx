@@ -49,10 +49,10 @@ export function ClientDetailView({
 
   // Drawer state — the detail page owns every per-client operation.
   const [clientEditDrawer, setClientEditDrawer] = useState(false);
+  // SITES-2b: drawer state narrows to EDIT-only — create now navigates to
+  // /sites/new?clientId=X (full-screen).
   const [siteDrawer, setSiteDrawer] = useState<
-    | { open: false }
-    | { open: true; mode: "create"; clientId: string }
-    | { open: true; mode: "edit"; site: DbSite }
+    { open: false } | { open: true; site: DbSite }
   >({ open: false });
   const [contactDrawer, setContactDrawer] = useState<
     | { open: false }
@@ -123,9 +123,7 @@ export function ClientDetailView({
         client={client}
         sites={sites}
         onEdit={() => setClientEditDrawer(true)}
-        onAddSite={() =>
-          setSiteDrawer({ open: true, mode: "create", clientId: client.id })
-        }
+        onAddSite={() => router.push(`/sites/new?clientId=${client.id}`)}
       />
 
       <ClientStatsRow client={client} />
@@ -142,12 +140,8 @@ export function ClientDetailView({
           client={client}
           sites={sites}
           contacts={contacts}
-          onAddSite={() =>
-            setSiteDrawer({ open: true, mode: "create", clientId: client.id })
-          }
-          onEditSite={(s) =>
-            setSiteDrawer({ open: true, mode: "edit", site: s })
-          }
+          onAddSite={() => router.push(`/sites/new?clientId=${client.id}`)}
+          onEditSite={(s) => setSiteDrawer({ open: true, site: s })}
           onDeleteSite={handleDeleteSite}
           onAddContact={() =>
             setContactDrawer({
@@ -203,11 +197,11 @@ export function ClientDetailView({
             setSiteDrawer({ open: false });
             router.refresh();
           }}
-          mode={
-            siteDrawer.mode === "edit"
-              ? { kind: "edit", site: siteDrawer.site }
-              : { kind: "create", clientId: siteDrawer.clientId }
-          }
+          mode={{ kind: "edit", site: siteDrawer.site }}
+          // The edit drawer only needs the parent client (for inheritance
+          // display). We pass it as a single-item array since SiteForm
+          // looks the client up by id.
+          clients={[client]}
         />
       )}
       {contactDrawer.open && (

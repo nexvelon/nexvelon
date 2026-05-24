@@ -1,0 +1,1542 @@
+"use client";
+
+// SITES-2b — Shared site-form body. Lifted from SiteFormDrawer (which now
+// becomes a thin Sheet wrapper) so both the drawer (edit mode) and the new
+// full-screen /sites/new page (create mode) consume the exact same form.
+//
+// Mirrors the CL-9 ClientForm architecture: discriminated Mode union,
+// onSubmitSuccess(id) callback, 8 collapsible Sections, internal Section /
+// Field / Toggle helpers. The SITES-2a schema added 28 new columns; this
+// form surfaces them via three live inheritance toggles:
+//
+//   1. billing_same_as_client (default true) — billing fields inherit from
+//      the parent client's billing_*
+//   2. mailing_same_as_billing (default true) — mailing fields inherit
+//      from the site's effective billing (which itself may inherit)
+//   3. inherit_payment_terms_from_client (default true) — single flag that
+//      gates Tax + Payment + Portal sections as a group (SITES-2a
+//      Decision Point 3 — splittable additively later)
+//
+// Inheritance semantics (Decision Point 1): when a toggle is ON, the
+// site's own fields are persisted as NULL — the client is the only source
+// of truth. When toggled OFF, the UI pre-populates with the client's
+// values (one-time copy) so the operator has a starting point, then
+// edits and we persist the site's own values.
+
+import { useMemo, useRef, useState, useTransition } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PhonesEditor } from "./PhonesEditor";
+import {
+  createContactAction,
+  createSiteAction,
+  updateSiteAction,
+} from "../actions";
+import { CANADA_PROVINCES } from "@/lib/canada-provinces";
+import { defaultTaxRateForProvince } from "@/lib/tax-rates";
+import type {
+  ContactPhone,
+  DbClient,
+  DbClientCurrency,
+  DbClientPaymentMethod,
+  DbClientPaymentTerms,
+  DbContactInsert,
+  DbSite,
+  DbSiteInsert,
+  DbSiteStatus,
+} from "@/lib/types/database";
+
+// ─── Module-level constants ────────────────────────────────────────────────
+
+const STATUSES: DbSiteStatus[] = [
+  "Active",
+  "In Project",
+  "Maintained",
+  "Decommissioned",
+];
+
+// Reuse the canonical labels from ClientForm (same DB enums on both tables).
+const PAYMENT_TERMS: { value: DbClientPaymentTerms; label: string }[] = [
+  { value: "due_on_receipt", label: "Due on receipt" },
+  { value: "net_7", label: "NET 7" },
+  { value: "net_15", label: "NET 15" },
+  { value: "net_30", label: "NET 30" },
+  { value: "net_60", label: "NET 60" },
+  { value: "net_90", label: "NET 90" },
+  { value: "custom", label: "Custom" },
+];
+
+const PAYMENT_METHODS: { value: DbClientPaymentMethod; label: string }[] = [
+  { value: "cheque", label: "Cheque" },
+  { value: "eft", label: "EFT" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "e_transfer", label: "E-Transfer" },
+  { value: "wire", label: "Wire" },
+];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ─── Types ────────────────────────────────────────────────────────────────
+
+export type Mode =
+  | { kind: "create"; clientId?: string }
+  | { kind: "edit"; site: DbSite };
+
+// Mirrors ClientForm's ContactRowState exactly (CL-5c / CL-7). The only
+// difference at fan-out is that we set BOTH client_id AND site_id on
+// each created contact (dual-FK).
+type ContactRowState = {
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+  phones: ContactPhone[];
+  is_primary: boolean;
+  is_billing: boolean;
+  is_emergency: boolean;
+  is_accounts_payable: boolean;
+  contact_type_custom: string;
+  has_custom_type: boolean; // UI-only — not persisted
+};
+
+function newEmptyContact(): ContactRowState {
+  return {
+    first_name: "",
+    last_name: "",
+    role: "",
+    email: "",
+    phones: [{ label: "Phone", number: "" }],
+    is_primary: false,
+    is_billing: false,
+    is_emergency: false,
+    is_accounts_payable: false,
+    contact_type_custom: "",
+    has_custom_type: false,
+  };
+}
+
+interface SiteFormProps {
+  mode: Mode;
+  /**
+   * Full client rows used both for the picker (in create mode without a
+   * preset clientId) AND for inheritance display (showing the parent
+   * client's billing/payment/portal values when the matching inheritance
+   * toggle is ON). Always pass at least the parent client when editing;
+   * the picker only shows for create-no-preset.
+   */
+  clients: DbClient[];
+  /**
+   * Fires after a successful create OR edit. Receives the site id (the
+   * existing id for edits, the freshly-created id for creates). The
+   * drawer wrapper ignores the id and just closes; the page wrapper uses
+   * it to navigate (currently to /sites since no /sites/[id] exists).
+   */
+  onSubmitSuccess: (siteId: string) => void;
+  /** Fires when the user clicks Cancel. Drawer closes; page navigates back. */
+  onCancel: () => void;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+
+export function SiteForm({
+  mode,
+  clients,
+  onSubmitSuccess,
+  onCancel,
+}: SiteFormProps) {
+  const isEdit = mode.kind === "edit";
+  const existing = isEdit ? mode.site : null;
+  const presetClientId = !isEdit ? mode.clientId : undefined;
+
+  // In edit mode the existing site has a fixed client_id. In create mode we
+  // start with whatever the preset is (from the query param) or "" so the
+  // operator picks from the dropdown.
+  const initialClientId =
+    existing?.client_id ?? presetClientId ?? "";
+
+  const needsClientPicker = !isEdit && !presetClientId;
+
+  // ─── Site basics ───
+  const [selectedClientId, setSelectedClientId] =
+    useState<string>(initialClientId);
+  const [name, setName] = useState(existing?.name ?? "");
+  const [siteCode] = useState(existing?.site_code ?? "");
+  const [status, setStatus] = useState<DbSiteStatus>(
+    existing?.status ?? "Active"
+  );
+  const [lastServiceDate, setLastServiceDate] = useState(
+    existing?.last_service_date ?? ""
+  );
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+
+  // ─── Site (physical) address ───
+  const [address1, setAddress1] = useState(existing?.address_line1 ?? "");
+  const [address2, setAddress2] = useState(existing?.address_line2 ?? "");
+  const [city, setCity] = useState(existing?.city ?? "");
+  const [province, setProvince] = useState(existing?.province ?? "");
+  const [postal, setPostal] = useState(existing?.postal_code ?? "");
+  const [siteCountry, setSiteCountry] = useState(existing?.country ?? "Canada");
+
+  // ─── Billing (defaults inherit from client) ───
+  const [billSameAsClient, setBillSameAsClient] = useState(
+    existing?.billing_same_as_client ?? true
+  );
+  const [billStreet, setBillStreet] = useState(existing?.billing_street ?? "");
+  const [billUnit, setBillUnit] = useState(existing?.billing_unit ?? "");
+  const [billCity, setBillCity] = useState(existing?.billing_city ?? "");
+  const [billProvince, setBillProvince] = useState(
+    existing?.billing_province ?? ""
+  );
+  const [billPostal, setBillPostal] = useState(existing?.billing_postal ?? "");
+  const [billCountry, setBillCountry] = useState(
+    existing?.billing_country ?? "Canada"
+  );
+
+  // ─── Mailing (defaults inherit from billing) ───
+  const [mailSameAsBilling, setMailSameAsBilling] = useState(
+    existing?.mailing_same_as_billing ?? true
+  );
+  const [mailStreet, setMailStreet] = useState(existing?.mailing_street ?? "");
+  const [mailUnit, setMailUnit] = useState(existing?.mailing_unit ?? "");
+  const [mailCity, setMailCity] = useState(existing?.mailing_city ?? "");
+  const [mailProvince, setMailProvince] = useState(
+    existing?.mailing_province ?? ""
+  );
+  const [mailPostal, setMailPostal] = useState(existing?.mailing_postal ?? "");
+  const [mailCountry, setMailCountry] = useState(
+    existing?.mailing_country ?? "Canada"
+  );
+
+  // ─── Tax / Payment / Portal — single inherit flag gates all three ───
+  const [inheritFromClient, setInheritFromClient] = useState(
+    existing?.inherit_payment_terms_from_client ?? true
+  );
+
+  // Tax
+  const [siteHstGst, setSiteHstGst] = useState(
+    existing?.site_hst_gst_number ?? ""
+  );
+  const [taxExempt, setTaxExempt] = useState(existing?.tax_exempt ?? false);
+  const [taxExemptCert, setTaxExemptCert] = useState(
+    existing?.tax_exempt_certificate_number ?? ""
+  );
+  const [taxRate, setTaxRate] = useState<string>(
+    existing?.tax_rate != null ? String(existing.tax_rate) : ""
+  );
+
+  // Payment
+  const [paymentTerms, setPaymentTerms] = useState<DbClientPaymentTerms>(
+    existing?.payment_terms ?? "net_30"
+  );
+  const [paymentTermsCustom, setPaymentTermsCustom] = useState(
+    existing?.payment_terms_custom ?? ""
+  );
+  const [payMethod, setPayMethod] = useState<DbClientPaymentMethod>(
+    existing?.preferred_payment_method ?? "eft"
+  );
+  const [ccSurcharge, setCcSurcharge] = useState(
+    existing?.apply_cc_surcharge ?? true
+  );
+  const [creditLimit, setCreditLimit] = useState<string>(
+    existing?.credit_limit != null ? String(existing.credit_limit) : ""
+  );
+  const [creditHold, setCreditHold] = useState(existing?.credit_hold ?? false);
+  const [currency, setCurrency] = useState<DbClientCurrency>(
+    existing?.preferred_currency ?? "CAD"
+  );
+
+  // Portal
+  const [portalEnabled, setPortalEnabled] = useState(
+    existing?.portal_access_enabled ?? false
+  );
+  const [portalEmail, setPortalEmail] = useState(
+    existing?.portal_contact_email ?? ""
+  );
+
+  // ─── Contacts (create-mode only) — dynamic rows; mirror ClientForm ───
+  const [contacts, setContacts] = useState<ContactRowState[]>([]);
+
+  const isContactActive = (c: ContactRowState) =>
+    c.first_name.trim() !== "" ||
+    c.last_name.trim() !== "" ||
+    c.role.trim() !== "" ||
+    c.email.trim() !== "" ||
+    c.phones.some((p) => p.number.trim() !== "");
+
+  // ─── UI plumbing ───
+  const [pending, startTransition] = useTransition();
+
+  // Avoid wiping a manual tax_rate edit when the user changes province —
+  // we only want the auto-fill to fire on explicit button click, not as a
+  // side effect of every province change. Tracking whether the field is
+  // currently auto-filled is overkill; the explicit button is the contract.
+  const _unused = useRef(null);
+  void _unused;
+
+  // ─── Derived helpers ───
+
+  // The currently-selected parent client — null if the picker hasn't fired
+  // yet OR if the preset id doesn't match any client in the `clients` prop
+  // (shouldn't happen but defensive).
+  const parentClient = useMemo<DbClient | null>(
+    () => clients.find((c) => c.id === selectedClientId) ?? null,
+    [clients, selectedClientId]
+  );
+
+  // For the tax-rate auto-fill: prefer the site's billing province (when
+  // billing is overridden), otherwise the parent client's billing province
+  // (when billing is inherited). The site's physical address province is
+  // ignored — tax follows the billing address.
+  const taxProvinceForLookup =
+    billSameAsClient && parentClient
+      ? parentClient.billing_province
+      : billProvince || null;
+  const suggestedTaxRate = defaultTaxRateForProvince(taxProvinceForLookup);
+
+  // ─── Validation ───
+  const errors: Record<string, string> = {};
+  if (!selectedClientId) errors.client = "Client is required.";
+  if (!name.trim()) errors.name = "Site name is required.";
+  if (!inheritFromClient && portalEnabled) {
+    if (!portalEmail.trim())
+      errors.portalEmail = "Portal contact email is required.";
+    else if (!EMAIL_RE.test(portalEmail.trim()))
+      errors.portalEmail = "Enter a valid email address.";
+  }
+  if (!inheritFromClient && taxExempt && !taxExemptCert.trim())
+    errors.taxExemptCert = "Certificate number is required when tax-exempt.";
+  if (
+    !inheritFromClient &&
+    paymentTerms === "custom" &&
+    !paymentTermsCustom.trim()
+  )
+    errors.paymentTermsCustom = "Custom terms text is required.";
+  contacts.forEach((c, i) => {
+    if (isContactActive(c)) {
+      if (!c.first_name.trim())
+        errors[`contact${i}FirstName`] = "First name is required";
+      if (!c.last_name.trim())
+        errors[`contact${i}LastName`] = "Last name is required";
+    }
+  });
+  const isInvalid = Object.keys(errors).length > 0;
+
+  // ─── Inheritance toggle handlers — one-time copy on toggle OFF ───
+
+  function handleBillingInheritToggle(inherit: boolean) {
+    if (!inherit && parentClient) {
+      // Toggling OFF — pre-fill with client values so operator has a
+      // starting point. Only fires when there's a parent to copy from.
+      setBillStreet(parentClient.billing_street ?? "");
+      setBillUnit(parentClient.billing_unit ?? "");
+      setBillCity(parentClient.billing_city ?? "");
+      setBillProvince(parentClient.billing_province ?? "");
+      setBillPostal(parentClient.billing_postal ?? "");
+      setBillCountry(parentClient.billing_country ?? "Canada");
+    }
+    setBillSameAsClient(inherit);
+  }
+
+  function handleMailingInheritToggle(inherit: boolean) {
+    if (!inherit) {
+      // Toggling OFF — pre-fill with whatever the effective billing is
+      // (the site's own billing if overridden, else the client's billing).
+      const effStreet = billSameAsClient
+        ? parentClient?.billing_street ?? ""
+        : billStreet;
+      const effUnit = billSameAsClient
+        ? parentClient?.billing_unit ?? ""
+        : billUnit;
+      const effCity = billSameAsClient
+        ? parentClient?.billing_city ?? ""
+        : billCity;
+      const effProvince = billSameAsClient
+        ? parentClient?.billing_province ?? ""
+        : billProvince;
+      const effPostal = billSameAsClient
+        ? parentClient?.billing_postal ?? ""
+        : billPostal;
+      const effCountry = billSameAsClient
+        ? parentClient?.billing_country ?? "Canada"
+        : billCountry;
+      setMailStreet(effStreet);
+      setMailUnit(effUnit);
+      setMailCity(effCity);
+      setMailProvince(effProvince);
+      setMailPostal(effPostal);
+      setMailCountry(effCountry);
+    }
+    setMailSameAsBilling(inherit);
+  }
+
+  function handleInheritFromClientToggle(inherit: boolean) {
+    if (!inherit && parentClient) {
+      // Toggling OFF — copy client's tax/payment/portal values so the
+      // operator can edit from a known starting point.
+      setSiteHstGst(parentClient.client_hst_gst_number ?? "");
+      setTaxExempt(parentClient.tax_exempt ?? false);
+      setTaxExemptCert(parentClient.tax_exempt_certificate_number ?? "");
+      // Client has no tax_rate column — leave blank or use province default.
+      setTaxRate(
+        suggestedTaxRate != null ? String(suggestedTaxRate) : ""
+      );
+      setPaymentTerms(parentClient.payment_terms ?? "net_30");
+      setPaymentTermsCustom(parentClient.payment_terms_custom ?? "");
+      setPayMethod(parentClient.preferred_payment_method ?? "eft");
+      setCcSurcharge(parentClient.apply_cc_surcharge ?? true);
+      setCreditLimit(
+        parentClient.credit_limit != null
+          ? String(parentClient.credit_limit)
+          : ""
+      );
+      setCreditHold(parentClient.credit_hold ?? false);
+      setCurrency(parentClient.preferred_currency ?? "CAD");
+      setPortalEnabled(parentClient.portal_access_enabled ?? false);
+      setPortalEmail(parentClient.portal_contact_email ?? "");
+    }
+    setInheritFromClient(inherit);
+  }
+
+  // ─── Submit ───
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isInvalid) {
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+
+    const parsedCredit = creditLimit.trim() ? Number(creditLimit.trim()) : null;
+    const parsedTaxRate = taxRate.trim() ? Number(taxRate.trim()) : null;
+
+    const payload: DbSiteInsert = {
+      client_id: selectedClientId,
+      name: name.trim(),
+      site_code: siteCode.trim() || null,
+      status,
+      last_service_date: lastServiceDate || null,
+      notes: notes.trim() || null,
+
+      // Site physical address (always editable)
+      address_line1: address1.trim() || null,
+      address_line2: address2.trim() || null,
+      city: city.trim() || null,
+      province: province || null,
+      postal_code: postal.trim() || null,
+      country: siteCountry.trim() || "Canada",
+
+      // Billing — NULL when inherited per Phase 1 Decision Point 1
+      billing_same_as_client: billSameAsClient,
+      billing_street: billSameAsClient ? null : billStreet.trim() || null,
+      billing_unit: billSameAsClient ? null : billUnit.trim() || null,
+      billing_city: billSameAsClient ? null : billCity.trim() || null,
+      billing_province: billSameAsClient ? null : billProvince || null,
+      billing_postal: billSameAsClient ? null : billPostal.trim() || null,
+      billing_country: billSameAsClient ? null : billCountry.trim() || null,
+
+      // Mailing — NULL when "same as billing"
+      mailing_same_as_billing: mailSameAsBilling,
+      mailing_street: mailSameAsBilling ? null : mailStreet.trim() || null,
+      mailing_unit: mailSameAsBilling ? null : mailUnit.trim() || null,
+      mailing_city: mailSameAsBilling ? null : mailCity.trim() || null,
+      mailing_province: mailSameAsBilling ? null : mailProvince || null,
+      mailing_postal: mailSameAsBilling ? null : mailPostal.trim() || null,
+      mailing_country: mailSameAsBilling ? null : mailCountry.trim() || null,
+
+      // Tax / Payment / Portal — NULL when inheriting. Booleans use the
+      // SITES-2a DB defaults (NOT NULL with DEFAULT) when inheriting so
+      // the DB doesn't reject the insert; the inherit flag is the source
+      // of truth at read time anyway.
+      inherit_payment_terms_from_client: inheritFromClient,
+      site_hst_gst_number: inheritFromClient ? null : siteHstGst.trim() || null,
+      tax_exempt: inheritFromClient ? false : taxExempt,
+      tax_exempt_certificate_number: inheritFromClient
+        ? null
+        : taxExemptCert.trim() || null,
+      tax_rate: inheritFromClient
+        ? null
+        : parsedTaxRate != null && Number.isFinite(parsedTaxRate)
+          ? parsedTaxRate
+          : null,
+      payment_terms: inheritFromClient ? "net_30" : paymentTerms,
+      payment_terms_custom: inheritFromClient
+        ? null
+        : paymentTerms === "custom"
+          ? paymentTermsCustom.trim() || null
+          : null,
+      preferred_payment_method: inheritFromClient ? "eft" : payMethod,
+      apply_cc_surcharge: inheritFromClient ? true : ccSurcharge,
+      credit_limit: inheritFromClient
+        ? null
+        : parsedCredit != null && Number.isFinite(parsedCredit)
+          ? parsedCredit
+          : null,
+      credit_hold: inheritFromClient ? false : creditHold,
+      preferred_currency: inheritFromClient ? "CAD" : currency,
+      portal_access_enabled: inheritFromClient ? false : portalEnabled,
+      portal_contact_email: inheritFromClient
+        ? null
+        : portalEnabled
+          ? portalEmail.trim() || null
+          : null,
+    };
+
+    startTransition(async () => {
+      const result =
+        isEdit && existing
+          ? await updateSiteAction(existing.id, payload)
+          : await createSiteAction(payload);
+
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      if (isEdit && existing) {
+        toast.success(`Updated ${name}`);
+        onSubmitSuccess(existing.id);
+        return;
+      }
+
+      const newSiteId = result.data.id;
+
+      // Fan out contacts with DUAL-FK (client_id + site_id both set), so
+      // each new contact appears on both the parent client's Contacts
+      // pane AND any future site detail page.
+      const activeContacts = contacts.filter(isContactActive);
+      let contactFailCount = 0;
+      if (activeContacts.length > 0) {
+        const contactPayloads: DbContactInsert[] = activeContacts.map((c) => ({
+          client_id: selectedClientId,
+          site_id: newSiteId,
+          first_name: c.first_name.trim(),
+          last_name: c.last_name.trim(),
+          title: c.role.trim() || null,
+          email: c.email.trim() || null,
+          phones: c.phones
+            .filter((p) => p.number.trim() !== "")
+            .map((p) => ({ label: p.label, number: p.number.trim() })),
+          is_primary: c.is_primary,
+          is_billing: c.is_billing,
+          is_emergency: c.is_emergency,
+          is_accounts_payable: c.is_accounts_payable,
+          contact_type_custom:
+            c.has_custom_type && c.contact_type_custom.trim()
+              ? c.contact_type_custom.trim()
+              : null,
+        }));
+        const results = await Promise.all(
+          contactPayloads.map((p) => createContactAction(p))
+        );
+        contactFailCount = results.filter((r) => !r.ok).length;
+      }
+
+      toast.success(`Site "${name}" created`);
+      if (contactFailCount > 0) {
+        toast.warning(
+          `${contactFailCount} contact${
+            contactFailCount > 1 ? "s" : ""
+          } couldn't be added. You can add them later from the client detail page.`
+        );
+      }
+      onSubmitSuccess(newSiteId);
+    });
+  }
+
+  // Effective values displayed when an inheritance toggle is ON. The
+  // disabled inputs read these so the operator sees what's being
+  // inherited. parentClient is null until the picker fires, so we
+  // fall back to "" to keep the inputs controlled.
+  const effBill = {
+    street: parentClient?.billing_street ?? "",
+    unit: parentClient?.billing_unit ?? "",
+    city: parentClient?.billing_city ?? "",
+    province: parentClient?.billing_province ?? "",
+    postal: parentClient?.billing_postal ?? "",
+    country: parentClient?.billing_country ?? "Canada",
+  };
+  // For mailing-when-same-as-billing display: prefer the site's own
+  // billing (if it's been overridden) else the client's billing.
+  const effMail = billSameAsClient
+    ? effBill
+    : {
+        street: billStreet,
+        unit: billUnit,
+        city: billCity,
+        province: billProvince,
+        postal: billPostal,
+        country: billCountry,
+      };
+
+  // ─── JSX ─────────────────────────────────────────────────────────────
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {/* SECTION 1 — Site Information */}
+      <Section title="Site Information" defaultOpen>
+        {needsClientPicker && (
+          <Field label="Client *" error={errors.client}>
+            <Select
+              value={selectedClientId || undefined}
+              onValueChange={(v) => setSelectedClientId(v ?? "")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a client…" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                    {c.client_code ? ` (${c.client_code})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        <Field label="Site name *" error={errors.name}>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            placeholder="e.g. Bay 4 (Cleanroom)"
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Site code">
+            <Input
+              value={isEdit ? siteCode : "Auto-generated on save"}
+              readOnly
+              disabled
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field label="Status">
+            <Select
+              value={status}
+              onValueChange={(v) =>
+                setStatus((v ?? "Active") as DbSiteStatus)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        <Field label="Last service date">
+          <Input
+            type="date"
+            value={lastServiceDate}
+            onChange={(e) => setLastServiceDate(e.target.value)}
+          />
+        </Field>
+
+        <Field label="Notes">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Internal notes — not shown to the client."
+          />
+        </Field>
+      </Section>
+
+      {/* SECTION 2 — Site (physical) Address */}
+      <Section title="Site Address">
+        <Field label="Address — line 1">
+          <Input
+            value={address1}
+            onChange={(e) => setAddress1(e.target.value)}
+            placeholder="1842 Industrial Pkwy"
+          />
+        </Field>
+        <Field label="Address — line 2">
+          <Input
+            value={address2}
+            onChange={(e) => setAddress2(e.target.value)}
+            placeholder="Suite / floor / unit"
+          />
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="City">
+            <Input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Toronto"
+            />
+          </Field>
+          <Field label="Province">
+            <ProvinceSelect value={province} onChange={setProvince} />
+          </Field>
+          <Field label="Postal">
+            <Input
+              value={postal}
+              onChange={(e) => setPostal(e.target.value)}
+              placeholder="M5H 2S6"
+            />
+          </Field>
+        </div>
+        <Field label="Country">
+          <Input
+            value={siteCountry}
+            onChange={(e) => setSiteCountry(e.target.value)}
+            placeholder="Canada"
+          />
+        </Field>
+      </Section>
+
+      {/* SECTION 3 — Billing Address */}
+      <Section title="Billing Address">
+        <InheritRadio
+          name="billing_same_as_client"
+          inheritedLabel="Same as client billing address"
+          overrideLabel="Different address"
+          value={billSameAsClient}
+          onChange={handleBillingInheritToggle}
+          parentClientName={parentClient?.name}
+        />
+        <AddressFields
+          street={billSameAsClient ? effBill.street : billStreet}
+          unit={billSameAsClient ? effBill.unit : billUnit}
+          city={billSameAsClient ? effBill.city : billCity}
+          province={billSameAsClient ? effBill.province : billProvince}
+          postal={billSameAsClient ? effBill.postal : billPostal}
+          country={billSameAsClient ? effBill.country : billCountry}
+          disabled={billSameAsClient}
+          onStreetChange={setBillStreet}
+          onUnitChange={setBillUnit}
+          onCityChange={setBillCity}
+          onProvinceChange={setBillProvince}
+          onPostalChange={setBillPostal}
+          onCountryChange={setBillCountry}
+        />
+      </Section>
+
+      {/* SECTION 4 — Mailing Address */}
+      <Section title="Mailing Address">
+        <InheritRadio
+          name="mailing_same_as_billing"
+          inheritedLabel="Same as billing address"
+          overrideLabel="Different address"
+          value={mailSameAsBilling}
+          onChange={handleMailingInheritToggle}
+          parentClientName={undefined /* mailing inherits from billing, not client name */}
+        />
+        <AddressFields
+          street={mailSameAsBilling ? effMail.street : mailStreet}
+          unit={mailSameAsBilling ? effMail.unit : mailUnit}
+          city={mailSameAsBilling ? effMail.city : mailCity}
+          province={mailSameAsBilling ? effMail.province : mailProvince}
+          postal={mailSameAsBilling ? effMail.postal : mailPostal}
+          country={mailSameAsBilling ? effMail.country : mailCountry}
+          disabled={mailSameAsBilling}
+          onStreetChange={setMailStreet}
+          onUnitChange={setMailUnit}
+          onCityChange={setMailCity}
+          onProvinceChange={setMailProvince}
+          onPostalChange={setMailPostal}
+          onCountryChange={setMailCountry}
+        />
+      </Section>
+
+      {/* SECTION 5/6/7 banner — single inherit flag controls all three */}
+      <Section title="Tax">
+        <InheritRadio
+          name="inherit_payment_terms_from_client"
+          inheritedLabel="Use client's terms"
+          overrideLabel="Override at site level"
+          value={inheritFromClient}
+          onChange={handleInheritFromClientToggle}
+          parentClientName={parentClient?.name}
+          helpText="Controls Tax, Payment, and Portal sections together."
+        />
+
+        <Field label="HST / GST number">
+          <Input
+            value={
+              inheritFromClient
+                ? parentClient?.client_hst_gst_number ?? ""
+                : siteHstGst
+            }
+            onChange={(e) => setSiteHstGst(e.target.value)}
+            placeholder="123456789 RT0001"
+            disabled={inheritFromClient}
+          />
+        </Field>
+        <Toggle
+          label="Tax-exempt"
+          value={inheritFromClient ? parentClient?.tax_exempt ?? false : taxExempt}
+          onChange={setTaxExempt}
+          disabled={inheritFromClient}
+        />
+        {(inheritFromClient
+          ? parentClient?.tax_exempt
+          : taxExempt) && (
+          <Field
+            label="Tax-exempt certificate number *"
+            error={errors.taxExemptCert}
+          >
+            <Input
+              value={
+                inheritFromClient
+                  ? parentClient?.tax_exempt_certificate_number ?? ""
+                  : taxExemptCert
+              }
+              onChange={(e) => setTaxExemptCert(e.target.value)}
+              placeholder="Certificate / exemption ref."
+              disabled={inheritFromClient}
+            />
+          </Field>
+        )}
+        <Field label="Tax rate (%)">
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              step="0.001"
+              value={taxRate}
+              onChange={(e) => setTaxRate(e.target.value)}
+              placeholder={
+                suggestedTaxRate != null ? String(suggestedTaxRate) : "Optional"
+              }
+              disabled={inheritFromClient}
+              className="max-w-[140px]"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                suggestedTaxRate != null && setTaxRate(String(suggestedTaxRate))
+              }
+              disabled={inheritFromClient || suggestedTaxRate == null}
+            >
+              Use {taxProvinceForLookup ?? "default"} default (
+              {suggestedTaxRate != null ? `${suggestedTaxRate}%` : "—"})
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-[11px]">
+            Auto-fills from billing province. Edit to override.
+          </p>
+        </Field>
+      </Section>
+
+      {/* SECTION 6 — Payment Terms & Method */}
+      <Section title="Payment Terms & Method">
+        <Field label="Payment terms">
+          <Select
+            value={
+              inheritFromClient
+                ? parentClient?.payment_terms ?? "net_30"
+                : paymentTerms
+            }
+            onValueChange={(v) =>
+              setPaymentTerms((v ?? "net_30") as DbClientPaymentTerms)
+            }
+            disabled={inheritFromClient}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYMENT_TERMS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        {(inheritFromClient
+          ? parentClient?.payment_terms === "custom"
+          : paymentTerms === "custom") && (
+          <Field
+            label="Custom payment terms *"
+            error={errors.paymentTermsCustom}
+          >
+            <Input
+              value={
+                inheritFromClient
+                  ? parentClient?.payment_terms_custom ?? ""
+                  : paymentTermsCustom
+              }
+              onChange={(e) => setPaymentTermsCustom(e.target.value)}
+              placeholder="e.g. 50% deposit, balance NET 45"
+              disabled={inheritFromClient}
+            />
+          </Field>
+        )}
+        <Field label="Preferred payment method">
+          <Select
+            value={
+              inheritFromClient
+                ? parentClient?.preferred_payment_method ?? "eft"
+                : payMethod
+            }
+            onValueChange={(v) =>
+              setPayMethod((v ?? "eft") as DbClientPaymentMethod)
+            }
+            disabled={inheritFromClient}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYMENT_METHODS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Toggle
+          label="Apply credit-card surcharge"
+          value={
+            inheritFromClient
+              ? parentClient?.apply_cc_surcharge ?? true
+              : ccSurcharge
+          }
+          onChange={setCcSurcharge}
+          disabled={inheritFromClient}
+        />
+        <Field label="Credit limit (CAD)">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            value={
+              inheritFromClient
+                ? parentClient?.credit_limit != null
+                  ? String(parentClient.credit_limit)
+                  : ""
+                : creditLimit
+            }
+            onChange={(e) => setCreditLimit(e.target.value)}
+            placeholder="Optional"
+            disabled={inheritFromClient}
+          />
+        </Field>
+        <Toggle
+          label="Credit hold"
+          value={
+            inheritFromClient
+              ? parentClient?.credit_hold ?? false
+              : creditHold
+          }
+          onChange={setCreditHold}
+          disabled={inheritFromClient}
+        />
+        <Field label="Preferred currency">
+          <div className="flex gap-4">
+            {(["CAD", "USD"] as DbClientCurrency[]).map((c) => (
+              <label
+                key={c}
+                className="flex items-center gap-2 text-sm"
+                style={{ opacity: inheritFromClient ? 0.6 : 1 }}
+              >
+                <input
+                  type="radio"
+                  name="currency"
+                  checked={
+                    inheritFromClient
+                      ? parentClient?.preferred_currency === c
+                      : currency === c
+                  }
+                  onChange={() => setCurrency(c)}
+                  disabled={inheritFromClient}
+                />
+                {c}
+              </label>
+            ))}
+          </div>
+        </Field>
+      </Section>
+
+      {/* SECTION 7 — Portal Access */}
+      <Section title="Portal Access">
+        <Toggle
+          label="Portal access enabled"
+          value={
+            inheritFromClient
+              ? parentClient?.portal_access_enabled ?? false
+              : portalEnabled
+          }
+          onChange={setPortalEnabled}
+          disabled={inheritFromClient}
+          help="Login provisioning ships with the Users module."
+        />
+        {(inheritFromClient
+          ? parentClient?.portal_access_enabled
+          : portalEnabled) && (
+          <Field label="Portal contact email *" error={errors.portalEmail}>
+            <Input
+              type="email"
+              value={
+                inheritFromClient
+                  ? parentClient?.portal_contact_email ?? ""
+                  : portalEmail
+              }
+              onChange={(e) => setPortalEmail(e.target.value)}
+              placeholder="ap@client.com"
+              disabled={inheritFromClient}
+            />
+          </Field>
+        )}
+      </Section>
+
+      {/* SECTION 8 — Contact Information (create-mode only) */}
+      {!isEdit && (
+        <Section title="Contact Information">
+          <p className="text-muted-foreground text-xs">
+            Add contacts now or anytime later from the client detail page.
+            These contacts will be linked to both this client and this site.
+          </p>
+
+          {contacts.map((c, idx) => (
+            <div
+              key={idx}
+              className="space-y-3 rounded-md border border-[var(--border)] p-3"
+            >
+              <div className="flex items-center justify-between">
+                <p className="nx-eyebrow-soft text-[10px]">
+                  Contact {idx + 1}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                  aria-label="Remove contact"
+                  onClick={() =>
+                    setContacts(contacts.filter((_, i) => i !== idx))
+                  }
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="First name *"
+                  error={errors[`contact${idx}FirstName`]}
+                >
+                  <Input
+                    value={c.first_name}
+                    onChange={(e) =>
+                      setContacts(
+                        contacts.map((x, i) =>
+                          i === idx
+                            ? { ...x, first_name: e.target.value }
+                            : x
+                        )
+                      )
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Last name *"
+                  error={errors[`contact${idx}LastName`]}
+                >
+                  <Input
+                    value={c.last_name}
+                    onChange={(e) =>
+                      setContacts(
+                        contacts.map((x, i) =>
+                          i === idx
+                            ? { ...x, last_name: e.target.value }
+                            : x
+                        )
+                      )
+                    }
+                  />
+                </Field>
+              </div>
+
+              <Field label="Role">
+                <Input
+                  value={c.role}
+                  onChange={(e) =>
+                    setContacts(
+                      contacts.map((x, i) =>
+                        i === idx ? { ...x, role: e.target.value } : x
+                      )
+                    )
+                  }
+                  placeholder="e.g. Site Lead, Facilities Manager"
+                />
+              </Field>
+
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={c.email}
+                  onChange={(e) =>
+                    setContacts(
+                      contacts.map((x, i) =>
+                        i === idx ? { ...x, email: e.target.value } : x
+                      )
+                    )
+                  }
+                  placeholder="name@example.com"
+                />
+              </Field>
+
+              <div className="space-y-2">
+                <p className="nx-eyebrow-soft text-[10px]">Phones</p>
+                <PhonesEditor
+                  phones={c.phones}
+                  onChange={(nextPhones) =>
+                    setContacts(
+                      contacts.map((x, i) =>
+                        i === idx ? { ...x, phones: nextPhones } : x
+                      )
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="nx-eyebrow-soft text-[10px]">Contact type</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={c.is_primary}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? { ...x, is_primary: e.target.checked }
+                              : x
+                          )
+                        )
+                      }
+                    />
+                    Primary
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={c.is_billing}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? { ...x, is_billing: e.target.checked }
+                              : x
+                          )
+                        )
+                      }
+                    />
+                    Billing
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={c.is_emergency}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? { ...x, is_emergency: e.target.checked }
+                              : x
+                          )
+                        )
+                      }
+                    />
+                    Emergency
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={c.is_accounts_payable}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? {
+                                  ...x,
+                                  is_accounts_payable: e.target.checked,
+                                }
+                              : x
+                          )
+                        )
+                      }
+                    />
+                    AP
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={c.has_custom_type}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? {
+                                  ...x,
+                                  has_custom_type: e.target.checked,
+                                  contact_type_custom: e.target.checked
+                                    ? x.contact_type_custom
+                                    : "",
+                                }
+                              : x
+                          )
+                        )
+                      }
+                    />
+                    Custom
+                  </label>
+                </div>
+                {c.has_custom_type && (
+                  <Field label="Custom type label">
+                    <Input
+                      value={c.contact_type_custom}
+                      onChange={(e) =>
+                        setContacts(
+                          contacts.map((x, i) =>
+                            i === idx
+                              ? {
+                                  ...x,
+                                  contact_type_custom: e.target.value,
+                                }
+                              : x
+                          )
+                        )
+                      }
+                      placeholder="e.g. HR Lead, Vendor Coordinator"
+                    />
+                  </Field>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            onClick={() => setContacts([...contacts, newEmptyContact()])}
+          >
+            <Plus className="h-3 w-3" />
+            Add contact
+          </Button>
+        </Section>
+      )}
+
+      {/* Footer — Cancel + Submit (mirror ClientForm) */}
+      <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={pending || isInvalid}
+          className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold tracking-wide shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+          style={{
+            background: "var(--brand-accent)",
+            color: "var(--brand-primary)",
+          }}
+        >
+          {pending ? "Saving…" : isEdit ? "Save changes" : "Add site"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Local helpers ────────────────────────────────────────────────────────
+
+function ProvinceSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select
+      value={value || undefined}
+      onValueChange={(v) => onChange(v ?? "")}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Province…" />
+      </SelectTrigger>
+      <SelectContent>
+        {CANADA_PROVINCES.map((p) => (
+          <SelectItem key={p.code} value={p.code}>
+            {p.code} — {p.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function InheritRadio({
+  name,
+  inheritedLabel,
+  overrideLabel,
+  value,
+  onChange,
+  parentClientName,
+  helpText,
+}: {
+  name: string;
+  inheritedLabel: string;
+  overrideLabel: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+  parentClientName?: string;
+  helpText?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={name}
+            checked={value}
+            onChange={() => onChange(true)}
+          />
+          {inheritedLabel}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={name}
+            checked={!value}
+            onChange={() => onChange(false)}
+          />
+          {overrideLabel}
+        </label>
+      </div>
+      {value && parentClientName && (
+        <p className="text-muted-foreground text-[11px] italic">
+          Currently inheriting from {parentClientName}.
+        </p>
+      )}
+      {helpText && (
+        <p className="text-muted-foreground text-[11px]">{helpText}</p>
+      )}
+    </div>
+  );
+}
+
+function AddressFields({
+  street,
+  unit,
+  city,
+  province,
+  postal,
+  country,
+  disabled,
+  onStreetChange,
+  onUnitChange,
+  onCityChange,
+  onProvinceChange,
+  onPostalChange,
+  onCountryChange,
+}: {
+  street: string;
+  unit: string;
+  city: string;
+  province: string;
+  postal: string;
+  country: string;
+  disabled: boolean;
+  onStreetChange: (v: string) => void;
+  onUnitChange: (v: string) => void;
+  onCityChange: (v: string) => void;
+  onProvinceChange: (v: string) => void;
+  onPostalChange: (v: string) => void;
+  onCountryChange: (v: string) => void;
+}) {
+  return (
+    <>
+      <Field label="Street">
+        <Input
+          value={street}
+          onChange={(e) => onStreetChange(e.target.value)}
+          placeholder="350 Bay Street"
+          disabled={disabled}
+        />
+      </Field>
+      <Field label="Unit / Suite">
+        <Input
+          value={unit}
+          onChange={(e) => onUnitChange(e.target.value)}
+          placeholder="Suite 1200"
+          disabled={disabled}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="City">
+          <Input
+            value={city}
+            onChange={(e) => onCityChange(e.target.value)}
+            placeholder="Toronto"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Province">
+          {/* Disabled state can't use Select cleanly with placeholder, so
+              show a flat Input in that case. */}
+          {disabled ? (
+            <Input
+              value={province}
+              readOnly
+              disabled
+              placeholder="—"
+            />
+          ) : (
+            <ProvinceSelect value={province} onChange={onProvinceChange} />
+          )}
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Postal code">
+          <Input
+            value={postal}
+            onChange={(e) => onPostalChange(e.target.value)}
+            placeholder="M5H 2S6"
+            disabled={disabled}
+          />
+        </Field>
+        <Field label="Country">
+          <Input
+            value={country}
+            onChange={(e) => onCountryChange(e.target.value)}
+            placeholder="Canada"
+            disabled={disabled}
+          />
+        </Field>
+      </div>
+    </>
+  );
+}
+
+function Section({
+  title,
+  defaultOpen,
+  error,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  return (
+    <div className="rounded-md border border-[var(--border)]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="hover:bg-muted/50 flex w-full items-center justify-between rounded-t-md px-3 py-2.5 text-left"
+      >
+        <span className="font-serif text-sm font-medium">{title}</span>
+        <span className="flex items-center gap-2">
+          {error && (
+            <span className="text-[10px] font-medium text-red-600">
+              needs attention
+            </span>
+          )}
+          {open ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </span>
+      </button>
+      {open && <div className="space-y-3 px-3 pb-4 pt-1">{children}</div>}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="nx-eyebrow-soft text-[10px]">{label}</Label>
+      {children}
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  value,
+  onChange,
+  help,
+  disabled,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  help?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <Label className="nx-eyebrow-soft text-[10px]">{label}</Label>
+        {help && (
+          <p className="text-muted-foreground mt-1 text-[11px]">{help}</p>
+        )}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={value ? "default" : "outline"}
+        onClick={() => onChange(!value)}
+        aria-pressed={value}
+        disabled={disabled}
+        className="min-w-[3.25rem] shrink-0"
+      >
+        {value ? "On" : "Off"}
+      </Button>
+    </div>
+  );
+}
