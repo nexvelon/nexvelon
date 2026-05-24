@@ -1,8 +1,10 @@
-// Server component — fetches one client + its sites + contacts, then hands
-// off to the interactive ClientDetailView (client component).
+// Server component — fetches one client + its sites + contacts + activity
+// log, then hands off to the interactive ClientDetailView (client
+// component). ACT-1 added the activity-log fetch alongside existing data.
 
 import Link from "next/link";
 import { getClientById } from "@/lib/api/clients";
+import { listActivityFor } from "@/lib/api/activity-log";
 import type { DbClientWithCounts } from "@/lib/types/database";
 import { ClientDetailView } from "./ClientDetailView";
 
@@ -32,6 +34,12 @@ export default async function ClientDetailPage({
 
   const { client, sites, contacts } = result;
 
+  // ACT-1: fetch activity-log entries for THIS client (entity_type='client'
+  // only — site / contact log rows exist in the DB but aren't surfaced on
+  // this tab; future /sites/[id] + /contacts/[id] pages will render their
+  // own). Run alongside the existing fetches.
+  const activityLog = await listActivityFor("client", id, 100);
+
   // DbClientWithCounts = DbClient + site_count + contact_count. Every other
   // field (lifetime_value / ytd_revenue / nps_score) lives on DbClient itself,
   // so the spread produces a complete view-model.
@@ -46,6 +54,7 @@ export default async function ClientDetailPage({
       client={clientWithCounts}
       sites={sites}
       contacts={contacts}
+      activityLog={activityLog}
     />
   );
 }

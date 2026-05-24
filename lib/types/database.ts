@@ -488,3 +488,47 @@ export interface DbAuthOtp {
   attempts: number;
   created_at: string;
 }
+
+// ============================================================================
+// ACT-1 (migration 0016): activity log
+// ============================================================================
+
+export type ActivityEntityType = "client" | "site" | "contact";
+export type ActivityAction = "create" | "update" | "delete";
+
+/** One field-level change inside a `changes` JSONB blob. */
+export interface ActivityChange {
+  from: unknown;
+  to: unknown;
+}
+
+/**
+ * The shape of activity_log.changes — a flat object keyed by column name,
+ * each value a {from, to} pair. Empty `{}` for create / delete entries
+ * (the action itself implies what happened).
+ */
+export type ActivityChanges = Record<string, ActivityChange>;
+
+export interface DbActivityLog {
+  id: string;
+  entity_type: ActivityEntityType;
+  entity_id: string;
+  action: ActivityAction;
+  changes: ActivityChanges;
+  actor_id: string | null;
+  created_at: string;
+}
+
+/**
+ * Activity log row enriched with the actor's profile slice (for display).
+ * `actor` is null when actor_id is null (system action) OR when the
+ * referenced profile no longer exists.
+ */
+export interface DbActivityLogWithActor extends DbActivityLog {
+  actor: {
+    id: string;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
+}

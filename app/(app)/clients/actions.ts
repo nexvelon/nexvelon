@@ -5,6 +5,7 @@ import {
   createClient,
   createContact,
   createSite,
+  getClientById,
   getClients,
   getContactsByClient,
   getSitesByClient,
@@ -17,7 +18,9 @@ import {
   updateContact,
   updateSite,
 } from "@/lib/api/clients";
+import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   DbClientInsert,
   DbClientUpdate,
@@ -25,6 +28,7 @@ import type {
   DbContact,
   DbContactInsert,
   DbContactUpdate,
+  DbSite,
   DbSiteInsert,
   DbSiteStatus,
   DbSiteUpdate,
@@ -41,6 +45,35 @@ function fail(err: unknown): { ok: false; error: string } {
   const message =
     err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
   return { ok: false, error: message };
+}
+
+// ----------------------------------------------------------------------------
+// ACT-1 — per-entity "before" fetchers for the activity-log diff. Clients
+// reuse the existing getClientById helper; sites + contacts get a thin
+// inline lookup since the lib/api/clients.ts file only exposes by-parent
+// listers for those (getSitesByClient / getContactsByClient).
+// ----------------------------------------------------------------------------
+
+async function getSiteByIdForDiff(id: string): Promise<DbSite | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("sites")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getSiteByIdForDiff: ${error.message}`);
+  return (data as DbSite | null) ?? null;
+}
+
+async function getContactByIdForDiff(id: string): Promise<DbContact | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getContactByIdForDiff: ${error.message}`);
+  return (data as DbContact | null) ?? null;
 }
 
 // ----------------------------------------------------------------------------
@@ -238,6 +271,8 @@ export async function createClientAction(
     // here; kept for symmetry / future create-with-site flows.
     const finalPayload = await applyBillingSameAsSite(payload, null);
     const row = await createClient(finalPayload);
+    // ACT-1: best-effort log; never blocks the main mutation.
+    await logActivity("client", row.id, "create", {});
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -253,7 +288,24 @@ export async function updateClientAction(
     const invalid = await validateClientPayload(payload);
     if (invalid) return invalid;
     const finalPayload = await applyBillingSameAsSite(payload, id);
+
+    // ACT-1: fetch the row BEFORE mutating so we can compute the diff.
+    // Reuses the existing getClientById (returns {client, sites, contacts}
+    // — we only need .client).
+    const before = await getClientById(id);
+    if (!before) return { ok: false, error: "Client not found" };
+
     const row = await updateClient(id, finalPayload);
+
+    // ACT-1: log only when there's an actual change (skip no-op saves).
+    const changes = computeChanges(
+      before.client as unknown as Record<string, unknown>,
+      finalPayload as Record<string, unknown>
+    );
+    if (Object.keys(changes).length > 0) {
+      await logActivity("client", id, "update", changes);
+    }
+
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -269,6 +321,8 @@ export async function deleteClientAction(
     if (!deleted) {
       return { ok: false, error: "Client not found or already deleted" };
     }
+    // ACT-1: log only when an actual row was deleted (not "already gone").
+    await logActivity("client", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
   } catch (e) {
@@ -299,6 +353,7 @@ export async function createSiteAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const row = await createSite(payload);
+    await logActivity("site", row.id, "create", {});
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -311,7 +366,19 @@ export async function updateSiteAction(
   payload: DbSiteUpdate
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const before = await getSiteByIdForDiff(id);
+    if (!before) return { ok: false, error: "Site not found" };
+
     const row = await updateSite(id, payload);
+
+    const changes = computeChanges(
+      before as unknown as Record<string, unknown>,
+      payload as Record<string, unknown>
+    );
+    if (Object.keys(changes).length > 0) {
+      await logActivity("site", id, "update", changes);
+    }
+
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -324,6 +391,7 @@ export async function deleteSiteAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     await softDeleteSite(id);
+    await logActivity("site", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
   } catch (e) {
@@ -340,6 +408,7 @@ export async function createContactAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const row = await createContact(payload);
+    await logActivity("contact", row.id, "create", {});
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -352,7 +421,19 @@ export async function updateContactAction(
   payload: DbContactUpdate
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const before = await getContactByIdForDiff(id);
+    if (!before) return { ok: false, error: "Contact not found" };
+
     const row = await updateContact(id, payload);
+
+    const changes = computeChanges(
+      before as unknown as Record<string, unknown>,
+      payload as Record<string, unknown>
+    );
+    if (Object.keys(changes).length > 0) {
+      await logActivity("contact", id, "update", changes);
+    }
+
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -365,6 +446,7 @@ export async function deleteContactAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     await softDeleteContact(id);
+    await logActivity("contact", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
   } catch (e) {

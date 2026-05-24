@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type {
+  DbActivityLogWithActor,
   DbClientWithCounts,
   DbContact,
   DbSite,
@@ -26,6 +27,7 @@ import { PlaceholderPane } from "../_components/PlaceholderPane";
 import { ClientFormDrawer } from "../ClientFormDrawer";
 import { SiteFormDrawer } from "../SiteFormDrawer";
 import { ContactFormDrawer } from "../ContactFormDrawer";
+import { ActivityLog } from "@/components/activity/ActivityLog";
 import {
   deleteClientAction,
   deleteContactAction,
@@ -36,12 +38,18 @@ interface ClientDetailViewProps {
   client: DbClientWithCounts;
   sites: DbSite[];
   contacts: DbContact[];
+  // ACT-1: activity-log entries for THIS client. Server-fetched in page.tsx
+  // alongside the existing data. Site/contact log entries are not surfaced
+  // on this tab — they live in the DB and will render on future
+  // /sites/[id] + /contacts/[id] detail pages.
+  activityLog: DbActivityLogWithActor[];
 }
 
 export function ClientDetailView({
   client,
   sites,
   contacts,
+  activityLog,
 }: ClientDetailViewProps) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("Sites");
@@ -177,7 +185,7 @@ export function ClientDetailView({
         <PlaceholderPane label="Service history" />
       )}
       {tab === "Documents" && <PlaceholderPane label="Documents" />}
-      {tab === "Activity" && <PlaceholderPane label="Activity" />}
+      {tab === "Activity" && <ActivityLog entries={activityLog} />}
 
       {/* Drawers */}
       {clientEditDrawer && (
