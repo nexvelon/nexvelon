@@ -208,7 +208,6 @@ export function SitesView({ initialSites, clients }: Props) {
                 <TableHead>Client</TableHead>
                 <TableHead>Site Name</TableHead>
                 <TableHead>Location</TableHead>
-                <TableHead>Equipment</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Service</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -289,14 +288,6 @@ function SiteRow({
 }) {
   const location =
     [site.city, site.province].filter(Boolean).join(" · ") || "—";
-  const equipment =
-    [
-      site.cameras_count > 0 ? `${site.cameras_count} cam` : null,
-      site.doors_count > 0 ? `${site.doors_count} door` : null,
-      site.controllers_count > 0 ? `${site.controllers_count} ctrl` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ") || "—";
 
   return (
     <TableRow className="group">
@@ -313,9 +304,6 @@ function SiteRow({
       </TableCell>
       <TableCell className="text-sm font-medium">{site.name}</TableCell>
       <TableCell className="text-muted-foreground text-xs">{location}</TableCell>
-      <TableCell className="text-muted-foreground text-xs">
-        {equipment}
-      </TableCell>
       <TableCell>
         <StatusBadge status={site.status} />
       </TableCell>

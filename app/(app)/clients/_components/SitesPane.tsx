@@ -152,19 +152,18 @@ function SiteCard({
         </div>
       </div>
 
+      {/* SITES-2c: dropped 6 systems stats (Panel / Intrusion / Cameras /
+          Controllers / Doors / Cards Issued). The underlying DB columns +
+          DbSite fields stay per §2.1; only the display is removed.
+          Regridded to grid-cols-2 since 2 items in sm:grid-cols-4 would
+          leave 2 empty cells. */}
       <div
-        className="mt-3 grid grid-cols-2 gap-3 rounded-md p-3 sm:grid-cols-4"
+        className="mt-3 grid grid-cols-2 gap-3 rounded-md p-3"
         style={{
           background:
             "color-mix(in oklab, var(--brand-muted) 50%, transparent)",
         }}
       >
-        <SiteStat label="Panel" value={site.panel_system ?? "—"} />
-        <SiteStat label="Intrusion" value={site.intrusion_system ?? "—"} />
-        <SiteStat label="Cameras" value={`${site.cameras_count}`} />
-        <SiteStat label="Controllers" value={`${site.controllers_count}`} />
-        <SiteStat label="Doors" value={`${site.doors_count}`} />
-        <SiteStat label="Cards Issued" value={`${site.cards_issued}`} />
         <SiteStat
           label="Last Service"
           value={
