@@ -178,6 +178,41 @@ export interface DbSite {
   status: DbSiteStatus;
   last_service_date: string | null;
   notes: string | null;
+  // SITES-2a (migration 0015) — billing address
+  billing_street: string | null;
+  billing_unit: string | null;
+  billing_city: string | null;
+  billing_province: string | null;
+  billing_postal: string | null;
+  billing_country: string | null;
+  billing_same_as_client: boolean;
+  // mailing address
+  mailing_street: string | null;
+  mailing_unit: string | null;
+  mailing_city: string | null;
+  mailing_province: string | null;
+  mailing_postal: string | null;
+  mailing_country: string | null;
+  mailing_same_as_billing: boolean;
+  // tax
+  site_hst_gst_number: string | null;
+  tax_exempt: boolean;
+  tax_exempt_certificate_number: string | null;
+  tax_rate: number | null;
+  // payment — reuses the client enum types (same CHECK values on both tables)
+  payment_terms: DbClientPaymentTerms;
+  payment_terms_custom: string | null;
+  preferred_payment_method: DbClientPaymentMethod;
+  apply_cc_surcharge: boolean;
+  credit_limit: number | null;
+  credit_hold: boolean;
+  preferred_currency: DbClientCurrency;
+  // portal
+  portal_access_enabled: boolean;
+  portal_contact_email: string | null;
+  // inheritance — UI flag: when true the site reads payment/tax/portal from
+  // its parent client; when false the site's own values above are used.
+  inherit_payment_terms_from_client: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -205,6 +240,37 @@ export type DbSiteInsert = {
   status?: DbSiteStatus;
   last_service_date?: string | null;
   notes?: string | null;
+  // SITES-2a (migration 0015) — all new columns optional on insert/update
+  // since the DB applies defaults. Booleans are `boolean | undefined` (no
+  // `| null`) since the columns are NOT NULL.
+  billing_street?: string | null;
+  billing_unit?: string | null;
+  billing_city?: string | null;
+  billing_province?: string | null;
+  billing_postal?: string | null;
+  billing_country?: string | null;
+  billing_same_as_client?: boolean;
+  mailing_street?: string | null;
+  mailing_unit?: string | null;
+  mailing_city?: string | null;
+  mailing_province?: string | null;
+  mailing_postal?: string | null;
+  mailing_country?: string | null;
+  mailing_same_as_billing?: boolean;
+  site_hst_gst_number?: string | null;
+  tax_exempt?: boolean;
+  tax_exempt_certificate_number?: string | null;
+  tax_rate?: number | null;
+  payment_terms?: DbClientPaymentTerms;
+  payment_terms_custom?: string | null;
+  preferred_payment_method?: DbClientPaymentMethod;
+  apply_cc_surcharge?: boolean;
+  credit_limit?: number | null;
+  credit_hold?: boolean;
+  preferred_currency?: DbClientCurrency;
+  portal_access_enabled?: boolean;
+  portal_contact_email?: string | null;
+  inherit_payment_terms_from_client?: boolean;
 };
 
 export type DbSiteUpdate = Partial<DbSiteInsert>;
