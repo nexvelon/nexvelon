@@ -268,8 +268,9 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
     }
   }
 
-  // CL-4: parse a filled template and auto-populate the drawer. Only sets
-  // fields that have content — values Jay already typed are preserved.
+  // CL-8: parse a filled single-sheet template and auto-populate the drawer.
+  // Only sets fields that have content — values Jay already typed are
+  // preserved. The parser raises a friendly error for older 4-sheet templates.
   async function handleUploadTemplate(file: File) {
     try {
       const { parseClientTemplate } = await import(
@@ -277,9 +278,20 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       );
       const parsed = await parseClientTemplate(file);
 
-      // Client info
+      // ─── Client identity ───
       if (parsed.client.legal_name) setLegalName(parsed.client.legal_name);
       if (parsed.client.name) setName(parsed.client.name);
+      // Status — only accept values that match the form's narrowed enum
+      // (Prospect / Active / Inactive — Lost isn't a template option).
+      if (
+        parsed.client.status &&
+        (["Prospect", "Active", "Inactive"] as DbClientStatus[]).includes(
+          parsed.client.status as DbClientStatus
+        )
+      ) {
+        setStatus(parsed.client.status as DbClientStatus);
+      }
+      if (parsed.client.industry) setIndustry(parsed.client.industry);
       if (parsed.client.hst_gst_number)
         setHstGst(parsed.client.hst_gst_number);
       if (parsed.client.tax_exempt !== null)
@@ -287,7 +299,7 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       if (parsed.client.tax_exempt_cert)
         setTaxCert(parsed.client.tax_exempt_cert);
 
-      // Billing address
+      // ─── Billing address ───
       if (parsed.billing.street) setBillStreet(parsed.billing.street);
       if (parsed.billing.unit) setBillUnit(parsed.billing.unit);
       if (parsed.billing.city) setBillCity(parsed.billing.city);
@@ -295,71 +307,85 @@ export function ClientFormDrawer({ open, onClose, mode }: Props) {
       if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
       if (parsed.billing.country) setBillCountry(parsed.billing.country);
 
-      // CL-5c/CL-7: build dynamic contact rows from the template's three fixed
-      // slots. Main → primary, Accounts Payable → billing + AP (CL-7 — both
-      // flags kept; AP is the new explicit flag, is_billing stays for
-      // back-compat), Additional → none. CL-7 fields default to empty/false;
-      // the template gains no new columns until CL-8's single-sheet refactor.
-      const tplContacts: ContactRowState[] = [];
-      const pushTpl = (
-        tc: {
-          first_name: string;
-          last_name: string;
-          phone: string;
-          email: string;
-        },
-        roles: {
-          is_primary: boolean;
-          is_billing: boolean;
-          is_accounts_payable: boolean;
-        }
-      ) => {
-        if (
-          !tc.first_name.trim() &&
-          !tc.last_name.trim() &&
-          !tc.phone.trim() &&
-          !tc.email.trim()
-        ) {
-          return;
-        }
-        tplContacts.push({
-          first_name: tc.first_name,
-          last_name: tc.last_name,
-          role: "",
-          email: tc.email,
-          phones: [{ label: "Phone", number: tc.phone }],
-          is_primary: roles.is_primary,
-          is_billing: roles.is_billing,
-          is_emergency: false,
-          is_accounts_payable: roles.is_accounts_payable,
-          contact_type_custom: "",
-          has_custom_type: false,
-        });
-      };
-      pushTpl(parsed.mainContact, {
-        is_primary: true,
-        is_billing: false,
-        is_accounts_payable: false,
-      });
-      pushTpl(parsed.apContact, {
-        is_primary: false,
-        is_billing: true,
-        is_accounts_payable: true,
-      });
-      pushTpl(parsed.additionalContact, {
-        is_primary: false,
-        is_billing: false,
-        is_accounts_payable: false,
-      });
-      if (tplContacts.length > 0) setContacts(tplContacts);
+      // ─── Mailing address ───
+      // CL-8: if ALL mailing fields are blank, keep / default to same-as-billing
+      // (matches the template hint "Leave all fields blank to use billing
+      // address"). If ANY mailing field has content, populate them and flip
+      // the toggle to "Different address" so the values are persisted on save.
+      const mailingHasContent =
+        !!parsed.mailing.street ||
+        !!parsed.mailing.unit ||
+        !!parsed.mailing.city ||
+        !!parsed.mailing.province ||
+        !!parsed.mailing.postal ||
+        !!parsed.mailing.country;
+      if (mailingHasContent) {
+        setMailSameAsBilling(false);
+        if (parsed.mailing.street) setMailStreet(parsed.mailing.street);
+        if (parsed.mailing.unit) setMailUnit(parsed.mailing.unit);
+        if (parsed.mailing.city) setMailCity(parsed.mailing.city);
+        if (parsed.mailing.province) setMailProvince(parsed.mailing.province);
+        if (parsed.mailing.postal) setMailPostal(parsed.mailing.postal);
+        if (parsed.mailing.country) setMailCountry(parsed.mailing.country);
+      }
 
-      // CL-5a removed the Initial Site section — the template's Site sheet is
-      // still parsed but no longer populates a form field (sites are added on
-      // the client detail page now).
+      // ─── Payment terms & method ───
+      // parsed.payment.terms / .method are already mapped back to DB enum
+      // strings ("net_30", "eft", etc.) by the parser. Empty string = no
+      // selection — leave the current form default in place.
+      if (parsed.payment.terms) {
+        setPaymentTerms(parsed.payment.terms as DbClientPaymentTerms);
+      }
+      if (parsed.payment.terms_custom)
+        setPaymentTermsCustom(parsed.payment.terms_custom);
+      if (parsed.payment.method) {
+        setPayMethod(parsed.payment.method as DbClientPaymentMethod);
+      }
+      if (parsed.payment.credit_limit) setCreditLimit(parsed.payment.credit_limit);
+      if (
+        parsed.payment.currency &&
+        (["CAD", "USD"] as DbClientCurrency[]).includes(
+          parsed.payment.currency as DbClientCurrency
+        )
+      ) {
+        setCurrency(parsed.payment.currency as DbClientCurrency);
+      }
+
+      // ─── Portal access ───
+      if (parsed.portal.enabled !== null) setPortalEnabled(parsed.portal.enabled);
+      if (parsed.portal.email) setPortalEmail(parsed.portal.email);
+
+      // ─── Notes ───
+      if (parsed.notes) setNotes(parsed.notes);
+
+      // ─── Contacts ───
+      // CL-8: contacts now arrive as a flat array of up to 5 rows with
+      // per-row type flags (Primary / Billing / Emergency / AP / Custom).
+      // Replace the dynamic Contact Information list wholesale when the
+      // template carried any contacts (the form's existing rows are still
+      // editable above this section).
+      if (parsed.contacts.length > 0) {
+        const newContactRows: ContactRowState[] = parsed.contacts.map((pc) => ({
+          first_name: pc.first_name,
+          last_name: pc.last_name,
+          role: pc.role,
+          email: pc.email,
+          phones: pc.phone
+            ? [{ label: "Phone", number: pc.phone }]
+            : [{ label: "Phone", number: "" }],
+          is_primary: pc.is_primary,
+          is_billing: pc.is_billing,
+          is_emergency: pc.is_emergency,
+          is_accounts_payable: pc.is_accounts_payable,
+          contact_type_custom: pc.contact_type_custom,
+          has_custom_type: pc.contact_type_custom.trim() !== "",
+        }));
+        setContacts(newContactRows);
+      }
 
       toast.success("Template loaded — review the form below before saving");
     } catch (e) {
-      console.error("[CL-4] Template parse failed:", e);
+      console.error("[CL-8] Template parse failed:", e);
       toast.error(
         e instanceof Error ? e.message : "Failed to parse template"
       );
