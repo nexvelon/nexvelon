@@ -49,6 +49,10 @@ import type {
   DbContactInsert,
   ContactPhone,
 } from "@/lib/types/database";
+// CL-10: type-only import — the template module itself is dynamic-imported
+// inside handleUploadTemplate so the ~1 MB exceljs lib stays out of the
+// main bundle.
+import type { ParsedContact } from "@/lib/client-onboarding-template";
 
 const TYPES: DbClientType[] = [
   "Commercial",
@@ -112,6 +116,62 @@ function newEmptyContact(): ContactRowState {
     is_billing: false,
     is_emergency: false,
     is_accounts_payable: false,
+    contact_type_custom: "",
+    has_custom_type: false,
+  };
+}
+
+// ─── CL-10: parser-side merge-by-name helpers ────────────────────────────
+
+/** Case-insensitive trimmed match on first AND last name. Returns false
+ *  if either side has an empty name (can't confirm a match). */
+function namesMatch(a: ParsedContact, b: ParsedContact): boolean {
+  const af = a.first_name.trim().toLowerCase();
+  const al = a.last_name.trim().toLowerCase();
+  const bf = b.first_name.trim().toLowerCase();
+  const bl = b.last_name.trim().toLowerCase();
+  if (!af || !al || !bf || !bl) return false;
+  return af === bf && al === bl;
+}
+
+/** A parsed-template contact row has content if any of name/email/phone
+ *  is non-empty. Used to decide whether to produce a contact from a
+ *  non-merged row. */
+function hasContactContent(pc: ParsedContact): boolean {
+  return Boolean(
+    pc.first_name.trim() ||
+      pc.last_name.trim() ||
+      pc.email.trim() ||
+      pc.phone.trim()
+  );
+}
+
+/** Convert a single (non-merged) ParsedContact into a ContactRowState
+ *  with the right type-flag booleans + phone label. The `fallbackRole`
+ *  is used only if the row's Role column is blank — defaults to the
+ *  type_label (which is pre-filled by the template). */
+function buildContact(
+  pc: ParsedContact,
+  fallbackRole: string,
+  phoneLabel: string,
+  flags: {
+    is_primary: boolean;
+    is_billing: boolean;
+    is_accounts_payable: boolean;
+  }
+): ContactRowState {
+  return {
+    first_name: pc.first_name,
+    last_name: pc.last_name,
+    role: pc.role.trim() || pc.type_label.trim() || fallbackRole,
+    email: pc.email.trim(),
+    phones: [
+      { label: phoneLabel, number: pc.phone.trim() },
+    ],
+    is_primary: flags.is_primary,
+    is_billing: flags.is_billing,
+    is_emergency: false,
+    is_accounts_payable: flags.is_accounts_payable,
     contact_type_custom: "",
     has_custom_type: false,
   };
@@ -277,30 +337,64 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
     }
   }
 
-  // CL-8: parse a filled single-sheet template and auto-populate the drawer.
-  // Only sets fields that have content — values Jay already typed are
-  // preserved. The parser raises a friendly error for older 4-sheet templates.
+  // CL-10: parse a filled v2 template and auto-populate the form. The
+  // parser raises a friendly "older version" error for any pre-v2
+  // template (no version stamp in the title cell). Status / Industry /
+  // Credit Limit / Portal / Notes are no longer carried by the template
+  // — they keep their existing form defaults / values. Contacts arrive
+  // as 4 fixed rows in order (Primary Work / Primary Personal / AP
+  // work/ext / AP direct); the merge-by-name logic below collapses
+  // pairs with matching names into a single contact with two phones.
   async function handleUploadTemplate(file: File) {
     try {
       const { parseClientTemplate } = await import(
         "@/lib/client-onboarding-template"
       );
       const parsed = await parseClientTemplate(file);
+      const r = parsed.contacts; // always length 4
+
+      // ─── Collect missing-mandatory-field list BEFORE setting state,
+      // so the warn-and-proceed toast accurately reflects what the
+      // operator will still need to fill in by hand. Non-blocking —
+      // the form populates whatever IS present regardless.
+      const missing: string[] = [];
+
+      // Client identity
+      if (!parsed.client.legal_name) missing.push("Company Legal Name");
+      if (!parsed.client.name) missing.push("Trade / Display Name");
+      // Billing — all 6 mandatory
+      if (!parsed.billing.street) missing.push("Billing Street");
+      if (!parsed.billing.city) missing.push("Billing City");
+      if (!parsed.billing.province) missing.push("Billing Province");
+      if (!parsed.billing.postal) missing.push("Billing Postal Code");
+      if (!parsed.billing.country) missing.push("Billing Country");
+      // Tax — HST mandatory; cert only if exempt
+      if (!parsed.client.hst_gst_number) missing.push("HST / GST Number");
+      if (parsed.client.tax_exempt === null)
+        missing.push("Tax Exempt? (Yes/No)");
+      if (parsed.client.tax_exempt === true && !parsed.client.tax_exempt_cert)
+        missing.push("Tax Exempt Certificate Number");
+      // Payment — terms/method/currency all mandatory
+      if (!parsed.payment.terms) missing.push("Select Payment Terms");
+      if (!parsed.payment.method) missing.push("Select Payment Method");
+      if (!parsed.payment.currency) missing.push("Select Currency");
+      // Contacts — row 1 (Primary Work) + row 3 (AP work/ext) mandatory.
+      // Rows 2 + 4 are optional secondary phone numbers for the same
+      // person.
+      if (!r[0]?.first_name || !r[0]?.last_name)
+        missing.push("Primary Contact Work (name)");
+      if (!r[0]?.email) missing.push("Primary Contact Work (email)");
+      if (!r[0]?.phone) missing.push("Primary Contact Work (phone)");
+      if (!r[2]?.first_name || !r[2]?.last_name)
+        missing.push("AP work/ext Contact (name)");
+      if (!r[2]?.email) missing.push("AP work/ext Contact (email)");
+      if (!r[2]?.phone) missing.push("AP work/ext Contact (phone)");
 
       // ─── Client identity ───
       if (parsed.client.legal_name) setLegalName(parsed.client.legal_name);
       if (parsed.client.name) setName(parsed.client.name);
-      // Status — only accept values that match the form's narrowed enum
-      // (Prospect / Active / Inactive — Lost isn't a template option).
-      if (
-        parsed.client.status &&
-        (["Prospect", "Active", "Inactive"] as DbClientStatus[]).includes(
-          parsed.client.status as DbClientStatus
-        )
-      ) {
-        setStatus(parsed.client.status as DbClientStatus);
-      }
-      if (parsed.client.industry) setIndustry(parsed.client.industry);
+      // CL-10: setStatus / setIndustry removed — fields no longer on
+      // the template; form keeps its own defaults.
       if (parsed.client.hst_gst_number)
         setHstGst(parsed.client.hst_gst_number);
       if (parsed.client.tax_exempt !== null)
@@ -316,11 +410,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
       if (parsed.billing.country) setBillCountry(parsed.billing.country);
 
-      // ─── Mailing address ───
-      // CL-8: if ALL mailing fields are blank, keep / default to same-as-billing
-      // (matches the template hint "Leave all fields blank to use billing
-      // address"). If ANY mailing field has content, populate them and flip
-      // the toggle to "Different address" so the values are persisted on save.
+      // ─── Mailing address — if ANY mailing cell has content, populate
+      // and flip same-as-billing OFF. If all blank, keep the default
+      // (same as billing).
       const mailingHasContent =
         !!parsed.mailing.street ||
         !!parsed.mailing.unit ||
@@ -339,9 +431,6 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       }
 
       // ─── Payment terms & method ───
-      // parsed.payment.terms / .method are already mapped back to DB enum
-      // strings ("net_30", "eft", etc.) by the parser. Empty string = no
-      // selection — leave the current form default in place.
       if (parsed.payment.terms) {
         setPaymentTerms(parsed.payment.terms as DbClientPaymentTerms);
       }
@@ -350,7 +439,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (parsed.payment.method) {
         setPayMethod(parsed.payment.method as DbClientPaymentMethod);
       }
-      if (parsed.payment.credit_limit) setCreditLimit(parsed.payment.credit_limit);
+      // CL-10: setCreditLimit removed — template no longer carries it.
       if (
         parsed.payment.currency &&
         (["CAD", "USD"] as DbClientCurrency[]).includes(
@@ -360,41 +449,121 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
         setCurrency(parsed.payment.currency as DbClientCurrency);
       }
 
-      // ─── Portal access ───
-      if (parsed.portal.enabled !== null) setPortalEnabled(parsed.portal.enabled);
-      if (parsed.portal.email) setPortalEmail(parsed.portal.email);
+      // CL-10: setPortalEnabled / setPortalEmail / setNotes removed —
+      // template no longer carries these sections.
 
-      // ─── Notes ───
-      if (parsed.notes) setNotes(parsed.notes);
+      // ─── Contacts — merge-by-name logic for the 4 fixed template rows.
+      // Rows 1+2 are the Primary pair (Work + Personal phones for the
+      // same person, or 2 separate contacts if names differ). Rows 3+4
+      // are the AP pair (Work/Ext + Direct).
+      const newContacts: ContactRowState[] = [];
 
-      // ─── Contacts ───
-      // CL-8: contacts now arrive as a flat array of up to 5 rows with
-      // per-row type flags (Primary / Billing / Emergency / AP / Custom).
-      // Replace the dynamic Contact Information list wholesale when the
-      // template carried any contacts (the form's existing rows are still
-      // editable above this section).
-      if (parsed.contacts.length > 0) {
-        const newContactRows: ContactRowState[] = parsed.contacts.map((pc) => ({
-          first_name: pc.first_name,
-          last_name: pc.last_name,
-          role: pc.role,
-          email: pc.email,
-          phones: pc.phone
-            ? [{ label: "Phone", number: pc.phone }]
-            : [{ label: "Phone", number: "" }],
-          is_primary: pc.is_primary,
-          is_billing: pc.is_billing,
-          is_emergency: pc.is_emergency,
-          is_accounts_payable: pc.is_accounts_payable,
-          contact_type_custom: pc.contact_type_custom,
-          has_custom_type: pc.contact_type_custom.trim() !== "",
-        }));
-        setContacts(newContactRows);
+      // PRIMARY pair
+      if (r[0] && r[1] && namesMatch(r[0], r[1])) {
+        // Merge into 1 contact with 2 phones
+        newContacts.push({
+          first_name: r[0].first_name,
+          last_name: r[0].last_name,
+          role: "Primary Contact",
+          email: r[0].email.trim() || r[1].email.trim() || "",
+          phones: [
+            ...(r[0].phone.trim()
+              ? [{ label: "Work", number: r[0].phone.trim() }]
+              : []),
+            ...(r[1].phone.trim()
+              ? [{ label: "Personal", number: r[1].phone.trim() }]
+              : []),
+          ],
+          is_primary: true,
+          is_billing: false,
+          is_emergency: false,
+          is_accounts_payable: false,
+          contact_type_custom: "",
+          has_custom_type: false,
+        });
+      } else {
+        if (r[0] && hasContactContent(r[0])) {
+          newContacts.push(
+            buildContact(r[0], "Primary Contact Work", "Work", {
+              is_primary: true,
+              is_billing: false,
+              is_accounts_payable: false,
+            })
+          );
+        }
+        if (r[1] && hasContactContent(r[1])) {
+          newContacts.push(
+            buildContact(r[1], "Primary Contact Personal", "Personal", {
+              is_primary: true,
+              is_billing: false,
+              is_accounts_payable: false,
+            })
+          );
+        }
       }
 
-      toast.success("Template loaded — review the form below before saving");
+      // AP pair — same pattern
+      if (r[2] && r[3] && namesMatch(r[2], r[3])) {
+        newContacts.push({
+          first_name: r[2].first_name,
+          last_name: r[2].last_name,
+          role: "Accounts Payable",
+          email: r[2].email.trim() || r[3].email.trim() || "",
+          phones: [
+            ...(r[2].phone.trim()
+              ? [{ label: "Work/Ext", number: r[2].phone.trim() }]
+              : []),
+            ...(r[3].phone.trim()
+              ? [{ label: "Direct", number: r[3].phone.trim() }]
+              : []),
+          ],
+          is_primary: false,
+          is_billing: true,
+          is_emergency: false,
+          is_accounts_payable: true,
+          contact_type_custom: "",
+          has_custom_type: false,
+        });
+      } else {
+        if (r[2] && hasContactContent(r[2])) {
+          newContacts.push(
+            buildContact(r[2], "AP work/ext", "Work/Ext", {
+              is_primary: false,
+              is_billing: true,
+              is_accounts_payable: true,
+            })
+          );
+        }
+        if (r[3] && hasContactContent(r[3])) {
+          newContacts.push(
+            buildContact(r[3], "AP direct", "Direct", {
+              is_primary: false,
+              is_billing: true,
+              is_accounts_payable: true,
+            })
+          );
+        }
+      }
+
+      if (newContacts.length > 0) setContacts(newContacts);
+
+      // ─── Final feedback toast — warn-and-proceed on missing fields,
+      // else plain success.
+      if (missing.length > 0) {
+        const preview = missing.slice(0, 5).join(", ");
+        const more =
+          missing.length > 5 ? ` …and ${missing.length - 5} more` : "";
+        toast.warning(
+          `Template loaded with ${missing.length} missing field${
+            missing.length > 1 ? "s" : ""
+          }: ${preview}${more}`,
+          { duration: 8000 }
+        );
+      } else {
+        toast.success("Template loaded successfully");
+      }
     } catch (e) {
-      console.error("[CL-8] Template parse failed:", e);
+      console.error("[CL-10] Template parse failed:", e);
       toast.error(
         e instanceof Error ? e.message : "Failed to parse template"
       );

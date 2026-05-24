@@ -3,36 +3,54 @@
 import type { Cell, Worksheet } from "exceljs";
 import { PROVINCE_CODES } from "./canada-provinces";
 
-// CL-8 — single-sheet client onboarding Excel template.
-// Replaces the CL-4 4-sheet layout (Instructions / Client+Billing / Contacts /
-// Site) with one polished sheet "Client Onboarding" covering every field on
-// ClientFormDrawer + the CL-7 contact type columns (AP, Custom). exceljs is
-// dynamic-imported in each function so the ~1 MB library stays out of the
-// main bundle. `import type` above is erased at compile.
+// CL-10 — single-sheet client onboarding Excel template (v2).
+//
+// Replaces the CL-8 v1 layout. Differences from CL-8:
+//   * Title carries "— v2" version stamp; parser uses it to reject old
+//     templates with a friendly download-fresh-copy error.
+//   * Client Info: drops Status + Industry (operator-only fields).
+//   * Billing + Mailing: drops Province="ON" / Country="Canada" defaults
+//     (clients shouldn't see pre-filled location hints).
+//   * Payment Terms: 4 options only (Due on receipt / NET 7 / NET 15 /
+//     NET 30); drops Credit Limit row; labels prefixed "Select " for
+//     clarity. NO pre-filled defaults across the section.
+//   * NEW locked-looking late-payment / 2.8% interest text block under
+//     the payment section (visual-only — italic gray fill, NOT
+//     cell.protection which would lock every input cell too).
+//   * Drops Portal Access + Notes sections entirely.
+//   * Contacts: 4 fixed rows with a pre-filled Type column (Primary
+//     Contact Work / Primary Contact Personal / AP work/ext / AP direct).
+//     The 5 boolean type columns (Primary/Billing/Emergency/AP/Custom
+//     Type) are gone — type intent is positional.
+//   * Mandatory fields marked with " *" suffix on labels.
+//
+// exceljs is dynamic-imported in each function so the ~1 MB lib stays
+// out of the main bundle. `import type` above is erased at compile.
 
 // ─── Public types ──────────────────────────────────────────────────────────
 
 export interface ParsedContact {
   first_name: string;
   last_name: string;
-  role: string; // maps to DbContact.title
+  /** Pre-filled Type column value (e.g. "Primary Contact Work"). The
+   *  parser returns it verbatim; the merge logic in ClientForm uses it
+   *  to derive the row's intent + the phone label. */
+  type_label: string;
+  role: string; // maps to DbContact.title; client may type their own
   email: string;
-  phone: string; // single value; wrapped to phones[{label:"Phone", number}]
-  is_primary: boolean;
-  is_billing: boolean;
-  is_emergency: boolean;
-  is_accounts_payable: boolean;
-  contact_type_custom: string;
+  phone: string;
+  // Note: the 5 type booleans (is_primary / is_billing / is_emergency /
+  // is_accounts_payable / contact_type_custom) are no longer parser-side.
+  // ClientForm's handleUploadTemplate derives them from row position
+  // (rows 1+2 → primary, rows 3+4 → billing+AP).
 }
 
 export interface ParsedClientTemplate {
   client: {
     legal_name: string;
-    name: string; // trade name
-    status: string; // "Active" | "Inactive" | "Prospect" — validated in handler
-    industry: string;
+    name: string;
     hst_gst_number: string;
-    tax_exempt: boolean | null; // null = cell empty (don't override existing)
+    tax_exempt: boolean | null;
     tax_exempt_cert: string;
   };
   billing: {
@@ -52,18 +70,14 @@ export interface ParsedClientTemplate {
     country: string;
   };
   payment: {
-    terms: string; // enum-style value: "net_30" | "due_on_receipt" | "custom" | ""
+    terms: string; // "due_on_receipt" | "net_7" | "net_15" | "net_30" | ""
     terms_custom: string;
-    method: string; // enum-style value: "eft" | "cheque" | "credit_card" | "e_transfer" | "wire" | ""
-    credit_limit: string; // raw string — handler parses
+    method: string; // "cheque" | "eft" | "credit_card" | "e_transfer" | "wire" | ""
     currency: string; // "CAD" | "USD" | ""
   };
-  portal: {
-    enabled: boolean | null;
-    email: string;
-  };
-  notes: string;
-  contacts: ParsedContact[]; // 0..5 from template
+  // CL-10 dropped: client.status, client.industry, payment.credit_limit,
+  // portal.{enabled,email}, notes.
+  contacts: ParsedContact[]; // exactly 4 rows from the template (some may be empty)
 }
 
 // ─── Style constants ───────────────────────────────────────────────────────
@@ -88,6 +102,16 @@ const CONTACTS_HEADER_FILL = {
   pattern: "solid",
   fgColor: { argb: "FFE5E5E5" },
 } as const;
+const TYPE_CELL_FILL = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFEFEFEF" },
+} as const;
+const LOCKED_TEXT_FILL = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFF5F5F5" },
+} as const;
 const VALUE_BORDER = {
   top: { style: "thin", color: { argb: "FFCCCCCC" } },
   left: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -95,21 +119,11 @@ const VALUE_BORDER = {
   right: { style: "thin", color: { argb: "FFCCCCCC" } },
 } as const;
 
-const STATUS_OPTIONS = ["Prospect", "Active", "Inactive"];
-// PROVINCE_OPTIONS — lifted to lib/canada-provinces.ts (SITES-2b).
-// PROVINCE_CODES is a `readonly ProvinceCode[]` which the exceljs
-// `formulae` API accepts wherever a string[] was accepted before.
 const PROVINCE_OPTIONS: readonly string[] = PROVINCE_CODES;
 const YES_NO_OPTIONS = ["Yes", "No"];
-const PAYMENT_TERMS_LABELS = [
-  "Due on receipt",
-  "NET 7",
-  "NET 15",
-  "NET 30",
-  "NET 60",
-  "NET 90",
-  "Custom",
-];
+
+// CL-10: 4 options only (was 7 in CL-8). "Custom" dropped intentionally.
+const PAYMENT_TERMS_LABELS = ["Due on receipt", "NET 7", "NET 15", "NET 30"];
 const PAYMENT_METHOD_LABELS = [
   "Cheque",
   "EFT",
@@ -119,16 +133,13 @@ const PAYMENT_METHOD_LABELS = [
 ];
 const CURRENCY_OPTIONS = ["CAD", "USD"];
 
-// Label → enum value maps (used by parser to round-trip dropdown selections
-// back to DB enum strings).
+// Label → enum value maps (used by parser to round-trip dropdown
+// selections back to DB enum strings).
 const PAYMENT_TERMS_LABEL_TO_VALUE: Record<string, string> = {
   "due on receipt": "due_on_receipt",
   "net 7": "net_7",
   "net 15": "net_15",
   "net 30": "net_30",
-  "net 60": "net_60",
-  "net 90": "net_90",
-  custom: "custom",
 };
 const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
   cheque: "cheque",
@@ -138,29 +149,54 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
   wire: "wire",
 };
 
+// Title carries the version stamp. Parser fails any upload whose title
+// cell doesn't contain "— v2" (the em-dash + suffix).
+const TITLE_TEXT = "Nexvelon Client Onboarding Template — v2";
+const TITLE_VERSION_MARKER = "— v2";
+
+// CL-10: late-payment / 2.8% interest disclosure shown below the Payment
+// section as a visual-locked block (italic gray, distinct fill — NOT
+// password-protected so input cells stay editable).
+const LATE_PAYMENT_TEXT =
+  "Late Payments: The Client agrees to pay the total invoiced amount within the payment period selected here. (Due on receipt, Net7, Net 15 or Net 30 days). Invoices not settled beyond the selected payment term will accrue interest at a rate of 2.8% per month (33.6% per annum) effective immediately on all outstanding payments.";
+
+// Pre-filled Type column values for the 4 contact rows. Order is fixed
+// — the parser/merge logic depends on it.
+const CONTACT_TYPE_LABELS = [
+  "Primary Contact Work",
+  "Primary Contact Personal",
+  "AP work/ext",
+  "AP direct",
+] as const;
+
 // ─── Generator helpers ─────────────────────────────────────────────────────
 
 function sectionHeader(sheet: Worksheet, rowNum: number, title: string) {
+  // Section header for the standard label/value sections (cols A:B).
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = title;
   row.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
   row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
   sheet.mergeCells(rowNum, 1, rowNum, 2);
-  // Fill the merged range
   for (let c = 1; c <= 2; c++) {
     row.getCell(c).fill = SECTION_HEADER_FILL;
   }
   row.height = 22;
 }
 
-function sectionHeaderWide(sheet: Worksheet, rowNum: number, title: string) {
-  // Spans cols A–L for the wider Contacts + Notes sections.
+function sectionHeaderRange(
+  sheet: Worksheet,
+  rowNum: number,
+  title: string,
+  endCol: number
+) {
+  // Wider section header for Contacts (cols A:F = 6 cols).
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = title;
   row.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
   row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
-  sheet.mergeCells(rowNum, 1, rowNum, 12);
-  for (let c = 1; c <= 12; c++) {
+  sheet.mergeCells(rowNum, 1, rowNum, endCol);
+  for (let c = 1; c <= endCol; c++) {
     row.getCell(c).fill = SECTION_HEADER_FILL;
   }
   row.height = 22;
@@ -172,16 +208,17 @@ function labelValueRow(
   label: string,
   options: {
     required?: boolean;
-    defaultValue?: string;
     dropdown?: readonly string[];
   } = {}
 ) {
+  // CL-10: defaults dropped. All value cells start blank; clients fill
+  // them in. The * suffix marks mandatory fields visually.
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = label + (options.required ? " *" : "");
   row.getCell(1).font = { bold: true };
   row.getCell(1).fill = LABEL_FILL;
   row.getCell(1).alignment = { vertical: "middle" };
-  row.getCell(2).value = options.defaultValue ?? "";
+  row.getCell(2).value = "";
   row.getCell(2).fill = VALUE_FILL;
   row.getCell(2).border = VALUE_BORDER;
   row.getCell(2).alignment = { vertical: "middle", wrapText: true };
@@ -190,7 +227,7 @@ function labelValueRow(
       type: "list",
       allowBlank: true,
       formulae: [`"${options.dropdown.join(",")}"`],
-      showErrorMessage: false, // permissive — let the parser handle anything
+      showErrorMessage: false,
     };
   }
   row.height = 18;
@@ -215,7 +252,7 @@ function noteRow(
 // ─── Generator ─────────────────────────────────────────────────────────────
 
 /**
- * CL-8: generate the single-sheet onboarding Excel template.
+ * CL-10: generate the single-sheet onboarding Excel template (v2).
  * Returns a Blob downloadable via URL.createObjectURL.
  */
 export async function generateClientTemplate(): Promise<Blob> {
@@ -226,31 +263,32 @@ export async function generateClientTemplate(): Promise<Blob> {
 
   const sheet = workbook.addWorksheet("Client Onboarding");
 
-  // Column widths — A=labels, B=values; C–J = contacts table.
-  sheet.getColumn(1).width = 22;
-  sheet.getColumn(2).width = 40;
-  sheet.getColumn(3).width = 20; // Role
-  sheet.getColumn(4).width = 28; // Email
-  sheet.getColumn(5).width = 18; // Phone
-  sheet.getColumn(6).width = 10; // Primary
-  sheet.getColumn(7).width = 10; // Billing
-  sheet.getColumn(8).width = 12; // Emergency
-  sheet.getColumn(9).width = 8; // AP
-  sheet.getColumn(10).width = 22; // Custom Type
-  sheet.getColumn(11).width = 10;
-  sheet.getColumn(12).width = 10;
+  // Column widths — A=labels / First Name, B=values / Last Name,
+  // C=Type, D=Role, E=Email, F=Phone. The late-payment block merges
+  // A:L so cols G–L need some minimum width too.
+  sheet.getColumn(1).width = 24;
+  sheet.getColumn(2).width = 38;
+  sheet.getColumn(3).width = 25;
+  sheet.getColumn(4).width = 25;
+  sheet.getColumn(5).width = 30;
+  sheet.getColumn(6).width = 20;
+  for (let c = 7; c <= 12; c++) sheet.getColumn(c).width = 8;
 
-  // Freeze the title + intro rows so they stay visible while scrolling.
+  // Freeze the title block so it stays visible while scrolling.
   sheet.views = [{ state: "frozen", ySplit: 3 }];
 
-  // ─── Title block (rows 1–3) ───
-  sheet.getCell("A1").value = "Nexvelon Client Onboarding Template";
+  // ─── Title block (rows 1–2) ───
+  // Row 1: title carries the "— v2" version stamp the parser uses.
+  sheet.getCell("A1").value = TITLE_TEXT;
   sheet.getCell("A1").font = { bold: true, size: 16 };
   sheet.mergeCells("A1:L1");
   sheet.getRow(1).height = 26;
 
+  // Row 2: subtitle. Row 3 intentionally blank (CL-10 drops the old
+  // "Download a fresh template…" line; ySplit:3 still freezes the
+  // breathing-room row so the title group looks anchored).
   sheet.getCell("A2").value =
-    "Complete the fields below — required fields marked with *";
+    "Kindly complete the fields below — required fields marked with *";
   sheet.getCell("A2").font = {
     italic: true,
     color: { argb: "FF666666" },
@@ -258,110 +296,102 @@ export async function generateClientTemplate(): Promise<Blob> {
   };
   sheet.mergeCells("A2:L2");
 
-  sheet.getCell("A3").value =
-    "Download a fresh template before each onboarding · Leave fields blank when unknown";
-  sheet.getCell("A3").font = { color: { argb: "FF666666" }, size: 10 };
-  sheet.mergeCells("A3:L3");
-
-  // Row 4 — spacer.
-
-  // ─── Client Information (rows 5–10) ───
+  // ─── Section 1: CLIENT INFORMATION (rows 5–7) ───
   sectionHeader(sheet, 5, "CLIENT INFORMATION");
-  labelValueRow(sheet, 6, "Legal Name", { required: true });
-  labelValueRow(sheet, 7, "Trade / Display Name");
-  labelValueRow(sheet, 8, "Status", {
-    defaultValue: "Prospect",
-    dropdown: STATUS_OPTIONS,
-  });
-  labelValueRow(sheet, 9, "Industry");
-  // Row 10 spacer left intentionally — keeps a breath before the next header.
+  labelValueRow(sheet, 6, "Company Legal Name", { required: true });
+  labelValueRow(sheet, 7, "Trade / Display Name", { required: true });
+  // CL-10: Status + Industry rows DROPPED (operator-only fields).
 
-  // ─── Billing Address (rows 12–18) ───
-  sectionHeader(sheet, 12, "BILLING ADDRESS");
-  labelValueRow(sheet, 13, "Street");
-  labelValueRow(sheet, 14, "Unit / Suite");
-  labelValueRow(sheet, 15, "City");
-  labelValueRow(sheet, 16, "Province", {
-    defaultValue: "ON",
+  // ─── Section 2: BILLING ADDRESS (rows 9–15) ───
+  sectionHeader(sheet, 9, "BILLING ADDRESS");
+  labelValueRow(sheet, 10, "Street", { required: true });
+  labelValueRow(sheet, 11, "Unit / Suite");
+  labelValueRow(sheet, 12, "City", { required: true });
+  labelValueRow(sheet, 13, "Province", {
+    required: true,
     dropdown: PROVINCE_OPTIONS,
   });
-  labelValueRow(sheet, 17, "Postal Code");
-  labelValueRow(sheet, 18, "Country", { defaultValue: "Canada" });
+  labelValueRow(sheet, 14, "Postal Code", { required: true });
+  labelValueRow(sheet, 15, "Country", { required: true });
 
-  // ─── Mailing Address (rows 20–27) ───
-  sectionHeader(sheet, 20, "MAILING ADDRESS");
-  noteRow(sheet, 21, "Leave all fields blank to use billing address");
-  labelValueRow(sheet, 22, "Street");
-  labelValueRow(sheet, 23, "Unit / Suite");
-  labelValueRow(sheet, 24, "City");
-  labelValueRow(sheet, 25, "Province", { dropdown: PROVINCE_OPTIONS });
-  labelValueRow(sheet, 26, "Postal Code");
-  labelValueRow(sheet, 27, "Country");
+  // ─── Section 3: MAILING ADDRESS (rows 17–24) ───
+  sectionHeader(sheet, 17, "MAILING ADDRESS");
+  noteRow(
+    sheet,
+    18,
+    "Leave all fields blank if mailing address will be same as billing address"
+  );
+  labelValueRow(sheet, 19, "Street");
+  labelValueRow(sheet, 20, "Unit / Suite");
+  labelValueRow(sheet, 21, "City");
+  labelValueRow(sheet, 22, "Province", { dropdown: PROVINCE_OPTIONS });
+  labelValueRow(sheet, 23, "Postal Code");
+  labelValueRow(sheet, 24, "Country");
 
-  // ─── Tax (rows 29–32) ───
-  sectionHeader(sheet, 29, "TAX");
-  labelValueRow(sheet, 30, "HST / GST Number");
-  labelValueRow(sheet, 31, "Tax Exempt?", { dropdown: YES_NO_OPTIONS });
-  labelValueRow(sheet, 32, "Tax Exempt Certificate Number");
+  // ─── Section 4: TAX (rows 26–29) ───
+  sectionHeader(sheet, 26, "TAX");
+  labelValueRow(sheet, 27, "HST / GST Number", { required: true });
+  labelValueRow(sheet, 28, "Tax Exempt?", {
+    required: true,
+    dropdown: YES_NO_OPTIONS,
+  });
+  labelValueRow(sheet, 29, "Tax Exempt Certificate Number");
 
-  // ─── Payment Terms & Method (rows 34–39) ───
-  sectionHeader(sheet, 34, "PAYMENT TERMS & METHOD");
-  labelValueRow(sheet, 35, "Payment Terms", {
-    defaultValue: "NET 30",
+  // ─── Section 5: PAYMENT TERMS & METHOD (rows 31–35) ───
+  sectionHeader(sheet, 31, "PAYMENT TERMS & METHOD");
+  labelValueRow(sheet, 32, "Select Payment Terms", {
+    required: true,
     dropdown: PAYMENT_TERMS_LABELS,
   });
-  labelValueRow(sheet, 36, "Custom Terms (if Payment Terms = Custom)");
-  labelValueRow(sheet, 37, "Preferred Payment Method", {
-    defaultValue: "EFT",
+  // Custom Terms row kept for operator override after upload; the
+  // dropdown above no longer offers "Custom" so this stays blank for
+  // most clients.
+  labelValueRow(sheet, 33, "Custom Terms (if other)");
+  labelValueRow(sheet, 34, "Select Payment Method", {
+    required: true,
     dropdown: PAYMENT_METHOD_LABELS,
   });
-  labelValueRow(sheet, 38, "Credit Limit (CAD)");
-  labelValueRow(sheet, 39, "Currency", {
-    defaultValue: "CAD",
+  labelValueRow(sheet, 35, "Select Currency", {
+    required: true,
     dropdown: CURRENCY_OPTIONS,
   });
 
-  // ─── Portal Access (rows 41–43) ───
-  sectionHeader(sheet, 41, "PORTAL ACCESS");
-  labelValueRow(sheet, 42, "Portal Access Enabled?", {
-    defaultValue: "No",
-    dropdown: YES_NO_OPTIONS,
-  });
-  labelValueRow(sheet, 43, "Portal Contact Email");
+  // ─── Locked late-payment text block (rows 37–40) ───
+  // Visual-only locking: distinctive light-gray fill + italic dark-gray
+  // text + wrap. NO cell.protection / sheet.protect — that would lock
+  // every input cell too.
+  sheet.mergeCells("A37:L40");
+  const lateCell = sheet.getCell("A37");
+  lateCell.value = LATE_PAYMENT_TEXT;
+  lateCell.font = {
+    italic: true,
+    color: { argb: "FF666666" },
+    size: 10,
+  };
+  lateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+  lateCell.fill = LOCKED_TEXT_FILL;
+  lateCell.border = VALUE_BORDER;
+  // Set row heights so the merged block has breathing room for the long text.
+  for (let r = 37; r <= 40; r++) sheet.getRow(r).height = 22;
 
-  // ─── Notes (rows 45–50) ───
-  // Section header wide so the merged free-text area aligns visually with
-  // the contacts section below.
-  sectionHeaderWide(sheet, 45, "NOTES");
-  sheet.mergeCells("A46:L50");
-  const notesCell = sheet.getCell("A46");
-  notesCell.value = "";
-  notesCell.fill = LABEL_FILL;
-  notesCell.alignment = { vertical: "top", wrapText: true };
-  notesCell.border = VALUE_BORDER;
-
-  // ─── Contacts (rows 52–59) ───
-  sectionHeaderWide(sheet, 52, "CONTACTS");
+  // ─── Section 6: CONTACTS (rows 42–48) ───
+  sectionHeaderRange(sheet, 42, "CONTACTS", 6);
   noteRow(
     sheet,
-    53,
-    "Up to 5 contacts. First Name + Last Name required if filled. Type columns: Yes / X / 1 = checked. Custom Type = free-text label.",
-    12
+    43,
+    "Add additional contacts after the form is uploaded via the system.",
+    6
   );
 
   const contactsHeaders = [
     "First Name *",
     "Last Name *",
+    "Type",
     "Role",
-    "Email",
-    "Phone",
-    "Primary",
-    "Billing",
-    "Emergency",
-    "AP",
-    "Custom Type",
+    "Email *",
+    "Phone *",
   ];
-  const headerRow = sheet.getRow(54);
+  const headerRow = sheet.getRow(44);
   contactsHeaders.forEach((h, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = h;
@@ -372,28 +402,26 @@ export async function generateClientTemplate(): Promise<Blob> {
   });
   headerRow.height = 20;
 
-  // 5 blank data rows (55–59).
-  for (let r = 55; r <= 59; r++) {
+  // 4 data rows (45–48). Type column pre-filled with the row-position
+  // label; the rest are input cells (yellow fill). NO Yes/No dropdowns
+  // anywhere (CL-10 dropped the 5 boolean type columns).
+  for (let i = 0; i < 4; i++) {
+    const r = 45 + i;
     const row = sheet.getRow(r);
-    for (let c = 1; c <= 10; c++) {
+    for (let c = 1; c <= 6; c++) {
       const cell = row.getCell(c);
-      cell.fill = VALUE_FILL;
+      if (c === 3) {
+        // Type column — pre-filled, distinct fill, bold.
+        cell.value = CONTACT_TYPE_LABELS[i];
+        cell.font = { bold: true };
+        cell.fill = TYPE_CELL_FILL;
+      } else {
+        cell.fill = VALUE_FILL;
+      }
       cell.border = VALUE_BORDER;
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: c >= 6 && c <= 9 ? "center" : "left",
-      };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
     }
-    // Yes/No dropdowns on the four boolean columns (F=6 through I=9).
-    for (let c = 6; c <= 9; c++) {
-      row.getCell(c).dataValidation = {
-        type: "list",
-        allowBlank: true,
-        formulae: [`"${YES_NO_OPTIONS.join(",")}"`],
-        showErrorMessage: false,
-      };
-    }
-    row.height = 18;
+    row.height = 20;
   }
 
   // ─── Output ───
@@ -405,7 +433,7 @@ export async function generateClientTemplate(): Promise<Blob> {
 
 // ─── Parser helpers ────────────────────────────────────────────────────────
 
-/** Normalize a label for matching: lowercase, trim, strip trailing asterisks. */
+/** Normalize a label: lowercase, trim, strip trailing asterisks. */
 function normalizeLabel(s: string): string {
   return s.trim().toLowerCase().replace(/\*/g, "").trim();
 }
@@ -413,7 +441,11 @@ function normalizeLabel(s: string): string {
 /**
  * Find a value in a 2-column label/value sheet by matching the label in
  * col 1. Returns the trimmed string from col 2, or "" if not found.
- * Label-based lookup survives clients adding blank rows or reordering rows.
+ * Label-based lookup survives row insertions / reordering.
+ *
+ * NOTE: where labels collide between sections (Billing vs Mailing both
+ * have "Street" / "City" / etc.), parseClientTemplate uses absolute
+ * row-number reads instead — see the billing/mailing blocks below.
  */
 function findValueByLabel(sheet: Worksheet, label: string): string {
   const target = normalizeLabel(label);
@@ -428,35 +460,11 @@ function findValueByLabel(sheet: Worksheet, label: string): string {
   return result.trim();
 }
 
-/**
- * Find the value of col 1 of the row IMMEDIATELY AFTER the row whose col 1
- * matches `headerText` (case-insensitive). Used for the merged Notes block
- * where the value lives in A46 just below the "NOTES" header at row 45.
- */
-function findValueAfterHeader(sheet: Worksheet, headerText: string): string {
-  const target = headerText.trim().toLowerCase();
-  let foundRowNum: number | null = null;
-  sheet.eachRow((row, rowNum) => {
-    const cellText = row.getCell(1).value?.toString().trim().toLowerCase();
-    if (cellText === target && foundRowNum === null) {
-      foundRowNum = rowNum;
-    }
-  });
-  if (foundRowNum == null) return "";
-  const v = sheet.getRow(foundRowNum + 1).getCell(1).value;
-  return v == null ? "" : String(v).trim();
-}
-
 /** Parse a yes/no cell into a boolean, or null when the cell is empty. */
 function parseBooleanCell(raw: string): boolean | null {
   const v = raw.trim().toLowerCase();
   if (!v) return null;
   return v === "yes" || v === "true" || v === "y" || v === "1" || v === "x";
-}
-
-/** Strict variant — empty → false (not null). Used for per-contact flags. */
-function parseBooleanCellStrict(raw: string): boolean {
-  return parseBooleanCell(raw) === true;
 }
 
 function cellToString(cell: Cell): string {
@@ -465,40 +473,36 @@ function cellToString(cell: Cell): string {
 }
 
 /**
- * Scan the Contacts table: find the header row (col 1 = "First Name"), then
- * iterate data rows below. A row is included if either First or Last name has
- * content. Iteration stops at the first row with BOTH first AND last name
- * empty (partial-fill allowed earlier — later blanks just end the scan).
+ * Scan the Contacts table: find the header row (col A = "First Name"),
+ * then read exactly 4 data rows below (rows 1-4 of the table). All 4
+ * are returned in order — including empty rows — because the merge
+ * logic in ClientForm depends on positional indexing.
  */
 function scanContactsTable(sheet: Worksheet): ParsedContact[] {
-  let headerRowNum: number | null = null;
-  sheet.eachRow((row, rowNum) => {
-    if (headerRowNum !== null) return;
-    const c1 = row.getCell(1).value?.toString();
-    if (c1 && normalizeLabel(c1) === "first name") {
-      headerRowNum = rowNum;
+  let headerRow = -1;
+  for (let r = 1; r <= 60; r++) {
+    const colA =
+      sheet.getRow(r).getCell(1).value?.toString().trim().toLowerCase().replace(
+        /\s*\*\s*$/,
+        ""
+      ) ?? "";
+    if (colA === "first name") {
+      headerRow = r;
+      break;
     }
-  });
-  if (headerRowNum == null) return [];
+  }
+  if (headerRow === -1) return [];
 
   const contacts: ParsedContact[] = [];
-  // Cap the scan at 50 rows past the header — generous but bounded.
-  for (let r = headerRowNum + 1; r <= headerRowNum + 50; r++) {
-    const row = sheet.getRow(r);
-    const firstName = cellToString(row.getCell(1));
-    const lastName = cellToString(row.getCell(2));
-    if (!firstName && !lastName) break;
+  for (let i = 1; i <= 4; i++) {
+    const row = sheet.getRow(headerRow + i);
     contacts.push({
-      first_name: firstName,
-      last_name: lastName,
-      role: cellToString(row.getCell(3)),
-      email: cellToString(row.getCell(4)),
-      phone: cellToString(row.getCell(5)),
-      is_primary: parseBooleanCellStrict(cellToString(row.getCell(6))),
-      is_billing: parseBooleanCellStrict(cellToString(row.getCell(7))),
-      is_emergency: parseBooleanCellStrict(cellToString(row.getCell(8))),
-      is_accounts_payable: parseBooleanCellStrict(cellToString(row.getCell(9))),
-      contact_type_custom: cellToString(row.getCell(10)),
+      first_name: cellToString(row.getCell(1)),
+      last_name: cellToString(row.getCell(2)),
+      type_label: cellToString(row.getCell(3)),
+      role: cellToString(row.getCell(4)),
+      email: cellToString(row.getCell(5)),
+      phone: cellToString(row.getCell(6)),
     });
   }
   return contacts;
@@ -517,12 +521,14 @@ function mapPaymentMethodLabel(raw: string): string {
 // ─── Parser ────────────────────────────────────────────────────────────────
 
 /**
- * Parse a filled CL-8 template back into structured data. Lenient by design —
- * unknown / blank values pass through as empty strings or null; the form's
- * own validation catches issues on submit.
+ * Parse a filled CL-10 v2 template back into structured data. Lenient
+ * by design — unknown / blank values pass through as empty strings or
+ * null; the form's own validation catches issues on submit.
  *
- * Older (CL-4 / 4-sheet) templates fail the sheet-name check below and the
- * user gets a friendly "download a fresh template" message.
+ * Old templates fail one of two ways:
+ *   1. CL-4 (4-sheet) — no "Client Onboarding" sheet → friendly error.
+ *   2. CL-8 v1 (single sheet, no version stamp) — title cell lacks
+ *      "— v2" → same friendly error.
  */
 export async function parseClientTemplate(
   file: File
@@ -539,15 +545,22 @@ export async function parseClientTemplate(
     );
   }
 
+  // CL-10: version stamp gate. CL-8 v1 templates have the same sheet
+  // name but no "— v2" in the title — column reads would silently
+  // misread because the row layout shifted.
+  const titleCell = sheet.getRow(1).getCell(1).value?.toString() ?? "";
+  if (!titleCell.includes(TITLE_VERSION_MARKER)) {
+    throw new Error(
+      "This template appears to be from an older version. Please download a fresh template using the 'Download Template' button."
+    );
+  }
+
   const taxExemptRaw = findValueByLabel(sheet, "Tax Exempt?");
-  const portalEnabledRaw = findValueByLabel(sheet, "Portal Access Enabled?");
 
   return {
     client: {
-      legal_name: findValueByLabel(sheet, "Legal Name"),
+      legal_name: findValueByLabel(sheet, "Company Legal Name"),
       name: findValueByLabel(sheet, "Trade / Display Name"),
-      status: findValueByLabel(sheet, "Status"),
-      industry: findValueByLabel(sheet, "Industry"),
       hst_gst_number: findValueByLabel(sheet, "HST / GST Number"),
       tax_exempt: parseBooleanCell(taxExemptRaw),
       tax_exempt_cert: findValueByLabel(
@@ -557,43 +570,35 @@ export async function parseClientTemplate(
     },
     // Billing + Mailing labels collide ("Street" / "City" / "Province" /
     // "Postal Code" / "Country" / "Unit / Suite" appear in BOTH sections).
-    // Read those fields by absolute row number — billing in rows 13–18,
-    // mailing in rows 22–27 — instead of label scan. Other sections still
-    // use findValueByLabel since their labels are unique.
+    // Read those fields by absolute row number — billing rows 10-15,
+    // mailing rows 19-24 per CL-10 layout. Other sections still use
+    // findValueByLabel since their labels are unique.
     billing: {
-      street: cellToString(sheet.getRow(13).getCell(2)),
-      unit: cellToString(sheet.getRow(14).getCell(2)),
-      city: cellToString(sheet.getRow(15).getCell(2)),
-      province: cellToString(sheet.getRow(16).getCell(2)),
-      postal: cellToString(sheet.getRow(17).getCell(2)),
-      country: cellToString(sheet.getRow(18).getCell(2)),
+      street: cellToString(sheet.getRow(10).getCell(2)),
+      unit: cellToString(sheet.getRow(11).getCell(2)),
+      city: cellToString(sheet.getRow(12).getCell(2)),
+      province: cellToString(sheet.getRow(13).getCell(2)),
+      postal: cellToString(sheet.getRow(14).getCell(2)),
+      country: cellToString(sheet.getRow(15).getCell(2)),
     },
     mailing: {
-      street: cellToString(sheet.getRow(22).getCell(2)),
-      unit: cellToString(sheet.getRow(23).getCell(2)),
-      city: cellToString(sheet.getRow(24).getCell(2)),
-      province: cellToString(sheet.getRow(25).getCell(2)),
-      postal: cellToString(sheet.getRow(26).getCell(2)),
-      country: cellToString(sheet.getRow(27).getCell(2)),
+      street: cellToString(sheet.getRow(19).getCell(2)),
+      unit: cellToString(sheet.getRow(20).getCell(2)),
+      city: cellToString(sheet.getRow(21).getCell(2)),
+      province: cellToString(sheet.getRow(22).getCell(2)),
+      postal: cellToString(sheet.getRow(23).getCell(2)),
+      country: cellToString(sheet.getRow(24).getCell(2)),
     },
     payment: {
-      terms: mapPaymentTermsLabel(findValueByLabel(sheet, "Payment Terms")),
-      terms_custom: findValueByLabel(
-        sheet,
-        "Custom Terms (if Payment Terms = Custom)"
+      terms: mapPaymentTermsLabel(
+        findValueByLabel(sheet, "Select Payment Terms")
       ),
+      terms_custom: findValueByLabel(sheet, "Custom Terms (if other)"),
       method: mapPaymentMethodLabel(
-        findValueByLabel(sheet, "Preferred Payment Method")
+        findValueByLabel(sheet, "Select Payment Method")
       ),
-      credit_limit: findValueByLabel(sheet, "Credit Limit (CAD)"),
-      currency: findValueByLabel(sheet, "Currency"),
+      currency: findValueByLabel(sheet, "Select Currency"),
     },
-    portal: {
-      enabled: parseBooleanCell(portalEnabledRaw),
-      email: findValueByLabel(sheet, "Portal Contact Email"),
-    },
-    notes: findValueAfterHeader(sheet, "NOTES"),
     contacts: scanContactsTable(sheet),
   };
 }
-
