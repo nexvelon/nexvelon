@@ -5,15 +5,14 @@ import {
   createClient,
   createContact,
   createSite,
+  deleteClient,
+  deleteContact,
+  deleteSite,
   getClientById,
   getClients,
   getContactsByClient,
   getSitesByClient,
   listSites,
-  restoreClient,
-  softDeleteClient,
-  softDeleteContact,
-  softDeleteSite,
   updateClient,
   updateContact,
   updateSite,
@@ -202,60 +201,29 @@ export async function getPrimaryContactAction(
   }
 }
 
-/**
- * Asserts the caller is an authenticated active Admin. Mirrors the
- * requireAdmin() gate in app/(app)/users/actions.ts (the canonical
- * admin-gate pattern).
- */
-async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin")
-    return { ok: false, error: "Admin access required." };
-  return { ok: true };
-}
+// FIX-1: local requireAdmin() helper removed — its only consumers
+// (listClientsAction's includeDeleted gate + restoreClientAction) were
+// dropped with the hard-delete switch. The Guardian-OpCo Admin check in
+// validateClientPayload reads getCurrentProfile().role directly inline.
 
 /**
- * List clients for the view. `includeDeleted` is admin-gated — non-admins
- * can never pull archived rows even if the flag is forced. Used by the
- * "Show archived" toggle and to refresh the list after delete/restore.
+ * List clients for the view. FIX-1: dropped the `includeDeleted` param
+ * + admin gate — hard-delete model means deleted rows don't exist.
  */
-export async function listClientsAction(
-  includeDeleted = false
-): Promise<ActionResult<DbClientWithCounts[]>> {
+export async function listClientsAction(): Promise<
+  ActionResult<DbClientWithCounts[]>
+> {
   try {
-    if (includeDeleted) {
-      const gate = await requireAdmin();
-      if (!gate.ok) return gate;
-    }
-    const rows = await getClients({ includeDeleted });
+    const rows = await getClients();
     return { ok: true, data: rows };
   } catch (e) {
     return fail(e);
   }
 }
 
-/**
- * Restore a soft-deleted client (admin only). Never touches a live row.
- */
-export async function restoreClientAction(
-  id: string
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    const gate = await requireAdmin();
-    if (!gate.ok) return gate;
-    const restored = await restoreClient(id);
-    if (!restored) {
-      return { ok: false, error: "Client not found or not archived" };
-    }
-    revalidatePath("/clients");
-    return { ok: true, data: { id } };
-  } catch (e) {
-    return fail(e);
-  }
-}
+// FIX-1: restoreClientAction removed entirely. There is no longer a
+// soft-deleted state to restore from; deletes are immediate. Activity
+// log entries for the deleted entity survive per ACT-1 design.
 
 // ----------------------------------------------------------------------------
 // Clients
@@ -317,11 +285,13 @@ export async function deleteClientAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const deleted = await softDeleteClient(id);
+    // FIX-1: hard delete. Sites + contacts cascade via FK ON DELETE
+    // CASCADE on their client_id (0001_clients_schema.sql).
+    const deleted = await deleteClient(id);
     if (!deleted) {
-      return { ok: false, error: "Client not found or already deleted" };
+      return { ok: false, error: "Client not found" };
     }
-    // ACT-1: log only when an actual row was deleted (not "already gone").
+    // ACT-1: log survives the hard delete (no FK on activity_log.entity_id).
     await logActivity("client", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
@@ -390,7 +360,12 @@ export async function deleteSiteAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    await softDeleteSite(id);
+    // FIX-1: hard delete. Contacts referencing this site keep their
+    // client_id (their site_id flips to NULL via FK ON DELETE SET NULL).
+    const deleted = await deleteSite(id);
+    if (!deleted) {
+      return { ok: false, error: "Site not found" };
+    }
     await logActivity("site", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
@@ -445,7 +420,11 @@ export async function deleteContactAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    await softDeleteContact(id);
+    // FIX-1: hard delete.
+    const deleted = await deleteContact(id);
+    if (!deleted) {
+      return { ok: false, error: "Contact not found" };
+    }
     await logActivity("contact", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };

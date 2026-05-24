@@ -35,10 +35,10 @@ export async function listClassifications(
   return (data ?? []) as DbLineItemClassification[];
 }
 
-// audit-field uid stamp: mirrors softDeleteClient in lib/api/clients.ts
-// (createClient there does NOT stamp audit fields; the established uid-stamp
-// idiom in this codebase is `supabase.auth.getUser()` → user.id, used for
-// deleted_by). created_by / updated_by are auth.users(id) per migration 0008.
+// audit-field uid stamp: the established uid-stamp idiom in this codebase
+// is `supabase.auth.getUser()` → user.id (was used by softDeleteClient for
+// deleted_by pre-FIX-1; now only used here for created_by / updated_by).
+// created_by / updated_by are auth.users(id) per migration 0008.
 
 export async function createClassification(payload: {
   name: string;

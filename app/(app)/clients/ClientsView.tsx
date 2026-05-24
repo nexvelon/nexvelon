@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -8,7 +8,6 @@ import {
   Edit3,
   MoreHorizontal,
   Plus,
-  RotateCcw,
   Search,
   Trash2,
 } from "lucide-react";
@@ -34,13 +33,13 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
 import { TIER_BADGE, initials } from "./_components/shared";
-import {
-  deleteClientAction,
-  getCurrentUserIsAdminAction,
-  listClientsAction,
-  restoreClientAction,
-} from "./actions";
+import { deleteClientAction, listClientsAction } from "./actions";
 import type { DbClient, DbClientWithCounts } from "@/lib/types/database";
+
+// FIX-1: dropped imports — getCurrentUserIsAdminAction (was used only by
+// the Show-archived admin gate) and restoreClientAction (no longer
+// exists). The functions themselves remain in actions.ts for any future
+// admin-gated UI.
 
 interface Props {
   clients: DbClientWithCounts[];
@@ -49,35 +48,17 @@ interface Props {
 export function ClientsView({ clients }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  // Local source of truth, seeded from SSR props. Mutations refresh it via
-  // listClientsAction so the archived toggle stays coherent (router.refresh
-  // would only re-fetch the default active-only set).
+  // Local source of truth, seeded from SSR props. Mutations refresh it
+  // via listClientsAction. FIX-1: dropped the showArchived branch — the
+  // list is always the full set (no soft-deleted rows exist).
   const [rows, setRows] = useState<DbClientWithCounts[]>(clients);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<DbClient | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    getCurrentUserIsAdminAction().then((r) => {
-      if (!cancelled && r.ok) setIsAdmin(r.data.isAdmin);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const reload = async (archived: boolean) => {
-    const r = await listClientsAction(archived);
+  const reload = async () => {
+    const r = await listClientsAction();
     if (r.ok) setRows(r.data);
     else toast.error(r.error);
-  };
-
-  const toggleArchived = () => {
-    const next = !showArchived;
-    setShowArchived(next);
-    void reload(next);
   };
 
   // CL-9: the list owns the EDIT drawer only. Create now navigates to the
@@ -100,7 +81,8 @@ export function ClientsView({ clients }: Props) {
   }, [rows, search]);
 
   // ─── Empty state ─────────────────────────────────────────────────────────
-  const activeCount = rows.filter((c) => !c.deleted_at).length;
+  // FIX-1: rows.length IS activeCount now (no soft-deleted rows exist).
+  const activeCount = rows.length;
 
   if (rows.length === 0) {
     return (
@@ -199,22 +181,8 @@ export function ClientsView({ clients }: Props) {
           <p className="nx-eyebrow-soft">
             A–Z · {filtered.length} of {rows.length}
           </p>
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={toggleArchived}
-              aria-pressed={showArchived}
-              className={cn(
-                "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-                showArchived
-                  ? "bg-muted text-brand-charcoal"
-                  : "text-muted-foreground hover:bg-muted/40"
-              )}
-              style={{ borderColor: "var(--brand-border)" }}
-            >
-              {showArchived ? "Hide archived" : "Show archived"}
-            </button>
-          )}
+          {/* FIX-1: dropped the admin-gated "Show archived" toggle — the
+              hard-delete model has no archived state to surface. */}
         </div>
 
         <ul className="space-y-2">
@@ -223,11 +191,9 @@ export function ClientsView({ clients }: Props) {
               key={c.id}
               client={c}
               active={false}
-              archived={!!c.deleted_at}
               onSelect={() => router.push(`/clients/${c.id}`)}
               onEdit={() => setEditDrawer({ open: true, client: c })}
               onDelete={() => setConfirmDelete(c)}
-              onRestore={() => handleRestoreClient(c)}
             />
           ))}
         </ul>
@@ -251,9 +217,9 @@ export function ClientsView({ clients }: Props) {
           <DialogHeader>
             <DialogTitle className="font-serif">Delete client?</DialogTitle>
             <DialogDescription>
-              {confirmDelete?.name} will be hidden from the active list. An
-              admin can restore it later from the archived view. This will
-              not permanently remove the client&apos;s records.
+              {confirmDelete?.name} will be permanently deleted, along with
+              its sites and contacts. This cannot be undone. (The activity
+              log entry is preserved for audit purposes.)
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -279,7 +245,8 @@ export function ClientsView({ clients }: Props) {
     </div>
   );
 
-  // ─── Delete / restore handlers ───────────────────────────────────────────
+  // ─── Delete handler ──────────────────────────────────────────────────────
+  // FIX-1: restore handler removed (no soft-deleted state to restore from).
   function performDeleteClient() {
     if (!confirmDelete) return;
     const c = confirmDelete;
@@ -289,20 +256,9 @@ export function ClientsView({ clients }: Props) {
       if (r.ok) {
         setConfirmDelete(null);
         toast.success("Client deleted");
-        void reload(showArchived);
+        void reload();
       } else {
         // Keep the modal open + Delete button enabled so the user can retry.
-        toast.error(r.error);
-      }
-    });
-  }
-
-  function handleRestoreClient(c: DbClient) {
-    restoreClientAction(c.id).then((r) => {
-      if (r.ok) {
-        toast.success(`Restored ${c.name}`);
-        void reload(showArchived);
-      } else {
         toast.error(r.error);
       }
     });
@@ -314,19 +270,15 @@ export function ClientsView({ clients }: Props) {
 function ClientRow({
   client,
   active,
-  archived,
   onSelect,
   onEdit,
   onDelete,
-  onRestore,
 }: {
   client: DbClientWithCounts;
   active: boolean;
-  archived: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onRestore: () => void;
 }) {
   const tier = client.tier;
   const badge = tier ? TIER_BADGE[tier] : TIER_BADGE.Bronze;
@@ -361,10 +313,7 @@ function ClientRow({
           </span>
           <div className="min-w-0 flex-1">
             <p
-              className={cn(
-                "font-serif text-sm font-medium leading-tight truncate",
-                archived && "line-through opacity-60"
-              )}
+              className="font-serif text-sm font-medium leading-tight truncate"
               style={{ color: "var(--brand-primary)" }}
             >
               {client.name}
@@ -378,14 +327,6 @@ function ClientRow({
             </p>
           </div>
         </button>
-        {archived && (
-          <span
-            className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-            title="Soft-deleted — restore from this menu"
-          >
-            Archived
-          </span>
-        )}
         {tier && (
           <span
             className="flex h-6 w-6 items-center justify-center rounded-sm font-mono text-[10px] font-bold"
@@ -396,16 +337,14 @@ function ClientRow({
           </span>
         )}
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {!archived && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal rounded p-1"
-              aria-label="Edit"
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal rounded p-1"
+            aria-label="Edit"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Row actions"
@@ -414,22 +353,17 @@ function ClientRow({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {archived ? (
-                <DropdownMenuItem onClick={onRestore}>
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                  Restore client
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={onDelete}
-                  className="text-red-600 data-highlighted:text-red-600"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete client
-                </DropdownMenuItem>
-              )}
-              {/* Future row actions (Archive, Duplicate, …) slot in here
-                  without restructuring the menu. */}
+              {/* FIX-1: dropped the archived/Restore branch — hard-delete
+                  model has no archived state. */}
+              <DropdownMenuItem
+                onClick={onDelete}
+                className="text-red-600 data-highlighted:text-red-600"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete client
+              </DropdownMenuItem>
+              {/* Future row actions (Duplicate, …) slot in here without
+                  restructuring the menu. */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

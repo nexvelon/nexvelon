@@ -356,8 +356,6 @@ export interface ClientListFilters {
   tier?: DbClientTier;
   status?: DbClientStatus;
   type?: DbClientType;
-  /** Admin-only opt-in: include soft-deleted rows. Defaults to false. */
-  includeDeleted?: boolean;
 }
 
 // ============================================================================
