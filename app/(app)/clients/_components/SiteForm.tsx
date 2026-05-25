@@ -82,12 +82,16 @@ const PAYMENT_TERMS: { value: DbClientPaymentTerms; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
+// CL-11: mirrors ClientForm — reordered + dropped Cheque + added Cash.
+// The Cheque-legacy conditional include lives at the render site since
+// SiteForm's dropdown is also driven by the parent client's value when
+// inheritFromClient is true.
 const PAYMENT_METHODS: { value: DbClientPaymentMethod; label: string }[] = [
-  { value: "cheque", label: "Cheque" },
   { value: "eft", label: "EFT" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "e_transfer", label: "E-Transfer" },
+  { value: "e_transfer", label: "e-Transfer" },
   { value: "wire", label: "Wire" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "cash", label: "Cash" },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -908,7 +912,21 @@ export function SiteForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PAYMENT_METHODS.map((p) => (
+              {/* CL-11: conditional Cheque-legacy option. Inheritance
+                  twist: the currently-displayed value is the parent
+                  client's when inheritFromClient is true, otherwise
+                  the site's own. Include the legacy option whenever
+                  either side currently shows 'cheque'. */}
+              {(
+                (inheritFromClient
+                  ? parentClient?.preferred_payment_method
+                  : payMethod) === "cheque"
+                  ? [
+                      ...PAYMENT_METHODS,
+                      { value: "cheque" as const, label: "Cheque (legacy)" },
+                    ]
+                  : PAYMENT_METHODS
+              ).map((p) => (
                 <SelectItem key={p.value} value={p.value}>
                   {p.label}
                 </SelectItem>

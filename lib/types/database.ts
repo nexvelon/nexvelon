@@ -29,12 +29,19 @@ export type DbClientPaymentTerms =
   | "net_90"
   | "custom";
 
+// CL-11: 'cash' added to the allow-list. 'cheque' kept dormant for
+// §2.1 past-data preservation — DB still accepts it and existing rows
+// render as "Cheque (legacy)" in the form dropdowns, but new
+// selections route through the 5 active options (eft / e_transfer /
+// wire / credit_card / cash). Migration 0018 mirrors this on the DB
+// CHECK constraint for both clients + sites tables.
 export type DbClientPaymentMethod =
   | "cheque"
   | "eft"
   | "credit_card"
   | "e_transfer"
-  | "wire";
+  | "wire"
+  | "cash";
 
 export type DbClientCurrency = "CAD" | "USD";
 

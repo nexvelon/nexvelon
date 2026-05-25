@@ -107,10 +107,13 @@ const TYPE_CELL_FILL = {
   pattern: "solid",
   fgColor: { argb: "FFEFEFEF" },
 } as const;
+// CL-11: locked text block restyled — white background + bold black
+// 11pt text (was light-gray + italic dark-gray 10pt). Kept as a
+// constant so the cell wiring below stays readable.
 const LOCKED_TEXT_FILL = {
   type: "pattern",
   pattern: "solid",
-  fgColor: { argb: "FFF5F5F5" },
+  fgColor: { argb: "FFFFFFFF" },
 } as const;
 const VALUE_BORDER = {
   top: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -124,12 +127,15 @@ const YES_NO_OPTIONS = ["Yes", "No"];
 
 // CL-10: 4 options only (was 7 in CL-8). "Custom" dropped intentionally.
 const PAYMENT_TERMS_LABELS = ["Due on receipt", "NET 7", "NET 15", "NET 30"];
+// CL-11: reordered + dropped "Cheque" + added "Cash". Order matches
+// what ClientForm/SiteForm render in the in-app dropdown so the
+// download → fill → upload UX is consistent.
 const PAYMENT_METHOD_LABELS = [
-  "Cheque",
   "EFT",
-  "Credit Card",
-  "E-Transfer",
+  "e-Transfer",
   "Wire",
+  "Credit Card",
+  "Cash",
 ];
 const CURRENCY_OPTIONS = ["CAD", "USD"];
 
@@ -141,24 +147,34 @@ const PAYMENT_TERMS_LABEL_TO_VALUE: Record<string, string> = {
   "net 15": "net_15",
   "net 30": "net_30",
 };
+// Lowercase keys — the parser calls `raw.trim().toLowerCase()` before
+// lookup, so "e-Transfer" / "EFT" / "Cash" all round-trip through
+// "e-transfer" / "eft" / "cash". CL-11: dropped "cheque" — the new
+// dropdown doesn't offer it. A hand-typed "Cheque" in the Excel cell
+// returns "" (unmapped) → form keeps its default. Acceptable since
+// the v3 template doesn't include Cheque in the dropdown.
 const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
-  cheque: "cheque",
   eft: "eft",
-  "credit card": "credit_card",
   "e-transfer": "e_transfer",
   wire: "wire",
+  "credit card": "credit_card",
+  cash: "cash",
 };
 
-// Title carries the version stamp. Parser fails any upload whose title
-// cell doesn't contain "— v2" (the em-dash + suffix).
-const TITLE_TEXT = "Nexvelon Client Onboarding Template — v2";
-const TITLE_VERSION_MARKER = "— v2";
+// CL-11: title is plain text again (no visible version marker). The
+// version stamp moved to a hidden workbook.subject property so the
+// title can read clean and "Template" was renamed to "Form" per
+// operator preference. Parser checks workbook.subject — see
+// VERSION_STAMP_VALUE + the gate at the top of parseClientTemplate.
+const TITLE_TEXT = "Nexvelon Client Onboarding Form";
+const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 
-// CL-10: late-payment / 2.8% interest disclosure shown below the Payment
-// section as a visual-locked block (italic gray, distinct fill — NOT
-// password-protected so input cells stay editable).
-const LATE_PAYMENT_TEXT =
-  "Late Payments: The Client agrees to pay the total invoiced amount within the payment period selected here. (Due on receipt, Net7, Net 15 or Net 30 days). Invoices not settled beyond the selected payment term will accrue interest at a rate of 2.8% per month (33.6% per annum) effective immediately on all outstanding payments.";
+// CL-11: rebranded "Late Payments:" → "Payment terms and conditions:".
+// Same body text; same visual-locking strategy (white fill + bold
+// black 11pt) — NO password protection (that would lock every input
+// cell too).
+const PAYMENT_TERMS_AND_CONDITIONS_TEXT =
+  "Payment terms and conditions: The Client agrees to pay the total invoiced amount within the payment period selected here. (Due on receipt, Net7, Net 15 or Net 30 days). Invoices not settled beyond the selected payment term will accrue interest at a rate of 2.8% per month (33.6% per annum) effective immediately on all outstanding payments.";
 
 // Pre-filled Type column values for the 4 contact rows. Order is fixed
 // — the parser/merge logic depends on it.
@@ -259,6 +275,12 @@ export async function generateClientTemplate(): Promise<Blob> {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Nexvelon";
+  // CL-11: hidden version stamp. Stored as <dc:subject> in the OOXML
+  // core properties; Excel preserves it on save. parseClientTemplate
+  // gates uploads on this string — see the check at the top of the
+  // parser. Old templates (CL-10 v2 and earlier) have no subject set
+  // and fail the gate with the friendly "older version" error.
+  workbook.subject = VERSION_STAMP_VALUE;
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet("Client Onboarding");
@@ -278,7 +300,8 @@ export async function generateClientTemplate(): Promise<Blob> {
   sheet.views = [{ state: "frozen", ySplit: 3 }];
 
   // ─── Title block (rows 1–2) ───
-  // Row 1: title carries the "— v2" version stamp the parser uses.
+  // Row 1: plain title text (no visible version marker — that lives in
+  // workbook.subject now).
   sheet.getCell("A1").value = TITLE_TEXT;
   sheet.getCell("A1").font = { bold: true, size: 16 };
   sheet.mergeCells("A1:L1");
@@ -299,7 +322,13 @@ export async function generateClientTemplate(): Promise<Blob> {
   // ─── Section 1: CLIENT INFORMATION (rows 5–7) ───
   sectionHeader(sheet, 5, "CLIENT INFORMATION");
   labelValueRow(sheet, 6, "Company Legal Name", { required: true });
-  labelValueRow(sheet, 7, "Trade / Display Name", { required: true });
+  // CL-11: Trade name renamed + dropped * (optional now; form falls
+  // back to legal_name on submit when blank).
+  labelValueRow(
+    sheet,
+    7,
+    "Company's trade / registered business/brand name (if any)"
+  );
   // CL-10: Status + Industry rows DROPPED (operator-only fields).
 
   // ─── Section 2: BILLING ADDRESS (rows 9–15) ───
@@ -315,18 +344,25 @@ export async function generateClientTemplate(): Promise<Blob> {
   labelValueRow(sheet, 15, "Country", { required: true });
 
   // ─── Section 3: MAILING ADDRESS (rows 17–24) ───
+  // CL-11: hint now prepended with "Kindly"; labels get visual * markers.
+  // Parser-side behaviour unchanged — all-blank mailing still
+  // auto-detects "same as billing" via the existing mailingHasContent
+  // check in ClientForm.handleUploadTemplate.
   sectionHeader(sheet, 17, "MAILING ADDRESS");
   noteRow(
     sheet,
     18,
-    "Leave all fields blank if mailing address will be same as billing address"
+    "Kindly leave all fields blank if mailing address will be same as billing address"
   );
-  labelValueRow(sheet, 19, "Street");
-  labelValueRow(sheet, 20, "Unit / Suite");
-  labelValueRow(sheet, 21, "City");
-  labelValueRow(sheet, 22, "Province", { dropdown: PROVINCE_OPTIONS });
-  labelValueRow(sheet, 23, "Postal Code");
-  labelValueRow(sheet, 24, "Country");
+  labelValueRow(sheet, 19, "Street", { required: true });
+  labelValueRow(sheet, 20, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 21, "City", { required: true });
+  labelValueRow(sheet, 22, "Province", {
+    required: true,
+    dropdown: PROVINCE_OPTIONS,
+  });
+  labelValueRow(sheet, 23, "Postal Code", { required: true });
+  labelValueRow(sheet, 24, "Country", { required: true });
 
   // ─── Section 4: TAX (rows 26–29) ───
   sectionHeader(sheet, 26, "TAX");
@@ -356,17 +392,17 @@ export async function generateClientTemplate(): Promise<Blob> {
     dropdown: CURRENCY_OPTIONS,
   });
 
-  // ─── Locked late-payment text block (rows 37–40) ───
-  // Visual-only locking: distinctive light-gray fill + italic dark-gray
-  // text + wrap. NO cell.protection / sheet.protect — that would lock
-  // every input cell too.
+  // ─── Locked Payment-terms-and-conditions text block (rows 37–40) ───
+  // CL-11 restyling: bold black 11pt on white fill (was italic dark-gray
+  // 10pt on light-gray). Still visual-only locking — NO cell.protection
+  // or sheet.protect (that would lock every input cell too).
   sheet.mergeCells("A37:L40");
   const lateCell = sheet.getCell("A37");
-  lateCell.value = LATE_PAYMENT_TEXT;
+  lateCell.value = PAYMENT_TERMS_AND_CONDITIONS_TEXT;
   lateCell.font = {
-    italic: true,
-    color: { argb: "FF666666" },
-    size: 10,
+    bold: true,
+    color: { argb: "FF000000" },
+    size: 11,
   };
   lateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
   lateCell.fill = LOCKED_TEXT_FILL;
@@ -374,11 +410,26 @@ export async function generateClientTemplate(): Promise<Blob> {
   // Set row heights so the merged block has breathing room for the long text.
   for (let r = 37; r <= 40; r++) sheet.getRow(r).height = 22;
 
-  // ─── Section 6: CONTACTS (rows 42–48) ───
-  sectionHeaderRange(sheet, 42, "CONTACTS", 6);
+  // ─── Acknowledge field (row 42) ───
+  // CL-11 hard-blocker. Parser refuses to populate the form unless the
+  // operator/client explicitly selects "Yes" here. No default value so
+  // the choice can't be skipped via the "leave as default" autopilot.
+  // Row 41 + 43 left blank as visual spacers above/below.
+  labelValueRow(
+    sheet,
+    42,
+    "Acknowledge above payment terms and conditions",
+    { required: true, dropdown: YES_NO_OPTIONS }
+  );
+
+  // ─── Section 6: CONTACTS (rows 44–50) ───
+  // CL-11: shifted down by 2 rows to make room for the Acknowledge
+  // field at row 42 (+ blank spacers at 41 and 43). Role column header
+  // gets * (mandatory for rows 1 + 3 per CL-11 item #10).
+  sectionHeaderRange(sheet, 44, "CONTACTS", 6);
   noteRow(
     sheet,
-    43,
+    45,
     "Add additional contacts after the form is uploaded via the system.",
     6
   );
@@ -387,11 +438,11 @@ export async function generateClientTemplate(): Promise<Blob> {
     "First Name *",
     "Last Name *",
     "Type",
-    "Role",
+    "Role *",
     "Email *",
     "Phone *",
   ];
-  const headerRow = sheet.getRow(44);
+  const headerRow = sheet.getRow(46);
   contactsHeaders.forEach((h, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = h;
@@ -402,11 +453,11 @@ export async function generateClientTemplate(): Promise<Blob> {
   });
   headerRow.height = 20;
 
-  // 4 data rows (45–48). Type column pre-filled with the row-position
+  // 4 data rows (47–50). Type column pre-filled with the row-position
   // label; the rest are input cells (yellow fill). NO Yes/No dropdowns
   // anywhere (CL-10 dropped the 5 boolean type columns).
   for (let i = 0; i < 4; i++) {
-    const r = 45 + i;
+    const r = 47 + i;
     const row = sheet.getRow(r);
     for (let c = 1; c <= 6; c++) {
       const cell = row.getCell(c);
@@ -545,13 +596,27 @@ export async function parseClientTemplate(
     );
   }
 
-  // CL-10: version stamp gate. CL-8 v1 templates have the same sheet
-  // name but no "— v2" in the title — column reads would silently
-  // misread because the row layout shifted.
-  const titleCell = sheet.getRow(1).getCell(1).value?.toString() ?? "";
-  if (!titleCell.includes(TITLE_VERSION_MARKER)) {
+  // CL-11: version stamp gate via workbook.subject (hidden core
+  // property). Older templates (CL-10 v2 — visible "— v2" in title,
+  // no subject; CL-8 v1; CL-4) all lack the subject string and fail
+  // here with the friendly "older version" message.
+  const subject = workbook.subject ?? "";
+  if (!subject.includes(VERSION_STAMP_VALUE)) {
     throw new Error(
       "This template appears to be from an older version. Please download a fresh template using the 'Download Template' button."
+    );
+  }
+
+  // CL-11: Acknowledge hard-block. Locked from Phase 0 — parser refuses
+  // to populate the form unless the operator/client explicitly selected
+  // "Yes". No field setters fire when this throws.
+  const ackRaw = findValueByLabel(
+    sheet,
+    "Acknowledge above payment terms and conditions"
+  );
+  if (ackRaw.trim().toLowerCase() !== "yes") {
+    throw new Error(
+      "Client must acknowledge payment terms (set 'Acknowledge above payment terms and conditions' to 'Yes' in the Excel form) before upload."
     );
   }
 
@@ -560,7 +625,13 @@ export async function parseClientTemplate(
   return {
     client: {
       legal_name: findValueByLabel(sheet, "Company Legal Name"),
-      name: findValueByLabel(sheet, "Trade / Display Name"),
+      // CL-11: label renamed (parser still uses normalized label-scan,
+      // so the long new label is matched verbatim — case + asterisks
+      // stripped by normalizeLabel).
+      name: findValueByLabel(
+        sheet,
+        "Company's trade / registered business/brand name (if any)"
+      ),
       hst_gst_number: findValueByLabel(sheet, "HST / GST Number"),
       tax_exempt: parseBooleanCell(taxExemptRaw),
       tax_exempt_cert: findValueByLabel(
