@@ -76,12 +76,16 @@ const PAYMENT_TERMS: { value: DbClientPaymentTerms; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
+// CL-11: reordered + dropped Cheque + added Cash. Existing clients
+// whose preferred_payment_method === 'cheque' get a conditional
+// "Cheque (legacy)" option spliced in at render time — see the
+// `paymentMethodOptions` derivation inside the component.
 const PAYMENT_METHODS: { value: DbClientPaymentMethod; label: string }[] = [
-  { value: "cheque", label: "Cheque" },
   { value: "eft", label: "EFT" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "e_transfer", label: "E-Transfer" },
+  { value: "e_transfer", label: "e-Transfer" },
   { value: "wire", label: "Wire" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "cash", label: "Cash" },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -361,7 +365,8 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
 
       // Client identity
       if (!parsed.client.legal_name) missing.push("Company Legal Name");
-      if (!parsed.client.name) missing.push("Trade / Display Name");
+      // CL-11: Trade Name no longer mandatory. The submit-side fallback
+      // (`tradeName = name.trim() || legalName.trim()`) handles blank.
       // Billing — all 6 mandatory
       if (!parsed.billing.street) missing.push("Billing Street");
       if (!parsed.billing.city) missing.push("Billing City");
@@ -385,10 +390,13 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
         missing.push("Primary Contact Work (name)");
       if (!r[0]?.email) missing.push("Primary Contact Work (email)");
       if (!r[0]?.phone) missing.push("Primary Contact Work (phone)");
+      // CL-11: Role mandatory on the two primary rows (1 + 3).
+      if (!r[0]?.role) missing.push("Primary Contact Work (role)");
       if (!r[2]?.first_name || !r[2]?.last_name)
         missing.push("AP work/ext Contact (name)");
       if (!r[2]?.email) missing.push("AP work/ext Contact (email)");
       if (!r[2]?.phone) missing.push("AP work/ext Contact (phone)");
+      if (!r[2]?.role) missing.push("AP work/ext Contact (role)");
 
       // ─── Client identity ───
       if (parsed.client.legal_name) setLegalName(parsed.client.legal_name);
@@ -1345,7 +1353,17 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PAYMENT_METHODS.map((p) => (
+              {/* CL-11: existing 'cheque' rows render with a "Cheque
+                  (legacy)" option spliced in; once the operator picks
+                  a non-cheque value the option disappears on next
+                  render. New clients never see it. */}
+              {(payMethod === "cheque"
+                ? [
+                    ...PAYMENT_METHODS,
+                    { value: "cheque" as const, label: "Cheque (legacy)" },
+                  ]
+                : PAYMENT_METHODS
+              ).map((p) => (
                 <SelectItem key={p.value} value={p.value}>
                   {p.label}
                 </SelectItem>
