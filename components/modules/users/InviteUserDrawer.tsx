@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { inviteUserAction } from "@/app/(app)/users/actions";
+import { sanitizePhoneInput } from "@/lib/phone";
 import type { DbRole } from "@/lib/types/database";
 
 // ============================================================================
@@ -271,8 +272,9 @@ export function InviteUserDrawer({ open, onOpenChange }: Props) {
             <Field label="Phone">
               <Input
                 type="tel"
+                inputMode="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
                 autoComplete="tel"
                 disabled={pending}
                 className="h-10"
