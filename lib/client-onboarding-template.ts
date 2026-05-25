@@ -71,8 +71,10 @@ export interface ParsedClientTemplate {
   };
   payment: {
     terms: string; // "due_on_receipt" | "net_7" | "net_15" | "net_30" | ""
-    terms_custom: string;
-    method: string; // "cheque" | "eft" | "credit_card" | "e_transfer" | "wire" | ""
+    // CL-12: terms_custom dropped — Custom Terms row removed from the
+    // template. ClientForm keeps its own paymentTermsCustom state for
+    // operator-side manual override on payment_terms='custom'.
+    method: string; // "cheque" | "eft" | "credit_card" | "e_transfer" | "wire" | "cash" | ""
     currency: string; // "CAD" | "USD" | ""
   };
   // CL-10 dropped: client.status, client.industry, payment.credit_limit,
@@ -166,7 +168,10 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
 // title can read clean and "Template" was renamed to "Form" per
 // operator preference. Parser checks workbook.subject — see
 // VERSION_STAMP_VALUE + the gate at the top of parseClientTemplate.
-const TITLE_TEXT = "Nexvelon Client Onboarding Form";
+// CL-12: dropped the "Nexvelon" prefix — client-facing document
+// doesn't need to repeat the vendor name (it's already in the email
+// signature / cover letter that ships the form).
+const TITLE_TEXT = "Client Onboarding Form";
 const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 
 // CL-11: rebranded "Late Payments:" → "Payment terms and conditions:".
@@ -191,7 +196,8 @@ function sectionHeader(sheet: Worksheet, rowNum: number, title: string) {
   // Section header for the standard label/value sections (cols A:B).
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = title;
-  row.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+  // CL-12: black on gold (was white). Higher contrast + more readable.
+  row.getCell(1).font = { bold: true, size: 12, color: { argb: "FF000000" } };
   row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
   sheet.mergeCells(rowNum, 1, rowNum, 2);
   for (let c = 1; c <= 2; c++) {
@@ -209,7 +215,8 @@ function sectionHeaderRange(
   // Wider section header for Contacts (cols A:F = 6 cols).
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = title;
-  row.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+  // CL-12: black on gold (was white). Higher contrast + more readable.
+  row.getCell(1).font = { bold: true, size: 12, color: { argb: "FF000000" } };
   row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
   sheet.mergeCells(rowNum, 1, rowNum, endCol);
   for (let c = 1; c <= endCol; c++) {
@@ -304,8 +311,15 @@ export async function generateClientTemplate(): Promise<Blob> {
   // workbook.subject now).
   sheet.getCell("A1").value = TITLE_TEXT;
   sheet.getCell("A1").font = { bold: true, size: 16 };
+  sheet.getCell("A1").alignment = {
+    vertical: "middle",
+    horizontal: "center",
+    wrapText: true,
+  };
   sheet.mergeCells("A1:L1");
-  sheet.getRow(1).height = 26;
+  // CL-12: bumped from 26 → 28 + wrapText so the 16pt bold title
+  // renders cleanly without needing a manual row-height drag in Excel.
+  sheet.getRow(1).height = 28;
 
   // Row 2: subtitle. Row 3 intentionally blank (CL-10 drops the old
   // "Download a fresh template…" line; ySplit:3 still freezes the
@@ -317,24 +331,28 @@ export async function generateClientTemplate(): Promise<Blob> {
     color: { argb: "FF666666" },
     size: 11,
   };
+  sheet.getCell("A2").alignment = {
+    vertical: "middle",
+    horizontal: "center",
+    wrapText: true,
+  };
   sheet.mergeCells("A2:L2");
+  sheet.getRow(2).height = 22;
 
   // ─── Section 1: CLIENT INFORMATION (rows 5–7) ───
   sectionHeader(sheet, 5, "CLIENT INFORMATION");
   labelValueRow(sheet, 6, "Company Legal Name", { required: true });
-  // CL-11: Trade name renamed + dropped * (optional now; form falls
-  // back to legal_name on submit when blank).
-  labelValueRow(
-    sheet,
-    7,
-    "Company's trade / registered business/brand name (if any)"
-  );
+  // CL-12: trade name relabeled (still optional). The form's submit-
+  // side fallback (`tradeName = name.trim() || legalName.trim()`)
+  // handles blank.
+  labelValueRow(sheet, 7, "Company's registered trade/business name");
   // CL-10: Status + Industry rows DROPPED (operator-only fields).
 
   // ─── Section 2: BILLING ADDRESS (rows 9–15) ───
   sectionHeader(sheet, 9, "BILLING ADDRESS");
   labelValueRow(sheet, 10, "Street", { required: true });
-  labelValueRow(sheet, 11, "Unit / Suite");
+  // CL-12: Unit / Suite now mandatory (parser tracks it in missing[]).
+  labelValueRow(sheet, 11, "Unit / Suite", { required: true });
   labelValueRow(sheet, 12, "City", { required: true });
   labelValueRow(sheet, 13, "Province", {
     required: true,
@@ -371,33 +389,36 @@ export async function generateClientTemplate(): Promise<Blob> {
     required: true,
     dropdown: YES_NO_OPTIONS,
   });
-  labelValueRow(sheet, 29, "Tax Exempt Certificate Number");
+  // CL-12: label rewritten for clarity (still optional — only required
+  // when Tax Exempt = Yes, enforced form-side via validateClientPayload).
+  labelValueRow(sheet, 29, "If Tax Exempt, Enter Certificate Number");
 
-  // ─── Section 5: PAYMENT TERMS & METHOD (rows 31–35) ───
+  // ─── Section 5: PAYMENT TERMS & METHOD (rows 31–34) ───
+  // CL-12: dropped the Custom Terms row entirely — the dropdown only
+  // offers 4 fixed options (no "Custom" since CL-10) so the row was
+  // dead weight on the client side. Operator can still set
+  // payment_terms_custom by hand in the form after upload. Everything
+  // below shifts up by 1 row to close the gap.
   sectionHeader(sheet, 31, "PAYMENT TERMS & METHOD");
   labelValueRow(sheet, 32, "Select Payment Terms", {
     required: true,
     dropdown: PAYMENT_TERMS_LABELS,
   });
-  // Custom Terms row kept for operator override after upload; the
-  // dropdown above no longer offers "Custom" so this stays blank for
-  // most clients.
-  labelValueRow(sheet, 33, "Custom Terms (if other)");
-  labelValueRow(sheet, 34, "Select Payment Method", {
+  labelValueRow(sheet, 33, "Select Payment Method", {
     required: true,
     dropdown: PAYMENT_METHOD_LABELS,
   });
-  labelValueRow(sheet, 35, "Select Currency", {
+  labelValueRow(sheet, 34, "Select Currency", {
     required: true,
     dropdown: CURRENCY_OPTIONS,
   });
 
-  // ─── Locked Payment-terms-and-conditions text block (rows 37–40) ───
-  // CL-11 restyling: bold black 11pt on white fill (was italic dark-gray
-  // 10pt on light-gray). Still visual-only locking — NO cell.protection
-  // or sheet.protect (that would lock every input cell too).
-  sheet.mergeCells("A37:L40");
-  const lateCell = sheet.getCell("A37");
+  // ─── Locked Payment-terms-and-conditions text block (rows 36–39) ───
+  // CL-12: shifted up by 1 row (was 37–40) after dropping Custom Terms.
+  // Styling unchanged from CL-11: bold black 11pt on white fill.
+  // Still visual-only locking — NO cell.protection or sheet.protect.
+  sheet.mergeCells("A36:L39");
+  const lateCell = sheet.getCell("A36");
   lateCell.value = PAYMENT_TERMS_AND_CONDITIONS_TEXT;
   lateCell.font = {
     bold: true,
@@ -407,29 +428,34 @@ export async function generateClientTemplate(): Promise<Blob> {
   lateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
   lateCell.fill = LOCKED_TEXT_FILL;
   lateCell.border = VALUE_BORDER;
-  // Set row heights so the merged block has breathing room for the long text.
-  for (let r = 37; r <= 40; r++) sheet.getRow(r).height = 22;
+  for (let r = 36; r <= 39; r++) sheet.getRow(r).height = 22;
 
-  // ─── Acknowledge field (row 42) ───
-  // CL-11 hard-blocker. Parser refuses to populate the form unless the
-  // operator/client explicitly selects "Yes" here. No default value so
-  // the choice can't be skipped via the "leave as default" autopilot.
-  // Row 41 + 43 left blank as visual spacers above/below.
+  // ─── Acknowledge field (row 41) ───
+  // CL-12: shifted up by 1 row (was 42). Label rewritten to a full
+  // legal-disclosure sentence (was "Acknowledge above payment terms
+  // and conditions") so the click-through is unambiguous. Long label
+  // gets an explicit tall row + wrapText on the label cell so the
+  // text reads cleanly without a manual row-height drag.
+  // Row 40 + 42 left blank as visual spacers above/below.
   labelValueRow(
     sheet,
-    42,
-    "Acknowledge above payment terms and conditions",
+    41,
+    "By selecting and submitting Yes, I have read, understood and Acknowledge above payment terms and conditions",
     { required: true, dropdown: YES_NO_OPTIONS }
   );
+  sheet.getRow(41).height = 54;
+  sheet.getCell("A41").alignment = {
+    vertical: "middle",
+    horizontal: "left",
+    wrapText: true,
+  };
 
-  // ─── Section 6: CONTACTS (rows 44–50) ───
-  // CL-11: shifted down by 2 rows to make room for the Acknowledge
-  // field at row 42 (+ blank spacers at 41 and 43). Role column header
-  // gets * (mandatory for rows 1 + 3 per CL-11 item #10).
-  sectionHeaderRange(sheet, 44, "CONTACTS", 6);
+  // ─── Section 6: CONTACTS (rows 43–49) ───
+  // CL-12: shifted up by 1 row (was 44–50) after dropping Custom Terms.
+  sectionHeaderRange(sheet, 43, "CONTACTS", 6);
   noteRow(
     sheet,
-    45,
+    44,
     "Add additional contacts after the form is uploaded via the system.",
     6
   );
@@ -442,7 +468,7 @@ export async function generateClientTemplate(): Promise<Blob> {
     "Email *",
     "Phone *",
   ];
-  const headerRow = sheet.getRow(46);
+  const headerRow = sheet.getRow(45);
   contactsHeaders.forEach((h, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = h;
@@ -453,11 +479,11 @@ export async function generateClientTemplate(): Promise<Blob> {
   });
   headerRow.height = 20;
 
-  // 4 data rows (47–50). Type column pre-filled with the row-position
+  // 4 data rows (46–49). Type column pre-filled with the row-position
   // label; the rest are input cells (yellow fill). NO Yes/No dropdowns
   // anywhere (CL-10 dropped the 5 boolean type columns).
   for (let i = 0; i < 4; i++) {
-    const r = 47 + i;
+    const r = 46 + i;
     const row = sheet.getRow(r);
     for (let c = 1; c <= 6; c++) {
       const cell = row.getCell(c);
@@ -607,16 +633,17 @@ export async function parseClientTemplate(
     );
   }
 
-  // CL-11: Acknowledge hard-block. Locked from Phase 0 — parser refuses
-  // to populate the form unless the operator/client explicitly selected
-  // "Yes". No field setters fire when this throws.
+  // CL-11/CL-12: Acknowledge hard-block. Parser refuses to populate
+  // the form unless the operator/client explicitly selected "Yes". No
+  // field setters fire when this throws. Label rewritten in CL-12 to
+  // a full legal-disclosure sentence.
   const ackRaw = findValueByLabel(
     sheet,
-    "Acknowledge above payment terms and conditions"
+    "By selecting and submitting Yes, I have read, understood and Acknowledge above payment terms and conditions"
   );
   if (ackRaw.trim().toLowerCase() !== "yes") {
     throw new Error(
-      "Client must acknowledge payment terms (set 'Acknowledge above payment terms and conditions' to 'Yes' in the Excel form) before upload."
+      "Client must acknowledge payment terms (set the Acknowledge dropdown to 'Yes' in the Excel form) before upload."
     );
   }
 
@@ -636,7 +663,7 @@ export async function parseClientTemplate(
       tax_exempt: parseBooleanCell(taxExemptRaw),
       tax_exempt_cert: findValueByLabel(
         sheet,
-        "Tax Exempt Certificate Number"
+        "If Tax Exempt, Enter Certificate Number"
       ),
     },
     // Billing + Mailing labels collide ("Street" / "City" / "Province" /
@@ -664,7 +691,8 @@ export async function parseClientTemplate(
       terms: mapPaymentTermsLabel(
         findValueByLabel(sheet, "Select Payment Terms")
       ),
-      terms_custom: findValueByLabel(sheet, "Custom Terms (if other)"),
+      // CL-12: terms_custom read dropped — Custom Terms row no longer
+      // in the template.
       method: mapPaymentMethodLabel(
         findValueByLabel(sheet, "Select Payment Method")
       ),
