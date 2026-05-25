@@ -367,8 +367,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (!parsed.client.legal_name) missing.push("Company Legal Name");
       // CL-11: Trade Name no longer mandatory. The submit-side fallback
       // (`tradeName = name.trim() || legalName.trim()`) handles blank.
-      // Billing — all 6 mandatory
+      // Billing — all 6 mandatory (CL-12: Unit / Suite added).
       if (!parsed.billing.street) missing.push("Billing Street");
+      if (!parsed.billing.unit) missing.push("Billing Unit / Suite");
       if (!parsed.billing.city) missing.push("Billing City");
       if (!parsed.billing.province) missing.push("Billing Province");
       if (!parsed.billing.postal) missing.push("Billing Postal Code");
@@ -378,7 +379,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (parsed.client.tax_exempt === null)
         missing.push("Tax Exempt? (Yes/No)");
       if (parsed.client.tax_exempt === true && !parsed.client.tax_exempt_cert)
-        missing.push("Tax Exempt Certificate Number");
+        // CL-12: matches the renamed Excel label so the operator can
+        // find the field at a glance.
+        missing.push("If Tax Exempt, Enter Certificate Number");
       // Payment — terms/method/currency all mandatory
       if (!parsed.payment.terms) missing.push("Select Payment Terms");
       if (!parsed.payment.method) missing.push("Select Payment Method");
@@ -442,8 +445,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (parsed.payment.terms) {
         setPaymentTerms(parsed.payment.terms as DbClientPaymentTerms);
       }
-      if (parsed.payment.terms_custom)
-        setPaymentTermsCustom(parsed.payment.terms_custom);
+      // CL-12: setPaymentTermsCustom no longer called from the template
+      // (Custom Terms row removed). The form state stays so the operator
+      // can manually set it on payment_terms='custom'.
       if (parsed.payment.method) {
         setPayMethod(parsed.payment.method as DbClientPaymentMethod);
       }
