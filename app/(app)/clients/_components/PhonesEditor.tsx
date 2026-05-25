@@ -3,6 +3,7 @@
 import { Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { sanitizePhoneInput } from "@/lib/phone";
 import type { ContactPhone } from "@/lib/types/database";
 
 // CL-5c — locked label set offered by the phone-type dropdown.
@@ -63,8 +64,14 @@ export function PhonesEditor({ phones, onChange }: PhonesEditorProps) {
               ))}
             </select>
             <Input
+              type="text"
+              inputMode="tel"
               value={p.number}
-              onChange={(e) => updatePhone(idx, { number: e.target.value })}
+              onChange={(e) =>
+                updatePhone(idx, {
+                  number: sanitizePhoneInput(e.target.value),
+                })
+              }
               placeholder="(416) 555-0100"
             />
             {phones.length > 1 && (
