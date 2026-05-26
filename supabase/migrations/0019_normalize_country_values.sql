@@ -11,21 +11,20 @@
 -- Existing NULL / "" values are left as-is (NOT coerced to "Canada").
 -- Unknown values that don't match any LOWER(TRIM(...)) IN (...) list
 -- below also stay as-is (operator-side cleanup if needed).
+--
+-- Schema reality (confirmed v2 of this file):
+--   * clients table has billing_country + mailing_country only — no
+--     top-level country column (never existed). 0007 added the
+--     billing_country column; 0012 added mailing_country.
+--   * sites table has top-level country (NOT NULL DEFAULT 'Canada'
+--     from 0001) + billing_country + mailing_country (SITES-2a / 0015).
+--
+-- So 5 column blocks total (2 on clients + 3 on sites), not 6.
 
 BEGIN;
 
--- ─── clients.country / billing_country / mailing_country ──────────────
-
-UPDATE public.clients SET country = 'Canada'
-  WHERE LOWER(TRIM(country)) IN ('canada','ca','can');
-UPDATE public.clients SET country = 'USA'
-  WHERE LOWER(TRIM(country)) IN ('united states','us','usa','united states of america');
-UPDATE public.clients SET country = 'UAE'
-  WHERE LOWER(TRIM(country)) IN ('united arab emirates','uae','ae');
-UPDATE public.clients SET country = 'India'
-  WHERE LOWER(TRIM(country)) IN ('india','in');
-UPDATE public.clients SET country = 'Ireland'
-  WHERE LOWER(TRIM(country)) IN ('ireland','ie','republic of ireland');
+-- ─── clients.billing_country / mailing_country ────────────────────────
+-- (NO top-level clients.country column — never existed on this table)
 
 UPDATE public.clients SET billing_country = 'Canada'
   WHERE LOWER(TRIM(billing_country)) IN ('canada','ca','can');

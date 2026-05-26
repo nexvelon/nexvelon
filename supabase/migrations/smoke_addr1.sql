@@ -7,7 +7,9 @@
 -- empty string, or one of the 5 canonical enum values (Canada / USA /
 -- UAE / India / Ireland).
 --
--- 6 checks total (3 columns × 2 tables). FAILs-first ordering surfaces
+-- 5 checks total: clients has 2 country columns (billing + mailing —
+-- no top-level country on this table); sites has 3 (country +
+-- billing_country + mailing_country). FAILs-first ordering surfaces
 -- any non-canonical rows at the top of the result panel. ROLLBACK at
 -- the end keeps the TEMP table clean for re-runs.
 -- ============================================================================
@@ -19,14 +21,7 @@ CREATE TEMP TABLE smoke_results (
   status     text
 ) ON COMMIT DROP;
 
--- ─── clients (3 checks) ─────────────────────────────────────────────────
-
-INSERT INTO smoke_results SELECT 'clients.country values are valid',
-  CASE WHEN NOT EXISTS (
-    SELECT 1 FROM public.clients
-    WHERE country IS NOT NULL AND country != ''
-      AND country NOT IN ('Canada','USA','UAE','India','Ireland')
-  ) THEN 'PASS' ELSE 'FAIL' END;
+-- ─── clients (2 checks — no top-level country column on this table) ────
 
 INSERT INTO smoke_results SELECT 'clients.billing_country values are valid',
   CASE WHEN NOT EXISTS (
