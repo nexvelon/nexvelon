@@ -172,6 +172,10 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
 // doesn't need to repeat the vendor name (it's already in the email
 // signature / cover letter that ships the form).
 const TITLE_TEXT = "Client Onboarding Form";
+// CL-14: extracted to a constant so the column-A auto-fit logic can
+// exclude this text (it lives in a merged A:L cell, not in column A).
+const SUBTITLE_TEXT =
+  "Kindly complete the fields below — required fields marked with *";
 const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 
 // CL-13: rewrote as a 3-line header + 2 numbered items. The cell uses
@@ -300,7 +304,9 @@ export async function generateClientTemplate(): Promise<Blob> {
   // Column widths — A=labels / First Name, B=values / Last Name,
   // C=Type, D=Role, E=Email, F=Phone. The late-payment block merges
   // A:L so cols G–L need some minimum width too.
-  sheet.getColumn(1).width = 24;
+  // CL-14: column 1 width is auto-fit at the end of this function
+  // based on the longest label rendered into column A. See the
+  // dynamic computation right before workbook.xlsx.writeBuffer().
   sheet.getColumn(2).width = 38;
   sheet.getColumn(3).width = 25;
   sheet.getColumn(4).width = 25;
@@ -329,8 +335,7 @@ export async function generateClientTemplate(): Promise<Blob> {
   // Row 2: subtitle. Row 3 intentionally blank (CL-10 drops the old
   // "Download a fresh template…" line; ySplit:3 still freezes the
   // breathing-room row so the title group looks anchored).
-  sheet.getCell("A2").value =
-    "Kindly complete the fields below — required fields marked with *";
+  sheet.getCell("A2").value = SUBTITLE_TEXT;
   sheet.getCell("A2").font = {
     italic: true,
     color: { argb: "FF666666" },
@@ -492,6 +497,41 @@ export async function generateClientTemplate(): Promise<Blob> {
     }
     row.height = 20;
   }
+
+  // ─── CL-14: Auto-fit column A width to the longest label ──────────────
+  // Excel's default column width (~10 chars) was truncating labels like
+  // "Company's registered trade/business name" (40 chars). We walk
+  // column A across the whole sheet, collect string lengths, and set
+  // the column width with a small margin for proportional font
+  // rendering (a 1.15× multiplier handles characters wider than the
+  // average — M, W, etc. — without inflating to whitespace).
+  //
+  // Multi-line / multi-column-spanning cells are excluded: they live
+  // in merged ranges that span A:L, so column A width doesn't apply
+  // to them. The exclude set covers our three known wide-merge texts;
+  // the `.includes("\n")` fallback catches any future multi-line
+  // additions defensively.
+  const widerThanColAMergedCells = new Set<string>([
+    TITLE_TEXT,
+    SUBTITLE_TEXT,
+    PAYMENT_TERMS_AND_CONDITIONS_TEXT,
+  ]);
+  const labelLengths: number[] = [];
+  for (let r = 1; r <= 50; r++) {
+    const value = sheet.getRow(r).getCell(1).value;
+    if (
+      typeof value === "string" &&
+      !widerThanColAMergedCells.has(value) &&
+      !value.includes("\n")
+    ) {
+      labelLengths.push(value.length);
+    }
+  }
+  // Floor at 30 chars so even a future minimal-label config stays
+  // legible. 1.15× the max char count is enough for the default Excel
+  // font without producing bloated whitespace.
+  const maxLabelLength = Math.max(30, ...labelLengths);
+  sheet.getColumn(1).width = Math.ceil(maxLabelLength * 1.15);
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
