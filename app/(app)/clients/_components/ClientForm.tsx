@@ -329,7 +329,10 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Nexvelon-Client-Onboarding-Template.xlsx";
+      // CL-15: filename matches the CL-12 title rename ("Client
+      // Onboarding Form") — consistent branding from filename to
+      // spreadsheet title. "Nexvelon" prefix + "Template" word dropped.
+      a.download = "Client Onboarding Form.xlsx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

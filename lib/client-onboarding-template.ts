@@ -527,11 +527,12 @@ export async function generateClientTemplate(): Promise<Blob> {
       labelLengths.push(value.length);
     }
   }
-  // Floor at 30 chars so even a future minimal-label config stays
-  // legible. 1.15× the max char count is enough for the default Excel
-  // font without producing bloated whitespace.
-  const maxLabelLength = Math.max(30, ...labelLengths);
-  sheet.getColumn(1).width = Math.ceil(maxLabelLength * 1.15);
+  // CL-15: tightened the margin per operator feedback ("column A is
+  // too wide"). Floor reduced 30→25 and multiplier 1.15→1.05 — gives
+  // ~2 chars of trailing whitespace past the longest label (e.g. a
+  // 40-char label sets width 42, down from CL-14's 46).
+  const maxLabelLength = Math.max(25, ...labelLengths);
+  sheet.getColumn(1).width = Math.ceil(maxLabelLength * 1.05);
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
