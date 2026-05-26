@@ -171,9 +171,9 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
 // CL-12: dropped the "Nexvelon" prefix — client-facing document
 // doesn't need to repeat the vendor name (it's already in the email
 // signature / cover letter that ships the form).
-// CL-16: shortened to "Client Template" (was "Client Onboarding Form")
-// — consistent with the renamed downloaded filename "Client Template.xlsx".
-const TITLE_TEXT = "Client Template";
+// CL-17: final rename to "Client Form" (was "Client Template").
+// Filename matches: "Client Form.xlsx".
+const TITLE_TEXT = "Client Form";
 // CL-14: extracted to a constant so the column-A auto-fit logic can
 // exclude this text (it lives in a merged A:L cell, not in column A).
 const SUBTITLE_TEXT =
@@ -500,42 +500,14 @@ export async function generateClientTemplate(): Promise<Blob> {
     row.height = 20;
   }
 
-  // ─── CL-14: Auto-fit column A width to the longest label ──────────────
-  // Excel's default column width (~10 chars) was truncating labels like
-  // "Company's registered trade/business name" (40 chars). We walk
-  // column A across the whole sheet, collect string lengths, and set
-  // the column width with a small margin for proportional font
-  // rendering (a 1.15× multiplier handles characters wider than the
-  // average — M, W, etc. — without inflating to whitespace).
-  //
-  // Multi-line / multi-column-spanning cells are excluded: they live
-  // in merged ranges that span A:L, so column A width doesn't apply
-  // to them. The exclude set covers our three known wide-merge texts;
-  // the `.includes("\n")` fallback catches any future multi-line
-  // additions defensively.
-  const widerThanColAMergedCells = new Set<string>([
-    TITLE_TEXT,
-    SUBTITLE_TEXT,
-    PAYMENT_TERMS_AND_CONDITIONS_TEXT,
-  ]);
-  const labelLengths: number[] = [];
-  for (let r = 1; r <= 50; r++) {
-    const value = sheet.getRow(r).getCell(1).value;
-    if (
-      typeof value === "string" &&
-      !widerThanColAMergedCells.has(value) &&
-      !value.includes("\n")
-    ) {
-      labelLengths.push(value.length);
-    }
-  }
-  // CL-16: exact fit — width = longest label char count, no multiplier.
-  // Column ends right at the last char of the longest label; column B
-  // starts immediately after. Floor stays at 25 as a safety net for
-  // future short-label-only configs. If proportional-font rendering
-  // ever truncates the last char in practice, bump to `maxLabelLength + 1`.
-  const maxLabelLength = Math.max(25, ...labelLengths);
-  sheet.getColumn(1).width = maxLabelLength;
+  // ─── CL-17: Column A width hardcoded to 33 per operator request ───────
+  // The dynamic auto-fit (CL-14 → CL-16) computed character-count widths,
+  // but Excel renders width units as a function of the default font's
+  // character width — so "exact fit on char count" overshot in pixels
+  // and looked too wide. 33 is the visual sweet spot the operator
+  // confirmed. SUBTITLE_TEXT + PAYMENT_TERMS_AND_CONDITIONS_TEXT
+  // constants stay (still wire the row 2 + locked-text-block cells).
+  sheet.getColumn(1).width = 33;
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
