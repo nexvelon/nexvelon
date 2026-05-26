@@ -1,7 +1,11 @@
 "use client";
 
 import type { Cell, Worksheet } from "exceljs";
-import { PROVINCE_CODES } from "./canada-provinces";
+import {
+  COUNTRIES,
+  PROVINCES_BY_COUNTRY,
+  PROVINCE_LIST_NAME_BY_COUNTRY,
+} from "./countries";
 
 // CL-10 — single-sheet client onboarding Excel template (v2).
 //
@@ -124,7 +128,11 @@ const VALUE_BORDER = {
   right: { style: "thin", color: { argb: "FFCCCCCC" } },
 } as const;
 
-const PROVINCE_OPTIONS: readonly string[] = PROVINCE_CODES;
+// ADDR-1: PROVINCE_OPTIONS removed — replaced by per-country INDIRECT
+// dropdowns sourced from a hidden Lists sheet (see generateClientTemplate
+// for the named-range setup). Country cells use COUNTRIES; province
+// cells use formula validation referencing the named ranges.
+const COUNTRY_DROPDOWN = `"${COUNTRIES.join(",")}"`;
 const YES_NO_OPTIONS = ["Yes", "No"];
 
 // CL-10: 4 options only (was 7 in CL-8). "Custom" dropped intentionally.
@@ -283,6 +291,71 @@ function noteRow(
   sheet.mergeCells(rowNum, 1, rowNum, mergeToCol);
 }
 
+// ─── ADDR-1: dependent-dropdown wiring helpers ────────────────────────────
+
+/** Apply a static 5-option Country dropdown to the given cell. */
+function applyCountryDropdown(cell: Cell) {
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [COUNTRY_DROPDOWN],
+    showErrorMessage: false,
+  };
+}
+
+/**
+ * Apply a dependent Province / State dropdown to `cell` whose options
+ * are sourced from the named range matching the country in `countryCellRef`.
+ * The INDIRECT formula resolves "Canada" → "Canada_Regions" via the
+ * uniform `_Regions` suffix (see PROVINCE_LIST_NAME_BY_COUNTRY in
+ * lib/countries.ts). Works in Excel, LibreOffice, and Google Sheets.
+ */
+function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [`=INDIRECT(${countryCellRef} & "_Regions")`],
+    showErrorMessage: false,
+  };
+}
+
+/**
+ * Build the hidden Lists sheet + define one named range per country
+ * (Canada_Regions / USA_Regions / UAE_Regions / India_Regions /
+ * Ireland_Regions). The province cells' INDIRECT formula resolves
+ * against these names at sheet-evaluation time.
+ */
+function buildHiddenListsSheet(workbook: import("exceljs").Workbook) {
+  const lists = workbook.addWorksheet("Lists");
+  lists.state = "hidden";
+
+  // Header row — purely informational; named ranges target rows 2+.
+  COUNTRIES.forEach((country, colIdx) => {
+    lists.getCell(1, colIdx + 1).value = `${country} (${PROVINCE_LIST_NAME_BY_COUNTRY[country]})`;
+  });
+
+  // Body rows — one column per country, provinces top to bottom.
+  COUNTRIES.forEach((country, colIdx) => {
+    PROVINCES_BY_COUNTRY[country].forEach((province, rowIdx) => {
+      lists.getCell(rowIdx + 2, colIdx + 1).value = province;
+    });
+  });
+
+  // Named ranges — one per country, scoped to the workbook so INDIRECT
+  // can resolve them from any sheet.
+  const colLetters = ["A", "B", "C", "D", "E"];
+  COUNTRIES.forEach((country, colIdx) => {
+    const provinces = PROVINCES_BY_COUNTRY[country];
+    const rangeRef = `Lists!$${colLetters[colIdx]}$2:$${colLetters[colIdx]}$${
+      provinces.length + 1
+    }`;
+    workbook.definedNames.add(
+      rangeRef,
+      PROVINCE_LIST_NAME_BY_COUNTRY[country]
+    );
+  });
+}
+
 // ─── Generator ─────────────────────────────────────────────────────────────
 
 /**
@@ -300,6 +373,13 @@ export async function generateClientTemplate(): Promise<Blob> {
   // and fail the gate with the friendly "older version" error.
   workbook.subject = VERSION_STAMP_VALUE;
   workbook.created = new Date();
+
+  // ADDR-1: hidden Lists sheet + 5 named ranges (Canada_Regions /
+  // USA_Regions / UAE_Regions / India_Regions / Ireland_Regions)
+  // power the dependent Province dropdowns via INDIRECT formulae.
+  // Created BEFORE the main "Client Onboarding" sheet so it's not
+  // the active tab when the operator/client opens the file.
+  buildHiddenListsSheet(workbook);
 
   const sheet = workbook.addWorksheet("Client Onboarding");
 
@@ -361,38 +441,35 @@ export async function generateClientTemplate(): Promise<Blob> {
   // CL-10: Status + Industry rows DROPPED (operator-only fields).
 
   // ─── Section 2: BILLING ADDRESS (rows 9–15) ───
+  // ADDR-1 layout (Country first → Province dependent → Street/...):
+  //   Row 10 Country, Row 11 Province, Row 12 Street, Row 13 Unit / Suite,
+  //   Row 14 City, Row 15 Postal Code.
   sectionHeader(sheet, 9, "BILLING ADDRESS");
-  labelValueRow(sheet, 10, "Street", { required: true });
-  // CL-12: Unit / Suite now mandatory (parser tracks it in missing[]).
-  labelValueRow(sheet, 11, "Unit / Suite", { required: true });
-  labelValueRow(sheet, 12, "City", { required: true });
-  labelValueRow(sheet, 13, "Province", {
-    required: true,
-    dropdown: PROVINCE_OPTIONS,
-  });
-  labelValueRow(sheet, 14, "Postal Code", { required: true });
-  labelValueRow(sheet, 15, "Country", { required: true });
+  labelValueRow(sheet, 10, "Country", { required: true });
+  applyCountryDropdown(sheet.getCell("B10"));
+  labelValueRow(sheet, 11, "Province / State", { required: true });
+  applyProvinceIndirectDropdown(sheet.getCell("B11"), "$B$10");
+  labelValueRow(sheet, 12, "Street", { required: true });
+  labelValueRow(sheet, 13, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 14, "City", { required: true });
+  labelValueRow(sheet, 15, "Postal Code", { required: true });
 
   // ─── Section 3: MAILING ADDRESS (rows 17–24) ───
-  // CL-11: hint now prepended with "Kindly"; labels get visual * markers.
-  // Parser-side behaviour unchanged — all-blank mailing still
-  // auto-detects "same as billing" via the existing mailingHasContent
-  // check in ClientForm.handleUploadTemplate.
+  // ADDR-1: same Country-first reorder; rows 19–24 now C/P/S/U/Ci/PC.
   sectionHeader(sheet, 17, "MAILING ADDRESS");
   noteRow(
     sheet,
     18,
     "Kindly leave all fields blank if mailing address will be same as billing address"
   );
-  labelValueRow(sheet, 19, "Street", { required: true });
-  labelValueRow(sheet, 20, "Unit / Suite", { required: true });
-  labelValueRow(sheet, 21, "City", { required: true });
-  labelValueRow(sheet, 22, "Province", {
-    required: true,
-    dropdown: PROVINCE_OPTIONS,
-  });
-  labelValueRow(sheet, 23, "Postal Code", { required: true });
-  labelValueRow(sheet, 24, "Country", { required: true });
+  labelValueRow(sheet, 19, "Country", { required: true });
+  applyCountryDropdown(sheet.getCell("B19"));
+  labelValueRow(sheet, 20, "Province / State", { required: true });
+  applyProvinceIndirectDropdown(sheet.getCell("B20"), "$B$19");
+  labelValueRow(sheet, 21, "Street", { required: true });
+  labelValueRow(sheet, 22, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 23, "City", { required: true });
+  labelValueRow(sheet, 24, "Postal Code", { required: true });
 
   // ─── Section 4: TAX (rows 26–29) ───
   sectionHeader(sheet, 26, "TAX");
@@ -672,21 +749,24 @@ export async function parseClientTemplate(
     // Read those fields by absolute row number — billing rows 10-15,
     // mailing rows 19-24 per CL-10 layout. Other sections still use
     // findValueByLabel since their labels are unique.
+    // ADDR-1: reordered to Country (R10) / Province (R11) / Street (R12)
+    // / Unit (R13) / City (R14) / Postal (R15).
     billing: {
-      street: cellToString(sheet.getRow(10).getCell(2)),
-      unit: cellToString(sheet.getRow(11).getCell(2)),
-      city: cellToString(sheet.getRow(12).getCell(2)),
-      province: cellToString(sheet.getRow(13).getCell(2)),
-      postal: cellToString(sheet.getRow(14).getCell(2)),
-      country: cellToString(sheet.getRow(15).getCell(2)),
+      country: cellToString(sheet.getRow(10).getCell(2)),
+      province: cellToString(sheet.getRow(11).getCell(2)),
+      street: cellToString(sheet.getRow(12).getCell(2)),
+      unit: cellToString(sheet.getRow(13).getCell(2)),
+      city: cellToString(sheet.getRow(14).getCell(2)),
+      postal: cellToString(sheet.getRow(15).getCell(2)),
     },
+    // ADDR-1: same Country-first reorder; rows 19–24.
     mailing: {
-      street: cellToString(sheet.getRow(19).getCell(2)),
-      unit: cellToString(sheet.getRow(20).getCell(2)),
-      city: cellToString(sheet.getRow(21).getCell(2)),
-      province: cellToString(sheet.getRow(22).getCell(2)),
-      postal: cellToString(sheet.getRow(23).getCell(2)),
-      country: cellToString(sheet.getRow(24).getCell(2)),
+      country: cellToString(sheet.getRow(19).getCell(2)),
+      province: cellToString(sheet.getRow(20).getCell(2)),
+      street: cellToString(sheet.getRow(21).getCell(2)),
+      unit: cellToString(sheet.getRow(22).getCell(2)),
+      city: cellToString(sheet.getRow(23).getCell(2)),
+      postal: cellToString(sheet.getRow(24).getCell(2)),
     },
     payment: {
       terms: mapPaymentTermsLabel(

@@ -45,12 +45,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PhonesEditor } from "./PhonesEditor";
+import { AddressSection } from "./AddressSection";
 import {
   createContactAction,
   createSiteAction,
   updateSiteAction,
 } from "../actions";
-import { CANADA_PROVINCES } from "@/lib/canada-provinces";
+// ADDR-1: canada-provinces removed; lib/countries.ts now consolidates
+// the per-country province lists. AddressSection encapsulates the
+// Country + Province dropdowns; SiteForm no longer needs the constant.
 import { defaultTaxRateForProvince } from "@/lib/tax-rates";
 import type {
   ContactPhone,
@@ -364,15 +367,23 @@ export function SiteForm({
     [clients, selectedClientId]
   );
 
-  // For the tax-rate auto-fill: prefer the site's billing province (when
-  // billing is overridden), otherwise the parent client's billing province
-  // (when billing is inherited). The site's physical address province is
-  // ignored — tax follows the billing address.
+  // For the tax-rate auto-fill: prefer the site's billing country +
+  // province (when billing is overridden), otherwise the parent
+  // client's billing country + province (when billing is inherited).
+  // The site's physical address is ignored — tax follows the billing
+  // address. ADDR-1 makes the lookup country-aware.
+  const taxCountryForLookup =
+    billSameAsClient && parentClient
+      ? parentClient.billing_country
+      : billCountry || null;
   const taxProvinceForLookup =
     billSameAsClient && parentClient
       ? parentClient.billing_province
       : billProvince || null;
-  const suggestedTaxRate = defaultTaxRateForProvince(taxProvinceForLookup);
+  const suggestedTaxRate = defaultTaxRateForProvince(
+    taxCountryForLookup,
+    taxProvinceForLookup
+  );
 
   // ─── Validation ───
   const errors: Record<string, string> = {};
@@ -1033,51 +1044,26 @@ export function SiteForm({
         </Field>
       </Section>
 
-      {/* SECTION 2 — Site (physical) Address */}
+      {/* SECTION 2 — Site (physical) Address — ADDR-1 multi-country */}
       <Section title="Site Address">
-        <Field label="Address — line 1">
-          <Input
-            value={address1}
-            onChange={(e) => setAddress1(e.target.value)}
-            placeholder="1842 Industrial Pkwy"
-          />
-        </Field>
-        <Field label="Address — line 2">
-          <Input
-            value={address2}
-            onChange={(e) => setAddress2(e.target.value)}
-            placeholder="Suite / floor / unit"
-          />
-        </Field>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="City">
-            <Input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Toronto"
-            />
-          </Field>
-          <Field label="Province">
-            <ProvinceSelect value={province} onChange={setProvince} />
-          </Field>
-          <Field label="Postal">
-            <Input
-              value={postal}
-              onChange={(e) => setPostal(e.target.value)}
-              placeholder="M5H 2S6"
-            />
-          </Field>
-        </div>
-        <Field label="Country">
-          <Input
-            value={siteCountry}
-            onChange={(e) => setSiteCountry(e.target.value)}
-            placeholder="Canada"
-          />
-        </Field>
+        <AddressSection
+          country={siteCountry}
+          province={province}
+          street={address1}
+          unit={address2}
+          city={city}
+          postal={postal}
+          onCountryChange={setSiteCountry}
+          onProvinceChange={setProvince}
+          onStreetChange={setAddress1}
+          onUnitChange={setAddress2}
+          onCityChange={setCity}
+          onPostalChange={setPostal}
+          streetPlaceholder="1842 Industrial Pkwy"
+        />
       </Section>
 
-      {/* SECTION 3 — Billing Address */}
+      {/* SECTION 3 — Billing Address — ADDR-1 multi-country */}
       <Section title="Billing Address">
         <InheritRadio
           name="billing_same_as_client"
@@ -1087,24 +1073,24 @@ export function SiteForm({
           onChange={handleBillingInheritToggle}
           parentClientName={parentClient?.name}
         />
-        <AddressFields
+        <AddressSection
+          country={billSameAsClient ? effBill.country : billCountry}
+          province={billSameAsClient ? effBill.province : billProvince}
           street={billSameAsClient ? effBill.street : billStreet}
           unit={billSameAsClient ? effBill.unit : billUnit}
           city={billSameAsClient ? effBill.city : billCity}
-          province={billSameAsClient ? effBill.province : billProvince}
           postal={billSameAsClient ? effBill.postal : billPostal}
-          country={billSameAsClient ? effBill.country : billCountry}
-          disabled={billSameAsClient}
+          onCountryChange={setBillCountry}
+          onProvinceChange={setBillProvince}
           onStreetChange={setBillStreet}
           onUnitChange={setBillUnit}
           onCityChange={setBillCity}
-          onProvinceChange={setBillProvince}
           onPostalChange={setBillPostal}
-          onCountryChange={setBillCountry}
+          disabled={billSameAsClient}
         />
       </Section>
 
-      {/* SECTION 4 — Mailing Address */}
+      {/* SECTION 4 — Mailing Address — ADDR-1 multi-country */}
       <Section title="Mailing Address">
         <InheritRadio
           name="mailing_same_as_billing"
@@ -1114,20 +1100,20 @@ export function SiteForm({
           onChange={handleMailingInheritToggle}
           parentClientName={undefined /* mailing inherits from billing, not client name */}
         />
-        <AddressFields
+        <AddressSection
+          country={mailSameAsBilling ? effMail.country : mailCountry}
+          province={mailSameAsBilling ? effMail.province : mailProvince}
           street={mailSameAsBilling ? effMail.street : mailStreet}
           unit={mailSameAsBilling ? effMail.unit : mailUnit}
           city={mailSameAsBilling ? effMail.city : mailCity}
-          province={mailSameAsBilling ? effMail.province : mailProvince}
           postal={mailSameAsBilling ? effMail.postal : mailPostal}
-          country={mailSameAsBilling ? effMail.country : mailCountry}
-          disabled={mailSameAsBilling}
+          onCountryChange={setMailCountry}
+          onProvinceChange={setMailProvince}
           onStreetChange={setMailStreet}
           onUnitChange={setMailUnit}
           onCityChange={setMailCity}
-          onProvinceChange={setMailProvince}
           onPostalChange={setMailPostal}
-          onCountryChange={setMailCountry}
+          disabled={mailSameAsBilling}
         />
       </Section>
 
@@ -1203,12 +1189,15 @@ export function SiteForm({
               }
               disabled={inheritFromClient || suggestedTaxRate == null}
             >
-              Use {taxProvinceForLookup ?? "default"} default (
-              {suggestedTaxRate != null ? `${suggestedTaxRate}%` : "—"})
+              Use{" "}
+              {taxCountryForLookup && taxProvinceForLookup
+                ? `${taxCountryForLookup} ${taxProvinceForLookup}`
+                : "default"}{" "}
+              default ({suggestedTaxRate != null ? `${suggestedTaxRate}%` : "—"})
             </Button>
           </div>
           <p className="text-muted-foreground text-[11px]">
-            Auto-fills from billing province. Edit to override.
+            Auto-fills from billing country + province. Edit to override.
           </p>
         </Field>
       </Section>
@@ -1658,32 +1647,8 @@ export function SiteForm({
 }
 
 // ─── Local helpers ────────────────────────────────────────────────────────
-
-function ProvinceSelect({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Select
-      value={value || undefined}
-      onValueChange={(v) => onChange(v ?? "")}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Province…" />
-      </SelectTrigger>
-      <SelectContent>
-        {CANADA_PROVINCES.map((p) => (
-          <SelectItem key={p.code} value={p.code}>
-            {p.code} — {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
+// ADDR-1: removed the local ProvinceSelect + AddressFields helpers —
+// the shared <AddressSection> from ./AddressSection.tsx replaces both.
 
 function InheritRadio({
   name,
@@ -1733,99 +1698,6 @@ function InheritRadio({
         <p className="text-muted-foreground text-[11px]">{helpText}</p>
       )}
     </div>
-  );
-}
-
-function AddressFields({
-  street,
-  unit,
-  city,
-  province,
-  postal,
-  country,
-  disabled,
-  onStreetChange,
-  onUnitChange,
-  onCityChange,
-  onProvinceChange,
-  onPostalChange,
-  onCountryChange,
-}: {
-  street: string;
-  unit: string;
-  city: string;
-  province: string;
-  postal: string;
-  country: string;
-  disabled: boolean;
-  onStreetChange: (v: string) => void;
-  onUnitChange: (v: string) => void;
-  onCityChange: (v: string) => void;
-  onProvinceChange: (v: string) => void;
-  onPostalChange: (v: string) => void;
-  onCountryChange: (v: string) => void;
-}) {
-  return (
-    <>
-      <Field label="Street">
-        <Input
-          value={street}
-          onChange={(e) => onStreetChange(e.target.value)}
-          placeholder="350 Bay Street"
-          disabled={disabled}
-        />
-      </Field>
-      <Field label="Unit / Suite">
-        <Input
-          value={unit}
-          onChange={(e) => onUnitChange(e.target.value)}
-          placeholder="Suite 1200"
-          disabled={disabled}
-        />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="City">
-          <Input
-            value={city}
-            onChange={(e) => onCityChange(e.target.value)}
-            placeholder="Toronto"
-            disabled={disabled}
-          />
-        </Field>
-        <Field label="Province">
-          {/* Disabled state can't use Select cleanly with placeholder, so
-              show a flat Input in that case. */}
-          {disabled ? (
-            <Input
-              value={province}
-              readOnly
-              disabled
-              placeholder="—"
-            />
-          ) : (
-            <ProvinceSelect value={province} onChange={onProvinceChange} />
-          )}
-        </Field>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Postal code">
-          <Input
-            value={postal}
-            onChange={(e) => onPostalChange(e.target.value)}
-            placeholder="M5H 2S6"
-            disabled={disabled}
-          />
-        </Field>
-        <Field label="Country">
-          <Input
-            value={country}
-            onChange={(e) => onCountryChange(e.target.value)}
-            placeholder="Canada"
-            disabled={disabled}
-          />
-        </Field>
-      </div>
-    </>
   );
 }
 

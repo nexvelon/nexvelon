@@ -1,7 +1,11 @@
 "use client";
 
 import type { Cell, Worksheet } from "exceljs";
-import { PROVINCE_CODES } from "./canada-provinces";
+import {
+  COUNTRIES,
+  PROVINCES_BY_COUNTRY,
+  PROVINCE_LIST_NAME_BY_COUNTRY,
+} from "./countries";
 
 // SITES-3 — single-sheet Site Form Excel template.
 //
@@ -121,7 +125,10 @@ const VALUE_BORDER = {
   right: { style: "thin", color: { argb: "FFCCCCCC" } },
 } as const;
 
-const PROVINCE_OPTIONS: readonly string[] = PROVINCE_CODES;
+// ADDR-1: PROVINCE_OPTIONS removed — replaced by per-country INDIRECT
+// dropdowns sourced from a hidden Lists sheet. See
+// generateSiteTemplate for the named-range setup.
+const COUNTRY_DROPDOWN = `"${COUNTRIES.join(",")}"`;
 const YES_NO_OPTIONS = ["Yes", "No"];
 const PAYMENT_TERMS_LABELS = ["Due on receipt", "NET 7", "NET 15", "NET 30"];
 const PAYMENT_METHOD_LABELS = [
@@ -246,6 +253,50 @@ function noteRow(
   sheet.mergeCells(rowNum, 1, rowNum, mergeToCol);
 }
 
+// ─── ADDR-1: dependent-dropdown wiring helpers ────────────────────────────
+
+function applyCountryDropdown(cell: Cell) {
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [COUNTRY_DROPDOWN],
+    showErrorMessage: false,
+  };
+}
+
+function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
+  cell.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [`=INDIRECT(${countryCellRef} & "_Regions")`],
+    showErrorMessage: false,
+  };
+}
+
+function buildHiddenListsSheet(workbook: import("exceljs").Workbook) {
+  const lists = workbook.addWorksheet("Lists");
+  lists.state = "hidden";
+  COUNTRIES.forEach((country, colIdx) => {
+    lists.getCell(1, colIdx + 1).value = `${country} (${PROVINCE_LIST_NAME_BY_COUNTRY[country]})`;
+  });
+  COUNTRIES.forEach((country, colIdx) => {
+    PROVINCES_BY_COUNTRY[country].forEach((province, rowIdx) => {
+      lists.getCell(rowIdx + 2, colIdx + 1).value = province;
+    });
+  });
+  const colLetters = ["A", "B", "C", "D", "E"];
+  COUNTRIES.forEach((country, colIdx) => {
+    const provinces = PROVINCES_BY_COUNTRY[country];
+    const rangeRef = `Lists!$${colLetters[colIdx]}$2:$${colLetters[colIdx]}$${
+      provinces.length + 1
+    }`;
+    workbook.definedNames.add(
+      rangeRef,
+      PROVINCE_LIST_NAME_BY_COUNTRY[country]
+    );
+  });
+}
+
 // ─── Generator ─────────────────────────────────────────────────────────────
 
 /**
@@ -269,6 +320,11 @@ export async function generateSiteTemplate(): Promise<Blob> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Nexvelon";
   workbook.subject = VERSION_STAMP_VALUE;
+
+  // ADDR-1: hidden Lists sheet + 5 named ranges power the dependent
+  // Province dropdowns via INDIRECT formulae. Created BEFORE the main
+  // "Site Onboarding" sheet so it's not the active tab on open.
+  buildHiddenListsSheet(workbook);
 
   const sheet = workbook.addWorksheet("Site Onboarding");
   sheet.views = [{ state: "frozen", ySplit: 3 }];
@@ -322,32 +378,33 @@ export async function generateSiteTemplate(): Promise<Blob> {
   labelValueRow(sheet, 6, "Site/Project Name", { required: true });
 
   // ─── Section 2: SITE ADDRESS (rows 8–14) ───
-  // Physical site location — distinct from the billing/mailing
-  // sections below.
+  // ADDR-1 layout: Country (R9) → Province (R10) → Street (R11) →
+  // Unit (R12) → City (R13) → Postal (R14). Physical site location —
+  // distinct from billing/mailing sections below.
   sectionHeader(sheet, 8, "SITE ADDRESS");
-  labelValueRow(sheet, 9, "Street", { required: true });
-  labelValueRow(sheet, 10, "Unit / Suite", { required: true });
-  labelValueRow(sheet, 11, "City", { required: true });
-  labelValueRow(sheet, 12, "Province", {
-    required: true,
-    dropdown: PROVINCE_OPTIONS,
-  });
-  labelValueRow(sheet, 13, "Postal Code", { required: true });
-  labelValueRow(sheet, 14, "Country", { required: true });
+  labelValueRow(sheet, 9, "Country", { required: true });
+  applyCountryDropdown(sheet.getCell("B9"));
+  labelValueRow(sheet, 10, "Province / State", { required: true });
+  applyProvinceIndirectDropdown(sheet.getCell("B10"), "$B$9");
+  labelValueRow(sheet, 11, "Street", { required: true });
+  labelValueRow(sheet, 12, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 13, "City", { required: true });
+  labelValueRow(sheet, 14, "Postal Code", { required: true });
 
   // ─── Section 3: BILLING ADDRESS (rows 16–22) ───
+  // ADDR-1: same Country-first reorder; rows 17–22.
   sectionHeader(sheet, 16, "BILLING ADDRESS");
-  labelValueRow(sheet, 17, "Street", { required: true });
-  labelValueRow(sheet, 18, "Unit / Suite", { required: true });
-  labelValueRow(sheet, 19, "City", { required: true });
-  labelValueRow(sheet, 20, "Province", {
-    required: true,
-    dropdown: PROVINCE_OPTIONS,
-  });
-  labelValueRow(sheet, 21, "Postal Code", { required: true });
-  labelValueRow(sheet, 22, "Country", { required: true });
+  labelValueRow(sheet, 17, "Country", { required: true });
+  applyCountryDropdown(sheet.getCell("B17"));
+  labelValueRow(sheet, 18, "Province / State", { required: true });
+  applyProvinceIndirectDropdown(sheet.getCell("B18"), "$B$17");
+  labelValueRow(sheet, 19, "Street", { required: true });
+  labelValueRow(sheet, 20, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 21, "City", { required: true });
+  labelValueRow(sheet, 22, "Postal Code", { required: true });
 
   // ─── Section 4: MAILING ADDRESS (rows 24–31) ───
+  // ADDR-1: same Country-first reorder; rows 26–31 now C/P/S/U/Ci/PC.
   // SiteForm's handleUploadTemplate detects all-blank mailing and
   // sets mailing_same_as_billing=true. The * markers are visual
   // only — parser-side behaviour unchanged.
@@ -357,15 +414,14 @@ export async function generateSiteTemplate(): Promise<Blob> {
     25,
     "Kindly leave all fields blank if mailing address will be same as billing address"
   );
-  labelValueRow(sheet, 26, "Street", { required: true });
-  labelValueRow(sheet, 27, "Unit / Suite", { required: true });
-  labelValueRow(sheet, 28, "City", { required: true });
-  labelValueRow(sheet, 29, "Province", {
-    required: true,
-    dropdown: PROVINCE_OPTIONS,
-  });
-  labelValueRow(sheet, 30, "Postal Code", { required: true });
-  labelValueRow(sheet, 31, "Country", { required: true });
+  labelValueRow(sheet, 26, "Country", { required: true });
+  applyCountryDropdown(sheet.getCell("B26"));
+  labelValueRow(sheet, 27, "Province / State", { required: true });
+  applyProvinceIndirectDropdown(sheet.getCell("B27"), "$B$26");
+  labelValueRow(sheet, 28, "Street", { required: true });
+  labelValueRow(sheet, 29, "Unit / Suite", { required: true });
+  labelValueRow(sheet, 30, "City", { required: true });
+  labelValueRow(sheet, 31, "Postal Code", { required: true });
 
   // ─── Section 5: TAX (rows 33–36) ───
   sectionHeader(sheet, 33, "TAX");
@@ -573,32 +629,34 @@ export async function parseSiteTemplate(
   // Site Info (unique label, label-scan).
   const siteName = findValueByLabel(sheet, "Site/Project Name");
 
-  // Site Address, Billing, Mailing labels all use "Street" / "City" /
-  // "Province" / etc. — they'd collide under label-scan, so use
-  // absolute row-number reads per the layout in generateSiteTemplate.
+  // Site Address, Billing, Mailing labels all use "Country" / "Province
+  // / State" / "Street" / "Unit / Suite" / "City" / "Postal Code" — they
+  // collide under label-scan, so use absolute row-number reads per the
+  // layout in generateSiteTemplate.
+  // ADDR-1 layout: Country / Province / Street / Unit / City / Postal.
   const siteAddress = {
-    address_line1: cellToString(sheet.getRow(9).getCell(2)),
-    address_line2: cellToString(sheet.getRow(10).getCell(2)),
-    city: cellToString(sheet.getRow(11).getCell(2)),
-    province: cellToString(sheet.getRow(12).getCell(2)),
-    postal_code: cellToString(sheet.getRow(13).getCell(2)),
-    country: cellToString(sheet.getRow(14).getCell(2)),
+    country: cellToString(sheet.getRow(9).getCell(2)),
+    province: cellToString(sheet.getRow(10).getCell(2)),
+    address_line1: cellToString(sheet.getRow(11).getCell(2)),
+    address_line2: cellToString(sheet.getRow(12).getCell(2)),
+    city: cellToString(sheet.getRow(13).getCell(2)),
+    postal_code: cellToString(sheet.getRow(14).getCell(2)),
   };
   const billing = {
-    street: cellToString(sheet.getRow(17).getCell(2)),
-    unit: cellToString(sheet.getRow(18).getCell(2)),
-    city: cellToString(sheet.getRow(19).getCell(2)),
-    province: cellToString(sheet.getRow(20).getCell(2)),
-    postal: cellToString(sheet.getRow(21).getCell(2)),
-    country: cellToString(sheet.getRow(22).getCell(2)),
+    country: cellToString(sheet.getRow(17).getCell(2)),
+    province: cellToString(sheet.getRow(18).getCell(2)),
+    street: cellToString(sheet.getRow(19).getCell(2)),
+    unit: cellToString(sheet.getRow(20).getCell(2)),
+    city: cellToString(sheet.getRow(21).getCell(2)),
+    postal: cellToString(sheet.getRow(22).getCell(2)),
   };
   const mailing = {
-    street: cellToString(sheet.getRow(26).getCell(2)),
-    unit: cellToString(sheet.getRow(27).getCell(2)),
-    city: cellToString(sheet.getRow(28).getCell(2)),
-    province: cellToString(sheet.getRow(29).getCell(2)),
-    postal: cellToString(sheet.getRow(30).getCell(2)),
-    country: cellToString(sheet.getRow(31).getCell(2)),
+    country: cellToString(sheet.getRow(26).getCell(2)),
+    province: cellToString(sheet.getRow(27).getCell(2)),
+    street: cellToString(sheet.getRow(28).getCell(2)),
+    unit: cellToString(sheet.getRow(29).getCell(2)),
+    city: cellToString(sheet.getRow(30).getCell(2)),
+    postal: cellToString(sheet.getRow(31).getCell(2)),
   };
 
   // Tax labels are unique to their section — label-scan is fine.
