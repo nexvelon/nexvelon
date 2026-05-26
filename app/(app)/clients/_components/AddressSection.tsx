@@ -137,9 +137,17 @@ export function AddressSection({
         </Select>
       </Field>
 
-      {/* Province / State — dependent on country. */}
+      {/* Province / State — dependent on country.
+          ADDR-2 fix: `key={country || "none"}` forces a full unmount +
+          remount of the Select whenever country changes. Base UI's
+          Portal-rendered popup caches the option set internally; without
+          the key, picking USA after Canada would show the stale 13-row
+          list on the first dropdown open. The key-remount is cheap (the
+          dropdown is closed at the moment country changes) and the
+          guarantee is bulletproof. */}
       <Field label={`${prefix}Province / State *`}>
         <Select
+          key={country || "none"}
           value={province || undefined}
           onValueChange={(v) => onProvinceChange(v ?? "")}
           disabled={disabled || !country}
