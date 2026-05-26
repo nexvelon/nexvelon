@@ -329,10 +329,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // CL-15: filename matches the CL-12 title rename ("Client
-      // Onboarding Form") — consistent branding from filename to
-      // spreadsheet title. "Nexvelon" prefix + "Template" word dropped.
-      a.download = "Client Onboarding Form.xlsx";
+      // CL-16: shortened to "Client Template.xlsx" — matches the
+      // shortened spreadsheet title (was "Client Onboarding Form").
+      a.download = "Client Template.xlsx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

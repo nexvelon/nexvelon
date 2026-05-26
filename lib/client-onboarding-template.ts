@@ -171,7 +171,9 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
 // CL-12: dropped the "Nexvelon" prefix — client-facing document
 // doesn't need to repeat the vendor name (it's already in the email
 // signature / cover letter that ships the form).
-const TITLE_TEXT = "Client Onboarding Form";
+// CL-16: shortened to "Client Template" (was "Client Onboarding Form")
+// — consistent with the renamed downloaded filename "Client Template.xlsx".
+const TITLE_TEXT = "Client Template";
 // CL-14: extracted to a constant so the column-A auto-fit logic can
 // exclude this text (it lives in a merged A:L cell, not in column A).
 const SUBTITLE_TEXT =
@@ -527,12 +529,13 @@ export async function generateClientTemplate(): Promise<Blob> {
       labelLengths.push(value.length);
     }
   }
-  // CL-15: tightened the margin per operator feedback ("column A is
-  // too wide"). Floor reduced 30→25 and multiplier 1.15→1.05 — gives
-  // ~2 chars of trailing whitespace past the longest label (e.g. a
-  // 40-char label sets width 42, down from CL-14's 46).
+  // CL-16: exact fit — width = longest label char count, no multiplier.
+  // Column ends right at the last char of the longest label; column B
+  // starts immediately after. Floor stays at 25 as a safety net for
+  // future short-label-only configs. If proportional-font rendering
+  // ever truncates the last char in practice, bump to `maxLabelLength + 1`.
   const maxLabelLength = Math.max(25, ...labelLengths);
-  sheet.getColumn(1).width = Math.ceil(maxLabelLength * 1.05);
+  sheet.getColumn(1).width = maxLabelLength;
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
