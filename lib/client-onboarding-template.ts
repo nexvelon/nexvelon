@@ -507,7 +507,7 @@ export async function generateClientTemplate(): Promise<Blob> {
   // and looked too wide. 33 is the visual sweet spot the operator
   // confirmed. SUBTITLE_TEXT + PAYMENT_TERMS_AND_CONDITIONS_TEXT
   // constants stay (still wire the row 2 + locked-text-block cells).
-  sheet.getColumn(1).width = 33;
+  sheet.getColumn(1).width = 35;
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
