@@ -31,8 +31,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete";
+// ADDR-1: AddressAutocomplete is now rendered inside <AddressSection>
+// when a callback is provided. Direct import dropped from this file.
 import { PhonesEditor } from "./PhonesEditor";
+import { AddressSection } from "./AddressSection";
+import type { Country } from "@/lib/countries";
 import {
   createClientAction,
   createContactAction,
@@ -123,6 +126,28 @@ function newEmptyContact(): ContactRowState {
     contact_type_custom: "",
     has_custom_type: false,
   };
+}
+
+// ─── ADDR-1: AddressAutocomplete country normalizer ──────────────────────
+// Google Places returns country as a display name ("Canada", "United
+// States", "United Arab Emirates", etc.). Coerce to our Country union
+// so the dropdown stays in sync after autocomplete fires. Unknown
+// values return "" (operator picks manually).
+function normalizeAutocompleteCountry(raw: string): Country | "" {
+  const v = raw.trim().toLowerCase();
+  if (v === "canada" || v === "ca") return "Canada";
+  if (
+    v === "united states" ||
+    v === "usa" ||
+    v === "us" ||
+    v === "united states of america"
+  )
+    return "USA";
+  if (v === "united arab emirates" || v === "uae" || v === "ae") return "UAE";
+  if (v === "india" || v === "in") return "India";
+  if (v === "ireland" || v === "ie" || v === "republic of ireland")
+    return "Ireland";
+  return "";
 }
 
 // ─── CL-10: parser-side merge-by-name helpers ────────────────────────────
@@ -893,61 +918,33 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
         </Field>
       </Section>
 
-      {/* SECTION 3 */}
+      {/* SECTION 3 — ADDR-1 multi-country */}
       <Section title="Billing Address">
-        <Field label="Street">
-          <AddressAutocomplete
-            value={billStreet}
-            onChange={setBillStreet}
-            onPlaceSelected={(p) => {
-              setBillStreet(p.street);
-              if (p.city) setBillCity(p.city);
-              if (p.province) setBillProvince(p.province);
-              if (p.postal) setBillPostal(p.postal);
-              if (p.country) setBillCountry(p.country);
-            }}
-            placeholder="350 Bay Street"
-          />
-        </Field>
-        <Field label="Unit / Suite">
-          <Input
-            value={billUnit}
-            onChange={(e) => setBillUnit(e.target.value)}
-            placeholder="Suite 1200"
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="City">
-            <Input
-              value={billCity}
-              onChange={(e) => setBillCity(e.target.value)}
-              placeholder="Toronto"
-            />
-          </Field>
-          <Field label="Province">
-            <Input
-              value={billProvince}
-              onChange={(e) => setBillProvince(e.target.value)}
-              placeholder="ON"
-            />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Postal code">
-            <Input
-              value={billPostal}
-              onChange={(e) => setBillPostal(e.target.value)}
-              placeholder="M5H 2S6"
-            />
-          </Field>
-          <Field label="Country">
-            <Input
-              value={billCountry}
-              onChange={(e) => setBillCountry(e.target.value)}
-              placeholder="Canada"
-            />
-          </Field>
-        </div>
+        <AddressSection
+          sectionPrefix=""
+          country={billCountry}
+          province={billProvince}
+          street={billStreet}
+          unit={billUnit}
+          city={billCity}
+          postal={billPostal}
+          onCountryChange={setBillCountry}
+          onProvinceChange={setBillProvince}
+          onStreetChange={setBillStreet}
+          onUnitChange={setBillUnit}
+          onCityChange={setBillCity}
+          onPostalChange={setBillPostal}
+          onStreetAutocomplete={(p) => {
+            setBillStreet(p.street);
+            if (p.city) setBillCity(p.city);
+            if (p.province) setBillProvince(p.province);
+            if (p.postal) setBillPostal(p.postal);
+            if (p.country) {
+              const normalized = normalizeAutocompleteCountry(p.country);
+              if (normalized) setBillCountry(normalized);
+            }
+          }}
+        />
       </Section>
 
       {/* SECTION 3.5: Mailing Address (CL-5b) */}
@@ -981,65 +978,36 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
             </p>
           )}
         </div>
-        <Field label="Street">
-          <AddressAutocomplete
-            value={mailSameAsBilling ? billStreet : mailStreet}
-            onChange={setMailStreet}
-            onPlaceSelected={(p) => {
-              setMailStreet(p.street);
-              if (p.city) setMailCity(p.city);
-              if (p.province) setMailProvince(p.province);
-              if (p.postal) setMailPostal(p.postal);
-              if (p.country) setMailCountry(p.country);
-            }}
-            placeholder="350 Bay Street"
-            disabled={mailSameAsBilling}
-          />
-        </Field>
-        <Field label="Unit / Suite">
-          <Input
-            value={mailSameAsBilling ? billUnit : mailUnit}
-            onChange={(e) => setMailUnit(e.target.value)}
-            placeholder="Suite 1200"
-            disabled={mailSameAsBilling}
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="City">
-            <Input
-              value={mailSameAsBilling ? billCity : mailCity}
-              onChange={(e) => setMailCity(e.target.value)}
-              placeholder="Toronto"
-              disabled={mailSameAsBilling}
-            />
-          </Field>
-          <Field label="Province">
-            <Input
-              value={mailSameAsBilling ? billProvince : mailProvince}
-              onChange={(e) => setMailProvince(e.target.value)}
-              placeholder="ON"
-              disabled={mailSameAsBilling}
-            />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Postal code">
-            <Input
-              value={mailSameAsBilling ? billPostal : mailPostal}
-              onChange={(e) => setMailPostal(e.target.value)}
-              placeholder="M5H 2S6"
-              disabled={mailSameAsBilling}
-            />
-          </Field>
-          <Field label="Country">
-            <Input
-              value={mailSameAsBilling ? billCountry : mailCountry}
-              onChange={(e) => setMailCountry(e.target.value)}
-              placeholder="Canada"
-              disabled={mailSameAsBilling}
-            />
-          </Field>
-        </div>
+        {/* ADDR-1: multi-country AddressSection. When mailSameAsBilling
+            is ON, we pass the billing values (effectively) for read-only
+            display; when OFF, the operator edits the mailing-specific
+            state directly. */}
+        <AddressSection
+          sectionPrefix=""
+          country={mailSameAsBilling ? billCountry : mailCountry}
+          province={mailSameAsBilling ? billProvince : mailProvince}
+          street={mailSameAsBilling ? billStreet : mailStreet}
+          unit={mailSameAsBilling ? billUnit : mailUnit}
+          city={mailSameAsBilling ? billCity : mailCity}
+          postal={mailSameAsBilling ? billPostal : mailPostal}
+          onCountryChange={setMailCountry}
+          onProvinceChange={setMailProvince}
+          onStreetChange={setMailStreet}
+          onUnitChange={setMailUnit}
+          onCityChange={setMailCity}
+          onPostalChange={setMailPostal}
+          disabled={mailSameAsBilling}
+          onStreetAutocomplete={(p) => {
+            setMailStreet(p.street);
+            if (p.city) setMailCity(p.city);
+            if (p.province) setMailProvince(p.province);
+            if (p.postal) setMailPostal(p.postal);
+            if (p.country) {
+              const normalized = normalizeAutocompleteCountry(p.country);
+              if (normalized) setMailCountry(normalized);
+            }
+          }}
+        />
       </Section>
 
       {/* CL-5c — Contact Information (create-mode only) */}
