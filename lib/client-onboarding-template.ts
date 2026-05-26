@@ -174,12 +174,17 @@ const PAYMENT_METHOD_LABEL_TO_VALUE: Record<string, string> = {
 const TITLE_TEXT = "Client Onboarding Form";
 const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 
-// CL-11: rebranded "Late Payments:" → "Payment terms and conditions:".
-// Same body text; same visual-locking strategy (white fill + bold
-// black 11pt) — NO password protection (that would lock every input
-// cell too).
+// CL-13: rewrote as a 3-line header + 2 numbered items. The cell uses
+// wrapText: true (set in the cell wiring below) so the embedded \n
+// renders as actual line breaks in Excel/LibreOffice.
+//
+// Locking is still visual-only (white fill + bold black 11pt) — NO
+// password protection, since that would lock every input cell on the
+// sheet.
 const PAYMENT_TERMS_AND_CONDITIONS_TEXT =
-  "Payment terms and conditions: The Client agrees to pay the total invoiced amount within the payment period selected here. (Due on receipt, Net7, Net 15 or Net 30 days). Invoices not settled beyond the selected payment term will accrue interest at a rate of 2.8% per month (33.6% per annum) effective immediately on all outstanding payments.";
+  "Payment terms and conditions:\n" +
+  "1> Invoices not settled beyond the selected payment term accrues interest at a rate of 2.8% per month (33.6% per annum) effective from that due date.\n" +
+  "2> 2.4% + applicable taxes for any payments done via Credit card.";
 
 // Pre-filled Type column values for the 4 contact rows. Order is fixed
 // — the parser/merge logic depends on it.
@@ -393,32 +398,21 @@ export async function generateClientTemplate(): Promise<Blob> {
   // when Tax Exempt = Yes, enforced form-side via validateClientPayload).
   labelValueRow(sheet, 29, "If Tax Exempt, Enter Certificate Number");
 
-  // ─── Section 5: PAYMENT TERMS & METHOD (rows 31–34) ───
-  // CL-12: dropped the Custom Terms row entirely — the dropdown only
-  // offers 4 fixed options (no "Custom" since CL-10) so the row was
-  // dead weight on the client side. Operator can still set
-  // payment_terms_custom by hand in the form after upload. Everything
-  // below shifts up by 1 row to close the gap.
+  // ─── Section 5: PAYMENT TERMS & METHOD (rows 31–39) ───
+  // CL-13: restructured. The locked terms-and-conditions block now
+  // sits IMMEDIATELY below the section header (rows 32–35), BEFORE
+  // the Select Payment Terms / Method / Currency dropdowns (rows
+  // 37–39). The Acknowledge field is gone entirely — Excel-only by
+  // construction so dropping it leaves no DB / form-state debt.
   sectionHeader(sheet, 31, "PAYMENT TERMS & METHOD");
-  labelValueRow(sheet, 32, "Select Payment Terms", {
-    required: true,
-    dropdown: PAYMENT_TERMS_LABELS,
-  });
-  labelValueRow(sheet, 33, "Select Payment Method", {
-    required: true,
-    dropdown: PAYMENT_METHOD_LABELS,
-  });
-  labelValueRow(sheet, 34, "Select Currency", {
-    required: true,
-    dropdown: CURRENCY_OPTIONS,
-  });
 
-  // ─── Locked Payment-terms-and-conditions text block (rows 36–39) ───
-  // CL-12: shifted up by 1 row (was 37–40) after dropping Custom Terms.
-  // Styling unchanged from CL-11: bold black 11pt on white fill.
-  // Still visual-only locking — NO cell.protection or sheet.protect.
-  sheet.mergeCells("A36:L39");
-  const lateCell = sheet.getCell("A36");
+  // ─── Locked payment-terms-and-conditions text block (rows 32–35) ───
+  // White fill + bold black 11pt — visual-only locking, NO
+  // cell.protection / sheet.protect (would lock every input cell on
+  // the sheet). The constant contains \n separators which render as
+  // real line breaks because wrapText is true.
+  sheet.mergeCells("A32:L35");
+  const lateCell = sheet.getCell("A32");
   lateCell.value = PAYMENT_TERMS_AND_CONDITIONS_TEXT;
   lateCell.font = {
     bold: true,
@@ -428,34 +422,32 @@ export async function generateClientTemplate(): Promise<Blob> {
   lateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
   lateCell.fill = LOCKED_TEXT_FILL;
   lateCell.border = VALUE_BORDER;
-  for (let r = 36; r <= 39; r++) sheet.getRow(r).height = 22;
+  // 4 rows × 22pt = 88pt — accommodates the 3-line text (header +
+  // 2 numbered items) with breathing room.
+  for (let r = 32; r <= 35; r++) sheet.getRow(r).height = 22;
 
-  // ─── Acknowledge field (row 41) ───
-  // CL-12: shifted up by 1 row (was 42). Label rewritten to a full
-  // legal-disclosure sentence (was "Acknowledge above payment terms
-  // and conditions") so the click-through is unambiguous. Long label
-  // gets an explicit tall row + wrapText on the label cell so the
-  // text reads cleanly without a manual row-height drag.
-  // Row 40 + 42 left blank as visual spacers above/below.
-  labelValueRow(
-    sheet,
-    41,
-    "By selecting and submitting Yes, I have read, understood and Acknowledge above payment terms and conditions",
-    { required: true, dropdown: YES_NO_OPTIONS }
-  );
-  sheet.getRow(41).height = 54;
-  sheet.getCell("A41").alignment = {
-    vertical: "middle",
-    horizontal: "left",
-    wrapText: true,
-  };
+  // Row 36 left blank as a visual spacer between the locked text
+  // and the dropdown rows.
+  labelValueRow(sheet, 37, "Select Payment Terms", {
+    required: true,
+    dropdown: PAYMENT_TERMS_LABELS,
+  });
+  labelValueRow(sheet, 38, "Select Payment Method", {
+    required: true,
+    dropdown: PAYMENT_METHOD_LABELS,
+  });
+  labelValueRow(sheet, 39, "Select Currency", {
+    required: true,
+    dropdown: CURRENCY_OPTIONS,
+  });
 
-  // ─── Section 6: CONTACTS (rows 43–49) ───
-  // CL-12: shifted up by 1 row (was 44–50) after dropping Custom Terms.
-  sectionHeaderRange(sheet, 43, "CONTACTS", 6);
+  // ─── Section 6: CONTACTS (rows 41–47) ───
+  // CL-13: shifted up by 2 rows (was 43–49) — the entire Acknowledge
+  // row + its spacer are gone.
+  sectionHeaderRange(sheet, 41, "CONTACTS", 6);
   noteRow(
     sheet,
-    44,
+    42,
     "Add additional contacts after the form is uploaded via the system.",
     6
   );
@@ -468,7 +460,7 @@ export async function generateClientTemplate(): Promise<Blob> {
     "Email *",
     "Phone *",
   ];
-  const headerRow = sheet.getRow(45);
+  const headerRow = sheet.getRow(43);
   contactsHeaders.forEach((h, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = h;
@@ -479,11 +471,11 @@ export async function generateClientTemplate(): Promise<Blob> {
   });
   headerRow.height = 20;
 
-  // 4 data rows (46–49). Type column pre-filled with the row-position
+  // 4 data rows (44–47). Type column pre-filled with the row-position
   // label; the rest are input cells (yellow fill). NO Yes/No dropdowns
   // anywhere (CL-10 dropped the 5 boolean type columns).
   for (let i = 0; i < 4; i++) {
-    const r = 46 + i;
+    const r = 44 + i;
     const row = sheet.getRow(r);
     for (let c = 1; c <= 6; c++) {
       const cell = row.getCell(c);
@@ -633,19 +625,12 @@ export async function parseClientTemplate(
     );
   }
 
-  // CL-11/CL-12: Acknowledge hard-block. Parser refuses to populate
-  // the form unless the operator/client explicitly selected "Yes". No
-  // field setters fire when this throws. Label rewritten in CL-12 to
-  // a full legal-disclosure sentence.
-  const ackRaw = findValueByLabel(
-    sheet,
-    "By selecting and submitting Yes, I have read, understood and Acknowledge above payment terms and conditions"
-  );
-  if (ackRaw.trim().toLowerCase() !== "yes") {
-    throw new Error(
-      "Client must acknowledge payment terms (set the Acknowledge dropdown to 'Yes' in the Excel form) before upload."
-    );
-  }
+  // CL-13: Acknowledge hard-block removed entirely. The locked terms
+  // block now sits directly under the section header, before the
+  // dropdowns — the operator/client reads it inline as part of the
+  // payment section. Old CL-11/CL-12 templates with the Acknowledge
+  // row still upload successfully; the parser silently ignores the
+  // unused field.
 
   const taxExemptRaw = findValueByLabel(sheet, "Tax Exempt?");
 
