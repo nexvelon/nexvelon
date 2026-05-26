@@ -189,8 +189,8 @@ const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 // sheet.
 const PAYMENT_TERMS_AND_CONDITIONS_TEXT =
   "Payment terms and conditions:\n" +
-  "1> Invoices not settled beyond the selected payment term accrues interest at a rate of 2.8% per month (33.6% per annum) effective from that due date.\n" +
-  "2> 2.4% + applicable taxes for any payments done via Credit card.";
+  "1> Invoices not settled beyond the selected payment term accrues interest at a rate of 2.8% per month (33.6% per annum) effective from that due date on all outstanding balances.\n" +
+  "2> Credit card payments will incur a 2.4% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT.";
 
 // Pre-filled Type column values for the 4 contact rows. Order is fixed
 // — the parser/merge logic depends on it.
