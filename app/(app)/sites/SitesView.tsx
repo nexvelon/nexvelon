@@ -206,7 +206,7 @@ export function SitesView({ initialSites, clients }: Props) {
               <TableRow>
                 <TableHead>Site Code</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Site Name</TableHead>
+                <TableHead>Site/Project Name</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Service</TableHead>

@@ -9,7 +9,7 @@ import { PROVINCE_CODES } from "./canada-provinces";
 // helpers, same constants, same overall section flow — with two new
 // sections at the top:
 //
-//   * SITE INFORMATION   — single field (Site Name)
+//   * SITE INFORMATION   — single field (Site/Project Name)
 //   * SITE ADDRESS       — 6 fields (physical address; mandatory *)
 //
 // All other sections (Billing / Mailing / Tax / Payment + locked
@@ -254,7 +254,7 @@ function noteRow(
  *
  * Section layout:
  *   R1-2   Title + subtitle (merged A:L)
- *   R5-6   SITE INFORMATION + Site Name
+ *   R5-6   SITE INFORMATION + Site/Project Name
  *   R8-14  SITE ADDRESS + 6 fields
  *   R16-22 BILLING ADDRESS + 6 fields
  *   R24-31 MAILING ADDRESS + hint + 6 fields
@@ -317,7 +317,9 @@ export async function generateSiteTemplate(): Promise<Blob> {
 
   // ─── Section 1: SITE INFORMATION (rows 5–6) ───
   sectionHeader(sheet, 5, "SITE INFORMATION");
-  labelValueRow(sheet, 6, "Site Name", { required: true });
+  // SITES-4: "Site Name" → "Site/Project Name". Internal field name on
+  // DbSite stays `name`; this is a user-facing label change only.
+  labelValueRow(sheet, 6, "Site/Project Name", { required: true });
 
   // ─── Section 2: SITE ADDRESS (rows 8–14) ───
   // Physical site location — distinct from the billing/mailing
@@ -569,7 +571,7 @@ export async function parseSiteTemplate(
   }
 
   // Site Info (unique label, label-scan).
-  const siteName = findValueByLabel(sheet, "Site Name");
+  const siteName = findValueByLabel(sheet, "Site/Project Name");
 
   // Site Address, Billing, Mailing labels all use "Street" / "City" /
   // "Province" / etc. — they'd collide under label-scan, so use

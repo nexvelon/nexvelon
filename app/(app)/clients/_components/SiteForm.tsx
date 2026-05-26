@@ -377,7 +377,7 @@ export function SiteForm({
   // ─── Validation ───
   const errors: Record<string, string> = {};
   if (!selectedClientId) errors.client = "Client is required.";
-  if (!name.trim()) errors.name = "Site name is required.";
+  if (!name.trim()) errors.name = "Site/Project name is required.";
   if (!inheritFromClient && portalEnabled) {
     if (!portalEmail.trim())
       errors.portalEmail = "Portal contact email is required.";
@@ -521,7 +521,7 @@ export function SiteForm({
     const missing: string[] = [];
 
     // Site Info + Site Address (all 7 mandatory)
-    if (!parsed.site.name) missing.push("Site Name");
+    if (!parsed.site.name) missing.push("Site/Project Name");
     if (!parsed.site.address_line1) missing.push("Site Address Street");
     if (!parsed.site.address_line2) missing.push("Site Address Unit / Suite");
     if (!parsed.site.city) missing.push("Site Address City");
@@ -976,7 +976,7 @@ export function SiteForm({
           </Field>
         )}
 
-        <Field label="Site name *" error={errors.name}>
+        <Field label="Site/Project name *" error={errors.name}>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
