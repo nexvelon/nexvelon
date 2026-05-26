@@ -6,6 +6,7 @@ import {
   PROVINCES_BY_COUNTRY,
   PROVINCE_LIST_NAME_BY_COUNTRY,
 } from "./countries";
+import { LATE_PAYMENT_RATES_BY_COUNTRY } from "./late-payment-rates";
 
 // SITES-3 — single-sheet Site Form Excel template.
 //
@@ -162,13 +163,10 @@ const SUBTITLE_TEXT =
 // uploads fail with the friendly older-version error.
 const VERSION_STAMP_VALUE = "nexvelon-site-v1";
 
-// Identical to client template — same payment terms + 2.4% surcharge
-// disclosure. The constant uses literal \n so wrapText renders them
-// as real line breaks.
-const PAYMENT_TERMS_AND_CONDITIONS_TEXT =
-  "Payment terms and conditions:\n" +
-  "1> Invoices not settled beyond the selected payment term accrues interest at a rate of 2.8% per month (33.6% per annum) effective from that due date on all outstanding balances.\n" +
-  "2> Credit card payments will incur a 2.4% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT.";
+// ADDR-2: PAYMENT_TERMS_AND_CONDITIONS_TEXT constant removed — locked
+// text now uses a dynamic Excel formula keyed off the BILLING country
+// cell ($B$17 in this template). Per-country rates live in
+// lib/late-payment-rates.ts.
 
 const CONTACT_TYPE_LABELS = [
   "Primary Contact Work",
@@ -273,28 +271,69 @@ function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
   };
 }
 
-function buildHiddenListsSheet(workbook: import("exceljs").Workbook) {
-  const lists = workbook.addWorksheet("Lists");
-  lists.state = "hidden";
-  COUNTRIES.forEach((country, colIdx) => {
-    lists.getCell(1, colIdx + 1).value = `${country} (${PROVINCE_LIST_NAME_BY_COUNTRY[country]})`;
-  });
-  COUNTRIES.forEach((country, colIdx) => {
-    PROVINCES_BY_COUNTRY[country].forEach((province, rowIdx) => {
-      lists.getCell(rowIdx + 2, colIdx + 1).value = province;
-    });
-  });
+// ADDR-2: lookup data lives inline on the main sheet (was a separate
+// hidden "Lists" tab in ADDR-1, which appeared in the bottom tab strip
+// and looked unprofessional). Mirrors lib/client-onboarding-template's
+// writeHiddenLookupData — duplicated per the SITES-3 decision to keep
+// each template self-contained.
+const HIDDEN_DATA_START_ROW = 201;
+const LATE_FEES_START_ROW = 260;
+
+function writeHiddenLookupData(
+  workbook: import("exceljs").Workbook,
+  sheet: Worksheet,
+  sheetName: string
+) {
   const colLetters = ["A", "B", "C", "D", "E"];
+  const whiteFont = { color: { argb: "FFFFFFFF" } } as const;
+
+  // Region lookup (cols A–E, one column per country).
   COUNTRIES.forEach((country, colIdx) => {
     const provinces = PROVINCES_BY_COUNTRY[country];
-    const rangeRef = `Lists!$${colLetters[colIdx]}$2:$${colLetters[colIdx]}$${
-      provinces.length + 1
-    }`;
+    provinces.forEach((province, rowIdx) => {
+      const cell = sheet.getCell(HIDDEN_DATA_START_ROW + rowIdx, colIdx + 1);
+      cell.value = province;
+      cell.font = whiteFont;
+    });
+  });
+
+  COUNTRIES.forEach((country, colIdx) => {
+    const provinces = PROVINCES_BY_COUNTRY[country];
+    const colLetter = colLetters[colIdx];
+    const startRow = HIDDEN_DATA_START_ROW;
+    const endRow = HIDDEN_DATA_START_ROW + provinces.length - 1;
+    const rangeRef = `'${sheetName}'!$${colLetter}$${startRow}:$${colLetter}$${endRow}`;
     workbook.definedNames.add(
       rangeRef,
       PROVINCE_LIST_NAME_BY_COUNTRY[country]
     );
   });
+
+  // Late-fees lookup (col A: country, B: monthly%, C: annual%, D: ccSurchargePct%).
+  COUNTRIES.forEach((country, idx) => {
+    const r = LATE_FEES_START_ROW + idx;
+    const rates = LATE_PAYMENT_RATES_BY_COUNTRY[country];
+    sheet.getCell(r, 1).value = country;
+    sheet.getCell(r, 2).value = rates.monthlyPct;
+    sheet.getCell(r, 3).value = rates.annualPct;
+    sheet.getCell(r, 4).value = rates.ccSurchargePct;
+    for (let c = 1; c <= 4; c++) {
+      sheet.getCell(r, c).font = whiteFont;
+    }
+  });
+
+  const lateFeesRangeRef = `'${sheetName}'!$A$${LATE_FEES_START_ROW}:$D$${
+    LATE_FEES_START_ROW + COUNTRIES.length - 1
+  }`;
+  workbook.definedNames.add(lateFeesRangeRef, "LateFees");
+
+  for (
+    let r = HIDDEN_DATA_START_ROW;
+    r <= LATE_FEES_START_ROW + COUNTRIES.length - 1;
+    r++
+  ) {
+    sheet.getRow(r).hidden = true;
+  }
 }
 
 // ─── Generator ─────────────────────────────────────────────────────────────
@@ -321,10 +360,9 @@ export async function generateSiteTemplate(): Promise<Blob> {
   workbook.creator = "Nexvelon";
   workbook.subject = VERSION_STAMP_VALUE;
 
-  // ADDR-1: hidden Lists sheet + 5 named ranges power the dependent
-  // Province dropdowns via INDIRECT formulae. Created BEFORE the main
-  // "Site Onboarding" sheet so it's not the active tab on open.
-  buildHiddenListsSheet(workbook);
+  // ADDR-2: lookup data lives on the main sheet (was a separate hidden
+  // "Lists" tab in ADDR-1). writeHiddenLookupData() is called near the
+  // end of this function once the main sheet exists.
 
   const sheet = workbook.addWorksheet("Site Onboarding");
   sheet.views = [{ state: "frozen", ySplit: 3 }];
@@ -386,6 +424,9 @@ export async function generateSiteTemplate(): Promise<Blob> {
   applyCountryDropdown(sheet.getCell("B9"));
   labelValueRow(sheet, 10, "Province / State", { required: true });
   applyProvinceIndirectDropdown(sheet.getCell("B10"), "$B$9");
+  // ADDR-2: hover comment nudges the operator after a country change.
+  sheet.getCell("B10").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
   labelValueRow(sheet, 11, "Street", { required: true });
   labelValueRow(sheet, 12, "Unit / Suite", { required: true });
   labelValueRow(sheet, 13, "City", { required: true });
@@ -398,6 +439,8 @@ export async function generateSiteTemplate(): Promise<Blob> {
   applyCountryDropdown(sheet.getCell("B17"));
   labelValueRow(sheet, 18, "Province / State", { required: true });
   applyProvinceIndirectDropdown(sheet.getCell("B18"), "$B$17");
+  sheet.getCell("B18").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
   labelValueRow(sheet, 19, "Street", { required: true });
   labelValueRow(sheet, 20, "Unit / Suite", { required: true });
   labelValueRow(sheet, 21, "City", { required: true });
@@ -418,6 +461,8 @@ export async function generateSiteTemplate(): Promise<Blob> {
   applyCountryDropdown(sheet.getCell("B26"));
   labelValueRow(sheet, 27, "Province / State", { required: true });
   applyProvinceIndirectDropdown(sheet.getCell("B27"), "$B$26");
+  sheet.getCell("B27").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
   labelValueRow(sheet, 28, "Street", { required: true });
   labelValueRow(sheet, 29, "Unit / Suite", { required: true });
   labelValueRow(sheet, 30, "City", { required: true });
@@ -435,12 +480,29 @@ export async function generateSiteTemplate(): Promise<Blob> {
   // ─── Section 6: PAYMENT TERMS & METHOD (rows 38–46) ───
   sectionHeader(sheet, 38, "PAYMENT TERMS & METHOD");
 
-  // Locked payment-terms-and-conditions block — identical to client
-  // template (CL-19). White fill + bold black 11pt. Visual-only
-  // locking; NO cell.protection / sheet.protect.
+  // Locked payment-terms-and-conditions block.
+  // ADDR-2: text is now a DYNAMIC Excel formula that pulls per-country
+  // rates from the hidden LateFees named range, keyed off the BILLING
+  // country cell ($B$17). IFERROR fallback uses Canada defaults when no
+  // billing country is selected.
+  //
+  // Styling unchanged from CL-13/CL-19: bold black 11pt on white fill.
+  // Visual-only locking (no cell.protection / sheet.protect).
   sheet.mergeCells("A39:L42");
   const lateCell = sheet.getCell("A39");
-  lateCell.value = PAYMENT_TERMS_AND_CONDITIONS_TEXT;
+  lateCell.value = {
+    formula:
+      '="Payment terms and conditions:" & CHAR(10) & ' +
+      '"1> Invoices not settled beyond the selected payment term accrues interest at a rate of " & ' +
+      "IFERROR(VLOOKUP($B$17,LateFees,2,FALSE),2.91) & " +
+      '"% per month (" & ' +
+      "IFERROR(VLOOKUP($B$17,LateFees,3,FALSE),35) & " +
+      '"% per annum) effective from that due date on all outstanding balances." & CHAR(10) & ' +
+      '"2> Credit card payments will incur a " & ' +
+      "IFERROR(VLOOKUP($B$17,LateFees,4,FALSE),2.4) & " +
+      '"% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT."',
+    result: "",
+  };
   lateCell.font = {
     bold: true,
     color: { argb: "FF000000" },
@@ -512,6 +574,11 @@ export async function generateSiteTemplate(): Promise<Blob> {
     }
     row.height = 20;
   }
+
+  // ADDR-2: lookup data lives inline at rows 201+ (region lists for
+  // INDIRECT dropdowns + late-fees table for the dynamic locked text
+  // VLOOKUP). Triple-hidden (position + row.hidden + white font).
+  writeHiddenLookupData(workbook, sheet, "Site Onboarding");
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();

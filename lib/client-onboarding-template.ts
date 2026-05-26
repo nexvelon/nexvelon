@@ -6,6 +6,7 @@ import {
   PROVINCES_BY_COUNTRY,
   PROVINCE_LIST_NAME_BY_COUNTRY,
 } from "./countries";
+import { LATE_PAYMENT_RATES_BY_COUNTRY } from "./late-payment-rates";
 
 // CL-10 — single-sheet client onboarding Excel template (v2).
 //
@@ -188,17 +189,10 @@ const SUBTITLE_TEXT =
   "Kindly complete the fields below — required fields marked with *";
 const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
 
-// CL-13: rewrote as a 3-line header + 2 numbered items. The cell uses
-// wrapText: true (set in the cell wiring below) so the embedded \n
-// renders as actual line breaks in Excel/LibreOffice.
-//
-// Locking is still visual-only (white fill + bold black 11pt) — NO
-// password protection, since that would lock every input cell on the
-// sheet.
-const PAYMENT_TERMS_AND_CONDITIONS_TEXT =
-  "Payment terms and conditions:\n" +
-  "1> Invoices not settled beyond the selected payment term accrues interest at a rate of 2.8% per month (33.6% per annum) effective from that due date on all outstanding balances.\n" +
-  "2> Credit card payments will incur a 2.4% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT.";
+// ADDR-2: PAYMENT_TERMS_AND_CONDITIONS_TEXT constant removed — the
+// locked text cell now uses a dynamic Excel formula (VLOOKUP against
+// the hidden LateFees range, keyed off the billing country). Per-
+// country rates live in lib/late-payment-rates.ts.
 
 // Pre-filled Type column values for the 4 contact rows. Order is fixed
 // — the parser/merge logic depends on it.
@@ -325,35 +319,96 @@ function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
  * Ireland_Regions). The province cells' INDIRECT formula resolves
  * against these names at sheet-evaluation time.
  */
-function buildHiddenListsSheet(workbook: import("exceljs").Workbook) {
-  const lists = workbook.addWorksheet("Lists");
-  lists.state = "hidden";
+/**
+ * ADDR-2: row index where the hidden region-lookup data starts. Sits
+ * far below the form content (which ends around row 50) so even an
+ * accidentally un-hidden block doesn't pollute the visible area.
+ */
+const HIDDEN_DATA_START_ROW = 201;
+/** ADDR-2: row index where the late-fees lookup table starts. */
+const LATE_FEES_START_ROW = 260;
 
-  // Header row — purely informational; named ranges target rows 2+.
-  COUNTRIES.forEach((country, colIdx) => {
-    lists.getCell(1, colIdx + 1).value = `${country} (${PROVINCE_LIST_NAME_BY_COUNTRY[country]})`;
-  });
+/**
+ * ADDR-2: write the hidden lookup data INLINE on the main form sheet
+ * (instead of a separate "Lists" tab, which appeared in the bottom
+ * tab strip and looked unprofessional for a client-facing template).
+ *
+ * Three layers of hiding stack defensively:
+ *   1. Position — rows 200+ are far below the form content.
+ *   2. row.hidden = true — Excel collapses the rows.
+ *   3. white font on default-white background — invisible even if a
+ *      curious user manually un-hides the rows.
+ *
+ * The named ranges (Canada_Regions / USA_Regions / UAE_Regions /
+ * India_Regions / Ireland_Regions + LateFees) are defined here so the
+ * Province INDIRECT dropdowns + the locked-text VLOOKUP formula
+ * resolve correctly against the main sheet.
+ *
+ * `sheetName` must match the worksheet that owns these rows — passed
+ * in by the caller so this helper stays sheet-name-agnostic.
+ */
+function writeHiddenLookupData(
+  workbook: import("exceljs").Workbook,
+  sheet: Worksheet,
+  sheetName: string
+) {
+  const colLetters = ["A", "B", "C", "D", "E"];
+  const whiteFont = { color: { argb: "FFFFFFFF" } } as const;
 
-  // Body rows — one column per country, provinces top to bottom.
+  // ── Region lookup (cols A–E, one column per country) ──
   COUNTRIES.forEach((country, colIdx) => {
-    PROVINCES_BY_COUNTRY[country].forEach((province, rowIdx) => {
-      lists.getCell(rowIdx + 2, colIdx + 1).value = province;
+    const provinces = PROVINCES_BY_COUNTRY[country];
+    provinces.forEach((province, rowIdx) => {
+      const cell = sheet.getCell(HIDDEN_DATA_START_ROW + rowIdx, colIdx + 1);
+      cell.value = province;
+      cell.font = whiteFont;
     });
   });
 
-  // Named ranges — one per country, scoped to the workbook so INDIRECT
-  // can resolve them from any sheet.
-  const colLetters = ["A", "B", "C", "D", "E"];
+  // ── Named range per country pointing at the main sheet's bottom rows ──
+  // Sheet name is quoted so spaces (e.g. "Client Onboarding") work.
   COUNTRIES.forEach((country, colIdx) => {
     const provinces = PROVINCES_BY_COUNTRY[country];
-    const rangeRef = `Lists!$${colLetters[colIdx]}$2:$${colLetters[colIdx]}$${
-      provinces.length + 1
-    }`;
+    const colLetter = colLetters[colIdx];
+    const startRow = HIDDEN_DATA_START_ROW;
+    const endRow = HIDDEN_DATA_START_ROW + provinces.length - 1;
+    const rangeRef = `'${sheetName}'!$${colLetter}$${startRow}:$${colLetter}$${endRow}`;
     workbook.definedNames.add(
       rangeRef,
       PROVINCE_LIST_NAME_BY_COUNTRY[country]
     );
   });
+
+  // ── Late-fees lookup table (cols A–D, one row per country) ──
+  // Col A: country name (VLOOKUP key)
+  // Col B: monthly interest %
+  // Col C: annual interest %
+  // Col D: credit-card surcharge %
+  COUNTRIES.forEach((country, idx) => {
+    const r = LATE_FEES_START_ROW + idx;
+    const rates = LATE_PAYMENT_RATES_BY_COUNTRY[country];
+    sheet.getCell(r, 1).value = country;
+    sheet.getCell(r, 2).value = rates.monthlyPct;
+    sheet.getCell(r, 3).value = rates.annualPct;
+    sheet.getCell(r, 4).value = rates.ccSurchargePct;
+    for (let c = 1; c <= 4; c++) {
+      sheet.getCell(r, c).font = whiteFont;
+    }
+  });
+
+  const lateFeesRangeRef = `'${sheetName}'!$A$${LATE_FEES_START_ROW}:$D$${
+    LATE_FEES_START_ROW + COUNTRIES.length - 1
+  }`;
+  workbook.definedNames.add(lateFeesRangeRef, "LateFees");
+
+  // ── Hide every row in the lookup band ──
+  for (
+    let r = HIDDEN_DATA_START_ROW;
+    r <= LATE_FEES_START_ROW + COUNTRIES.length - 1;
+    r++
+  ) {
+    sheet.getRow(r).hidden = true;
+  }
 }
 
 // ─── Generator ─────────────────────────────────────────────────────────────
@@ -374,12 +429,10 @@ export async function generateClientTemplate(): Promise<Blob> {
   workbook.subject = VERSION_STAMP_VALUE;
   workbook.created = new Date();
 
-  // ADDR-1: hidden Lists sheet + 5 named ranges (Canada_Regions /
-  // USA_Regions / UAE_Regions / India_Regions / Ireland_Regions)
-  // power the dependent Province dropdowns via INDIRECT formulae.
-  // Created BEFORE the main "Client Onboarding" sheet so it's not
-  // the active tab when the operator/client opens the file.
-  buildHiddenListsSheet(workbook);
+  // ADDR-2: lookup data lives on the main sheet (was a separate hidden
+  // "Lists" tab in ADDR-1, which appeared in the bottom tab strip and
+  // looked unprofessional). writeHiddenLookupData() is called AFTER
+  // the main sheet exists; see the call near the end of this function.
 
   const sheet = workbook.addWorksheet("Client Onboarding");
 
@@ -449,6 +502,10 @@ export async function generateClientTemplate(): Promise<Blob> {
   applyCountryDropdown(sheet.getCell("B10"));
   labelValueRow(sheet, 11, "Province / State", { required: true });
   applyProvinceIndirectDropdown(sheet.getCell("B11"), "$B$10");
+  // ADDR-2: Excel can't auto-clear a dropdown cell when its dependency
+  // changes (would need VBA). The hover comment nudges the operator.
+  sheet.getCell("B11").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
   labelValueRow(sheet, 12, "Street", { required: true });
   labelValueRow(sheet, 13, "Unit / Suite", { required: true });
   labelValueRow(sheet, 14, "City", { required: true });
@@ -466,6 +523,8 @@ export async function generateClientTemplate(): Promise<Blob> {
   applyCountryDropdown(sheet.getCell("B19"));
   labelValueRow(sheet, 20, "Province / State", { required: true });
   applyProvinceIndirectDropdown(sheet.getCell("B20"), "$B$19");
+  sheet.getCell("B20").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
   labelValueRow(sheet, 21, "Street", { required: true });
   labelValueRow(sheet, 22, "Unit / Suite", { required: true });
   labelValueRow(sheet, 23, "City", { required: true });
@@ -491,13 +550,33 @@ export async function generateClientTemplate(): Promise<Blob> {
   sectionHeader(sheet, 31, "PAYMENT TERMS & METHOD");
 
   // ─── Locked payment-terms-and-conditions text block (rows 32–35) ───
-  // White fill + bold black 11pt — visual-only locking, NO
-  // cell.protection / sheet.protect (would lock every input cell on
-  // the sheet). The constant contains \n separators which render as
-  // real line breaks because wrapText is true.
+  // ADDR-2: text is now a DYNAMIC Excel formula that pulls per-country
+  // rates from the hidden LateFees named range, keyed off the billing
+  // country cell ($B$10). When the operator/client picks a billing
+  // country, the locked block auto-rewrites to that country's monthly
+  // interest %, annual %, and credit-card surcharge %. IFERROR fallback
+  // uses Canada defaults (2.91 / 35 / 2.4) when no country is selected.
+  //
+  // CHAR(10) produces a hard line break — rendered as real newlines
+  // thanks to wrapText: true below.
+  //
+  // Styling unchanged from CL-13/CL-19: bold black 11pt on white fill.
+  // Visual-only locking (no cell.protection / sheet.protect).
   sheet.mergeCells("A32:L35");
   const lateCell = sheet.getCell("A32");
-  lateCell.value = PAYMENT_TERMS_AND_CONDITIONS_TEXT;
+  lateCell.value = {
+    formula:
+      '="Payment terms and conditions:" & CHAR(10) & ' +
+      '"1> Invoices not settled beyond the selected payment term accrues interest at a rate of " & ' +
+      "IFERROR(VLOOKUP($B$10,LateFees,2,FALSE),2.91) & " +
+      '"% per month (" & ' +
+      "IFERROR(VLOOKUP($B$10,LateFees,3,FALSE),35) & " +
+      '"% per annum) effective from that due date on all outstanding balances." & CHAR(10) & ' +
+      '"2> Credit card payments will incur a " & ' +
+      "IFERROR(VLOOKUP($B$10,LateFees,4,FALSE),2.4) & " +
+      '"% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT."',
+    result: "",
+  };
   lateCell.font = {
     bold: true,
     color: { argb: "FF000000" },
@@ -585,6 +664,13 @@ export async function generateClientTemplate(): Promise<Blob> {
   // confirmed. SUBTITLE_TEXT + PAYMENT_TERMS_AND_CONDITIONS_TEXT
   // constants stay (still wire the row 2 + locked-text-block cells).
   sheet.getColumn(1).width = 35;
+
+  // ADDR-2: lookup data lives inline on the main sheet (region lists
+  // for INDIRECT province dropdowns + late-fees table for the dynamic
+  // locked text VLOOKUP). Written here at the very end so the rows
+  // don't push the form's column-A auto-fit logic — they're far below
+  // (rows 201+) and triple-hidden (position + row.hidden + white font).
+  writeHiddenLookupData(workbook, sheet, "Client Onboarding");
 
   // ─── Output ───
   const buffer = await workbook.xlsx.writeBuffer();
