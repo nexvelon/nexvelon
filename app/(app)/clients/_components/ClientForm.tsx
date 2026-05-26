@@ -329,9 +329,9 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // CL-16: shortened to "Client Template.xlsx" — matches the
-      // shortened spreadsheet title (was "Client Onboarding Form").
-      a.download = "Client Template.xlsx";
+      // CL-17: final rename to "Client Form.xlsx" — matches the title
+      // rename ("Client Template" → "Client Form").
+      a.download = "Client Form.xlsx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
