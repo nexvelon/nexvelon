@@ -27,7 +27,9 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Download,
   Plus,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +63,10 @@ import type {
   DbSiteInsert,
   DbSiteStatus,
 } from "@/lib/types/database";
+// SITES-3: type-only import — the site template module itself is
+// dynamic-imported inside handleDownloadTemplate / handleUploadTemplate
+// so the ~1 MB exceljs lib stays out of the main bundle.
+import type { ParsedContact } from "@/lib/site-form-template";
 
 // ─── Module-level constants ────────────────────────────────────────────────
 
@@ -130,6 +136,61 @@ function newEmptyContact(): ContactRowState {
     is_billing: false,
     is_emergency: false,
     is_accounts_payable: false,
+    contact_type_custom: "",
+    has_custom_type: false,
+  };
+}
+
+// ─── SITES-3: parser-side merge-by-name helpers ──────────────────────────
+// Duplicated from ClientForm.tsx — same merge semantics for the 4-row
+// template (rows 1+2 → Primary pair, rows 3+4 → AP pair). Future option:
+// extract to a shared module if both forms diverge in lockstep.
+
+/** Case-insensitive trimmed match on first AND last name. Returns false
+ *  if either side has an empty name. */
+function namesMatch(a: ParsedContact, b: ParsedContact): boolean {
+  const af = a.first_name.trim().toLowerCase();
+  const al = a.last_name.trim().toLowerCase();
+  const bf = b.first_name.trim().toLowerCase();
+  const bl = b.last_name.trim().toLowerCase();
+  if (!af || !al || !bf || !bl) return false;
+  return af === bf && al === bl;
+}
+
+/** A parsed-template contact row has content if any of name/email/phone
+ *  is non-empty. Used to decide whether to produce a contact from a
+ *  non-merged row. */
+function hasContactContent(pc: ParsedContact): boolean {
+  return Boolean(
+    pc.first_name.trim() ||
+      pc.last_name.trim() ||
+      pc.email.trim() ||
+      pc.phone.trim()
+  );
+}
+
+/** Convert a single (non-merged) ParsedContact into a ContactRowState
+ *  with the right type-flag booleans + phone label. */
+function buildContact(
+  pc: ParsedContact,
+  fallbackRole: string,
+  phoneLabel: string,
+  flags: {
+    is_primary?: boolean;
+    is_billing?: boolean;
+    is_accounts_payable?: boolean;
+  }
+): ContactRowState {
+  return {
+    first_name: pc.first_name,
+    last_name: pc.last_name,
+    role: pc.role.trim() || pc.type_label.trim() || fallbackRole,
+    email: pc.email.trim(),
+    phones: [{ label: phoneLabel, number: pc.phone.trim() }],
+    is_primary: flags.is_primary ?? false,
+    is_billing: flags.is_billing ?? false,
+    is_emergency: false,
+    is_accounts_payable: flags.is_accounts_payable ?? false,
     contact_type_custom: "",
     has_custom_type: false,
   };
@@ -417,6 +478,266 @@ export function SiteForm({
     setInheritFromClient(inherit);
   }
 
+  // ─── SITES-3: template download / upload ─────────────────────────────
+  // Hidden file input ref for the "Upload filled template" trigger.
+  const templateFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleDownloadTemplate() {
+    try {
+      const { generateSiteTemplate } = await import(
+        "@/lib/site-form-template"
+      );
+      const blob = await generateSiteTemplate();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "Site Form.xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      toast.success("Template downloaded");
+    } catch (e) {
+      console.error("[SITES-3] Template generation failed:", e);
+      toast.error("Failed to generate template");
+    }
+  }
+
+  async function handleUploadTemplate(file: File) {
+    let parsed;
+    try {
+      const { parseSiteTemplate } = await import("@/lib/site-form-template");
+      parsed = await parseSiteTemplate(file);
+    } catch (e) {
+      console.error("[SITES-3] Template parse failed:", e);
+      toast.error(
+        e instanceof Error ? e.message : "Failed to parse template"
+      );
+      return;
+    }
+    const r = parsed.contacts; // always length 4
+
+    // ─── Collect missing-mandatory-field list BEFORE setting state.
+    const missing: string[] = [];
+
+    // Site Info + Site Address (all 7 mandatory)
+    if (!parsed.site.name) missing.push("Site Name");
+    if (!parsed.site.address_line1) missing.push("Site Address Street");
+    if (!parsed.site.address_line2) missing.push("Site Address Unit / Suite");
+    if (!parsed.site.city) missing.push("Site Address City");
+    if (!parsed.site.province) missing.push("Site Address Province");
+    if (!parsed.site.postal_code) missing.push("Site Address Postal Code");
+    if (!parsed.site.country) missing.push("Site Address Country");
+
+    // Billing — all 6 mandatory
+    if (!parsed.billing.street) missing.push("Billing Street");
+    if (!parsed.billing.unit) missing.push("Billing Unit / Suite");
+    if (!parsed.billing.city) missing.push("Billing City");
+    if (!parsed.billing.province) missing.push("Billing Province");
+    if (!parsed.billing.postal) missing.push("Billing Postal Code");
+    if (!parsed.billing.country) missing.push("Billing Country");
+
+    // Tax
+    if (!parsed.tax.hst_gst_number) missing.push("HST / GST Number");
+    if (parsed.tax.tax_exempt === null) missing.push("Tax Exempt? (Yes/No)");
+    if (parsed.tax.tax_exempt === true && !parsed.tax.tax_exempt_cert)
+      missing.push("If Tax Exempt, Enter Certificate Number");
+
+    // Payment
+    if (!parsed.payment.terms) missing.push("Select Payment Terms");
+    if (!parsed.payment.method) missing.push("Select Payment Method");
+    if (!parsed.payment.currency) missing.push("Select Currency");
+
+    // Contacts — rows 1 + 3 mandatory.
+    if (!r[0]?.first_name || !r[0]?.last_name)
+      missing.push("Primary Contact Work (name)");
+    if (!r[0]?.role) missing.push("Primary Contact Work (role)");
+    if (!r[0]?.email) missing.push("Primary Contact Work (email)");
+    if (!r[0]?.phone) missing.push("Primary Contact Work (phone)");
+    if (!r[2]?.first_name || !r[2]?.last_name)
+      missing.push("AP work/ext Contact (name)");
+    if (!r[2]?.role) missing.push("AP work/ext Contact (role)");
+    if (!r[2]?.email) missing.push("AP work/ext Contact (email)");
+    if (!r[2]?.phone) missing.push("AP work/ext Contact (phone)");
+
+    // ─── Site basics ───
+    if (parsed.site.name) setName(parsed.site.name);
+
+    // ─── Site physical address ───
+    if (parsed.site.address_line1) setAddress1(parsed.site.address_line1);
+    if (parsed.site.address_line2) setAddress2(parsed.site.address_line2);
+    if (parsed.site.city) setCity(parsed.site.city);
+    if (parsed.site.province) setProvince(parsed.site.province);
+    if (parsed.site.postal_code) setPostal(parsed.site.postal_code);
+    if (parsed.site.country) setSiteCountry(parsed.site.country);
+
+    // ─── Billing — auto-OFF same-as-client when template has values ───
+    const billingHasContent =
+      !!parsed.billing.street ||
+      !!parsed.billing.unit ||
+      !!parsed.billing.city ||
+      !!parsed.billing.province ||
+      !!parsed.billing.postal ||
+      !!parsed.billing.country;
+    if (billingHasContent) {
+      setBillSameAsClient(false);
+      if (parsed.billing.street) setBillStreet(parsed.billing.street);
+      if (parsed.billing.unit) setBillUnit(parsed.billing.unit);
+      if (parsed.billing.city) setBillCity(parsed.billing.city);
+      if (parsed.billing.province) setBillProvince(parsed.billing.province);
+      if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
+      if (parsed.billing.country) setBillCountry(parsed.billing.country);
+    }
+
+    // ─── Mailing — auto-detect "same as billing" / auto-OFF on content ─
+    const mailingHasContent =
+      !!parsed.mailing.street ||
+      !!parsed.mailing.unit ||
+      !!parsed.mailing.city ||
+      !!parsed.mailing.province ||
+      !!parsed.mailing.postal ||
+      !!parsed.mailing.country;
+    if (mailingHasContent) {
+      setMailSameAsBilling(false);
+      if (parsed.mailing.street) setMailStreet(parsed.mailing.street);
+      if (parsed.mailing.unit) setMailUnit(parsed.mailing.unit);
+      if (parsed.mailing.city) setMailCity(parsed.mailing.city);
+      if (parsed.mailing.province) setMailProvince(parsed.mailing.province);
+      if (parsed.mailing.postal) setMailPostal(parsed.mailing.postal);
+      if (parsed.mailing.country) setMailCountry(parsed.mailing.country);
+    }
+
+    // ─── Tax / Payment — auto-OFF inheritFromClient on content ─────────
+    const taxPaymentHasContent =
+      !!parsed.tax.hst_gst_number ||
+      parsed.tax.tax_exempt !== null ||
+      !!parsed.tax.tax_exempt_cert ||
+      !!parsed.payment.terms ||
+      !!parsed.payment.method ||
+      !!parsed.payment.currency;
+    if (taxPaymentHasContent) {
+      setInheritFromClient(false);
+      if (parsed.tax.hst_gst_number) setSiteHstGst(parsed.tax.hst_gst_number);
+      if (parsed.tax.tax_exempt !== null) setTaxExempt(parsed.tax.tax_exempt);
+      if (parsed.tax.tax_exempt_cert)
+        setTaxExemptCert(parsed.tax.tax_exempt_cert);
+      if (parsed.payment.terms) {
+        setPaymentTerms(parsed.payment.terms as DbClientPaymentTerms);
+      }
+      if (parsed.payment.method) {
+        setPayMethod(parsed.payment.method as DbClientPaymentMethod);
+      }
+      if (
+        parsed.payment.currency &&
+        (["CAD", "USD"] as DbClientCurrency[]).includes(
+          parsed.payment.currency as DbClientCurrency
+        )
+      ) {
+        setCurrency(parsed.payment.currency as DbClientCurrency);
+      }
+    }
+
+    // ─── Contacts — merge-by-name for the 4 fixed template rows ────────
+    const newContacts: ContactRowState[] = [];
+
+    // PRIMARY pair (rows 1+2)
+    if (r[0] && r[1] && namesMatch(r[0], r[1])) {
+      newContacts.push({
+        first_name: r[0].first_name,
+        last_name: r[0].last_name,
+        role: "Primary Contact",
+        email: r[0].email.trim() || r[1].email.trim() || "",
+        phones: [
+          ...(r[0].phone.trim()
+            ? [{ label: "Work", number: r[0].phone.trim() }]
+            : []),
+          ...(r[1].phone.trim()
+            ? [{ label: "Personal", number: r[1].phone.trim() }]
+            : []),
+        ],
+        is_primary: true,
+        is_billing: false,
+        is_emergency: false,
+        is_accounts_payable: false,
+        contact_type_custom: "",
+        has_custom_type: false,
+      });
+    } else {
+      if (r[0] && hasContactContent(r[0])) {
+        newContacts.push(
+          buildContact(r[0], "Primary Contact Work", "Work", {
+            is_primary: true,
+          })
+        );
+      }
+      if (r[1] && hasContactContent(r[1])) {
+        newContacts.push(
+          buildContact(r[1], "Primary Contact Personal", "Personal", {
+            is_primary: true,
+          })
+        );
+      }
+    }
+
+    // AP pair (rows 3+4)
+    if (r[2] && r[3] && namesMatch(r[2], r[3])) {
+      newContacts.push({
+        first_name: r[2].first_name,
+        last_name: r[2].last_name,
+        role: "Accounts Payable",
+        email: r[2].email.trim() || r[3].email.trim() || "",
+        phones: [
+          ...(r[2].phone.trim()
+            ? [{ label: "Work/Ext", number: r[2].phone.trim() }]
+            : []),
+          ...(r[3].phone.trim()
+            ? [{ label: "Direct", number: r[3].phone.trim() }]
+            : []),
+        ],
+        is_primary: false,
+        is_billing: true,
+        is_emergency: false,
+        is_accounts_payable: true,
+        contact_type_custom: "",
+        has_custom_type: false,
+      });
+    } else {
+      if (r[2] && hasContactContent(r[2])) {
+        newContacts.push(
+          buildContact(r[2], "AP work/ext", "Work/Ext", {
+            is_billing: true,
+            is_accounts_payable: true,
+          })
+        );
+      }
+      if (r[3] && hasContactContent(r[3])) {
+        newContacts.push(
+          buildContact(r[3], "AP direct", "Direct", {
+            is_billing: true,
+            is_accounts_payable: true,
+          })
+        );
+      }
+    }
+
+    if (newContacts.length > 0) setContacts(newContacts);
+
+    // ─── Final feedback toast ──────────────────────────────────────────
+    if (missing.length > 0) {
+      const preview = missing.slice(0, 5).join(", ");
+      const more =
+        missing.length > 5 ? ` …and ${missing.length - 5} more` : "";
+      toast.warning(
+        `Template loaded with ${missing.length} missing field${
+          missing.length > 1 ? "s" : ""
+        }: ${preview}${more}`,
+        { duration: 8000 }
+      );
+    } else {
+      toast.success("Site template loaded successfully");
+    }
+  }
+
   // ─── Submit ───
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -591,6 +912,47 @@ export function SiteForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {/* SITES-3 — onboarding template (create-mode only) */}
+      {!isEdit && (
+        <div className="space-y-2 rounded-md border border-[var(--border)] bg-muted/30 p-3">
+          <p className="text-muted-foreground text-xs">
+            Send the site template to your client to fill out, then upload
+            it here to auto-populate the form.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Download template
+            </Button>
+            <input
+              ref={templateFileInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = ""; // allow re-selecting the same file
+                if (file) handleUploadTemplate(file);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => templateFileInputRef.current?.click()}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              Upload filled template
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* SECTION 1 — Site Information */}
       <Section title="Site Information" defaultOpen>
         {needsClientPicker && (
