@@ -640,7 +640,7 @@ export function SiteForm({
       }
       if (
         parsed.payment.currency &&
-        (["CAD", "USD"] as DbClientCurrency[]).includes(
+        (["CAD", "USD", "AED", "INR", "EUR"] as DbClientCurrency[]).includes(
           parsed.payment.currency as DbClientCurrency
         )
       ) {
@@ -1324,7 +1324,7 @@ export function SiteForm({
         />
         <Field label="Preferred currency">
           <div className="flex gap-4">
-            {(["CAD", "USD"] as DbClientCurrency[]).map((c) => (
+            {(["CAD", "USD", "AED", "INR", "EUR"] as DbClientCurrency[]).map((c) => (
               <label
                 key={c}
                 className="flex items-center gap-2 text-sm"

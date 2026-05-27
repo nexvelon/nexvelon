@@ -129,7 +129,8 @@ const VALUE_BORDER = {
 // ADDR-1: PROVINCE_OPTIONS removed — replaced by per-country INDIRECT
 // dropdowns sourced from a hidden Lists sheet. See
 // generateSiteTemplate for the named-range setup.
-const COUNTRY_DROPDOWN = `"${COUNTRIES.join(",")}"`;
+// CL-20: COUNTRY_DROPDOWN constant removed — applyCountryDropdown now
+// builds the formula inline so it can prepend DROPDOWN_PLACEHOLDER.
 const YES_NO_OPTIONS = ["Yes", "No"];
 const PAYMENT_TERMS_LABELS = ["Due on receipt", "NET 7", "NET 15", "NET 30"];
 const PAYMENT_METHOD_LABELS = [
@@ -139,7 +140,11 @@ const PAYMENT_METHOD_LABELS = [
   "Credit Card",
   "Cash",
 ];
-const CURRENCY_OPTIONS = ["CAD", "USD"];
+// CL-20: expanded to 5 currencies (mirrors client template).
+const CURRENCY_OPTIONS = ["CAD", "USD", "AED", "INR", "EUR"];
+
+// CL-20: placeholder text for dropdown cells. See client template.
+const DROPDOWN_PLACEHOLDER = "- - - Select from dropdown - - -";
 
 const PAYMENT_TERMS_LABEL_TO_VALUE: Record<string, string> = {
   "due on receipt": "due_on_receipt",
@@ -215,22 +220,27 @@ function labelValueRow(
     dropdown?: readonly string[];
   } = {}
 ) {
+  // CL-20: dropdown cells pre-fill with DROPDOWN_PLACEHOLDER + include
+  // it as the first item in the validation list (mirrors client
+  // template). Parser strips placeholder values back to "" on read.
   const row = sheet.getRow(rowNum);
   row.getCell(1).value = label + (options.required ? " *" : "");
   row.getCell(1).font = { bold: true };
   row.getCell(1).fill = LABEL_FILL;
   row.getCell(1).alignment = { vertical: "middle" };
-  row.getCell(2).value = "";
   row.getCell(2).fill = VALUE_FILL;
   row.getCell(2).border = VALUE_BORDER;
   row.getCell(2).alignment = { vertical: "middle", wrapText: true };
   if (options.dropdown) {
+    row.getCell(2).value = DROPDOWN_PLACEHOLDER;
     row.getCell(2).dataValidation = {
       type: "list",
       allowBlank: true,
-      formulae: [`"${options.dropdown.join(",")}"`],
+      formulae: [`"${[DROPDOWN_PLACEHOLDER, ...options.dropdown].join(",")}"`],
       showErrorMessage: false,
     };
+  } else {
+    row.getCell(2).value = "";
   }
   row.height = 18;
 }
@@ -253,16 +263,24 @@ function noteRow(
 
 // ─── ADDR-1: dependent-dropdown wiring helpers ────────────────────────────
 
+// CL-20: country cell pre-fills with DROPDOWN_PLACEHOLDER + placeholder
+// is injected as the first list item so Excel doesn't flag it invalid.
 function applyCountryDropdown(cell: Cell) {
+  cell.value = DROPDOWN_PLACEHOLDER;
   cell.dataValidation = {
     type: "list",
     allowBlank: true,
-    formulae: [COUNTRY_DROPDOWN],
+    formulae: [`"${[DROPDOWN_PLACEHOLDER, ...COUNTRIES].join(",")}"`],
     showErrorMessage: false,
   };
 }
 
+// CL-20: province cell pre-fills with DROPDOWN_PLACEHOLDER. The
+// placeholder also lives as the first row of each region's hidden
+// lookup column (see writeHiddenLookupData) so it appears as the first
+// item in every per-country INDIRECT province dropdown.
 function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
+  cell.value = DROPDOWN_PLACEHOLDER;
   cell.dataValidation = {
     type: "list",
     allowBlank: true,
@@ -277,7 +295,15 @@ function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
 // writeHiddenLookupData — duplicated per the SITES-3 decision to keep
 // each template self-contained.
 const HIDDEN_DATA_START_ROW = 201;
-const LATE_FEES_START_ROW = 260;
+// CL-20: late-fees table starts dynamically below the longest region
+// column. Region columns now include a DROPDOWN_PLACEHOLDER row at
+// position 0 (effective max region row count = maxProvinces + 1). An
+// extra 8-row buffer keeps things future-proof.
+const MAX_PROVINCE_COUNT = Math.max(
+  ...COUNTRIES.map((c) => PROVINCES_BY_COUNTRY[c].length)
+);
+const LATE_FEES_START_ROW =
+  HIDDEN_DATA_START_ROW + MAX_PROVINCE_COUNT + 1 + 8;
 
 function writeHiddenLookupData(
   workbook: import("exceljs").Workbook,
@@ -288,20 +314,30 @@ function writeHiddenLookupData(
   const whiteFont = { color: { argb: "FFFFFFFF" } } as const;
 
   // Region lookup (cols A–E, one column per country).
+  // CL-20: prepend DROPDOWN_PLACEHOLDER as row 0 of every region column
+  // so it appears as the first item in every per-country INDIRECT
+  // province dropdown. Parser strips placeholder back to "".
   COUNTRIES.forEach((country, colIdx) => {
     const provinces = PROVINCES_BY_COUNTRY[country];
+    const placeholderCell = sheet.getCell(HIDDEN_DATA_START_ROW, colIdx + 1);
+    placeholderCell.value = DROPDOWN_PLACEHOLDER;
+    placeholderCell.font = whiteFont;
     provinces.forEach((province, rowIdx) => {
-      const cell = sheet.getCell(HIDDEN_DATA_START_ROW + rowIdx, colIdx + 1);
+      const cell = sheet.getCell(
+        HIDDEN_DATA_START_ROW + 1 + rowIdx,
+        colIdx + 1
+      );
       cell.value = province;
       cell.font = whiteFont;
     });
   });
 
+  // CL-20: endRow extended by +1 to cover the prepended placeholder row.
   COUNTRIES.forEach((country, colIdx) => {
     const provinces = PROVINCES_BY_COUNTRY[country];
     const colLetter = colLetters[colIdx];
     const startRow = HIDDEN_DATA_START_ROW;
-    const endRow = HIDDEN_DATA_START_ROW + provinces.length - 1;
+    const endRow = HIDDEN_DATA_START_ROW + provinces.length;
     const rangeRef = `'${sheetName}'!$${colLetter}$${startRow}:$${colLetter}$${endRow}`;
     workbook.definedNames.add(
       rangeRef,
@@ -508,7 +544,8 @@ export async function generateSiteTemplate(): Promise<Blob> {
     color: { argb: "FF000000" },
     size: 11,
   };
-  lateCell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+  // CL-20: vertical center (was "top") — text now visually centered.
+  lateCell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
   lateCell.fill = LOCKED_TEXT_FILL;
   lateCell.border = VALUE_BORDER;
   for (let r = 39; r <= 42; r++) sheet.getRow(r).height = 22;
@@ -603,7 +640,10 @@ function findValueByLabel(sheet: Worksheet, label: string): string {
       result = v == null ? "" : String(v);
     }
   });
-  return result.trim();
+  const trimmed = result.trim();
+  // CL-20: unselected dropdown still holds DROPDOWN_PLACEHOLDER —
+  // strip it back to "" so it doesn't leak into form state.
+  return trimmed === DROPDOWN_PLACEHOLDER ? "" : trimmed;
 }
 
 function parseBooleanCell(raw: string): boolean | null {
@@ -614,7 +654,11 @@ function parseBooleanCell(raw: string): boolean | null {
 
 function cellToString(cell: Cell): string {
   const v = cell.value;
-  return v == null ? "" : String(v).trim();
+  const s = v == null ? "" : String(v).trim();
+  // CL-20: strip dropdown placeholder back to "" so unselected
+  // Country / Province / Yes-No / payment dropdowns don't leak the
+  // placeholder text into downstream form state.
+  return s === DROPDOWN_PLACEHOLDER ? "" : s;
 }
 
 function scanContactsTable(sheet: Worksheet): ParsedContact[] {
