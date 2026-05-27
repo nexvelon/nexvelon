@@ -43,7 +43,9 @@ export type DbClientPaymentMethod =
   | "wire"
   | "cash";
 
-export type DbClientCurrency = "CAD" | "USD";
+// CL-20: expanded for the 5 ADDR-1 countries. CAD + USD preserved per
+// §2.1; AED (UAE Dirham), INR (Indian Rupee), EUR (Euro) added.
+export type DbClientCurrency = "CAD" | "USD" | "AED" | "INR" | "EUR";
 
 export type DbSiteStatus =
   | "Active"

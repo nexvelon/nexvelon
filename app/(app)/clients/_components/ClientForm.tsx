@@ -481,7 +481,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       // CL-10: setCreditLimit removed — template no longer carries it.
       if (
         parsed.payment.currency &&
-        (["CAD", "USD"] as DbClientCurrency[]).includes(
+        (["CAD", "USD", "AED", "INR", "EUR"] as DbClientCurrency[]).includes(
           parsed.payment.currency as DbClientCurrency
         )
       ) {
@@ -1369,7 +1369,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
         />
         <Field label="Preferred currency">
           <div className="flex gap-4">
-            {(["CAD", "USD"] as DbClientCurrency[]).map((c) => (
+            {(["CAD", "USD", "AED", "INR", "EUR"] as DbClientCurrency[]).map((c) => (
               <label
                 key={c}
                 className="flex items-center gap-2 text-sm"
