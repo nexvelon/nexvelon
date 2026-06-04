@@ -71,6 +71,7 @@ export interface Product {
   upc?: string;
   lastReceived?: string;
   byLocation?: Partial<Record<string, number>>;
+  searchAliases?: string[];
 }
 
 export type ProjectStatus =

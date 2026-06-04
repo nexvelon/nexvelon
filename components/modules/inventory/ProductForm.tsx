@@ -10,6 +10,7 @@
 // values are offered as suggestions without constraining entry.
 
 import { useEffect, useState, useTransition } from "react";
+import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
 import { Input } from "@/components/ui/input";
@@ -110,6 +111,23 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
     existing?.reorder_qty != null ? String(existing.reorder_qty) : ""
   );
 
+  // C-1: alternate search terms (stored as text[]). Add one at a time; chips
+  // are removable. Trimmed, deduped (case-insensitive), empties ignored.
+  const [searchAliases, setSearchAliases] = useState<string[]>(
+    existing?.search_aliases ?? []
+  );
+  const [aliasInput, setAliasInput] = useState("");
+
+  const addAlias = () => {
+    const a = aliasInput.trim();
+    if (a === "") return;
+    const exists = searchAliases.some((x) => x.toLowerCase() === a.toLowerCase());
+    if (!exists) setSearchAliases((prev) => [...prev, a]);
+    setAliasInput("");
+  };
+  const removeAlias = (a: string) =>
+    setSearchAliases((prev) => prev.filter((x) => x !== a));
+
   // B-2: datalist suggestions sourced from the managed inventory_vocab lists.
   // Default to the hardcoded consts so the form works before the fetch resolves
   // (and as a fallback if the fetch fails or a list is empty / 0023 not applied).
@@ -175,6 +193,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       list_price: numOrNull(listPrice),
       reorder_point: numOrNull(reorderPoint),
       reorder_qty: numOrNull(reorderQty),
+      search_aliases: searchAliases,
     };
 
     startTransition(async () => {
@@ -351,6 +370,62 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               placeholder="0"
             />
           </Field>
+        </div>
+      </section>
+
+      {/* Search aliases */}
+      <section className="space-y-4">
+        <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          Search aliases
+        </h2>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Input
+              value={aliasInput}
+              onChange={(e) => setAliasInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addAlias();
+                }
+              }}
+              placeholder="Old part number, nickname, common misspelling…"
+              className="max-w-md"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addAlias}
+              disabled={aliasInput.trim() === ""}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </Button>
+          </div>
+          {searchAliases.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {searchAliases.map((a) => (
+                <li
+                  key={a}
+                  className="bg-muted/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs"
+                >
+                  <span className="text-brand-charcoal">{a}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAlias(a)}
+                    className="text-muted-foreground hover:text-red-600"
+                    aria-label={`Remove ${a}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-muted-foreground text-[11px] leading-snug">
+            Add alternate terms to find this part — old part numbers, nicknames,
+            common misspellings.
+          </p>
         </div>
       </section>
 

@@ -28,7 +28,8 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
         (p) =>
           p.sku.toLowerCase().includes(q) ||
           p.name.toLowerCase().includes(q) ||
-          p.manufacturer.toLowerCase().includes(q)
+          p.manufacturer.toLowerCase().includes(q) ||
+          (p.searchAliases ?? []).some((a) => a.toLowerCase().includes(q))
       )
       .slice(0, 8);
   }, [products, value]);

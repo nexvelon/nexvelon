@@ -72,6 +72,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
             <CommandItem
               key={p.id}
               value={`${p.sku} ${p.name} ${p.manufacturer}`}
+              keywords={p.searchAliases ?? []}
               onSelect={() => {
                 if (targetSection) {
                   onAddProductToSection(targetSection.id, p);
