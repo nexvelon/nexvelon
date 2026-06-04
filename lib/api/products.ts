@@ -468,3 +468,104 @@ export async function returnUnitToStock(stockId: string): Promise<void> {
     );
   }
 }
+
+// ----------------------------------------------------------------------------
+// Reports (INV-6). Aggregated server-side over the REAL inventory_stock rows so
+// valuation/aging honor specific-identification (§2.4) — each unit's own
+// unit_cost, NOT the avg-cost Product rollup.
+// ----------------------------------------------------------------------------
+
+export type AgingBucket = "0-30" | "31-60" | "61-90" | "90+" | "Unknown";
+
+export interface InventoryReportData {
+  totalValuation: number;
+  valuationByCategory: { category: string; value: number; units: number }[];
+  aging: { bucket: AgingBucket; units: number; value: number }[];
+  /** Turnover PROXY — units/value marked consumed|retired in the last 90 days. */
+  consumption90d: { value: number; units: number };
+}
+
+// Supabase embeds a to-one relationship as an object, but the generated types
+// can widen it to an array — normalize either shape to the category string.
+function embeddedCategory(embedded: unknown): string {
+  let row = embedded;
+  if (Array.isArray(row)) row = row[0];
+  const cat = (row as { category?: string | null } | null | undefined)?.category;
+  return cat && cat.trim() !== "" ? cat : "Uncategorized";
+}
+
+export async function getInventoryReportData(): Promise<InventoryReportData> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .select(
+      "unit_cost, quantity, status, acquired_at, updated_at, inventory_products(category)"
+    );
+  if (error) throw new Error(`getInventoryReportData: ${error.message}`);
+
+  const rows = data ?? [];
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const ninetyDaysAgo = now - 90 * DAY;
+
+  // ── Valuation by category (in_stock only) ──
+  const catMap = new Map<string, { value: number; units: number }>();
+  let totalValuation = 0;
+
+  // ── Aging (in_stock only) ──
+  const agingOrder: AgingBucket[] = ["0-30", "31-60", "61-90", "90+", "Unknown"];
+  const agingMap = new Map<AgingBucket, { units: number; value: number }>(
+    agingOrder.map((b) => [b, { units: 0, value: 0 }])
+  );
+
+  // ── Consumption (90d) proxy ──
+  let consumptionValue = 0;
+  let consumptionUnits = 0;
+
+  for (const r of rows) {
+    const qty = Number(r.quantity);
+    const lineValue = Number(r.unit_cost) * qty;
+
+    if (r.status === "in_stock") {
+      const category = embeddedCategory(r.inventory_products);
+      const c = catMap.get(category) ?? { value: 0, units: 0 };
+      c.value += lineValue;
+      c.units += qty;
+      catMap.set(category, c);
+      totalValuation += lineValue;
+
+      let bucket: AgingBucket;
+      if (!r.acquired_at) {
+        bucket = "Unknown";
+      } else {
+        const days = Math.floor((now - new Date(r.acquired_at).getTime()) / DAY);
+        bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+      }
+      const a = agingMap.get(bucket)!;
+      a.units += qty;
+      a.value += lineValue;
+    } else if (r.status === "consumed" || r.status === "retired") {
+      if (r.updated_at && new Date(r.updated_at).getTime() >= ninetyDaysAgo) {
+        consumptionValue += lineValue;
+        consumptionUnits += qty;
+      }
+    }
+  }
+
+  const valuationByCategory = Array.from(catMap.entries())
+    .map(([category, v]) => ({ category, value: v.value, units: v.units }))
+    .sort((a, b) => b.value - a.value);
+
+  const aging = agingOrder.map((bucket) => ({
+    bucket,
+    units: agingMap.get(bucket)!.units,
+    value: agingMap.get(bucket)!.value,
+  }));
+
+  return {
+    totalValuation,
+    valuationByCategory,
+    aging,
+    consumption90d: { value: consumptionValue, units: consumptionUnits },
+  };
+}

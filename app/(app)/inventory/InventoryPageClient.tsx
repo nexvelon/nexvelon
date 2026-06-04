@@ -8,11 +8,13 @@
 // arrays until their tables ship.
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   AlertTriangle,
   Boxes,
   ClipboardList,
+  FileBarChart,
   Layers,
   ListTree,
   PackageSearch,
@@ -45,6 +47,20 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
+// INV-6: code-split the Reports tab so its recharts dependency only loads when
+// the operator opens Reports — keeps the default (Stock) inventory view light.
+const ReportsTab = dynamic(
+  () =>
+    import("@/components/modules/inventory/ReportsTab").then((m) => m.ReportsTab),
+  {
+    loading: () => (
+      <Card className="bg-card p-8 text-center shadow-sm">
+        <p className="text-muted-foreground text-sm">Loading reports…</p>
+      </Card>
+    ),
+  }
+);
+
 const TABS = [
   { key: "stock", label: "Stock", icon: PackageSearch },
   { key: "allocations", label: "Allocations", icon: ClipboardList },
@@ -52,6 +68,7 @@ const TABS = [
   { key: "pos", label: "Purchase Orders", icon: Warehouse },
   { key: "vendors", label: "Vendors", icon: Boxes },
   { key: "categories", label: "Categories", icon: ListTree },
+  { key: "reports", label: "Reports", icon: FileBarChart },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -171,6 +188,7 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
       {tab === "pos" && <PurchaseOrdersTab />}
       {tab === "vendors" && <VendorsTab />}
       {tab === "categories" && <CategoriesTab />}
+      {tab === "reports" && <ReportsTab />}
     </div>
   );
 }
