@@ -18,6 +18,7 @@ import {
   deleteProduct,
   deleteStockUnit,
   getProductRowById,
+  listProducts,
   receiveStock,
   returnUnitToStock,
   updateProduct,
@@ -30,6 +31,7 @@ import type {
   DbInventoryProductUpdate,
   DbInventoryStockUpdate,
 } from "@/lib/types/database";
+import type { Product } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -43,6 +45,14 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
+}
+
+// INV-4: expose the real catalog to client components (the quote builder reads
+// this so SKU search runs against live inventory instead of the empty mock
+// array). Plain Product[] return — a thrown error rejects the promise and the
+// caller falls back to an empty catalog.
+export async function listProductsAction(): Promise<Product[]> {
+  return listProducts();
 }
 
 export async function createProductAction(

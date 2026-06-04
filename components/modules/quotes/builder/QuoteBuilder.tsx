@@ -71,6 +71,8 @@ import type {
   User,
 } from "@/lib/types";
 import type { LineItemClassification } from "@/lib/classifications";
+import { listProductsAction } from "@/app/(app)/inventory/actions";
+import { CatalogProductsContext } from "./catalog-context";
 
 interface Props {
   initial: Quote;
@@ -103,6 +105,25 @@ export function QuoteBuilder({
   const router = useRouter();
   useQuotes(); // subscribe to store updates so the builder re-renders if state changes elsewhere
   const [saving, setSaving] = useState(false);
+
+  // INV-4: fetch the real inventory catalog once so SKU search + the command
+  // palette run against live products (the mock array is empty). Best-effort —
+  // on failure the catalog stays empty and the builder still works (free-text
+  // SKU entry). Provided via CatalogProductsContext to the nested consumers.
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    let active = true;
+    listProductsAction()
+      .then((rows) => {
+        if (active) setCatalogProducts(rows);
+      })
+      .catch(() => {
+        // leave catalog empty; SKU autocomplete falls back to free-text entry
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
 
   // Resolve picker data sources: real DB data when provided, else mock-data
@@ -439,6 +460,7 @@ export function QuoteBuilder({
   };
 
   return (
+    <CatalogProductsContext.Provider value={catalogProducts}>
     <div className="space-y-6">
       <BuilderHeader
         number={number}
@@ -681,6 +703,7 @@ export function QuoteBuilder({
         )}
       </div>
     </div>
+    </CatalogProductsContext.Provider>
   );
 }
 
