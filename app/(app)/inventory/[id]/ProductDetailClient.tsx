@@ -1,10 +1,14 @@
 "use client";
 
-// INV-2b — interactive product detail. Read view of the catalog fields with
-// Edit (swaps in the shared ProductForm) and Delete (friendly RESTRICT error
-// surfaced as a toast). Below: a READ-ONLY table of the product's stock units
-// — unit_cost gated behind the inventory:viewCost permission. Managing /
-// receiving units is out of scope here (INV-2d).
+// INV-2d / INV-3b — interactive product detail. Read view of the catalog
+// fields with Edit (swaps in the shared ProductForm) and Delete (friendly
+// RESTRICT error surfaced as a toast). Below: the product's stock units with
+// per-unit lifecycle actions —
+//   • in_stock  → Allocate to site (site-picker dialog) · Mark consumed ·
+//                 Mark retired · Delete
+//   • allocated → Return to stock · Delete (no consume/retire — return first)
+//   • consumed/retired → Restore to stock · Delete
+// Allocated rows show the site name. unit_cost is gated behind inventory:viewCost.
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
@@ -31,11 +35,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
 import {
+  allocateUnitAction,
   deleteProductAction,
   deleteStockUnitAction,
+  returnUnitAction,
   updateStockUnitAction,
 } from "@/app/(app)/inventory/actions";
 import { useRole } from "@/lib/role-context";
@@ -44,15 +65,18 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   DbInventoryProduct,
   DbInventoryStock,
+  DbSiteWithClient,
   InventoryStockStatus,
 } from "@/lib/types/database";
 
 export function ProductDetailClient({
   product,
   stock,
+  sites,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
+  sites: DbSiteWithClient[];
 }) {
   const router = useRouter();
   const { role } = useRole();
@@ -62,6 +86,11 @@ export function ProductDetailClient({
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
+
+  // Site allocation dialog state.
+  const [allocTarget, setAllocTarget] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState("");
+  const siteById = new Map(sites.map((s) => [s.id, s]));
 
   const onHand = stock
     .filter((s) => s.status === "in_stock")
@@ -92,12 +121,41 @@ export function ProductDetailClient({
     });
   };
 
+  const returnUnit = (unitId: string) => {
+    startUnitAction(async () => {
+      const result = await returnUnitAction(unitId, product.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Returned to stock");
+      router.refresh();
+    });
+  };
+
+  const confirmAllocate = () => {
+    if (!allocTarget) return;
+    if (!selectedSiteId) {
+      toast.error("Pick a site to allocate to.");
+      return;
+    }
+    const unitId = allocTarget;
+    const siteId = selectedSiteId;
+    startUnitAction(async () => {
+      const result = await allocateUnitAction(unitId, product.id, siteId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Allocated to ${siteById.get(siteId)?.name ?? "site"}`);
+      setAllocTarget(null);
+      setSelectedSiteId("");
+      router.refresh();
+    });
+  };
+
   const handleDelete = () => {
-    if (
-      !window.confirm(
-        `Delete "${product.name}"? This cannot be undone.`
-      )
-    ) {
+    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) {
       return;
     }
     startDelete(async () => {
@@ -235,6 +293,7 @@ export function ProductDetailClient({
                 <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
                 <TableHead className="text-[11px] uppercase">Location</TableHead>
                 <TableHead className="text-[11px] uppercase">Status</TableHead>
+                <TableHead className="text-[11px] uppercase">Site</TableHead>
                 <TableHead className="text-[11px] uppercase">Acquired</TableHead>
                 {showCost && (
                   <TableHead className="text-right text-[11px] uppercase">
@@ -248,7 +307,7 @@ export function ProductDetailClient({
               {stock.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={showCost ? 7 : 6}
+                    colSpan={showCost ? 8 : 7}
                     className="text-muted-foreground py-8 text-center text-sm"
                   >
                     No stock units yet. Use “Receive stock” to add some.
@@ -268,6 +327,11 @@ export function ProductDetailClient({
                     <Badge variant="outline" className="text-[10px] capitalize">
                       {s.status.replace("_", " ")}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {s.site_id
+                      ? siteById.get(s.site_id)?.name ?? "Unknown site"
+                      : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {s.acquired_at
@@ -292,6 +356,14 @@ export function ProductDetailClient({
                         {s.status === "in_stock" && (
                           <>
                             <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedSiteId("");
+                                setAllocTarget(s.id);
+                              }}
+                            >
+                              Allocate to site
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => setUnitStatus(s.id, "consumed")}
                             >
                               Mark consumed
@@ -303,6 +375,11 @@ export function ProductDetailClient({
                             </DropdownMenuItem>
                           </>
                         )}
+                        {s.status === "allocated" && (
+                          <DropdownMenuItem onClick={() => returnUnit(s.id)}>
+                            Return to stock
+                          </DropdownMenuItem>
+                        )}
                         {(s.status === "consumed" || s.status === "retired") && (
                           <DropdownMenuItem
                             onClick={() => setUnitStatus(s.id, "in_stock")}
@@ -310,7 +387,7 @@ export function ProductDetailClient({
                             Restore to stock
                           </DropdownMenuItem>
                         )}
-                        {s.status !== "allocated" && <DropdownMenuSeparator />}
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-red-600 focus:text-red-700"
                           onClick={() => removeUnit(s.id)}
@@ -337,6 +414,70 @@ export function ProductDetailClient({
           router.refresh();
         }}
       />
+
+      {/* Allocate-to-site picker */}
+      <Dialog
+        open={allocTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setAllocTarget(null);
+            setSelectedSiteId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Allocate to site</DialogTitle>
+            <DialogDescription>
+              The selected unit moves to status “allocated” against the chosen
+              site. Return it to stock to free it again.
+            </DialogDescription>
+          </DialogHeader>
+
+          {sites.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No sites available. Create a site first.
+            </p>
+          ) : (
+            <Select
+              value={selectedSiteId}
+              onValueChange={(v) => setSelectedSiteId(v ?? "")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a site…" />
+              </SelectTrigger>
+              <SelectContent>
+                {sites.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.site_code ? `${s.site_code} · ` : ""}
+                    {s.name}
+                    {s.client?.name ? ` — ${s.client.name}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAllocTarget(null);
+                setSelectedSiteId("");
+              }}
+              disabled={unitPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmAllocate}
+              disabled={unitPending || sites.length === 0}
+            >
+              {unitPending ? "Allocating…" : "Allocate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

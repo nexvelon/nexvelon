@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { getProductRowById, listStockForProduct } from "@/lib/api/products";
+import { listSites } from "@/lib/api/clients";
 import { ProductDetailClient } from "./ProductDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,10 @@ export default async function ProductDetailPage({
     );
   }
 
-  const stock = await listStockForProduct(id);
+  const [stock, sites] = await Promise.all([
+    listStockForProduct(id),
+    listSites(),
+  ]);
 
-  return <ProductDetailClient product={product} stock={stock} />;
+  return <ProductDetailClient product={product} stock={stock} sites={sites} />;
 }
