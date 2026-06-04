@@ -8,6 +8,7 @@
 // arrays until their tables ship.
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Boxes,
@@ -15,6 +16,7 @@ import {
   Layers,
   ListTree,
   PackageSearch,
+  Plus,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -74,6 +76,14 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
         description="Stock levels, allocations, transfers, and purchasing across all locations."
         actions={
           <>
+            <Link
+              href="/inventory/new"
+              className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
+              style={{ background: "var(--brand-primary)" }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add product
+            </Link>
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"

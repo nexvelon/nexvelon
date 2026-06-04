@@ -26,6 +26,8 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   DbInventoryProduct,
+  DbInventoryProductInsert,
+  DbInventoryProductUpdate,
   DbInventoryStock,
 } from "@/lib/types/database";
 import type {
@@ -163,4 +165,105 @@ export async function getProductById(id: string): Promise<Product | null> {
   if (stockErr) throw new Error(`getProductById/stock: ${stockErr.message}`);
 
   return toProduct(product as DbInventoryProduct, (stock ?? []) as StockSlice[]);
+}
+
+/**
+ * Fetch the RAW catalog row (DbInventoryProduct) by id — the lossless source
+ * for the detail page's display + edit form. getProductById() rolls up into
+ * the aggregate Product (no tracking_mode / description / unit_of_measure / raw
+ * cost columns), so the edit form needs this raw shape instead. Returns null
+ * when the id doesn't match.
+ */
+export async function getProductRowById(
+  id: string
+): Promise<DbInventoryProduct | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_products")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getProductRowById: ${error.message}`);
+  return (data as DbInventoryProduct | null) ?? null;
+}
+
+// ----------------------------------------------------------------------------
+// Catalog writes (INV-2b). These touch inventory_products only — stock units
+// (inventory_stock) are managed separately (receiving lands in INV-2d).
+// ----------------------------------------------------------------------------
+
+/**
+ * Create a catalog product. A freshly-created product has no stock units yet,
+ * so it rolls up via toProduct(row, []) → stock 0, no avgCost/byLocation.
+ */
+export async function createProduct(
+  input: DbInventoryProductInsert
+): Promise<Product> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_products")
+    .insert(input)
+    .select("*")
+    .single();
+  if (error) throw new Error(`createProduct: ${error.message}`);
+  return toProduct(data as DbInventoryProduct, []);
+}
+
+/**
+ * Update a catalog product. Stamps updated_at (the DB default only fires on
+ * insert). Returns the re-rolled Product (with its current stock units).
+ */
+export async function updateProduct(
+  id: string,
+  patch: DbInventoryProductUpdate
+): Promise<Product> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("inventory_products")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`updateProduct: ${error.message}`);
+
+  const updated = await getProductById(id);
+  if (!updated) throw new Error("updateProduct: product not found after update");
+  return updated;
+}
+
+/**
+ * Hard-delete a catalog product. inventory_stock.product_id is ON DELETE
+ * RESTRICT (0021), so a product with stock units cannot be deleted — Postgres
+ * raises a foreign-key violation (SQLSTATE 23503). We surface a friendly
+ * operator-facing message instead of the raw constraint error.
+ */
+export async function deleteProduct(id: string): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("inventory_products")
+    .delete()
+    .eq("id", id);
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error(
+        "Cannot delete a product that still has stock units. Remove its stock first."
+      );
+    }
+    throw new Error(`deleteProduct: ${error.message}`);
+  }
+}
+
+/**
+ * List every stock unit (all statuses) for a product, newest acquisition
+ * first — backs the read-only units table on the detail page.
+ */
+export async function listStockForProduct(
+  productId: string
+): Promise<DbInventoryStock[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .select("*")
+    .eq("product_id", productId)
+    .order("acquired_at", { ascending: false });
+  if (error) throw new Error(`listStockForProduct: ${error.message}`);
+  return (data ?? []) as DbInventoryStock[];
 }
