@@ -330,6 +330,7 @@ export type ReceiveStockInput = {
   unit_cost: number;
   location?: string | null;
   supplier?: string | null;
+  poNumber?: string; // C-2a: optional PO #, stamped on every row of the receipt
   acquired_at?: string | null; // defaults to today (UTC date)
   serials?: string[]; // serialized only; mapped 1:1 to the first N units
 };
@@ -339,8 +340,10 @@ export type ReceiveStockInput = {
  * shape:
  *   - SERIALIZED → `quantity` rows, each quantity:1, serial_number from
  *     serials[i] (or null past the end of the list).
- *   - BULK → ONE row with quantity:N, serial_number null.
- * All received rows enter as status 'in_stock'. acquired_at defaults to today.
+ *   - BULK / NON_SERIALIZED → ONE row with quantity:N, serial_number null (each
+ *     receipt is its own row, so distinct costs stay separate per §2.4).
+ * All received rows enter as status 'in_stock' and carry the receipt's PO #
+ * (if any). acquired_at defaults to today.
  */
 export async function receiveStock(
   productId: string,
@@ -363,12 +366,16 @@ export async function receiveStock(
     unit_cost: input.unit_cost,
     location: input.location ?? null,
     supplier: input.supplier ?? null,
+    po_number: input.poNumber?.trim() || null,
     status: "in_stock" as const,
     acquired_at: acquired,
   };
 
   let toInsert: DbInventoryStockInsert[];
-  if (product.tracking_mode === "bulk") {
+  if (
+    product.tracking_mode === "bulk" ||
+    product.tracking_mode === "non_serialized"
+  ) {
     toInsert = [{ ...base, serial_number: null, quantity: input.quantity }];
   } else {
     const serials = input.serials ?? [];
