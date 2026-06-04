@@ -12,12 +12,14 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  allocateUnitToSite,
   bulkCreateProducts,
   createProduct,
   deleteProduct,
   deleteStockUnit,
   getProductRowById,
   receiveStock,
+  returnUnitToStock,
   updateProduct,
   updateStockUnit,
   type ReceiveStockInput,
@@ -166,6 +168,43 @@ export async function deleteStockUnitAction(
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: { id: unitId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Site allocation (INV-3b) ───────────────────────────────────────────────
+
+export async function allocateUnitAction(
+  stockId: string,
+  productId: string,
+  siteId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await allocateUnitToSite(stockId, siteId);
+    await logActivity("inventory", productId, "update", {
+      allocated_to: { from: null, to: siteId },
+    });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: { id: stockId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function returnUnitAction(
+  stockId: string,
+  productId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await returnUnitToStock(stockId);
+    await logActivity("inventory", productId, "update", {
+      returned: { from: "allocated", to: "in_stock" },
+    });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: { id: stockId } };
   } catch (e) {
     return fail(e);
   }

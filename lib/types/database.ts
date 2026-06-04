@@ -602,6 +602,8 @@ export interface DbInventoryStock {
   location: string | null;
   supplier: string | null;
   status: InventoryStockStatus;
+  // INV-3b (migration 0022): set when status='allocated' (FK -> sites).
+  site_id: string | null;
   acquired_at: string | null;
   notes: string | null;
   created_at: string;
@@ -618,6 +620,7 @@ export type DbInventoryStockInsert = {
   location?: string | null;
   supplier?: string | null;
   status?: InventoryStockStatus;
+  site_id?: string | null;
   acquired_at?: string | null;
   notes?: string | null;
 };

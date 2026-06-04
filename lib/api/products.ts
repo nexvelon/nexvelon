@@ -409,3 +409,62 @@ export async function deleteStockUnit(id: string): Promise<void> {
     .eq("id", id);
   if (error) throw new Error(`deleteStockUnit: ${error.message}`);
 }
+
+// ----------------------------------------------------------------------------
+// Site allocation (INV-3b). Whole-row allocation only — a unit/lot is either
+// fully allocated to a site or not (partial-bulk deferred). Each transition is
+// guarded by the current status so a double-allocate / double-return no-ops at
+// the DB level rather than corrupting state.
+// ----------------------------------------------------------------------------
+
+/**
+ * Allocate an in-stock unit/lot to a site: status -> 'allocated', site_id set.
+ * Guarded WHERE status='in_stock' — a row that isn't in stock won't flip
+ * (returns a "not available" error so the caller can surface it).
+ */
+export async function allocateUnitToSite(
+  stockId: string,
+  siteId: string
+): Promise<void> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .update({
+      status: "allocated",
+      site_id: siteId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId)
+    .eq("status", "in_stock")
+    .select("id");
+  if (error) throw new Error(`allocateUnitToSite: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "This unit is no longer in stock and can't be allocated. Refresh and try again."
+    );
+  }
+}
+
+/**
+ * Return an allocated unit/lot to stock: status -> 'in_stock', site_id NULL.
+ * Guarded WHERE status='allocated'.
+ */
+export async function returnUnitToStock(stockId: string): Promise<void> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .update({
+      status: "in_stock",
+      site_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId)
+    .eq("status", "allocated")
+    .select("id");
+  if (error) throw new Error(`returnUnitToStock: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "This unit is not currently allocated. Refresh and try again."
+    );
+  }
+}
