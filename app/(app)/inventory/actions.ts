@@ -17,12 +17,14 @@ import {
   createProduct,
   deleteProduct,
   deleteStockUnit,
+  getInventoryReportData,
   getProductRowById,
   listProducts,
   receiveStock,
   returnUnitToStock,
   updateProduct,
   updateStockUnit,
+  type InventoryReportData,
   type ReceiveStockInput,
 } from "@/lib/api/products";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
@@ -55,6 +57,12 @@ function fail(err: unknown): { ok: false; error: string } {
 // caller falls back to an empty catalog.
 export async function listProductsAction(): Promise<Product[]> {
   return listProducts();
+}
+
+// INV-6: lazy fetch of aggregated report data (valuation / aging / consumption).
+// Computed server-side over real inventory_stock rows (§2.4-accurate).
+export async function getInventoryReportDataAction(): Promise<InventoryReportData> {
+  return getInventoryReportData();
 }
 
 // INV-5: on-demand low-stock report. Computes stock<=reorderPoint inline over
