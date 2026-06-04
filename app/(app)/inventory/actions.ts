@@ -10,6 +10,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  bulkCreateProducts,
   createProduct,
   deleteProduct,
   updateProduct,
@@ -69,6 +70,19 @@ export async function deleteProductAction(
     // TODO INV-3: logActivity("inventory", id, "delete", {});
     revalidatePath("/inventory");
     return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function importProductsAction(
+  rows: DbInventoryProductInsert[]
+): Promise<ActionResult<{ created: number; skipped: string[] }>> {
+  try {
+    const result = await bulkCreateProducts(rows);
+    // TODO INV-3: logActivity("inventory", <each created id>, "create", {});
+    revalidatePath("/inventory");
+    return { ok: true, data: result };
   } catch (e) {
     return fail(e);
   }

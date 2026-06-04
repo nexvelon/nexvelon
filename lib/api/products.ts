@@ -267,3 +267,51 @@ export async function listStockForProduct(
   if (error) throw new Error(`listStockForProduct: ${error.message}`);
   return (data ?? []) as DbInventoryStock[];
 }
+
+/**
+ * Bulk-insert catalog products (INV-2c). INSERT-only — no upsert/update-by-sku.
+ * Rows whose sku already exists in the table, OR is duplicated earlier within
+ * the same batch, are dropped and reported in `skipped` (the sku string). The
+ * sku UNIQUE constraint (0021) is the backstop; the pre-check makes skips
+ * explicit and keeps the insert from aborting the whole batch on a collision.
+ */
+export async function bulkCreateProducts(
+  inputs: DbInventoryProductInsert[]
+): Promise<{ created: number; skipped: string[] }> {
+  if (inputs.length === 0) return { created: 0, skipped: [] };
+  const supabase = await db();
+
+  // 1) existing SKUs already in the catalog.
+  const { data: existingRows, error: existErr } = await supabase
+    .from("inventory_products")
+    .select("sku");
+  if (existErr) throw new Error(`bulkCreateProducts: ${existErr.message}`);
+  const existing = new Set(
+    (existingRows ?? []).map((r) => (r.sku as string).toLowerCase())
+  );
+
+  // 2) filter out existing + intra-batch duplicate SKUs.
+  const seen = new Set<string>();
+  const skipped: string[] = [];
+  const toInsert: DbInventoryProductInsert[] = [];
+  for (const row of inputs) {
+    const key = row.sku.toLowerCase();
+    if (existing.has(key) || seen.has(key)) {
+      skipped.push(row.sku);
+      continue;
+    }
+    seen.add(key);
+    toInsert.push(row);
+  }
+
+  if (toInsert.length === 0) return { created: 0, skipped };
+
+  // 3) insert the remainder.
+  const { data: inserted, error: insErr } = await supabase
+    .from("inventory_products")
+    .insert(toInsert)
+    .select("id");
+  if (insErr) throw new Error(`bulkCreateProducts/insert: ${insErr.message}`);
+
+  return { created: inserted?.length ?? 0, skipped };
+}
