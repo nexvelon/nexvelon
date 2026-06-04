@@ -279,8 +279,8 @@ export async function listStockForProduct(
  */
 export async function bulkCreateProducts(
   inputs: DbInventoryProductInsert[]
-): Promise<{ created: number; skipped: string[] }> {
-  if (inputs.length === 0) return { created: 0, skipped: [] };
+): Promise<{ created: number; createdIds: string[]; skipped: string[] }> {
+  if (inputs.length === 0) return { created: 0, createdIds: [], skipped: [] };
   const supabase = await db();
 
   // 1) existing SKUs already in the catalog.
@@ -306,7 +306,7 @@ export async function bulkCreateProducts(
     toInsert.push(row);
   }
 
-  if (toInsert.length === 0) return { created: 0, skipped };
+  if (toInsert.length === 0) return { created: 0, createdIds: [], skipped };
 
   // 3) insert the remainder.
   const { data: inserted, error: insErr } = await supabase
@@ -315,7 +315,8 @@ export async function bulkCreateProducts(
     .select("id");
   if (insErr) throw new Error(`bulkCreateProducts/insert: ${insErr.message}`);
 
-  return { created: inserted?.length ?? 0, skipped };
+  const createdIds = (inserted ?? []).map((r) => r.id as string);
+  return { created: createdIds.length, createdIds, skipped };
 }
 
 // ----------------------------------------------------------------------------

@@ -500,7 +500,7 @@ export interface DbAuthOtp {
 // ACT-1 (migration 0016): activity log
 // ============================================================================
 
-export type ActivityEntityType = "client" | "site" | "contact";
+export type ActivityEntityType = "client" | "site" | "contact" | "inventory";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
