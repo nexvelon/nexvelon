@@ -141,3 +141,125 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+// ----------------------------------------------------------------------------
+// INV-5 · Low-stock report · on-demand email of items at/under reorder point.
+// Reuses the shared Resend client() + FROM + navy/gold tone from the OTP mail.
+// ----------------------------------------------------------------------------
+
+export interface LowStockItem {
+  sku: string;
+  name: string;
+  stock: number;
+  reorderPoint: number;
+  reorderQty?: number;
+}
+
+export async function sendLowStockAlert(
+  to: string,
+  items: LowStockItem[]
+): Promise<void> {
+  const count = items.length;
+  const subject = `Nexvelon — ${count} item${count === 1 ? "" : "s"} below reorder point`;
+
+  const html = renderLowStockHtml(items);
+  const text = renderLowStockText(items);
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: FROM,
+    to,
+    subject,
+    html,
+    text,
+    headers: {
+      "X-Entity-Ref-ID": `nexvelon-lowstock-${Date.now()}`,
+    },
+  });
+
+  if (result.error) {
+    throw new Error(`sendLowStockAlert: ${result.error.message}`);
+  }
+}
+
+function renderLowStockHtml(items: LowStockItem[]): string {
+  const rows = items
+    .map(
+      (it) => `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:'Courier New',monospace;font-size:13px;color:#0A1226;">${escapeHtml(
+          it.sku
+        )}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#2A2418;">${escapeHtml(
+          it.name
+        )}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#0A1226;text-align:right;">${it.stock}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#5C5240;text-align:right;">${it.reorderPoint}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#5C5240;text-align:right;">${
+          it.reorderQty ?? "—"
+        }</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;padding:48px 16px;">
+      <tr>
+        <td align="center">
+          <table width="640" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #E5DFD0;">
+            <tr>
+              <td style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
+                <div style="font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;">Nexvelon · Inventory</div>
+                <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">Low-stock report</div>
+                <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${
+                  items.length
+                } item${items.length === 1 ? "" : "s"} at or below the reorder point.</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 48px 40px;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E5DFD0;border-collapse:collapse;">
+                  <thead>
+                    <tr style="background:#F5F1E8;">
+                      <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">SKU</th>
+                      <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Name</th>
+                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">On hand</th>
+                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Reorder pt</th>
+                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Suggested qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
+                &copy; 2026 Nexvelon Global Inc.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function renderLowStockText(items: LowStockItem[]): string {
+  const lines = items.map(
+    (it) =>
+      `  ${it.sku} · ${it.name} — on hand ${it.stock}, reorder pt ${it.reorderPoint}, suggested ${
+        it.reorderQty ?? "—"
+      }`
+  );
+  return [
+    `Nexvelon · Inventory — Low-stock report`,
+    ``,
+    `${items.length} item(s) at or below the reorder point:`,
+    ``,
+    ...lines,
+    ``,
+    `— Nexvelon Global Inc.`,
+  ].join("\n");
+}

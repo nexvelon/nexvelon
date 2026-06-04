@@ -26,6 +26,8 @@ import {
   type ReceiveStockInput,
 } from "@/lib/api/products";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
+import { sendLowStockAlert } from "@/lib/auth/email";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
@@ -53,6 +55,55 @@ function fail(err: unknown): { ok: false; error: string } {
 // caller falls back to an empty catalog.
 export async function listProductsAction(): Promise<Product[]> {
   return listProducts();
+}
+
+// INV-5: on-demand low-stock report. Computes stock<=reorderPoint inline over
+// the catalog (same definition as the UI's lowStockCount) and emails the
+// signed-in user. Not a data change — no logActivity.
+export async function emailLowStockReportAction(): Promise<{
+  sent: boolean;
+  count: number;
+  to?: string;
+  reason?: string;
+}> {
+  try {
+    const products = await listProducts();
+    const low = products.filter((p) => p.stock <= p.reorderPoint);
+    if (low.length === 0) {
+      return { sent: false, count: 0, reason: "No items below reorder point" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const to = user?.email;
+    if (!to) {
+      return {
+        sent: false,
+        count: low.length,
+        reason: "No email on your account",
+      };
+    }
+
+    await sendLowStockAlert(
+      to,
+      low.map((p) => ({
+        sku: p.sku,
+        name: p.name,
+        stock: p.stock,
+        reorderPoint: p.reorderPoint,
+        reorderQty: p.reorderQty,
+      }))
+    );
+    return { sent: true, count: low.length, to };
+  } catch (e) {
+    return {
+      sent: false,
+      count: 0,
+      reason: e instanceof Error ? e.message : "Failed to send report",
+    };
+  }
 }
 
 export async function createProductAction(

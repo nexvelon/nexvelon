@@ -25,6 +25,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { AnimatedNumber } from "@/components/modules/dashboard/AnimatedNumber";
 import { ImportProductsButton } from "@/components/modules/inventory/ImportProductsButton";
+import { EmailLowStockButton } from "@/components/modules/inventory/EmailLowStockButton";
 import { StockTab } from "@/components/modules/inventory/StockTab";
 import { AllocationsTab } from "@/components/modules/inventory/AllocationsTab";
 import { TransfersTab } from "@/components/modules/inventory/TransfersTab";
@@ -86,6 +87,7 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
               Add product
             </Link>
             <ImportProductsButton />
+            <EmailLowStockButton />
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
