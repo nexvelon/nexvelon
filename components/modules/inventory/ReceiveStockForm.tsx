@@ -48,6 +48,7 @@ export function ReceiveStockForm({
   const [unitCost, setUnitCost] = useState("");
   const [location, setLocation] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [poNumber, setPoNumber] = useState("");
   const [acquiredAt, setAcquiredAt] = useState(todayIso());
   const [serials, setSerials] = useState("");
   const [pending, startTransition] = useTransition();
@@ -76,6 +77,7 @@ export function ReceiveStockForm({
     setUnitCost("");
     setLocation("");
     setSupplier("");
+    setPoNumber("");
     setAcquiredAt(todayIso());
     setSerials("");
   }
@@ -115,6 +117,7 @@ export function ReceiveStockForm({
         unit_cost: cost,
         location: location.trim() || null,
         supplier: supplier.trim() || null,
+        poNumber: poNumber.trim() || undefined,
         acquired_at: acquiredAt || null,
         serials: isSerialized ? serialList : undefined,
       });
@@ -188,6 +191,14 @@ export function ReceiveStockForm({
               <Input
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">PO # (optional)</Label>
+              <Input
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="e.g. PO-2026-0042"
               />
             </div>
             <div className="space-y-1.5">

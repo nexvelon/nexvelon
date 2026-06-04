@@ -549,7 +549,7 @@ export interface DbActivityLogWithActor extends DbActivityLog {
 // (schema-flexibility precedent §2.1); the lib/types.ts UI unions stay the
 // typed surface and can grow without a migration.
 // ----------------------------------------------------------------------------
-export type InventoryTrackingMode = "serialized" | "bulk";
+export type InventoryTrackingMode = "serialized" | "bulk" | "non_serialized";
 export type InventoryStockStatus =
   | "in_stock"
   | "allocated"
@@ -608,6 +608,8 @@ export interface DbInventoryStock {
   status: InventoryStockStatus;
   // INV-3b (migration 0022): set when status='allocated' (FK -> sites).
   site_id: string | null;
+  // C-2a (migration 0025): purchase-order number stamped at receipt time.
+  po_number: string | null;
   acquired_at: string | null;
   notes: string | null;
   created_at: string;
@@ -625,6 +627,7 @@ export type DbInventoryStockInsert = {
   supplier?: string | null;
   status?: InventoryStockStatus;
   site_id?: string | null;
+  po_number?: string | null;
   acquired_at?: string | null;
   notes?: string | null;
 };

@@ -309,12 +309,14 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="serialized">Serialized</SelectItem>
+                <SelectItem value="non_serialized">Non-serialized</SelectItem>
                 <SelectItem value="bulk">Bulk</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-muted-foreground text-[11px] leading-snug">
-              Serialized = one row per unit (with serial). Bulk = one row per lot
-              quantity.
+              Serialized = each unit has a serial. Non-serialized = countable
+              items, no serial. Bulk = a measured quantity (e.g. cable by the
+              foot).
             </p>
           </Field>
           <Field label="Unit of measure">
