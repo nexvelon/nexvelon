@@ -13,11 +13,16 @@ import {
   bulkCreateProducts,
   createProduct,
   deleteProduct,
+  deleteStockUnit,
+  receiveStock,
   updateProduct,
+  updateStockUnit,
+  type ReceiveStockInput,
 } from "@/lib/api/products";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
+  DbInventoryStockUpdate,
 } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -83,6 +88,54 @@ export async function importProductsAction(
     // TODO INV-3: logActivity("inventory", <each created id>, "create", {});
     revalidatePath("/inventory");
     return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Stock units (INV-2d) ───────────────────────────────────────────────────
+
+export async function receiveStockAction(
+  productId: string,
+  input: ReceiveStockInput
+): Promise<ActionResult<{ created: number }>> {
+  try {
+    const result = await receiveStock(productId, input);
+    // TODO INV-3: logActivity("inventory", productId, "update", { received: ... });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateStockUnitAction(
+  unitId: string,
+  productId: string,
+  patch: DbInventoryStockUpdate
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await updateStockUnit(unitId, patch);
+    // TODO INV-3: logActivity("inventory", productId, "update", { unit: unitId, ...patch });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: { id: unitId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteStockUnitAction(
+  unitId: string,
+  productId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await deleteStockUnit(unitId);
+    // TODO INV-3: logActivity("inventory", productId, "update", { removedUnit: unitId });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: { id: unitId } };
   } catch (e) {
     return fail(e);
   }
