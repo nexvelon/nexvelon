@@ -570,6 +570,9 @@ export interface DbInventoryProduct {
   list_price: number | null;
   reorder_point: number | null;
   reorder_qty: number | null;
+  // C-1 (migration 0024): alternate search terms (old part #s, nicknames,
+  // misspellings). NOT NULL DEFAULT '{}' in the DB → always an array.
+  search_aliases: string[];
   created_at: string;
   updated_at: string;
 }
@@ -589,6 +592,7 @@ export type DbInventoryProductInsert = {
   list_price?: number | null;
   reorder_point?: number | null;
   reorder_qty?: number | null;
+  search_aliases?: string[];
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;

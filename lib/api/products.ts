@@ -99,6 +99,7 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     avgCost, // display-only
     byLocation: Object.keys(byLocation).length > 0 ? byLocation : undefined,
     lastReceived,
+    searchAliases: p.search_aliases ?? [],
   };
 }
 

@@ -128,7 +128,14 @@ export function StockTab({ products }: { products: Product[] }) {
       if (status !== "All" && stockStatus(p) !== status) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (!p.sku.toLowerCase().includes(q) && !p.name.toLowerCase().includes(q))
+        const matchesAlias = (p.searchAliases ?? []).some((a) =>
+          a.toLowerCase().includes(q)
+        );
+        if (
+          !p.sku.toLowerCase().includes(q) &&
+          !p.name.toLowerCase().includes(q) &&
+          !matchesAlias
+        )
           return false;
       }
       return true;
