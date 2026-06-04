@@ -43,7 +43,7 @@ export function resetPasswordEmail(args: ResetPasswordEmailArgs): {
   html: string;
   text: string;
 } {
-  const subject = "Reset your Nexvelon password";
+  const subject = "Reset your Nexvelon Enterprise Suite password";
 
   const urlEsc = escapeHtml(args.resetUrl);
   const emailEsc = escapeHtml(args.recipientEmail);
@@ -230,7 +230,7 @@ ${escapeHtml(preheader)}
   const text = [
     "Nexvelon Enterprise Suite",
     "",
-    "Reset your Nexvelon password.",
+    "Reset your Nexvelon Enterprise Suite password.",
     "",
     `${args.recipientName ?? "Hello"}, we received a request to reset the password on your Nexvelon Enterprise Suite account.`,
     "",
