@@ -24,12 +24,10 @@ export interface Client {
 
 export type Vendor = "ADI" | "Anixter" | "Wesco" | "CDW" | "Provo";
 
-export type WarehouseLocation =
-  | "Main Warehouse"
-  | "Truck 1"
-  | "Truck 2"
-  | "Truck 3"
-  | "Branch — Mississauga";
+// B-3: storage locations are operator-managed (inventory_vocab, kind
+// 'storage_location') + free-text, so this is a plain string alias rather than
+// a strict union. The name is kept so existing imports compile unchanged.
+export type WarehouseLocation = string;
 export type ProductManufacturer =
   | "Kantech"
   | "Genetec"
@@ -72,7 +70,7 @@ export interface Product {
   avgCost?: number;
   upc?: string;
   lastReceived?: string;
-  byLocation?: Partial<Record<WarehouseLocation, number>>;
+  byLocation?: Partial<Record<string, number>>;
 }
 
 export type ProjectStatus =

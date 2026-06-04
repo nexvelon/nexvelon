@@ -20,31 +20,33 @@ function seed(s: string): number {
   return h;
 }
 
-export function locationBreakdown(p: Product): Record<WarehouseLocation, number> {
-  if (p.byLocation) {
-    return WAREHOUSE_LOCATIONS.reduce((acc, l) => {
-      acc[l] = p.byLocation?.[l] ?? 0;
-      return acc;
-    }, {} as Record<WarehouseLocation, number>);
+/**
+ * B-3: real per-location stock counts from the product's actual byLocation map.
+ * The synthetic seed-distribution fallback was removed — a product with no
+ * in-stock units returns a real empty/zero breakdown, never fabricated numbers.
+ *
+ * @param locations  optional location set to project onto (each absent location
+ *   reads 0, order preserved). When omitted, returns the raw byLocation counts.
+ */
+export function locationBreakdown(
+  p: Product,
+  locations?: string[]
+): Record<string, number> {
+  const counts = p.byLocation ?? {};
+  if (!locations) {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(counts)) {
+      if (v != null) out[k] = v;
+    }
+    return out;
   }
-  const out: Record<WarehouseLocation, number> = {
-    "Main Warehouse": 0,
-    "Truck 1": 0,
-    "Truck 2": 0,
-    "Truck 3": 0,
-    "Branch — Mississauga": 0,
-  };
-  let remaining = p.stock;
-  // Bias toward Main Warehouse, sprinkle the rest.
-  const biases = [0.62, 0.08, 0.08, 0.07, 0.15];
-  WAREHOUSE_LOCATIONS.forEach((loc, idx) => {
-    const noise = (seed(p.id + loc) % 5) - 2;
-    const portion = Math.max(0, Math.round(p.stock * biases[idx]) + noise);
-    out[loc] = idx === WAREHOUSE_LOCATIONS.length - 1 ? remaining : Math.min(portion, remaining);
-    remaining -= out[loc];
-  });
-  if (remaining > 0) out["Main Warehouse"] += remaining;
-  return out;
+  return locations.reduce(
+    (acc, l) => {
+      acc[l] = counts[l] ?? 0;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
 }
 
 export function totalAllocated(productId: string): number {
