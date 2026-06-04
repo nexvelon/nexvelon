@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { products } from "@/lib/mock-data/products";
+import { useCatalogProducts } from "./catalog-context";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
@@ -15,6 +15,7 @@ interface Props {
 }
 
 export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
+  const products = useCatalogProducts();
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -30,7 +31,7 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
           p.manufacturer.toLowerCase().includes(q)
       )
       .slice(0, 8);
-  }, [value]);
+  }, [products, value]);
 
   useEffect(() => {
     setActiveIdx(0);

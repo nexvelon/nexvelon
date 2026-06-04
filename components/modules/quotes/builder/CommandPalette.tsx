@@ -10,7 +10,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { products } from "@/lib/mock-data/products";
+import { useCatalogProducts } from "./catalog-context";
 import { formatCurrency } from "@/lib/format";
 import type { Product, QuoteSection } from "@/lib/types";
 
@@ -20,6 +20,7 @@ interface Props {
 }
 
 export function CommandPalette({ sections, onAddProductToSection }: Props) {
+  const products = useCatalogProducts();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {

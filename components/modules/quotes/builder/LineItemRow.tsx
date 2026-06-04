@@ -86,9 +86,15 @@ export function LineItemRow({
     onChange(
       recalcLineItem({
         ...item,
+        // INV-4: link the picked catalog product so cost-tracking + future
+        // reporting can tie this line back to inventory (was omitted here;
+        // the command-palette path already set it).
+        productId: p.id,
         name: p.name,
         sku: p.sku,
         vendor: p.vendor,
+        // INV-4: unitCost snapshots the catalog default_unit_cost (Product.cost
+        // via the INV-2a adapter); §2.2 — the copied value is the snapshot.
         unitCost: p.cost,
         margin: item.margin || 40,
         // classification intentionally omitted to preserve the user's selection
