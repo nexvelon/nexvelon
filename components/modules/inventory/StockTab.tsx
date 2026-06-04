@@ -27,7 +27,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { products } from "@/lib/mock-data/products";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import {
@@ -63,7 +62,7 @@ const CATEGORIES: ("All" | ProductCategory)[] = [
 const LOCATIONS: ("All" | WarehouseLocation)[] = ["All", ...WAREHOUSE_LOCATIONS];
 const STATUSES = ["All", "In Stock", "Low", "Out", "Overstock"] as const;
 
-export function StockTab() {
+export function StockTab({ products }: { products: Product[] }) {
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
 
@@ -107,7 +106,7 @@ export function StockTab() {
       }
       return a.sku.localeCompare(b.sku);
     });
-  }, [search, vendor, category, location, status, sortKey]);
+  }, [products, search, vendor, category, location, status, sortKey]);
 
   const reorder = (p: Product) =>
     toast.success(`Drafted PO for ${p.sku}`, {
