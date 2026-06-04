@@ -91,7 +91,7 @@ export function ImportProductsButton() {
       let msg = `Imported ${created} product${created === 1 ? "" : "s"}`;
       if (skipped.length > 0) {
         const shown = skipped.slice(0, 5).join(", ");
-        msg += ` · skipped ${skipped.length} duplicate SKU${
+        msg += ` · skipped ${skipped.length} duplicate Part #${
           skipped.length === 1 ? "" : "s"
         }: ${shown}${skipped.length > 5 ? "…" : ""}`;
       }
@@ -144,7 +144,7 @@ export function ImportProductsButton() {
           <DialogHeader>
             <DialogTitle>Import products</DialogTitle>
             <DialogDescription>
-              Review before importing. Products with a SKU that already exists
+              Review before importing. Products with a Part # that already exists
               are skipped automatically.
             </DialogDescription>
           </DialogHeader>

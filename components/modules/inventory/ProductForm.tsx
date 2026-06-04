@@ -120,7 +120,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
     e.preventDefault();
 
     if (sku.trim() === "") {
-      toast.error("SKU is required.");
+      toast.error("Part # is required.");
       return;
     }
     if (name.trim() === "") {
@@ -167,7 +167,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
           Product
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="SKU" required>
+          <Field label="Part #" required>
             <Input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
@@ -251,16 +251,18 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               value={trackingMode}
               onValueChange={(v) => setTrackingMode(v as InventoryTrackingMode)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="serialized">
-                  Serialized (one row per unit)
-                </SelectItem>
-                <SelectItem value="bulk">Bulk (lot quantity)</SelectItem>
+                <SelectItem value="serialized">Serialized</SelectItem>
+                <SelectItem value="bulk">Bulk</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              Serialized = one row per unit (with serial). Bulk = one row per lot
+              quantity.
+            </p>
           </Field>
           <Field label="Unit of measure">
             <Input

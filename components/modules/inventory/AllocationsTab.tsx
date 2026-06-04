@@ -102,7 +102,7 @@ export function AllocationsTab() {
             <TableRow>
               <TableHead className="text-[11px] uppercase">Project</TableHead>
               <TableHead className="text-[11px] uppercase">Client</TableHead>
-              <TableHead className="text-[11px] uppercase">SKU</TableHead>
+              <TableHead className="text-[11px] uppercase">Part #</TableHead>
               <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
               <TableHead className="text-[11px] uppercase">Allocated</TableHead>
               <TableHead className="text-[11px] uppercase">Picked</TableHead>

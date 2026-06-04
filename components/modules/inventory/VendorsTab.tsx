@@ -132,7 +132,7 @@ function VendorDetail({
 
       <Card className="p-4">
         <h3 className="text-brand-navy font-serif text-lg">
-          Top SKUs purchased from {vendor}
+          Top Parts purchased from {vendor}
         </h3>
         <ul className="mt-3 divide-y divide-[var(--border)]">
           {topSkus.map((p) => (

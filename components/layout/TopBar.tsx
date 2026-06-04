@@ -67,10 +67,10 @@ export function TopBar() {
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="hover:bg-muted/60 bg-muted/40 text-muted-foreground flex w-full max-w-md items-center gap-3 rounded-md border px-3 py-1.5 text-sm transition"
+          className="hover:bg-muted/60 bg-muted/40 text-muted-foreground flex w-full max-w-[11rem] items-center gap-3 rounded-md border px-3 py-1.5 text-sm transition sm:max-w-xs md:max-w-md"
         >
-          <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="flex-1 truncate text-left">
             Search clients, quotes, navigation…
           </span>
           <kbd className="bg-background text-muted-foreground hidden items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
@@ -81,7 +81,7 @@ export function TopBar() {
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
       {/* Right — actions + role + user */}
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         <NotificationsBell />
         <button
           type="button"

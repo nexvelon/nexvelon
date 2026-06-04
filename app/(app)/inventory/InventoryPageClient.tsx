@@ -90,7 +90,7 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`4 locations · ${stats.skusTracked.toLocaleString()} active SKUs`}
+        eyebrow={`4 locations · ${stats.skusTracked.toLocaleString()} active parts`}
         title="Inventory & Warehouse"
         description="Stock levels, allocations, transfers, and purchasing across all locations."
         actions={
@@ -139,7 +139,7 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
           hidden={!showCost}
           fallback="—"
         />
-        <Stat label="SKUs Tracked" value={stats.skusTracked} format={formatNumber} icon={Boxes} />
+        <Stat label="Parts Tracked" value={stats.skusTracked} format={formatNumber} icon={Boxes} />
         <Stat
           label="Low Stock Alerts"
           value={stats.lowStock}

@@ -115,7 +115,7 @@ export function InventoryHealth({ data, alerts }: Props) {
           <ul className="divide-border divide-y rounded-md border">
             {alerts.length === 0 && (
               <li className="text-muted-foreground p-3 text-sm">
-                All SKUs above reorder point.
+                All parts above reorder point.
               </li>
             )}
             {alerts.map((a) => (

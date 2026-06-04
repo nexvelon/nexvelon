@@ -208,7 +208,7 @@ export function StockTab({ products }: { products: Product[] }) {
           <TableHeader>
             <TableRow>
               <TableHead className="w-7"></TableHead>
-              <TableHead className="text-[11px] uppercase">SKU</TableHead>
+              <TableHead className="text-[11px] uppercase">Part #</TableHead>
               <TableHead className="text-[11px] uppercase">Description</TableHead>
               <TableHead className="text-[11px] uppercase">Vendor</TableHead>
               <TableHead className="text-[11px] uppercase">Category</TableHead>
