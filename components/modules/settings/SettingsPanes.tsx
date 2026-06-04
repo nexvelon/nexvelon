@@ -122,7 +122,7 @@ export function QuoteDefaults() {
       <Card className="bg-card p-6 shadow-sm">
         <h4 className="text-brand-navy font-serif text-base">Margin tiers</h4>
         <p className="text-muted-foreground mb-3 text-[11px]">
-          Default margin applied per category when a SKU is added to a quote.
+          Default margin applied per category when a Part # is added to a quote.
         </p>
         <MarginTiersTable />
       </Card>

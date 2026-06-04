@@ -214,7 +214,7 @@ function FragmentRow({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-[10px] uppercase">SKU</TableHead>
+                    <TableHead className="text-[10px] uppercase">Part #</TableHead>
                     <TableHead className="text-[10px] uppercase">Description</TableHead>
                     <TableHead className="text-right text-[10px] uppercase">Qty</TableHead>
                     {showCost && <TableHead className="text-right text-[10px] uppercase">Unit Cost</TableHead>}

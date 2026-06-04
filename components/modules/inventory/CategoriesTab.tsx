@@ -51,7 +51,7 @@ export function CategoriesTab() {
               <ChevronRight className="text-muted-foreground h-4 w-4" />
             </div>
             <p className="text-muted-foreground text-xs">
-              {items.length} {items.length === 1 ? "SKU" : "SKUs"} ·{" "}
+              {items.length} {items.length === 1 ? "Part" : "Parts"} ·{" "}
               {formatNumber(items.reduce((s, p) => s + p.stock, 0))} units
             </p>
             {showCost && (
