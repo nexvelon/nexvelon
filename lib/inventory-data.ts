@@ -178,12 +178,15 @@ export const VENDOR_DIRECTORY: VendorInfo[] = [];
 // Aggregated helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-export function totalStockValue(): number {
-  return products.reduce((s, p) => s + p.stock * p.cost, 0);
+// INV-2a: these aggregate helpers now take the product list explicitly so the
+// inventory page can feed them RSC-fetched real products (lib/api/products.ts)
+// instead of the emptied mock array. Pure functions over the passed-in list.
+export function totalStockValue(items: Product[]): number {
+  return items.reduce((s, p) => s + p.stock * p.cost, 0);
 }
 
-export function lowStockCount(): number {
-  return products.filter((p) => p.stock <= p.reorderPoint).length;
+export function lowStockCount(items: Product[]): number {
+  return items.filter((p) => p.stock <= p.reorderPoint).length;
 }
 
 export interface InventoryStats {
@@ -194,12 +197,15 @@ export interface InventoryStats {
   openPOs: number;
 }
 
-export function computeInventoryStats(openPOCount: number): InventoryStats {
-  const itemsAllocated = products.reduce((s, p) => s + totalAllocated(p.id), 0);
+export function computeInventoryStats(
+  items: Product[],
+  openPOCount: number
+): InventoryStats {
+  const itemsAllocated = items.reduce((s, p) => s + totalAllocated(p.id), 0);
   return {
-    stockValue: totalStockValue(),
-    skusTracked: products.length,
-    lowStock: lowStockCount(),
+    stockValue: totalStockValue(items),
+    skusTracked: items.length,
+    lowStock: lowStockCount(items),
     itemsAllocated,
     openPOs: openPOCount,
   };
