@@ -213,6 +213,7 @@ export function StockTab({ products }: { products: Product[] }) {
               <TableHead className="text-[11px] uppercase">Vendor</TableHead>
               <TableHead className="text-[11px] uppercase">Category</TableHead>
               <TableHead className="text-[11px] uppercase">Mfr</TableHead>
+              <TableHead className="text-[11px] uppercase">Status</TableHead>
               <TableHead className="text-right text-[11px] uppercase">On Hand</TableHead>
               <TableHead className="text-right text-[11px] uppercase">Allocated</TableHead>
               <TableHead className="cursor-pointer text-right text-[11px] uppercase" onClick={() => setSortKey("available")}>Available</TableHead>
@@ -227,7 +228,7 @@ export function StockTab({ products }: { products: Product[] }) {
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={showCost ? 15 : 13} className="text-muted-foreground py-8 text-center text-sm">
+                <TableCell colSpan={showCost ? 16 : 14} className="text-muted-foreground py-8 text-center text-sm">
                   No items match the current filters.
                 </TableCell>
               </TableRow>
@@ -296,6 +297,9 @@ function FragmentRow({
         <TableCell className="text-xs">{p.vendor}</TableCell>
         <TableCell className="text-xs">{p.category}</TableCell>
         <TableCell className="text-muted-foreground text-xs">{p.manufacturer}</TableCell>
+        <TableCell>
+          <StatusBadge status={stockStatus(p)} />
+        </TableCell>
         <TableCell className="text-right text-xs tabular-nums">{formatNumber(p.stock)}</TableCell>
         <TableCell className="text-right text-xs tabular-nums">{formatNumber(allocated)}</TableCell>
         <TableCell className="text-brand-navy text-right text-sm font-bold tabular-nums">
@@ -334,7 +338,7 @@ function FragmentRow({
       {isOpen && (
         <TableRow className="bg-muted/40">
           <TableCell></TableCell>
-          <TableCell colSpan={showCost ? 14 : 12} className="px-4 py-4">
+          <TableCell colSpan={showCost ? 15 : 13} className="px-4 py-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
                 <p className="text-muted-foreground mb-2 text-[10px] font-semibold uppercase tracking-wider">
@@ -412,5 +416,31 @@ function FragmentRow({
         </TableRow>
       )}
     </>
+  );
+}
+
+// INV-5: explicit per-row stock-status badge (complements the existing row
+// tint + status filter). Colors: Out=red, Low=amber, Overstock=blue,
+// In Stock=neutral.
+function StatusBadge({
+  status,
+}: {
+  status: "Out" | "Low" | "In Stock" | "Overstock";
+}) {
+  const styles: Record<typeof status, string> = {
+    Out: "bg-red-50 text-red-700",
+    Low: "bg-amber-50 text-amber-800",
+    "In Stock": "bg-slate-100 text-slate-600",
+    Overstock: "bg-sky-50 text-sky-700",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        styles[status]
+      )}
+    >
+      {status}
+    </span>
   );
 }
