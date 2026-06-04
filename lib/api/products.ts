@@ -37,7 +37,6 @@ import type {
   ProductCategory,
   ProductManufacturer,
   Vendor,
-  WarehouseLocation,
 } from "@/lib/types";
 
 async function db() {
@@ -66,13 +65,13 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
   const avgCost = stock > 0 ? totalCost / stock : undefined;
 
   // Group units by location into the Product.byLocation shape. DB location is
-  // free-text; the WarehouseLocation union is the UI vocabulary — cast, and
-  // any location outside the union simply won't render in the breakdown UI.
-  const byLocation: Partial<Record<WarehouseLocation, number>> = {};
+  // free-text and locations are operator-managed, so this is keyed by the raw
+  // location string — every location (incl. 'Default' / operator-added) is kept
+  // so it can render in the breakdown + filter (B-3).
+  const byLocation: Record<string, number> = {};
   for (const r of inStock) {
     if (!r.location) continue;
-    const loc = r.location as WarehouseLocation;
-    byLocation[loc] = (byLocation[loc] ?? 0) + Number(r.quantity);
+    byLocation[r.location] = (byLocation[r.location] ?? 0) + Number(r.quantity);
   }
 
   // Latest acquisition date among the in-stock units (ISO dates sort lexically).

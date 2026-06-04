@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import {
   ChevronDown,
@@ -36,14 +36,10 @@ import {
   stockStatus,
   totalAllocated,
 } from "@/lib/inventory-data";
+import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type {
-  Product,
-  ProductCategory,
-  Vendor,
-  WarehouseLocation,
-} from "@/lib/types";
+import type { Product, ProductCategory, Vendor } from "@/lib/types";
 
 const VENDORS: ("All" | Vendor)[] = ["All", "ADI", "Anixter", "Wesco", "CDW", "Provo"];
 const CATEGORIES: ("All" | ProductCategory)[] = [
@@ -59,7 +55,6 @@ const CATEGORIES: ("All" | ProductCategory)[] = [
   "Racks",
   "Accessories",
 ];
-const LOCATIONS: ("All" | WarehouseLocation)[] = ["All", ...WAREHOUSE_LOCATIONS];
 const STATUSES = ["All", "In Stock", "Low", "Out", "Overstock"] as const;
 
 export function StockTab({ products }: { products: Product[] }) {
@@ -69,10 +64,51 @@ export function StockTab({ products }: { products: Product[] }) {
   const [search, setSearch] = useState("");
   const [vendor, setVendor] = useState<(typeof VENDORS)[number]>("All");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
-  const [location, setLocation] = useState<(typeof LOCATIONS)[number]>("All");
+  const [location, setLocation] = useState<string>("All");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
   const [sortKey, setSortKey] = useState<"sku" | "available" | "value">("sku");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // B-3: managed storage-location list (active), fetched like the B-2 forms.
+  const [vocabLocations, setVocabLocations] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    listInventoryVocabAction("storage_location")
+      .then((res) => {
+        if (active && res.ok && res.data.length) {
+          setVocabLocations(res.data.map((r) => r.name));
+        }
+      })
+      .catch(() => {
+        // fall back to data-present / WAREHOUSE_LOCATIONS below
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Dynamic location set = managed vocab ∪ locations actually present in the
+  // data (deduped, managed order first), so stock in 'Default' or any operator-
+  // added location is never hidden. Falls back to WAREHOUSE_LOCATIONS if the
+  // vocab is unavailable.
+  const locationList = useMemo(() => {
+    const present = new Set<string>();
+    for (const p of products) {
+      for (const loc of Object.keys(p.byLocation ?? {})) present.add(loc);
+    }
+    const base = vocabLocations.length > 0 ? vocabLocations : WAREHOUSE_LOCATIONS;
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    for (const l of [...base, ...present]) {
+      if (!seen.has(l)) {
+        seen.add(l);
+        ordered.push(l);
+      }
+    }
+    return ordered;
+  }, [products, vocabLocations]);
+
+  const LOCATIONS = useMemo<string[]>(() => ["All", ...locationList], [locationList]);
 
   const dirty =
     search !== "" ||
@@ -247,6 +283,7 @@ export function StockTab({ products }: { products: Product[] }) {
                   showCost={showCost}
                   allocated={allocated}
                   available={available}
+                  locations={locationList}
                   onToggle={() => setExpanded((s) => ({ ...s, [p.id]: !s[p.id] }))}
                   onReorder={() => reorder(p)}
                 />
@@ -266,6 +303,7 @@ function FragmentRow({
   showCost,
   allocated,
   available,
+  locations,
   onToggle,
   onReorder,
 }: {
@@ -275,10 +313,11 @@ function FragmentRow({
   showCost: boolean;
   allocated: number;
   available: number;
+  locations: string[];
   onToggle: () => void;
   onReorder: () => void;
 }) {
-  const breakdown = locationBreakdown(p);
+  const breakdown = locationBreakdown(p, locations);
   const movements = movementHistory(p, 8);
   return (
     <>
@@ -345,7 +384,10 @@ function FragmentRow({
                   Location breakdown
                 </p>
                 <ul className="space-y-1 text-xs">
-                  {WAREHOUSE_LOCATIONS.map((l) => (
+                  {locations.length === 0 && (
+                    <li className="text-muted-foreground">No stock locations.</li>
+                  )}
+                  {locations.map((l) => (
                     <li key={l} className="flex items-center justify-between">
                       <span className="text-brand-charcoal">{l}</span>
                       <span className="text-brand-charcoal font-semibold tabular-nums">
