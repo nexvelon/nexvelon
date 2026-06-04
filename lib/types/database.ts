@@ -539,3 +539,87 @@ export interface DbActivityLogWithActor extends DbActivityLog {
     last_name: string | null;
   } | null;
 }
+
+// ----------------------------------------------------------------------------
+// Inventory (INV-1, migration 0021) — specific-identification cost tracking
+// (lock §2.4). Two tables: inventory_products (catalog) + inventory_stock
+// (one row per physical unit / bulk lot, each with its own unit_cost).
+// Aggregates (on-hand, avg cost, by-location) are COMPUTED at the API layer
+// in INV-2 — never stored. category / manufacturer / vendor are free-text
+// (schema-flexibility precedent §2.1); the lib/types.ts UI unions stay the
+// typed surface and can grow without a migration.
+// ----------------------------------------------------------------------------
+export type InventoryTrackingMode = "serialized" | "bulk";
+export type InventoryStockStatus =
+  | "in_stock"
+  | "allocated"
+  | "consumed"
+  | "retired";
+
+export interface DbInventoryProduct {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  manufacturer: string | null;
+  vendor: string | null;
+  tracking_mode: InventoryTrackingMode;
+  unit_of_measure: string;
+  default_unit_cost: number | null;
+  list_price: number | null;
+  reorder_point: number | null;
+  reorder_qty: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Payload for creating a product. id / timestamps are server-managed; columns
+ *  with DB defaults (tracking_mode, unit_of_measure) are optional. */
+export type DbInventoryProductInsert = {
+  sku: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  manufacturer?: string | null;
+  vendor?: string | null;
+  tracking_mode?: InventoryTrackingMode;
+  unit_of_measure?: string;
+  default_unit_cost?: number | null;
+  list_price?: number | null;
+  reorder_point?: number | null;
+  reorder_qty?: number | null;
+};
+
+export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
+
+export interface DbInventoryStock {
+  id: string;
+  product_id: string;
+  serial_number: string | null;
+  unit_cost: number;
+  quantity: number;
+  location: string | null;
+  supplier: string | null;
+  status: InventoryStockStatus;
+  acquired_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Payload for creating a stock row. id / timestamps are server-managed;
+ *  columns with DB defaults (quantity, status) are optional. */
+export type DbInventoryStockInsert = {
+  product_id: string;
+  unit_cost: number;
+  serial_number?: string | null;
+  quantity?: number;
+  location?: string | null;
+  supplier?: string | null;
+  status?: InventoryStockStatus;
+  acquired_at?: string | null;
+  notes?: string | null;
+};
+
+export type DbInventoryStockUpdate = Partial<DbInventoryStockInsert>;
