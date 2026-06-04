@@ -4,9 +4,11 @@
 // clients/actions.ts shape: uniform ActionResult so client callers can toast
 // failures without unwrapping thrown errors across the network.
 //
-// Activity logging is intentionally NOT wired here yet — the
-// ActivityEntityType "inventory" member + logActivity calls land in INV-3.
-// The // TODO INV-3 markers below mark exactly where each call will go.
+// INV-3a — activity logging wired in. Best-effort (logActivity swallows its
+// own errors) so a log write never blocks the mutation. entity_type is
+// "inventory"; entity_id is the product id (stock-unit ops log against their
+// product). Updates use the clients pattern: before-fetch + computeChanges +
+// empty-diff skip.
 
 import { revalidatePath } from "next/cache";
 import {
@@ -14,11 +16,13 @@ import {
   createProduct,
   deleteProduct,
   deleteStockUnit,
+  getProductRowById,
   receiveStock,
   updateProduct,
   updateStockUnit,
   type ReceiveStockInput,
 } from "@/lib/api/products";
+import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
@@ -44,7 +48,7 @@ export async function createProductAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const product = await createProduct(input);
-    // TODO INV-3: logActivity("inventory", product.id, "create", {});
+    await logActivity("inventory", product.id, "create", {});
     revalidatePath("/inventory");
     return { ok: true, data: { id: product.id } };
   } catch (e) {
@@ -57,8 +61,20 @@ export async function updateProductAction(
   patch: DbInventoryProductUpdate
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    // Fetch the row BEFORE mutating so we can compute the diff (ACT-1 pattern).
+    const before = await getProductRowById(id);
+    if (!before) return { ok: false, error: "Product not found" };
+
     const product = await updateProduct(id, patch);
-    // TODO INV-3: logActivity("inventory", id, "update", computeChanges(before, patch));
+
+    const changes = computeChanges(
+      before as unknown as Record<string, unknown>,
+      patch as Record<string, unknown>
+    );
+    if (Object.keys(changes).length > 0) {
+      await logActivity("inventory", id, "update", changes);
+    }
+
     revalidatePath("/inventory");
     revalidatePath(`/inventory/${id}`);
     return { ok: true, data: { id: product.id } };
@@ -72,7 +88,7 @@ export async function deleteProductAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     await deleteProduct(id);
-    // TODO INV-3: logActivity("inventory", id, "delete", {});
+    await logActivity("inventory", id, "delete", {});
     revalidatePath("/inventory");
     return { ok: true, data: { id } };
   } catch (e) {
@@ -84,10 +100,15 @@ export async function importProductsAction(
   rows: DbInventoryProductInsert[]
 ): Promise<ActionResult<{ created: number; skipped: string[] }>> {
   try {
-    const result = await bulkCreateProducts(rows);
-    // TODO INV-3: logActivity("inventory", <each created id>, "create", {});
+    const { created, createdIds, skipped } = await bulkCreateProducts(rows);
+    for (const id of createdIds) {
+      await logActivity("inventory", id, "create", {
+        via: { from: null, to: "import" },
+      });
+    }
     revalidatePath("/inventory");
-    return { ok: true, data: result };
+    // Keep the public shape { created, skipped } — createdIds is internal.
+    return { ok: true, data: { created, skipped } };
   } catch (e) {
     return fail(e);
   }
@@ -101,7 +122,9 @@ export async function receiveStockAction(
 ): Promise<ActionResult<{ created: number }>> {
   try {
     const result = await receiveStock(productId, input);
-    // TODO INV-3: logActivity("inventory", productId, "update", { received: ... });
+    await logActivity("inventory", productId, "update", {
+      received: { from: null, to: result.created },
+    });
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: result };
@@ -117,7 +140,12 @@ export async function updateStockUnitAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     await updateStockUnit(unitId, patch);
-    // TODO INV-3: logActivity("inventory", productId, "update", { unit: unitId, ...patch });
+    await logActivity("inventory", productId, "update", {
+      unit: { from: null, to: unitId },
+      ...Object.fromEntries(
+        Object.entries(patch).map(([k, v]) => [k, { from: null, to: v ?? null }])
+      ),
+    });
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: { id: unitId } };
@@ -132,7 +160,9 @@ export async function deleteStockUnitAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     await deleteStockUnit(unitId);
-    // TODO INV-3: logActivity("inventory", productId, "update", { removedUnit: unitId });
+    await logActivity("inventory", productId, "update", {
+      unit_removed: { from: unitId, to: null },
+    });
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: { id: unitId } };
