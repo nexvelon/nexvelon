@@ -9,8 +9,9 @@
 // extensible, §2.1) — rendered as <input list> + <datalist> so the UI-union
 // values are offered as suggestions without constraining entry.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,6 +65,9 @@ const MANUFACTURER_OPTIONS = [
   "Vivotek",
 ];
 const VENDOR_OPTIONS = ["ADI", "Anixter", "Wesco", "CDW", "Provo"];
+// B-2: fallback unit list (the only kind without a prior hardcoded const) used
+// if the managed inventory_vocab fetch is empty/unavailable.
+const UNIT_FALLBACK = ["Each", "Box", "Pack", "Case", "Roll", "Feet", "Meter"];
 
 export type Mode =
   | { kind: "create" }
@@ -105,6 +109,36 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [reorderQty, setReorderQty] = useState(
     existing?.reorder_qty != null ? String(existing.reorder_qty) : ""
   );
+
+  // B-2: datalist suggestions sourced from the managed inventory_vocab lists.
+  // Default to the hardcoded consts so the form works before the fetch resolves
+  // (and as a fallback if the fetch fails or a list is empty / 0023 not applied).
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(CATEGORY_OPTIONS);
+  const [manufacturerOptions, setManufacturerOptions] =
+    useState<string[]>(MANUFACTURER_OPTIONS);
+  const [unitOptions, setUnitOptions] = useState<string[]>(UNIT_FALLBACK);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      listInventoryVocabAction("category"),
+      listInventoryVocabAction("manufacturer"),
+      listInventoryVocabAction("unit_of_measure"),
+    ])
+      .then(([cat, man, uom]) => {
+        if (!active) return;
+        if (cat.ok && cat.data.length) setCategoryOptions(cat.data.map((r) => r.name));
+        if (man.ok && man.data.length)
+          setManufacturerOptions(man.data.map((r) => r.name));
+        if (uom.ok && uom.data.length) setUnitOptions(uom.data.map((r) => r.name));
+      })
+      .catch(() => {
+        // keep the hardcoded fallbacks
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [pending, startTransition] = useTransition();
 
@@ -206,7 +240,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               placeholder="Select or type…"
             />
             <datalist id="product-category-options">
-              {CATEGORY_OPTIONS.map((o) => (
+              {categoryOptions.map((o) => (
                 <option key={o} value={o} />
               ))}
             </datalist>
@@ -219,7 +253,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               placeholder="Select or type…"
             />
             <datalist id="product-manufacturer-options">
-              {MANUFACTURER_OPTIONS.map((o) => (
+              {manufacturerOptions.map((o) => (
                 <option key={o} value={o} />
               ))}
             </datalist>
@@ -266,10 +300,16 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
           </Field>
           <Field label="Unit of measure">
             <Input
+              list="product-unit-options"
               value={unitOfMeasure}
               onChange={(e) => setUnitOfMeasure(e.target.value)}
               placeholder="each"
             />
+            <datalist id="product-unit-options">
+              {unitOptions.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Default unit cost">
             <Input

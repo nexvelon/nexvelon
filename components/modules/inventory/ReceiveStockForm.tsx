@@ -7,8 +7,9 @@
 // Controlled Dialog (open/onOpenChange owned by the detail page), mirroring
 // ImportProductsButton's Dialog usage.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,25 @@ export function ReceiveStockForm({
   const [acquiredAt, setAcquiredAt] = useState(todayIso());
   const [serials, setSerials] = useState("");
   const [pending, startTransition] = useTransition();
+
+  // B-2: storage-location suggestions from the managed inventory_vocab list.
+  // No hard dependency — if the fetch fails/empty the input stays plain free-text.
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    listInventoryVocabAction("storage_location")
+      .then((res) => {
+        if (active && res.ok && res.data.length) {
+          setLocationOptions(res.data.map((r) => r.name));
+        }
+      })
+      .catch(() => {
+        // input still works as free-text
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function reset() {
     setQuantity("1");
@@ -152,10 +172,16 @@ export function ReceiveStockForm({
             <div className="space-y-1.5">
               <Label className="text-xs">Location</Label>
               <Input
+                list="receive-location-options"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g. Main Warehouse"
               />
+              <datalist id="receive-location-options">
+                {locationOptions.map((o) => (
+                  <option key={o} value={o} />
+                ))}
+              </datalist>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Supplier</Label>
