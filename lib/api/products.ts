@@ -29,6 +29,8 @@ import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
   DbInventoryStock,
+  DbInventoryStockInsert,
+  DbInventoryStockUpdate,
 } from "@/lib/types/database";
 import type {
   Product,
@@ -314,4 +316,95 @@ export async function bulkCreateProducts(
   if (insErr) throw new Error(`bulkCreateProducts/insert: ${insErr.message}`);
 
   return { created: inserted?.length ?? 0, skipped };
+}
+
+// ----------------------------------------------------------------------------
+// Stock units (INV-2d). Receiving creates inventory_stock rows; unit lifecycle
+// flips status / deletes. The 'allocated' status is owned by site allocation
+// (INV-3) — it is never set here.
+// ----------------------------------------------------------------------------
+
+export type ReceiveStockInput = {
+  quantity: number;
+  unit_cost: number;
+  location?: string | null;
+  supplier?: string | null;
+  acquired_at?: string | null; // defaults to today (UTC date)
+  serials?: string[]; // serialized only; mapped 1:1 to the first N units
+};
+
+/**
+ * Receive stock against a product. The product's tracking_mode decides the
+ * shape:
+ *   - SERIALIZED → `quantity` rows, each quantity:1, serial_number from
+ *     serials[i] (or null past the end of the list).
+ *   - BULK → ONE row with quantity:N, serial_number null.
+ * All received rows enter as status 'in_stock'. acquired_at defaults to today.
+ */
+export async function receiveStock(
+  productId: string,
+  input: ReceiveStockInput
+): Promise<{ created: number }> {
+  if (!Number.isFinite(input.quantity) || input.quantity < 1) {
+    throw new Error("receiveStock: quantity must be a positive integer.");
+  }
+  if (!Number.isFinite(input.unit_cost) || input.unit_cost < 0) {
+    throw new Error("receiveStock: unit cost must be zero or greater.");
+  }
+
+  const product = await getProductRowById(productId);
+  if (!product) throw new Error("receiveStock: product not found.");
+
+  const supabase = await db();
+  const acquired = input.acquired_at ?? new Date().toISOString().slice(0, 10);
+  const base = {
+    product_id: productId,
+    unit_cost: input.unit_cost,
+    location: input.location ?? null,
+    supplier: input.supplier ?? null,
+    status: "in_stock" as const,
+    acquired_at: acquired,
+  };
+
+  let toInsert: DbInventoryStockInsert[];
+  if (product.tracking_mode === "bulk") {
+    toInsert = [{ ...base, serial_number: null, quantity: input.quantity }];
+  } else {
+    const serials = input.serials ?? [];
+    toInsert = Array.from({ length: input.quantity }, (_, i) => ({
+      ...base,
+      serial_number: serials[i]?.trim() || null,
+      quantity: 1,
+    }));
+  }
+
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .insert(toInsert)
+    .select("id");
+  if (error) throw new Error(`receiveStock: ${error.message}`);
+  return { created: data?.length ?? 0 };
+}
+
+/** Patch a stock unit (status flips, etc.). Stamps updated_at. */
+export async function updateStockUnit(
+  id: string,
+  patch: DbInventoryStockUpdate
+): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`updateStockUnit: ${error.message}`);
+}
+
+/** Hard-delete a stock unit. */
+export async function deleteStockUnit(id: string): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("inventory_stock")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(`deleteStockUnit: ${error.message}`);
 }

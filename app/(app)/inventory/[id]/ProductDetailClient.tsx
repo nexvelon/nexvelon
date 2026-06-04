@@ -10,6 +10,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
-import { deleteProductAction } from "@/app/(app)/inventory/actions";
+import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
+import {
+  deleteProductAction,
+  deleteStockUnitAction,
+  updateStockUnitAction,
+} from "@/app/(app)/inventory/actions";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   DbInventoryProduct,
   DbInventoryStock,
+  InventoryStockStatus,
 } from "@/lib/types/database";
 
 export function ProductDetailClient({
@@ -45,11 +59,38 @@ export function ProductDetailClient({
   const showCost = hasPermission(role, "inventory", "viewCost");
 
   const [editing, setEditing] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const [deleting, startDelete] = useTransition();
+  const [unitPending, startUnitAction] = useTransition();
 
   const onHand = stock
     .filter((s) => s.status === "in_stock")
     .reduce((n, s) => n + s.quantity, 0);
+
+  const setUnitStatus = (unitId: string, status: InventoryStockStatus) => {
+    startUnitAction(async () => {
+      const result = await updateStockUnitAction(unitId, product.id, { status });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Unit marked ${status.replace("_", " ")}`);
+      router.refresh();
+    });
+  };
+
+  const removeUnit = (unitId: string) => {
+    if (!window.confirm("Delete this stock unit? This cannot be undone.")) return;
+    startUnitAction(async () => {
+      const result = await deleteStockUnitAction(unitId, product.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Stock unit deleted");
+      router.refresh();
+    });
+  };
 
   const handleDelete = () => {
     if (
@@ -172,14 +213,20 @@ export function ProductDetailClient({
         </dl>
       </Card>
 
-      {/* Read-only stock units */}
+      {/* Stock units */}
       <div>
-        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
-          Stock units{" "}
-          <span className="text-muted-foreground font-normal">
-            ({stock.length})
-          </span>
-        </h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+            Stock units{" "}
+            <span className="text-muted-foreground font-normal">
+              ({stock.length})
+            </span>
+          </h2>
+          <Button size="sm" onClick={() => setReceiveOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Receive stock
+          </Button>
+        </div>
         <Card className="bg-card overflow-hidden p-0 shadow-sm">
           <Table>
             <TableHeader>
@@ -194,16 +241,17 @@ export function ProductDetailClient({
                     Unit cost
                   </TableHead>
                 )}
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {stock.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={showCost ? 6 : 5}
+                    colSpan={showCost ? 7 : 6}
                     className="text-muted-foreground py-8 text-center text-sm"
                   >
-                    No stock units yet. Receiving lands in a later chunk.
+                    No stock units yet. Use “Receive stock” to add some.
                   </TableCell>
                 </TableRow>
               )}
@@ -231,12 +279,64 @@ export function ProductDetailClient({
                       {formatCurrency(Number(s.unit_cost))}
                     </TableCell>
                   )}
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        disabled={unitPending}
+                        aria-label="Unit actions"
+                        className="text-muted-foreground hover:text-brand-charcoal inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {s.status === "in_stock" && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => setUnitStatus(s.id, "consumed")}
+                            >
+                              Mark consumed
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setUnitStatus(s.id, "retired")}
+                            >
+                              Mark retired
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        {(s.status === "consumed" || s.status === "retired") && (
+                          <DropdownMenuItem
+                            onClick={() => setUnitStatus(s.id, "in_stock")}
+                          >
+                            Restore to stock
+                          </DropdownMenuItem>
+                        )}
+                        {s.status !== "allocated" && <DropdownMenuSeparator />}
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-700"
+                          onClick={() => removeUnit(s.id)}
+                        >
+                          Delete unit
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Card>
       </div>
+
+      <ReceiveStockForm
+        productId={product.id}
+        trackingMode={product.tracking_mode}
+        open={receiveOpen}
+        onOpenChange={setReceiveOpen}
+        onReceived={() => {
+          setReceiveOpen(false);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }
