@@ -10,11 +10,11 @@
 //   • consumed/retired → Restore to stock · Delete
 // Allocated rows show the site name. unit_cost is gated behind inventory:viewCost.
 
-import { useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -95,6 +95,40 @@ export function ProductDetailClient({
   const onHand = stock
     .filter((s) => s.status === "in_stock")
     .reduce((n, s) => n + s.quantity, 0);
+
+  // C-2b: group stock units by unit cost (cheapest first). Each group surfaces
+  // unallocated qty (what's available, not on a job) as the headline number,
+  // total qty, and the PO #(s) present; expanding reveals the individual units.
+  const costGroups = useMemo(() => {
+    const map = new Map<number, DbInventoryStock[]>();
+    for (const s of stock) {
+      const c = Number(s.unit_cost);
+      const arr = map.get(c) ?? [];
+      arr.push(s);
+      map.set(c, arr);
+    }
+    return Array.from(map.entries())
+      .map(([unitCost, units]) => ({
+        unitCost,
+        unallocatedQty: units
+          .filter((u) => u.status === "in_stock")
+          .reduce((n, u) => n + u.quantity, 0),
+        totalQty: units.reduce((n, u) => n + u.quantity, 0),
+        poNumbers: Array.from(
+          new Set(
+            units
+              .map((u) => u.po_number)
+              .filter((p): p is string => !!p && p.trim() !== "")
+          )
+        ),
+        units,
+      }))
+      .sort((a, b) => a.unitCost - b.unitCost);
+  }, [stock]);
+
+  const [expandedCosts, setExpandedCosts] = useState<Record<string, boolean>>({});
+  const toggleCost = (key: string) =>
+    setExpandedCosts((s) => ({ ...s, [key]: !s[key] }));
 
   const setUnitStatus = (unitId: string, status: InventoryStockStatus) => {
     startUnitAction(async () => {
@@ -236,8 +270,10 @@ export function ProductDetailClient({
             label="Tracking mode"
             value={
               product.tracking_mode === "bulk"
-                ? "Bulk (lot quantity)"
-                : "Serialized (one row per unit)"
+                ? "Bulk (measured quantity)"
+                : product.tracking_mode === "non_serialized"
+                  ? "Non-serialized (countable, no serial)"
+                  : "Serialized (one row per unit)"
             }
           />
           <Detail label="Unit of measure" value={product.unit_of_measure} />
@@ -289,116 +325,192 @@ export function ProductDetailClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-[11px] uppercase">Serial</TableHead>
-                <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
-                <TableHead className="text-[11px] uppercase">Location</TableHead>
-                <TableHead className="text-[11px] uppercase">Status</TableHead>
-                <TableHead className="text-[11px] uppercase">Site</TableHead>
-                <TableHead className="text-[11px] uppercase">Acquired</TableHead>
+                <TableHead className="w-7" />
                 {showCost && (
                   <TableHead className="text-right text-[11px] uppercase">
                     Unit cost
                   </TableHead>
                 )}
-                <TableHead className="w-10" />
+                <TableHead className="text-right text-[11px] uppercase">
+                  Unallocated
+                </TableHead>
+                <TableHead className="text-right text-[11px] uppercase">
+                  Total qty
+                </TableHead>
+                <TableHead className="text-[11px] uppercase">PO #</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {stock.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={showCost ? 8 : 7}
+                    colSpan={showCost ? 5 : 4}
                     className="text-muted-foreground py-8 text-center text-sm"
                   >
                     No stock units yet. Use “Receive stock” to add some.
                   </TableCell>
                 </TableRow>
               )}
-              {stock.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono text-xs">
-                    {s.serial_number ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right text-xs tabular-nums">
-                    {s.quantity}
-                  </TableCell>
-                  <TableCell className="text-xs">{s.location ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-[10px] capitalize">
-                      {s.status.replace("_", " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {s.site_id
-                      ? siteById.get(s.site_id)?.name ?? "Unknown site"
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
-                    {s.acquired_at
-                      ? format(parseISO(s.acquired_at), "MMM d, yyyy")
-                      : "—"}
-                  </TableCell>
-                  {showCost && (
-                    <TableCell className="text-right text-xs tabular-nums">
-                      {formatCurrency(Number(s.unit_cost))}
-                    </TableCell>
-                  )}
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        disabled={unitPending}
-                        aria-label="Unit actions"
-                        className="text-muted-foreground hover:text-brand-charcoal inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {s.status === "in_stock" && (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setSelectedSiteId("");
-                                setAllocTarget(s.id);
-                              }}
-                            >
-                              Allocate to site
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setUnitStatus(s.id, "consumed")}
-                            >
-                              Mark consumed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setUnitStatus(s.id, "retired")}
-                            >
-                              Mark retired
-                            </DropdownMenuItem>
-                          </>
+              {costGroups.map((g) => {
+                const key = String(g.unitCost);
+                const open = expandedCosts[key];
+                const summaryCols = showCost ? 5 : 4;
+                return (
+                  <Fragment key={key}>
+                    <TableRow
+                      className="cursor-pointer"
+                      onClick={() => toggleCost(key)}
+                    >
+                      <TableCell>
+                        {open ? (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5" />
                         )}
-                        {s.status === "allocated" && (
-                          <DropdownMenuItem onClick={() => returnUnit(s.id)}>
-                            Return to stock
-                          </DropdownMenuItem>
-                        )}
-                        {(s.status === "consumed" || s.status === "retired") && (
-                          <DropdownMenuItem
-                            onClick={() => setUnitStatus(s.id, "in_stock")}
-                          >
-                            Restore to stock
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-red-600 focus:text-red-700"
-                          onClick={() => removeUnit(s.id)}
-                        >
-                          Delete unit
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </TableCell>
+                      {showCost && (
+                        <TableCell className="text-right text-xs font-semibold tabular-nums">
+                          {formatCurrency(g.unitCost)}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-brand-navy text-right text-sm font-bold tabular-nums">
+                        {formatNumber(g.unallocatedQty)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
+                        {formatNumber(g.totalQty)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {g.poNumbers.length > 0 ? g.poNumbers.join(", ") : "—"}
+                      </TableCell>
+                    </TableRow>
+                    {open && (
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={summaryCols} className="p-0">
+                          <div className="px-4 py-3">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-[10px] uppercase">Serial</TableHead>
+                                  <TableHead className="text-right text-[10px] uppercase">Qty</TableHead>
+                                  <TableHead className="text-[10px] uppercase">Location</TableHead>
+                                  <TableHead className="text-[10px] uppercase">PO #</TableHead>
+                                  <TableHead className="text-[10px] uppercase">Status</TableHead>
+                                  <TableHead className="text-[10px] uppercase">Site</TableHead>
+                                  <TableHead className="text-[10px] uppercase">Acquired</TableHead>
+                                  <TableHead className="w-10" />
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {g.units.map((s) => (
+                                  <TableRow key={s.id}>
+                                    <TableCell className="font-mono text-xs">
+                                      {s.serial_number ?? "—"}
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs tabular-nums">
+                                      {s.quantity}
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      {s.location ?? "—"}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-xs">
+                                      {s.po_number ?? "—"}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] capitalize"
+                                      >
+                                        {s.status.replace("_", " ")}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      {s.site_id
+                                        ? siteById.get(s.site_id)?.name ??
+                                          "Unknown site"
+                                        : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-xs">
+                                      {s.acquired_at
+                                        ? format(
+                                            parseISO(s.acquired_at),
+                                            "MMM d, yyyy"
+                                          )
+                                        : "—"}
+                                    </TableCell>
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                          disabled={unitPending}
+                                          aria-label="Unit actions"
+                                          className="text-muted-foreground hover:text-brand-charcoal inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
+                                        >
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          {s.status === "in_stock" && (
+                                            <>
+                                              <DropdownMenuItem
+                                                onClick={() => {
+                                                  setSelectedSiteId("");
+                                                  setAllocTarget(s.id);
+                                                }}
+                                              >
+                                                Allocate to site
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  setUnitStatus(s.id, "consumed")
+                                                }
+                                              >
+                                                Mark consumed
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  setUnitStatus(s.id, "retired")
+                                                }
+                                              >
+                                                Mark retired
+                                              </DropdownMenuItem>
+                                            </>
+                                          )}
+                                          {s.status === "allocated" && (
+                                            <DropdownMenuItem
+                                              onClick={() => returnUnit(s.id)}
+                                            >
+                                              Return to stock
+                                            </DropdownMenuItem>
+                                          )}
+                                          {(s.status === "consumed" ||
+                                            s.status === "retired") && (
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                setUnitStatus(s.id, "in_stock")
+                                              }
+                                            >
+                                              Restore to stock
+                                            </DropdownMenuItem>
+                                          )}
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            className="text-red-600 focus:text-red-700"
+                                            onClick={() => removeUnit(s.id)}
+                                          >
+                                            Delete unit
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
