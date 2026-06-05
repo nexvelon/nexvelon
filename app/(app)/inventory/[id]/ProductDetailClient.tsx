@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
+import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
   allocateUnitAction,
   deleteProductAction,
@@ -127,6 +128,7 @@ export function ProductDetailClient({
   }, [stock]);
 
   const [expandedCosts, setExpandedCosts] = useState<Record<string, boolean>>({});
+  const [editingUnit, setEditingUnit] = useState<DbInventoryStock | null>(null);
   const toggleCost = (key: string) =>
     setExpandedCosts((s) => ({ ...s, [key]: !s[key] }));
 
@@ -447,6 +449,12 @@ export function ProductDetailClient({
                                           <MoreHorizontal className="h-4 w-4" />
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
+                                          <DropdownMenuItem
+                                            onClick={() => setEditingUnit(s)}
+                                          >
+                                            Edit
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
                                           {s.status === "in_stock" && (
                                             <>
                                               <DropdownMenuItem
@@ -526,6 +534,23 @@ export function ProductDetailClient({
           router.refresh();
         }}
       />
+
+      {editingUnit && (
+        <EditStockUnitForm
+          key={editingUnit.id}
+          productId={product.id}
+          trackingMode={product.tracking_mode}
+          unit={editingUnit}
+          open
+          onOpenChange={(o) => {
+            if (!o) setEditingUnit(null);
+          }}
+          onSaved={() => {
+            setEditingUnit(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Allocate-to-site picker */}
       <Dialog
