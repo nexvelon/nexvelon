@@ -87,13 +87,17 @@ export function ImportProductsButton() {
         toast.error(result.error);
         return;
       }
+      // C-4: `skipped` is the list of duplicate Part #s that already existed
+      // (not a count). Report how many were created + which were skipped.
       const { created, skipped } = result.data;
-      let msg = `Imported ${created} product${created === 1 ? "" : "s"}`;
+      let msg = `${created} part${created === 1 ? "" : "s"} imported.`;
       if (skipped.length > 0) {
-        const shown = skipped.slice(0, 5).join(", ");
-        msg += ` · skipped ${skipped.length} duplicate Part #${
-          skipped.length === 1 ? "" : "s"
-        }: ${shown}${skipped.length > 5 ? "…" : ""}`;
+        const shown = skipped.slice(0, 15).join(", ");
+        const more =
+          skipped.length > 15 ? ` …and ${skipped.length - 15} more` : "";
+        msg += ` ${skipped.length} already existed and ${
+          skipped.length === 1 ? "was" : "were"
+        } skipped: ${shown}${more}.`;
       }
       toast.success(msg);
       setPreview(null);
