@@ -100,6 +100,8 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     byLocation: Object.keys(byLocation).length > 0 ? byLocation : undefined,
     lastReceived,
     searchAliases: p.search_aliases ?? [],
+    notifyAddons: p.notify_addons ?? false,
+    addons: p.addons ?? [],
   };
 }
 

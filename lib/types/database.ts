@@ -550,6 +550,15 @@ export interface DbActivityLogWithActor extends DbActivityLog {
 // typed surface and can grow without a migration.
 // ----------------------------------------------------------------------------
 export type InventoryTrackingMode = "serialized" | "bulk" | "non_serialized";
+
+// D-1: a single companion add-on. 'part' value = an inventory_products UUID
+// (resolved to sku/name at render; skipped if the part was deleted — no FK on
+// the JSON ref). 'text' value = a free-text reminder.
+export interface AddonEntry {
+  kind: "part" | "text";
+  value: string;
+}
+
 export type InventoryStockStatus =
   | "in_stock"
   | "allocated"
@@ -573,6 +582,9 @@ export interface DbInventoryProduct {
   // C-1 (migration 0024): alternate search terms (old part #s, nicknames,
   // misspellings). NOT NULL DEFAULT '{}' in the DB → always an array.
   search_aliases: string[];
+  // D-1 (migration 0026): companion add-ons.
+  notify_addons: boolean;
+  addons: AddonEntry[];
   created_at: string;
   updated_at: string;
 }
@@ -593,6 +605,8 @@ export type DbInventoryProductInsert = {
   reorder_point?: number | null;
   reorder_qty?: number | null;
   search_aliases?: string[];
+  notify_addons?: boolean;
+  addons?: AddonEntry[];
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
