@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { CurrencyInput } from "./CurrencyInput";
 import { SkuAutocomplete } from "./SkuAutocomplete";
+import { useOfferAddons } from "./addons-context";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -69,6 +70,7 @@ export function LineItemRow({
   onMoveTo,
   onAddNote,
 }: Props) {
+  const offerAddons = useOfferAddons();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled });
 
@@ -100,6 +102,8 @@ export function LineItemRow({
         // classification intentionally omitted to preserve the user's selection
       })
     );
+    // D-2: a user pick may offer this part's companion add-ons.
+    offerAddons(sectionId, p);
   };
 
   const total = lineItemTotal(item);

@@ -73,6 +73,8 @@ import type {
 import type { LineItemClassification } from "@/lib/classifications";
 import { listProductsAction } from "@/app/(app)/inventory/actions";
 import { CatalogProductsContext } from "./catalog-context";
+import { OfferAddonsContext } from "./addons-context";
+import { AddonPrompt, type AddonPromptData } from "./AddonPrompt";
 
 interface Props {
   initial: Quote;
@@ -111,6 +113,8 @@ export function QuoteBuilder({
   // on failure the catalog stays empty and the builder still works (free-text
   // SKU entry). Provided via CatalogProductsContext to the nested consumers.
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  // D-2: the add-ons prompt (null = closed).
+  const [addonPrompt, setAddonPrompt] = useState<AddonPromptData | null>(null);
   useEffect(() => {
     let active = true;
     listProductsAction()
@@ -363,6 +367,47 @@ export function QuoteBuilder({
     toast.success(`Added ${p.sku}`);
   };
 
+  // D-2: after a USER adds a part, offer its companion add-ons. Resolves
+  // part-kind add-on refs (UUIDs) to catalog Products (skipping deleted/
+  // unresolvable ones), collects text reminders, and opens the prompt only when
+  // something remains. Never called for companion adds → no cascade/recursion.
+  const maybeOfferAddons = (sectionId: string, p: Product) => {
+    if (!p.notifyAddons || !p.addons || p.addons.length === 0) return;
+
+    const byId = new Map(catalogProducts.map((cp) => [cp.id, cp]));
+    const section = sections.find((s) => s.id === sectionId);
+    const presentIds = new Set(
+      (section?.items ?? [])
+        .filter((it) => it.type === "product" && it.productId)
+        .map((it) => it.productId as string)
+    );
+
+    const parts: AddonPromptData["parts"] = [];
+    const texts: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of p.addons) {
+      if (entry.kind === "text") {
+        if (entry.value.trim()) texts.push(entry.value);
+        continue;
+      }
+      // part-kind: resolve UUID → catalog product, skip unresolved + dupes.
+      const prod = byId.get(entry.value);
+      if (!prod || seen.has(prod.id)) continue;
+      seen.add(prod.id);
+      parts.push({ product: prod, alreadyInSection: presentIds.has(prod.id) });
+    }
+
+    if (parts.length === 0 && texts.length === 0) return;
+    setAddonPrompt({ sectionId, productName: p.name, parts, texts });
+  };
+
+  // Insert the user-selected companions into the SAME section. Routes through
+  // addProductFromPalette (NOT maybeOfferAddons) so companions never re-prompt.
+  const confirmAddons = (sectionId: string, products: Product[]) => {
+    for (const prod of products) addProductFromPalette(sectionId, prod);
+    setAddonPrompt(null);
+  };
+
   const persist = (nextStatus: QuoteStatus = status): Quote => {
     const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
     const out: Quote = {
@@ -461,6 +506,7 @@ export function QuoteBuilder({
 
   return (
     <CatalogProductsContext.Provider value={catalogProducts}>
+    <OfferAddonsContext.Provider value={maybeOfferAddons}>
     <div className="space-y-6">
       <BuilderHeader
         number={number}
@@ -475,7 +521,10 @@ export function QuoteBuilder({
 
       <CommandPalette
         sections={sections}
-        onAddProductToSection={addProductFromPalette}
+        onAddProductToSection={(sectionId, p) => {
+          addProductFromPalette(sectionId, p);
+          maybeOfferAddons(sectionId, p);
+        }}
       />
 
       <ReadOnlyBanner state={ro} quote={{ ...initial, status, projectId: initial.projectId }} />
@@ -702,7 +751,15 @@ export function QuoteBuilder({
           </div>
         )}
       </div>
+
+      <AddonPrompt
+        key={addonPrompt ? `${addonPrompt.sectionId}-${addonPrompt.productName}` : "closed"}
+        data={addonPrompt}
+        onAdd={confirmAddons}
+        onClose={() => setAddonPrompt(null)}
+      />
     </div>
+    </OfferAddonsContext.Provider>
     </CatalogProductsContext.Provider>
   );
 }
