@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { importProductsAction } from "@/app/(app)/inventory/actions";
+import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
+import { VENDOR_OPTIONS } from "@/components/modules/inventory/ProductForm";
 import type { DbInventoryProductInsert } from "@/lib/types/database";
 
 interface Preview {
@@ -40,7 +42,18 @@ export function ImportProductsButton() {
     try {
       const { generateInventoryTemplate, INVENTORY_TEMPLATE_FILENAME } =
         await import("@/lib/inventory-import-template");
-      const blob = await generateInventoryTemplate();
+      // C-6: source the template dropdowns from the live managed vocab.
+      const [cat, man, uom] = await Promise.all([
+        listInventoryVocabAction("category"),
+        listInventoryVocabAction("manufacturer"),
+        listInventoryVocabAction("unit_of_measure"),
+      ]);
+      const blob = await generateInventoryTemplate({
+        categories: cat.ok ? cat.data.map((r) => r.name) : [],
+        manufacturers: man.ok ? man.data.map((r) => r.name) : [],
+        units: uom.ok ? uom.data.map((r) => r.name) : [],
+        vendors: VENDOR_OPTIONS,
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
