@@ -66,7 +66,7 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   // Inventory
   { id: "inventory.view", module: "Inventory", label: "View inventory", description: "See parts, stock levels, and locations.", enforced: true },
   { id: "inventory.viewCost", module: "Inventory", label: "View cost", description: "See per-unit cost, total value, and avg cost columns.", enforced: true },
-  { id: "inventory.editItems", module: "Inventory", label: "Edit items", description: "Update Part # master data: name, vendor, reorder point." },
+  { id: "inventory.editItems", module: "Inventory", label: "Edit items", description: "Update Part # master data: name, vendor, low-stock threshold." },
   { id: "inventory.adjustStock", module: "Inventory", label: "Adjust stock", description: "Increase or decrease on-hand counts (loss, found, audit)." },
   { id: "inventory.createPO", module: "Inventory", label: "Create PO", description: "Raise a draft purchase order against a vendor." },
   { id: "inventory.approvePO", module: "Inventory", label: "Approve PO", description: "Send a draft PO to the vendor." },

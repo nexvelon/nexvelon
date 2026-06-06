@@ -107,9 +107,8 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [reorderPoint, setReorderPoint] = useState(
     existing?.reorder_point != null ? String(existing.reorder_point) : ""
   );
-  const [reorderQty, setReorderQty] = useState(
-    existing?.reorder_qty != null ? String(existing.reorder_qty) : ""
-  );
+  // C-5: reorder_qty field removed from the UI. The DB column stays (vestigial)
+  // per past-data preservation — we simply no longer send or show it.
 
   // C-1: alternate search terms (stored as text[]). Add one at a time; chips
   // are removable. Trimmed, deduped (case-insensitive), empties ignored.
@@ -192,7 +191,6 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       default_unit_cost: numOrNull(defaultUnitCost),
       list_price: numOrNull(listPrice),
       reorder_point: numOrNull(reorderPoint),
-      reorder_qty: numOrNull(reorderQty),
       search_aliases: searchAliases,
     };
 
@@ -352,7 +350,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               placeholder="0.00"
             />
           </Field>
-          <Field label="Reorder point">
+          <Field label="Low-stock at (qty)">
             <Input
               type="number"
               step="1"
@@ -361,16 +359,10 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               onChange={(e) => setReorderPoint(e.target.value)}
               placeholder="0"
             />
-          </Field>
-          <Field label="Reorder quantity">
-            <Input
-              type="number"
-              step="1"
-              min="0"
-              value={reorderQty}
-              onChange={(e) => setReorderQty(e.target.value)}
-              placeholder="0"
-            />
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              Flag this part as low stock when on-hand falls to or below this
+              quantity. Leave blank/0 for no alert.
+            </p>
           </Field>
         </div>
       </section>

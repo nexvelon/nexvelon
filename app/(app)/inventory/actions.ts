@@ -78,7 +78,7 @@ export async function emailLowStockReportAction(): Promise<{
     const products = await listProducts();
     const low = products.filter((p) => p.stock <= p.reorderPoint);
     if (low.length === 0) {
-      return { sent: false, count: 0, reason: "No items below reorder point" };
+      return { sent: false, count: 0, reason: "No items at or below their low-stock threshold" };
     }
 
     const supabase = await createSupabaseServerClient();
@@ -101,7 +101,6 @@ export async function emailLowStockReportAction(): Promise<{
         name: p.name,
         stock: p.stock,
         reorderPoint: p.reorderPoint,
-        reorderQty: p.reorderQty,
       }))
     );
     return { sent: true, count: low.length, to };
