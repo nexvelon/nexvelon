@@ -115,7 +115,7 @@ export function InventoryHealth({ data, alerts }: Props) {
           <ul className="divide-border divide-y rounded-md border">
             {alerts.length === 0 && (
               <li className="text-muted-foreground p-3 text-sm">
-                All parts above reorder point.
+                All parts above their low-stock threshold.
               </li>
             )}
             {alerts.map((a) => (
@@ -136,7 +136,7 @@ export function InventoryHealth({ data, alerts }: Props) {
                     {a.stock}
                   </p>
                   <p className="text-muted-foreground">
-                    reorder @ {a.reorderPoint}
+                    low-stock @ {a.reorderPoint}
                   </p>
                 </div>
               </li>

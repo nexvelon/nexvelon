@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import {
-  ChevronDown,
-  ChevronRight,
-  RotateCcw,
-  Search,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -151,11 +144,6 @@ export function StockTab({ products }: { products: Product[] }) {
     });
   }, [products, search, vendor, category, location, status, sortKey]);
 
-  const reorder = (p: Product) =>
-    toast.success(`Drafted PO for ${p.sku}`, {
-      description: `Reorder qty ${p.reorderQty ?? p.reorderPoint * 2} → ${p.vendor}.`,
-    });
-
   return (
     <div className="space-y-4">
       <Card className="bg-card p-4 shadow-sm">
@@ -260,8 +248,7 @@ export function StockTab({ products }: { products: Product[] }) {
               <TableHead className="text-right text-[11px] uppercase">On Hand</TableHead>
               <TableHead className="text-right text-[11px] uppercase">Allocated</TableHead>
               <TableHead className="cursor-pointer text-right text-[11px] uppercase" onClick={() => setSortKey("available")}>Available</TableHead>
-              <TableHead className="text-right text-[11px] uppercase">Reorder Pt</TableHead>
-              <TableHead className="text-right text-[11px] uppercase">Reorder Qty</TableHead>
+              <TableHead className="text-right text-[11px] uppercase">Low-stock at</TableHead>
               {showCost && <TableHead className="text-right text-[11px] uppercase">Avg Cost</TableHead>}
               {showCost && <TableHead className="cursor-pointer text-right text-[11px] uppercase" onClick={() => setSortKey("value")}>Total Value</TableHead>}
               <TableHead className="text-[11px] uppercase">Last Received</TableHead>
@@ -271,7 +258,7 @@ export function StockTab({ products }: { products: Product[] }) {
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={showCost ? 16 : 14} className="text-muted-foreground py-8 text-center text-sm">
+                <TableCell colSpan={showCost ? 15 : 13} className="text-muted-foreground py-8 text-center text-sm">
                   No items match the current filters.
                 </TableCell>
               </TableRow>
@@ -292,7 +279,6 @@ export function StockTab({ products }: { products: Product[] }) {
                   available={available}
                   locations={locationList}
                   onToggle={() => setExpanded((s) => ({ ...s, [p.id]: !s[p.id] }))}
-                  onReorder={() => reorder(p)}
                 />
               );
             })}
@@ -312,7 +298,6 @@ function FragmentRow({
   available,
   locations,
   onToggle,
-  onReorder,
 }: {
   p: Product;
   isOpen: boolean;
@@ -322,7 +307,6 @@ function FragmentRow({
   available: number;
   locations: string[];
   onToggle: () => void;
-  onReorder: () => void;
 }) {
   const breakdown = locationBreakdown(p, locations);
   const movements = movementHistory(p, 8);
@@ -352,9 +336,6 @@ function FragmentRow({
           {formatNumber(available)}
         </TableCell>
         <TableCell className="text-muted-foreground text-right text-xs tabular-nums">{p.reorderPoint}</TableCell>
-        <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
-          {p.reorderQty ?? "—"}
-        </TableCell>
         {showCost && (
           <TableCell className="text-right text-xs tabular-nums">
             {formatCurrency(p.avgCost ?? p.cost)}
@@ -368,23 +349,12 @@ function FragmentRow({
         <TableCell className="text-muted-foreground text-xs">
           {p.lastReceived ? format(parseISO(p.lastReceived), "MMM d, yyyy") : "—"}
         </TableCell>
-        <TableCell>
-          {isLow && (
-            <button
-              type="button"
-              onClick={onReorder}
-              className="border-brand-gold/40 bg-brand-gold/10 text-amber-900 hover:bg-brand-gold/20 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-            >
-              <RotateCcw className="h-3 w-3" />
-              Reorder
-            </button>
-          )}
-        </TableCell>
+        <TableCell />
       </TableRow>
       {isOpen && (
         <TableRow className="bg-muted/40">
           <TableCell></TableCell>
-          <TableCell colSpan={showCost ? 15 : 13} className="px-4 py-4">
+          <TableCell colSpan={showCost ? 14 : 12} className="px-4 py-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
                 <p className="text-muted-foreground mb-2 text-[10px] font-semibold uppercase tracking-wider">

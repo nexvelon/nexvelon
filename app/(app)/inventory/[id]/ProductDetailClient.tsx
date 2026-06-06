@@ -299,12 +299,8 @@ export function ProductDetailClient({
             }
           />
           <Detail
-            label="Reorder point"
+            label="Low-stock at"
             value={product.reorder_point != null ? String(product.reorder_point) : null}
-          />
-          <Detail
-            label="Reorder quantity"
-            value={product.reorder_qty != null ? String(product.reorder_qty) : null}
           />
         </dl>
       </Card>

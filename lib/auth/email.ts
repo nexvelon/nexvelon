@@ -152,7 +152,6 @@ export interface LowStockItem {
   name: string;
   stock: number;
   reorderPoint: number;
-  reorderQty?: number;
 }
 
 export async function sendLowStockAlert(
@@ -160,7 +159,7 @@ export async function sendLowStockAlert(
   items: LowStockItem[]
 ): Promise<void> {
   const count = items.length;
-  const subject = `Nexvelon — ${count} item${count === 1 ? "" : "s"} below reorder point`;
+  const subject = `Nexvelon — ${count} item${count === 1 ? "" : "s"} at or below the low-stock threshold`;
 
   const html = renderLowStockHtml(items);
   const text = renderLowStockText(items);
@@ -194,9 +193,6 @@ function renderLowStockHtml(items: LowStockItem[]): string {
         )}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#0A1226;text-align:right;">${it.stock}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#5C5240;text-align:right;">${it.reorderPoint}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#5C5240;text-align:right;">${
-          it.reorderQty ?? "—"
-        }</td>
       </tr>`
     )
     .join("");
@@ -214,7 +210,7 @@ function renderLowStockHtml(items: LowStockItem[]): string {
                 <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">Low-stock report</div>
                 <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${
                   items.length
-                } item${items.length === 1 ? "" : "s"} at or below the reorder point.</div>
+                } item${items.length === 1 ? "" : "s"} at or below the low-stock threshold.</div>
               </td>
             </tr>
             <tr>
@@ -225,8 +221,7 @@ function renderLowStockHtml(items: LowStockItem[]): string {
                       <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Part #</th>
                       <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Name</th>
                       <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">On hand</th>
-                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Reorder pt</th>
-                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Suggested qty</th>
+                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Low-stock at</th>
                     </tr>
                   </thead>
                   <tbody>${rows}</tbody>
@@ -249,14 +244,12 @@ function renderLowStockHtml(items: LowStockItem[]): string {
 function renderLowStockText(items: LowStockItem[]): string {
   const lines = items.map(
     (it) =>
-      `  ${it.sku} · ${it.name} — on hand ${it.stock}, reorder pt ${it.reorderPoint}, suggested ${
-        it.reorderQty ?? "—"
-      }`
+      `  ${it.sku} · ${it.name} — on hand ${it.stock}, low-stock at ${it.reorderPoint}`
   );
   return [
     `Nexvelon · Inventory — Low-stock report`,
     ``,
-    `${items.length} item(s) at or below the reorder point:`,
+    `${items.length} item(s) at or below the low-stock threshold:`,
     ``,
     ...lines,
     ``,
