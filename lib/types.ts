@@ -1,6 +1,7 @@
 import type { QuoteScheduleInstance } from "@/lib/quote-schedules";
 import type { QuoteThemeSlug } from "@/lib/quote-themes";
 import type { QuoteTemplateSlug } from "@/lib/company-profile";
+import type { AddonEntry } from "@/lib/types/database";
 
 export type ID = string;
 
@@ -72,6 +73,8 @@ export interface Product {
   lastReceived?: string;
   byLocation?: Partial<Record<string, number>>;
   searchAliases?: string[];
+  notifyAddons?: boolean;
+  addons?: AddonEntry[];
 }
 
 export type ProjectStatus =

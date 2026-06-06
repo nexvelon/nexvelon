@@ -26,13 +26,16 @@ import {
 } from "@/components/ui/select";
 import {
   createProductAction,
+  listProductsAction,
   updateProductAction,
 } from "@/app/(app)/inventory/actions";
 import type {
+  AddonEntry,
   DbInventoryProduct,
   DbInventoryProductInsert,
   InventoryTrackingMode,
 } from "@/lib/types/database";
+import type { Product } from "@/lib/types";
 
 // Seed vocabularies for the free-text suggestion dropdowns. These mirror the
 // lib/types.ts UI unions but are runtime arrays (the unions are type-only) and
@@ -127,6 +130,75 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const removeAlias = (a: string) =>
     setSearchAliases((prev) => prev.filter((x) => x !== a));
 
+  // D-1: companion add-ons. notifyAddons toggles the quote-builder prompt
+  // (wired in D-2); addons is an ordered mixed list of part-refs + text notes.
+  const [notifyAddons, setNotifyAddons] = useState(
+    existing?.notify_addons ?? false
+  );
+  const [addons, setAddons] = useState<AddonEntry[]>(existing?.addons ?? []);
+  const [addonKind, setAddonKind] = useState<"part" | "text">("part");
+  const [addonText, setAddonText] = useState("");
+  const [addonPartQuery, setAddonPartQuery] = useState("");
+
+  // Catalog for the Part # add-on picker. Fetched here (NOT via the quote
+  // builder's context) so ProductForm stays decoupled; degrades to text-only
+  // entries if the fetch fails.
+  const [catalog, setCatalog] = useState<Product[]>([]);
+  useEffect(() => {
+    let live = true;
+    listProductsAction()
+      .then((rows) => {
+        if (live) setCatalog(rows);
+      })
+      .catch(() => {
+        // part picker degrades gracefully; text add-ons still work
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const addPartAddon = (productId: string) => {
+    const already = addons.some(
+      (e) => e.kind === "part" && e.value === productId
+    );
+    if (already) return;
+    setAddons((prev) => [...prev, { kind: "part", value: productId }]);
+    setAddonPartQuery("");
+  };
+  const addTextAddon = () => {
+    const t = addonText.trim();
+    if (t === "") return;
+    setAddons((prev) => [...prev, { kind: "text", value: t }]);
+    setAddonText("");
+  };
+  const removeAddon = (idx: number) =>
+    setAddons((prev) => prev.filter((_, i) => i !== idx));
+
+  // Resolve a part add-on id to a "sku — name" label (skip-if-deleted).
+  const partLabel = (productId: string): string => {
+    const p = catalog.find((x) => x.id === productId);
+    return p ? `${p.sku} — ${p.name}` : "(deleted part)";
+  };
+
+  // Catalog matches for the picker: exclude self + already-added parts.
+  const addonPartMatches = (() => {
+    const q = addonPartQuery.trim().toLowerCase();
+    if (q === "") return [];
+    const editingId = existing?.id;
+    const chosen = new Set(
+      addons.filter((e) => e.kind === "part").map((e) => e.value)
+    );
+    return catalog
+      .filter(
+        (p) =>
+          p.id !== editingId &&
+          !chosen.has(p.id) &&
+          (p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+      )
+      .slice(0, 8);
+  })();
+
   // B-2: datalist suggestions sourced from the managed inventory_vocab lists.
   // Default to the hardcoded consts so the form works before the fetch resolves
   // (and as a fallback if the fetch fails or a list is empty / 0023 not applied).
@@ -192,6 +264,8 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       list_price: numOrNull(listPrice),
       reorder_point: numOrNull(reorderPoint),
       search_aliases: searchAliases,
+      notify_addons: notifyAddons,
+      addons,
     };
 
     startTransition(async () => {
@@ -420,6 +494,127 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             Add alternate terms to find this part — old part numbers, nicknames,
             common misspellings.
           </p>
+        </div>
+      </section>
+
+      {/* Add-ons (D-1) */}
+      <section className="space-y-4">
+        <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          Add-ons
+        </h2>
+
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={notifyAddons}
+            onChange={(e) => setNotifyAddons(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span className="text-sm">
+            Notify add-ons
+            <span className="text-muted-foreground block text-[11px] leading-snug">
+              When this part is added to a quote, prompt to also add these
+              companion items.
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-2">
+          {/* Entry-type selector */}
+          <div className="flex items-center gap-2">
+            <Select
+              value={addonKind}
+              onValueChange={(v) => setAddonKind((v ?? "part") as "part" | "text")}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="part">Part #</SelectItem>
+                <SelectItem value="text">Text</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {addonKind === "text" ? (
+              <>
+                <Input
+                  value={addonText}
+                  onChange={(e) => setAddonText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addTextAddon();
+                    }
+                  }}
+                  placeholder="e.g. Don't forget mounting bracket"
+                  className="max-w-md"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addTextAddon}
+                  disabled={addonText.trim() === ""}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </Button>
+              </>
+            ) : (
+              <div className="relative max-w-md flex-1">
+                <Input
+                  value={addonPartQuery}
+                  onChange={(e) => setAddonPartQuery(e.target.value)}
+                  placeholder="Search a part by Part # or name…"
+                />
+                {addonPartMatches.length > 0 && (
+                  <ul className="bg-card absolute z-10 mt-1 w-full overflow-hidden rounded-md border shadow-md">
+                    {addonPartMatches.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => addPartAddon(p.id)}
+                          className="hover:bg-muted/60 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs"
+                        >
+                          <span className="text-brand-navy font-mono font-semibold">
+                            {p.sku}
+                          </span>
+                          <span className="text-muted-foreground truncate">
+                            {p.name}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+
+          {addons.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {addons.map((entry, idx) => (
+                <li
+                  key={`${entry.kind}-${entry.value}-${idx}`}
+                  className="bg-muted/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs"
+                >
+                  <span className="text-muted-foreground text-[10px] uppercase">
+                    {entry.kind === "part" ? "Part" : "Note"}
+                  </span>
+                  <span className="text-brand-charcoal">
+                    {entry.kind === "part" ? partLabel(entry.value) : entry.value}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAddon(idx)}
+                    className="text-muted-foreground hover:text-red-600"
+                    aria-label="Remove add-on"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
