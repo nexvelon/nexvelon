@@ -65,7 +65,7 @@ const MANUFACTURER_OPTIONS = [
   "Uniview",
   "Vivotek",
 ];
-const VENDOR_OPTIONS = ["ADI", "Anixter", "Wesco", "CDW", "Provo"];
+export const VENDOR_OPTIONS = ["ADI", "Anixter", "Wesco", "CDW", "Provo"];
 // B-2: fallback unit list (the only kind without a prior hardcoded const) used
 // if the managed inventory_vocab fetch is empty/unavailable.
 const UNIT_FALLBACK = ["Each", "Box", "Pack", "Case", "Roll", "Feet", "Meter"];
