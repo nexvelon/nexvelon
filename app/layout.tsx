@@ -48,7 +48,7 @@ const themeBootstrap = `
 (function () {
   try {
     var saved = localStorage.getItem("nexvelon:theme");
-    var t = saved && /^(royal-navy|onyx-brass|oxford-green|burgundy-reserve)$/.test(saved)
+    var t = saved && /^(royal-navy|onyx-brass|oxford-green|burgundy-reserve|imperial-plum|sapphire-noir|emerald-dynasty|espresso-gilt|slate-rose|midnight-teal|mahogany-brass|amethyst-dusk|ivory-court|pearl-platinum)$/.test(saved)
       ? saved
       : "royal-navy";
     document.documentElement.dataset.theme = t;

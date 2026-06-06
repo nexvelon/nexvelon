@@ -124,6 +124,180 @@
   --brand-chart-quaternary: #B89094;
 }
 
+/* ── Chunk E: 10 additional luxury themes (jewel-tone darks + 2 lights).
+   Each mirrors royal-navy's full --brand-* token set; status-green/red are
+   the shared semantic pair. CSS values match lib/theme.ts 1:1. ── */
+
+:root[data-theme="imperial-plum"] {
+  --brand-primary: #2E1A47;
+  --brand-accent: #C9A24B;
+  --brand-accent-soft: #A8843B;
+  --brand-bg: #F6F2EC;
+  --brand-text: #221A2E;
+  --brand-card: #FCFAF6;
+  --brand-border: #E2D9CF;
+  --brand-muted: #ECE4DA;
+  --brand-sidebar-accent: #3A2257;
+  --brand-sidebar-border: #4A2D6E;
+  --brand-chart-tertiary: #7A5C9A;
+  --brand-chart-quaternary: #B9A8CE;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="sapphire-noir"] {
+  --brand-primary: #0A1F38;
+  --brand-accent: #9DB2CE;
+  --brand-accent-soft: #7E94B0;
+  --brand-bg: #F1F4F8;
+  --brand-text: #16202E;
+  --brand-card: #FFFFFF;
+  --brand-border: #D5DEE9;
+  --brand-muted: #E3EAF2;
+  --brand-sidebar-accent: #112A47;
+  --brand-sidebar-border: #1A3556;
+  --brand-chart-tertiary: #4A6488;
+  --brand-chart-quaternary: #93A8C4;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="emerald-dynasty"] {
+  --brand-primary: #0C3B2E;
+  --brand-accent: #D4AF37;
+  --brand-accent-soft: #B0902C;
+  --brand-bg: #F3F1E9;
+  --brand-text: #18241F;
+  --brand-card: #FFFFFF;
+  --brand-border: #D9DDCF;
+  --brand-muted: #E6E8DA;
+  --brand-sidebar-accent: #114A39;
+  --brand-sidebar-border: #195C47;
+  --brand-chart-tertiary: #3F7A63;
+  --brand-chart-quaternary: #8FB3A2;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="espresso-gilt"] {
+  --brand-primary: #2A1B12;
+  --brand-accent: #C8A45C;
+  --brand-accent-soft: #A8863F;
+  --brand-bg: #F4EFE7;
+  --brand-text: #251C14;
+  --brand-card: #FCF8F1;
+  --brand-border: #E0D6C7;
+  --brand-muted: #EBE2D3;
+  --brand-sidebar-accent: #3A271A;
+  --brand-sidebar-border: #4A3324;
+  --brand-chart-tertiary: #8A6A4A;
+  --brand-chart-quaternary: #C2A98C;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="slate-rose"] {
+  --brand-primary: #2C2F36;
+  --brand-accent: #C08A6E;
+  --brand-accent-soft: #A4715A;
+  --brand-bg: #F4F2F1;
+  --brand-text: #20242B;
+  --brand-card: #FFFFFF;
+  --brand-border: #DCD8D6;
+  --brand-muted: #E8E4E2;
+  --brand-sidebar-accent: #383C44;
+  --brand-sidebar-border: #474C56;
+  --brand-chart-tertiary: #8A7A82;
+  --brand-chart-quaternary: #BDB0B6;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="midnight-teal"] {
+  --brand-primary: #0C2E33;
+  --brand-accent: #BFA05A;
+  --brand-accent-soft: #9E8344;
+  --brand-bg: #F0F3F2;
+  --brand-text: #152426;
+  --brand-card: #FFFFFF;
+  --brand-border: #D2DCDA;
+  --brand-muted: #E0E8E6;
+  --brand-sidebar-accent: #103B41;
+  --brand-sidebar-border: #184C53;
+  --brand-chart-tertiary: #3F757C;
+  --brand-chart-quaternary: #8DB0B4;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="mahogany-brass"] {
+  --brand-primary: #3A1E16;
+  --brand-accent: #C09A53;
+  --brand-accent-soft: #A07E3E;
+  --brand-bg: #F6F1EA;
+  --brand-text: #261812;
+  --brand-card: #FFFFFF;
+  --brand-border: #E3D8CC;
+  --brand-muted: #EDE3D6;
+  --brand-sidebar-accent: #4A271C;
+  --brand-sidebar-border: #5C3325;
+  --brand-chart-tertiary: #8E5E4A;
+  --brand-chart-quaternary: #C49E8C;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="amethyst-dusk"] {
+  --brand-primary: #2A2140;
+  --brand-accent: #A88FC0;
+  --brand-accent-soft: #8A72A2;
+  --brand-bg: #F4F2F7;
+  --brand-text: #201B2E;
+  --brand-card: #FFFFFF;
+  --brand-border: #DED7E5;
+  --brand-muted: #E8E2EE;
+  --brand-sidebar-accent: #342843;
+  --brand-sidebar-border: #443458;
+  --brand-chart-tertiary: #6E5E8A;
+  --brand-chart-quaternary: #AD9EC4;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="ivory-court"] {
+  --brand-primary: #4A4036;
+  --brand-accent: #C9A24B;
+  --brand-accent-soft: #A8843B;
+  --brand-bg: #FAF7F0;
+  --brand-text: #2A2418;
+  --brand-card: #FFFFFF;
+  --brand-border: #E8E0D2;
+  --brand-muted: #F0E9DC;
+  --brand-sidebar-accent: #564A3E;
+  --brand-sidebar-border: #6A5C4C;
+  --brand-chart-tertiary: #9A8A6A;
+  --brand-chart-quaternary: #C9BCA2;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
+:root[data-theme="pearl-platinum"] {
+  --brand-primary: #3A3E44;
+  --brand-accent: #7E848C;
+  --brand-accent-soft: #646A72;
+  --brand-bg: #F5F6F7;
+  --brand-text: #21262C;
+  --brand-card: #FFFFFF;
+  --brand-border: #DDE0E3;
+  --brand-muted: #E9EBED;
+  --brand-sidebar-accent: #454A51;
+  --brand-sidebar-border: #565C64;
+  --brand-chart-tertiary: #7E868F;
+  --brand-chart-quaternary: #B4BAC1;
+  --brand-status-green: #5C7A4A;
+  --brand-status-red: #A03B3B;
+}
+
 /* ──────────────────────────────────────────────────────────────────
    shadcn / runtime tokens — derived from brand-* so all themes
    compose consistently.
