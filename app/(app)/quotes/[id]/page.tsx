@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { use } from "react";
 import Link from "next/link";
 import { QuoteBuilder } from "@/components/modules/quotes/builder/QuoteBuilder";
-import { useQuote } from "@/lib/quote-store";
+import { useQuote, useQuotesLoaded } from "@/lib/quote-store";
 import { ensureSections } from "@/lib/quote-helpers";
 
 export default function QuoteDetailPage({
@@ -14,11 +14,21 @@ export default function QuoteDetailPage({
 }) {
   const { id } = use(params);
   const quote = useQuote(id);
+  const quotesLoaded = useQuotesLoaded();
 
   const initial = useMemo(
     () => (quote ? { ...quote, sections: ensureSections(quote) } : undefined),
     [quote]
   );
+
+  // F-1b: while the DB load is in flight, don't flash "not found".
+  if (!initial && !quotesLoaded) {
+    return (
+      <div className="text-muted-foreground p-8 text-center text-sm">
+        Loading…
+      </div>
+    );
+  }
 
   if (!initial) {
     return (

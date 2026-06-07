@@ -1,11 +1,36 @@
 "use client";
 
+// F-1b — quote store cutover: the public API (useQuotes / useQuote /
+// upsertQuote / getMergedQuotes / getQuoteById / resetOverrides) is preserved,
+// but the backing store is now the DB (via the quotes server actions) instead
+// of localStorage. An in-memory cache + the existing listener mechanism keep
+// the synchronous-feel contract the consumers rely on: upsertQuote updates the
+// cache and fires listeners IMMEDIATELY (optimistic), then persists async.
+//
+// localStorage is no longer the source of truth — readOverrides() (with its
+// load-bearing legacy transforms) survives ONLY to drive the one-time import
+// of previously-saved quotes into the DB on first load, then stays dormant.
+
 import { useEffect, useState } from "react";
 import type { Quote } from "./types";
-import { quotes as seedQuotes } from "./mock-data/quotes";
+import {
+  listQuotesAction,
+  upsertQuoteAction,
+  getQuoteByIdAction,
+} from "@/app/(app)/quotes/actions";
 
 const STORAGE_KEY = "nexvelon:quotes:v1";
+const MIGRATED_KEY = "nexvelon:quotes:migrated-to-db";
 const listeners = new Set<() => void>();
+
+// ── DB-backed in-memory cache ───────────────────────────────────────────────
+let cache: Quote[] = [];
+let loaded = false;
+let loadPromise: Promise<void> | null = null;
+
+function notify() {
+  for (const listener of listeners) listener();
+}
 
 function readOverrides(): Record<string, Quote> {
   if (typeof window === "undefined") return {};
@@ -105,56 +130,101 @@ function readOverrides(): Record<string, Quote> {
   }
 }
 
-function writeOverrides(map: Record<string, Quote>): void {
+// ── One-time localStorage → DB import (idempotent) ──────────────────────────
+// Replays readOverrides()'s transforms over the operator's real saved quotes
+// (NOT mock seeds) and upserts each into the DB. The migrated flag is set ONLY
+// after a fully successful import, so a partial failure retries next load and
+// nothing re-imports once complete.
+async function migrateLocalStorageQuotes(): Promise<void> {
   if (typeof window === "undefined") return;
+  if (window.localStorage.getItem(MIGRATED_KEY)) return;
+
+  const overrides = readOverrides();
+  const quotes = Object.values(overrides);
+
+  if (quotes.length === 0) {
+    window.localStorage.setItem(MIGRATED_KEY, "1");
+    return;
+  }
+
+  let allOk = true;
+  for (const q of quotes) {
+    const res = await upsertQuoteAction(q);
+    if (!res.ok) {
+      allOk = false;
+      console.error("[quote-store] import failed for", q.id, res.error);
+    }
+  }
+  if (allOk) window.localStorage.setItem(MIGRATED_KEY, "1");
+}
+
+// Hydrate the cache from the DB (once). Dedupes concurrent callers via a single
+// in-flight promise. Runs the one-time import before the (re)load.
+async function loadQuotes(): Promise<void> {
+  if (loaded) return;
+  if (loadPromise) return loadPromise;
+  loadPromise = (async () => {
+    await migrateLocalStorageQuotes();
+    const res = await listQuotesAction();
+    cache = res.ok ? res.data : [];
+    loaded = true;
+    notify();
+  })();
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    /* quota exceeded — ignore for demo */
+    await loadPromise;
+  } finally {
+    loadPromise = null;
   }
 }
 
 export function getMergedQuotes(): Quote[] {
-  const overrides = readOverrides();
-  const byId = new Map<string, Quote>();
-  for (const q of seedQuotes) byId.set(q.id, q);
-  for (const id in overrides) byId.set(id, overrides[id]);
-  return [...byId.values()];
+  // DB is the source of truth — returns the current cache (empty until loaded).
+  return cache;
 }
 
 export function getQuoteById(id: string): Quote | undefined {
-  return getMergedQuotes().find((q) => q.id === id);
+  return cache.find((q) => q.id === id);
 }
 
+/**
+ * Optimistic upsert: replace/insert by id in the cache + fire listeners
+ * IMMEDIATELY (preserves the synchronous-feel contract), THEN persist async.
+ * Fire-and-forget — a persistence failure is logged, never thrown, never blocks
+ * the UI.
+ */
 export function upsertQuote(quote: Quote): void {
-  const overrides = readOverrides();
-  overrides[quote.id] = quote;
-  writeOverrides(overrides);
-  for (const listener of listeners) listener();
+  const idx = cache.findIndex((q) => q.id === quote.id);
+  if (idx >= 0) cache = cache.map((q) => (q.id === quote.id ? quote : q));
+  else cache = [quote, ...cache];
+  notify();
+
+  void upsertQuoteAction(quote).then((res) => {
+    if (!res.ok) {
+      console.error("[quote-store] upsert persist failed:", res.error);
+    }
+  });
 }
 
+// Retained for API compatibility. Clears the migration flag so a fresh import
+// can run again; does not wipe DB data.
 export function resetOverrides(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
-  for (const listener of listeners) listener();
+  window.localStorage.removeItem(MIGRATED_KEY);
+  notify();
 }
 
 export function useQuotes(): Quote[] {
-  // Render seed on server + first client render to avoid hydration mismatches,
-  // then sync with localStorage after mount.
-  const [quotes, setQuotes] = useState<Quote[]>(seedQuotes);
+  const [quotes, setQuotes] = useState<Quote[]>(cache);
 
   useEffect(() => {
-    setQuotes(getMergedQuotes());
-    const listener = () => setQuotes(getMergedQuotes());
+    const listener = () => setQuotes([...cache]);
     listeners.add(listener);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) listener();
-    };
-    window.addEventListener("storage", onStorage);
+    // Trigger the first DB load (no-op if already loaded); sync current cache.
+    void loadQuotes();
+    listener();
     return () => {
       listeners.delete(listener);
-      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
@@ -163,6 +233,37 @@ export function useQuotes(): Quote[] {
 
 export function useQuote(id: string | undefined): Quote | undefined {
   const all = useQuotes();
-  if (!id) return undefined;
-  return all.find((q) => q.id === id);
+  const fromCache = id ? all.find((q) => q.id === id) : undefined;
+  const [fallback, setFallback] = useState<Quote | undefined>(undefined);
+
+  // If the quote isn't in the loaded list (e.g. deep-link to a quote outside
+  // the current cache), fetch it directly once the list has loaded.
+  useEffect(() => {
+    if (!id || fromCache || !loaded) return;
+    let active = true;
+    void getQuoteByIdAction(id).then((res) => {
+      if (active && res.ok && res.data) setFallback(res.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, fromCache]);
+
+  return fromCache ?? fallback;
+}
+
+/** F-1b: whether the first DB load has resolved — lets consumers (e.g. the
+ *  new-quote number) defer until the quote list is hydrated. */
+export function useQuotesLoaded(): boolean {
+  const [isLoaded, setIsLoaded] = useState(loaded);
+  useEffect(() => {
+    const listener = () => setIsLoaded(loaded);
+    listeners.add(listener);
+    void loadQuotes();
+    listener();
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  return isLoaded;
 }
