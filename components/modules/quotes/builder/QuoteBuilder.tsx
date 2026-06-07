@@ -478,6 +478,18 @@ export function QuoteBuilder({
     });
   };
 
+  // F-3a: Sent -> Approved. Mirrors handleSend; gated in the header by the
+  // quotes:approve permission. No stock changes here (decrement is F-3b).
+  const handleApprove = () => {
+    if (status !== "Sent") return;
+    const next = persist("Approved");
+    upsertQuote(next);
+    setStatus("Approved");
+    toast.success(`${number} approved`, {
+      description: "Status moved to Approved — ready to convert.",
+    });
+  };
+
   const handlePreview = () => {
     const target = document.getElementById("pdf-preview-pane");
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -515,6 +527,7 @@ export function QuoteBuilder({
         disabled={ro.readOnly}
         onSaveDraft={handleSaveDraft}
         onSend={handleSend}
+        onApprove={handleApprove}
         onPreview={handlePreview}
         onConvert={handleConvert}
       />

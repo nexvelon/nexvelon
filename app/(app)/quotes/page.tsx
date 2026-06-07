@@ -113,6 +113,13 @@ export default function QuotesListPage() {
           description: `Status updated to Sent. Client copy queued.`,
         });
       },
+      onApprove: (q: Quote) => {
+        if (q.status !== "Sent") return;
+        upsertQuote({ ...q, status: "Approved" });
+        toast.success(`${q.number} approved`, {
+          description: `Status updated to Approved — ready to convert.`,
+        });
+      },
       onConvert: (q: Quote) => {
         if (q.status !== "Approved") return;
         const yearProjects = projects.filter((p) =>
