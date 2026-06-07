@@ -8,6 +8,7 @@ import {
   Loader2,
   Save,
   Send,
+  ThumbsUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuoteStatusBadge } from "../QuoteStatusBadge";
@@ -22,6 +23,7 @@ interface Props {
   disabled: boolean;
   onSaveDraft: () => void;
   onSend: () => void;
+  onApprove: () => void;
   onPreview: () => void;
   onConvert: () => void;
 }
@@ -33,10 +35,13 @@ export function BuilderHeader({
   disabled,
   onSaveDraft,
   onSend,
+  onApprove,
   onPreview,
   onConvert,
 }: Props) {
   const { role } = useRole();
+  const canApprove = hasPermission(role, "quotes", "approve");
+  const approveEnabled = canApprove && status === "Sent";
   const canConvert = hasPermission(role, "quotes", "convert");
   const convertEnabled = canConvert && status === "Approved";
 
@@ -94,6 +99,19 @@ export function BuilderHeader({
             <Send className="mr-1.5 h-3.5 w-3.5" />
             Send for Approval
           </Button>
+          {status === "Sent" && canApprove && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!approveEnabled || saving}
+              onClick={onApprove}
+              className="border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5"
+            >
+              <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />
+              Approve
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"

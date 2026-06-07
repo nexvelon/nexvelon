@@ -7,6 +7,7 @@ import {
   Eye,
   MoreVertical,
   Send,
+  ThumbsUp,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,6 +25,7 @@ interface Props {
   onView: (q: Quote) => void;
   onDuplicate: (q: Quote) => void;
   onSend: (q: Quote) => void;
+  onApprove: (q: Quote) => void;
   onConvert: (q: Quote) => void;
   onArchive: (q: Quote) => void;
 }
@@ -33,10 +35,13 @@ export function QuoteRowActions({
   onView,
   onDuplicate,
   onSend,
+  onApprove,
   onConvert,
   onArchive,
 }: Props) {
   const { role } = useRole();
+  const canApprove =
+    hasPermission(role, "quotes", "approve") && quote.status === "Sent";
   const canConvert =
     hasPermission(role, "quotes", "convert") &&
     quote.status === "Approved";
@@ -61,6 +66,12 @@ export function QuoteRowActions({
           <DropdownMenuItem onClick={() => onSend(quote)}>
             <Send className="mr-2 h-4 w-4" />
             Send to Client
+          </DropdownMenuItem>
+        )}
+        {canApprove && (
+          <DropdownMenuItem onClick={() => onApprove(quote)}>
+            <ThumbsUp className="mr-2 h-4 w-4" />
+            Approve
           </DropdownMenuItem>
         )}
         {canConvert && (
