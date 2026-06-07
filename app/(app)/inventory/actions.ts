@@ -20,6 +20,7 @@ import {
   getInventoryReportData,
   getProductRowById,
   listProducts,
+  listStockForProduct,
   receiveStock,
   returnUnitToStock,
   updateProduct,
@@ -33,6 +34,7 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
+  DbInventoryStock,
   DbInventoryStockUpdate,
 } from "@/lib/types/database";
 import type { Product } from "@/lib/types";
@@ -61,6 +63,17 @@ export async function listProductsAction(): Promise<Product[]> {
 
 // INV-6: lazy fetch of aggregated report data (valuation / aging / consumption).
 // Computed server-side over real inventory_stock rows (§2.4-accurate).
+// F-2: expose a product's stock units to the quote builder's pin picker.
+export async function listStockForProductAction(
+  productId: string
+): Promise<ActionResult<DbInventoryStock[]>> {
+  try {
+    return { ok: true, data: await listStockForProduct(productId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function getInventoryReportDataAction(): Promise<InventoryReportData> {
   return getInventoryReportData();
 }

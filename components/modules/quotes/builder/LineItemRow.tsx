@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import {
   Copy,
   GripVertical,
   MoreHorizontal,
+  Pin,
   StickyNote,
   Trash2,
 } from "lucide-react";
@@ -27,7 +29,9 @@ import {
 } from "@/components/ui/select";
 import { CurrencyInput } from "./CurrencyInput";
 import { SkuAutocomplete } from "./SkuAutocomplete";
+import { StockUnitPicker } from "./StockUnitPicker";
 import { useOfferAddons } from "./addons-context";
+import { useCatalogProducts } from "./catalog-context";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -71,6 +75,8 @@ export function LineItemRow({
   onAddNote,
 }: Props) {
   const offerAddons = useOfferAddons();
+  const catalog = useCatalogProducts();
+  const [pinOpen, setPinOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled });
 
@@ -104,6 +110,16 @@ export function LineItemRow({
     );
     // D-2: a user pick may offer this part's companion add-ons.
     offerAddons(sectionId, p);
+  };
+
+  // F-2: pin/unpin this line to a specific stock unit's cost.
+  const handlePin = (stockUnitId: string, unitCost: number) => {
+    onChange(recalcLineItem({ ...item, unitCost, stockUnitId }));
+  };
+  const handleUnpin = () => {
+    // Revert to the product's default cost (0 if the product isn't resolvable).
+    const def = catalog.find((p) => p.id === item.productId)?.cost ?? 0;
+    onChange(recalcLineItem({ ...item, unitCost: def, stockUnitId: undefined }));
   };
 
   const total = lineItemTotal(item);
@@ -232,6 +248,39 @@ export function LineItemRow({
             disabled={disabled}
             className="text-xs"
           />
+          {item.type === "product" && item.productId && (
+            <div className="mt-0.5 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setPinOpen(true)}
+                disabled={disabled}
+                className={cn(
+                  "inline-flex items-center gap-0.5 text-[10px]",
+                  item.stockUnitId
+                    ? "text-amber-700"
+                    : "text-muted-foreground hover:text-brand-charcoal"
+                )}
+                title={
+                  item.stockUnitId
+                    ? "Pinned to a stock unit's cost"
+                    : "Pin to a stock unit's cost"
+                }
+              >
+                <Pin className="h-2.5 w-2.5" />
+                {item.stockUnitId ? "Pinned" : "Pin stock"}
+              </button>
+            </div>
+          )}
+          {item.type === "product" && item.productId && (
+            <StockUnitPicker
+              productId={item.productId}
+              pinnedStockUnitId={item.stockUnitId}
+              open={pinOpen}
+              onOpenChange={setPinOpen}
+              onPin={handlePin}
+              onUnpin={handleUnpin}
+            />
+          )}
         </td>
       )}
 

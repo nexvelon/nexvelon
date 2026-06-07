@@ -155,6 +155,9 @@ export interface BuilderLineItem {
   margin: number;
   unitPrice: number;
   notes?: string;
+  // F-2: when set, this line's unitCost is pinned to a specific inventory_stock
+  // unit/lot (snapshot per §2.2). Cleared = uses the product default cost.
+  stockUnitId?: string;
 }
 
 export interface QuoteSection {
