@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 
 import { QuoteBuilder } from "@/components/modules/quotes/builder/QuoteBuilder";
-import { useQuotes } from "@/lib/quote-store";
+import { useQuotes, useQuotesLoaded } from "@/lib/quote-store";
 import {
   DEFAULT_TAX_RATE,
   DEFAULT_TERMS,
@@ -37,6 +37,7 @@ export function NewQuotePageClient({
   classifications,
 }: Props) {
   const allQuotes = useQuotes();
+  const quotesLoaded = useQuotesLoaded();
 
   const initial = useMemo<Quote>(() => {
     const today = new Date();
@@ -83,11 +84,22 @@ export function NewQuotePageClient({
       showName: true, // QB-4 default ON
       showDescription: true, // QB-4 default ON
     };
-    // initial values are computed once per page mount; allQuotes is read for
-    // next-number calculation but the resulting `initial` shouldn't reactively
-    // change as quotes are added in this session.
+    // F-1b: computed once the DB quote list has loaded so nextQuoteNumber sees
+    // every existing quote. `quotesLoaded` in the deps re-derives `initial` the
+    // moment hydration completes (the render is gated on it below, so this runs
+    // effectively once — when loaded flips true).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [owner.id]);
+  }, [owner.id, quotesLoaded]);
+
+  // Defer the builder until quotes have loaded — otherwise nextQuoteNumber would
+  // mint Q-…-0001 against an empty list and collide with existing quotes.
+  if (!quotesLoaded) {
+    return (
+      <div className="text-muted-foreground p-8 text-center text-sm">
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <QuoteBuilder
