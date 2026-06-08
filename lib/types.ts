@@ -182,6 +182,10 @@ export interface Quote {
   createdAt: string;
   expiresAt: string;
   ownerId: ID;
+  // Editable display override for the "Prepared By" line on the document.
+  // Falls back to the owner's name when unset (backward compatible). Display
+  // only — does NOT change ownerId / ownership.
+  preparedBy?: string;
   paymentTerms?: PaymentTerms;
   taxRate?: number;
   items: QuoteLineItem[];

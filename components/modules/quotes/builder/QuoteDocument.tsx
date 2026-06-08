@@ -1134,6 +1134,7 @@ interface CoverPageProps extends CommonPageProps {
   client?: Client;
   site?: Site;
   owner?: User;
+  preparedBy?: string;
 }
 
 function CoverPage({
@@ -1150,6 +1151,7 @@ function CoverPage({
   client,
   site,
   owner,
+  preparedBy,
 }: CoverPageProps) {
   const scope = schedule.scopeOfWorks?.trim() ?? "";
   const dropCap = scope.length > 0 ? scope.charAt(0) : "";
@@ -1254,7 +1256,7 @@ function CoverPage({
         </View>
         <View style={styles.coverMetaCol}>
           <Text style={styles.coverMetaLabel}>Prepared By</Text>
-          <Text style={[styles.coverMetaValue, styles.numText]}>{owner?.name ?? "—"}</Text>
+          <Text style={[styles.coverMetaValue, styles.numText]}>{preparedBy ?? owner?.name ?? "—"}</Text>
         </View>
       </View>
 
@@ -1975,6 +1977,7 @@ interface DocProps {
   client?: Client;
   site?: Site;
   owner?: User;
+  preparedBy?: string;
   sections: QuoteSection[];
   taxRatePct: number;
   discount: number;
@@ -2022,6 +2025,7 @@ export function QuoteDocument(props: DocProps) {
     client,
     site,
     owner,
+    preparedBy,
     sections,
     taxRatePct,
     discount,
@@ -2140,6 +2144,7 @@ export function QuoteDocument(props: DocProps) {
                 client={client}
                 site={site}
                 owner={owner}
+                preparedBy={preparedBy}
               />
             );
           case "particulars":

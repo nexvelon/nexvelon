@@ -37,6 +37,10 @@ interface Props {
   ownerId: string;
   projectType: QuoteProjectType;
   owners: User[];
+  /** Stored prepared-by override (blank = use the fallback). */
+  preparedBy: string;
+  /** The owner-derived name shown when no override is set. */
+  preparedByFallback: string;
   onChange: (patch: {
     name?: string;
     validUntil?: string;
@@ -44,6 +48,7 @@ interface Props {
     taxRatePct?: number;
     ownerId?: string;
     projectType?: QuoteProjectType;
+    preparedBy?: string;
   }) => void;
   disabled?: boolean;
 }
@@ -56,6 +61,8 @@ export function QuoteDetailsCard({
   ownerId,
   projectType,
   owners,
+  preparedBy,
+  preparedByFallback,
   onChange,
   disabled,
 }: Props) {
@@ -174,6 +181,20 @@ export function QuoteDetailsCard({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-1.5 md:col-span-6">
+          <Label className="text-muted-foreground text-xs">Prepared by</Label>
+          <Input
+            value={preparedBy || preparedByFallback}
+            onChange={(e) => onChange({ preparedBy: e.target.value })}
+            placeholder={preparedByFallback || "Name shown on the quote"}
+            disabled={disabled}
+          />
+          <p className="text-muted-foreground text-[11px]">
+            Shown on the quote document. Defaults to the assigned sales rep;
+            edit to override.
+          </p>
         </div>
       </CardContent>
     </Card>
