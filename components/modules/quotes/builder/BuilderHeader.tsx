@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Eye,
   Loader2,
+  PackageCheck,
   Save,
   Send,
   ThumbsUp,
@@ -26,6 +27,7 @@ interface Props {
   onApprove: () => void;
   onPreview: () => void;
   onConvert: () => void;
+  onCommitStock: () => void;
 }
 
 export function BuilderHeader({
@@ -38,12 +40,16 @@ export function BuilderHeader({
   onApprove,
   onPreview,
   onConvert,
+  onCommitStock,
 }: Props) {
   const { role } = useRole();
   const canApprove = hasPermission(role, "quotes", "approve");
   const approveEnabled = canApprove && status === "Sent";
   const canConvert = hasPermission(role, "quotes", "convert");
   const convertEnabled = canConvert && status === "Approved";
+  const canCommitStock = hasPermission(role, "inventory", "edit");
+  const commitVisible =
+    canCommitStock && (status === "Approved" || status === "Converted");
 
   return (
     <div className="bg-background/85 sticky top-16 z-20 -mx-8 border-b border-[var(--border)] px-8 py-3 backdrop-blur">
@@ -110,6 +116,19 @@ export function BuilderHeader({
             >
               <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />
               Approve
+            </Button>
+          )}
+          {commitVisible && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onCommitStock}
+              className="border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5"
+            >
+              <PackageCheck className="mr-1.5 h-3.5 w-3.5" />
+              Commit stock
             </Button>
           )}
           <Button

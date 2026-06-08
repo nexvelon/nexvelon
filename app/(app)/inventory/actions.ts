@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import {
   allocateUnitToSite,
   bulkCreateProducts,
+  consumeStock,
   createProduct,
   deleteProduct,
   deleteStockUnit,
@@ -69,6 +70,29 @@ export async function listStockForProductAction(
 ): Promise<ActionResult<DbInventoryStock[]>> {
   try {
     return { ok: true, data: await listStockForProduct(productId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// F-3b: commit (consume) qty from a pinned stock unit when a quote is
+// committed/converted. productId is supplied by the caller (the quote line) for
+// the activity log. Qty-aware consume/split lives in lib/api consumeStock.
+export async function commitStockUnitAction(
+  stockUnitId: string,
+  productId: string,
+  qty: number,
+  ref: string
+): Promise<ActionResult<{ consumedRowId: string }>> {
+  try {
+    const result = await consumeStock(stockUnitId, qty, { ref });
+    await logActivity("inventory", productId, "update", {
+      committed: { from: null, to: `${qty} → ${ref}` },
+      stock_unit: { from: stockUnitId, to: result.consumedRowId },
+    });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: result };
   } catch (e) {
     return fail(e);
   }

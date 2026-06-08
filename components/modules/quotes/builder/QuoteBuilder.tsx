@@ -71,10 +71,14 @@ import type {
   User,
 } from "@/lib/types";
 import type { LineItemClassification } from "@/lib/classifications";
-import { listProductsAction } from "@/app/(app)/inventory/actions";
+import {
+  listProductsAction,
+  commitStockUnitAction,
+} from "@/app/(app)/inventory/actions";
 import { CatalogProductsContext } from "./catalog-context";
 import { OfferAddonsContext } from "./addons-context";
 import { AddonPrompt, type AddonPromptData } from "./AddonPrompt";
+import { CommitStockDialog } from "./CommitStockDialog";
 
 interface Props {
   initial: Quote;
@@ -115,6 +119,8 @@ export function QuoteBuilder({
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   // D-2: the add-ons prompt (null = closed).
   const [addonPrompt, setAddonPrompt] = useState<AddonPromptData | null>(null);
+  // F-3b: the commit-stock dialog.
+  const [commitOpen, setCommitOpen] = useState(false);
   useEffect(() => {
     let active = true;
     listProductsAction()
@@ -408,8 +414,12 @@ export function QuoteBuilder({
     setAddonPrompt(null);
   };
 
-  const persist = (nextStatus: QuoteStatus = status): Quote => {
-    const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
+  const persist = (
+    nextStatus: QuoteStatus = status,
+    sectionsOverride?: QuoteSection[]
+  ): Quote => {
+    const secs = sectionsOverride ?? sections;
+    const totals = quoteTotals(secs, taxRatePct / 100, discount, discountType);
     const out: Quote = {
       id: initial.id,
       number,
@@ -424,8 +434,8 @@ export function QuoteBuilder({
       ownerId,
       paymentTerms,
       taxRate: taxRatePct / 100,
-      sections,
-      items: sections.flatMap((s) =>
+      sections: secs,
+      items: secs.flatMap((s) =>
         s.items
           .filter((it) => it.type === "product" && it.productId)
           .map((it) => ({
@@ -495,8 +505,90 @@ export function QuoteBuilder({
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const handleConvert = () => {
+  // F-3b: commit (consume) stock for pinned, not-yet-committed product lines.
+  // Only lines whose id is in `lineIds` are considered. Each successful commit
+  // stamps committedStockId on the line (idempotent — committed lines are
+  // skipped). Re-saves the quote so the marker persists, toasts a summary, and
+  // returns the updated sections so callers (handleConvert) can persist in one
+  // flow. Never re-commits; never over-consumes (the API aborts a short line).
+  const commitLines = async (
+    lineIds: string[],
+    nextStatus: QuoteStatus = status
+  ): Promise<QuoteSection[]> => {
+    const targets = new Set(lineIds);
+    let committed = 0;
+    const errors: string[] = [];
+    const committedFor: Record<string, string> = {}; // lineId -> stockUnitId
+
+    for (const sec of sections) {
+      for (const it of sec.items) {
+        if (!targets.has(it.id)) continue;
+        if (it.type !== "product" || !it.stockUnitId || it.committedStockId)
+          continue;
+        const res = await commitStockUnitAction(
+          it.stockUnitId,
+          it.productId!,
+          it.qty,
+          number
+        );
+        if (res.ok) {
+          committed++;
+          committedFor[it.id] = it.stockUnitId;
+        } else {
+          errors.push(`${it.sku ?? it.name}: ${res.error}`);
+        }
+      }
+    }
+
+    // Apply committedStockId markers to the sections.
+    const updated = sections.map((sec) => ({
+      ...sec,
+      items: sec.items.map((it) =>
+        committedFor[it.id]
+          ? { ...it, committedStockId: committedFor[it.id] }
+          : it
+      ),
+    }));
+
+    if (committed > 0) {
+      setSections(updated);
+      upsertQuote(persist(nextStatus, updated));
+    }
+
+    if (committed > 0 || errors.length > 0) {
+      const parts: string[] = [];
+      if (committed > 0) parts.push(`Committed ${committed} line${committed === 1 ? "" : "s"}`);
+      if (errors.length > 0) parts.push(`${errors.length} skipped`);
+      if (errors.length > 0) {
+        toast.warning(parts.join("; "), { description: errors[0] });
+      } else {
+        toast.success(parts.join("; "));
+      }
+    }
+
+    return updated;
+  };
+
+  // All pinned, not-yet-committed product line ids across the quote.
+  const pinnedUncommittedLineIds = (): string[] =>
+    sections.flatMap((s) =>
+      s.items
+        .filter(
+          (it) =>
+            it.type === "product" && it.stockUnitId && !it.committedStockId
+        )
+        .map((it) => it.id)
+    );
+
+  const handleConvert = async () => {
     if (status !== "Approved") return;
+    // F-3b: auto-commit any pinned-uncommitted lines before finalizing the
+    // conversion (idempotent — already-committed lines are skipped). Use the
+    // returned sections so the converted quote persists with the markers.
+    const committedSections = await commitLines(
+      pinnedUncommittedLineIds(),
+      "Converted"
+    );
     const yearProjects = projects.filter((p) =>
       p.code.includes(`-${new Date().getFullYear()}-`)
     );
@@ -507,7 +599,7 @@ export function QuoteBuilder({
     )
       .toString()
       .padStart(3, "0")}`;
-    const next = persist("Converted");
+    const next = persist("Converted", committedSections);
     next.projectId = projectCode;
     upsertQuote(next);
     setStatus("Converted");
@@ -530,6 +622,7 @@ export function QuoteBuilder({
         onApprove={handleApprove}
         onPreview={handlePreview}
         onConvert={handleConvert}
+        onCommitStock={() => setCommitOpen(true)}
       />
 
       <CommandPalette
@@ -770,6 +863,14 @@ export function QuoteBuilder({
         data={addonPrompt}
         onAdd={confirmAddons}
         onClose={() => setAddonPrompt(null)}
+      />
+
+      <CommitStockDialog
+        key={commitOpen ? "commit-open" : "commit-closed"}
+        sections={sections}
+        open={commitOpen}
+        onOpenChange={setCommitOpen}
+        onCommit={(lineIds) => void commitLines(lineIds)}
       />
     </div>
     </OfferAddonsContext.Provider>
