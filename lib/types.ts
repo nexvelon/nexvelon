@@ -158,6 +158,10 @@ export interface BuilderLineItem {
   // F-2: when set, this line's unitCost is pinned to a specific inventory_stock
   // unit/lot (snapshot per §2.2). Cleared = uses the product default cost.
   stockUnitId?: string;
+  // F-3b: the stock unit id that was committed (consumed) for this line. Its
+  // presence marks the line committed — guards against double-decrement. Lives
+  // in the quote jsonb blob; forward-only (no auto-return).
+  committedStockId?: string;
 }
 
 export interface QuoteSection {

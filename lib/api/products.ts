@@ -478,6 +478,92 @@ export async function returnUnitToStock(stockId: string): Promise<void> {
   }
 }
 
+/**
+ * F-3b: consume `qty` from an in-stock unit/lot (quote commit). Qty-aware:
+ *   - status must be 'in_stock' (else "no longer available").
+ *   - qty > unit.quantity → error ("insufficient stock"); never over-consume.
+ *   - qty === quantity → flip the row to 'consumed' (+ traceability note).
+ *   - qty <  quantity → SPLIT: reduce the source lot by qty, insert a new
+ *     'consumed' row of qty carrying the same cost/location/po/supplier/date.
+ * Returns the consumed row id (the source row when full-consume, the new split
+ * row when partial). `ref` (e.g. the quote #) is appended to notes for trace.
+ */
+export async function consumeStock(
+  stockUnitId: string,
+  qty: number,
+  opts: { ref?: string } = {}
+): Promise<{ consumedRowId: string }> {
+  if (!Number.isInteger(qty) || qty < 1) {
+    throw new Error("consumeStock: qty must be a positive integer.");
+  }
+  const supabase = await db();
+
+  const { data: unit, error: loadErr } = await supabase
+    .from("inventory_stock")
+    .select("*")
+    .eq("id", stockUnitId)
+    .maybeSingle();
+  if (loadErr) throw new Error(`consumeStock: ${loadErr.message}`);
+  if (!unit) throw new Error("consumeStock: stock unit not found.");
+
+  const u = unit as DbInventoryStock;
+  if (u.status !== "in_stock") {
+    throw new Error("This unit is no longer available to commit.");
+  }
+  if (qty > u.quantity) {
+    throw new Error(
+      `Insufficient stock: only ${u.quantity} available (needed ${qty}).`
+    );
+  }
+
+  const note = opts.ref ? `Committed to ${opts.ref}` : "Committed";
+  const stamp = new Date().toISOString();
+
+  if (qty === u.quantity) {
+    // Full consume — flip the row in place.
+    const mergedNotes = u.notes ? `${u.notes}\n${note}` : note;
+    const { error } = await supabase
+      .from("inventory_stock")
+      .update({ status: "consumed", notes: mergedNotes, updated_at: stamp })
+      .eq("id", stockUnitId)
+      .eq("status", "in_stock");
+    if (error) throw new Error(`consumeStock: ${error.message}`);
+    return { consumedRowId: stockUnitId };
+  }
+
+  // Partial — reduce the source lot, then insert a discrete consumed row.
+  const { data: dec, error: decErr } = await supabase
+    .from("inventory_stock")
+    .update({ quantity: u.quantity - qty, updated_at: stamp })
+    .eq("id", stockUnitId)
+    .eq("status", "in_stock")
+    .select("id");
+  if (decErr) throw new Error(`consumeStock/reduce: ${decErr.message}`);
+  if (!dec || dec.length === 0) {
+    throw new Error("This unit is no longer available to commit.");
+  }
+
+  const consumedRow: DbInventoryStockInsert = {
+    product_id: u.product_id,
+    unit_cost: u.unit_cost,
+    serial_number: null,
+    quantity: qty,
+    location: u.location,
+    supplier: u.supplier,
+    po_number: u.po_number,
+    acquired_at: u.acquired_at,
+    status: "consumed",
+    notes: note,
+  };
+  const { data: ins, error: insErr } = await supabase
+    .from("inventory_stock")
+    .insert(consumedRow)
+    .select("id")
+    .single();
+  if (insErr) throw new Error(`consumeStock/insert: ${insErr.message}`);
+  return { consumedRowId: (ins as { id: string }).id };
+}
+
 // ----------------------------------------------------------------------------
 // Reports (INV-6). Aggregated server-side over the REAL inventory_stock rows so
 // valuation/aging honor specific-identification (§2.4) — each unit's own
