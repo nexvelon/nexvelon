@@ -35,6 +35,7 @@ interface Props {
   client?: Client;
   site?: Site;
   owner?: User;
+  preparedBy?: string;
   sections: QuoteSection[];
   taxRatePct: number;
   discount: number;

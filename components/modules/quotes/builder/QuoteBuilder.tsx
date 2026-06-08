@@ -161,6 +161,8 @@ export function QuoteBuilder({
     (initial.taxRate ?? DEFAULT_TAX_RATE) * 100
   );
   const [ownerId, setOwnerId] = useState(initial.ownerId);
+  // Prepared-by display override (falls back to the owner's name when blank).
+  const [preparedBy, setPreparedBy] = useState(initial.preparedBy ?? "");
   const [projectType, setProjectType] = useState<QuoteProjectType>(
     initial.projectType ?? "New Install"
   );
@@ -428,6 +430,7 @@ export function QuoteBuilder({
       siteId,
       projectId: initial.projectId,
       projectType,
+      preparedBy: preparedBy.trim() || undefined,
       status: nextStatus,
       createdAt: initial.createdAt,
       expiresAt: validUntil,
@@ -685,6 +688,8 @@ export function QuoteBuilder({
             ownerId={ownerId}
             projectType={projectType}
             owners={owners}
+            preparedBy={preparedBy}
+            preparedByFallback={owner?.name ?? ""}
             disabled={ro.readOnly}
             onChange={(patch) => {
               if (patch.name !== undefined) setName(patch.name);
@@ -693,6 +698,7 @@ export function QuoteBuilder({
               if (patch.taxRatePct !== undefined) setTaxRatePct(patch.taxRatePct);
               if (patch.ownerId !== undefined) setOwnerId(patch.ownerId);
               if (patch.projectType !== undefined) setProjectType(patch.projectType);
+              if (patch.preparedBy !== undefined) setPreparedBy(patch.preparedBy);
             }}
           />
 
@@ -838,6 +844,7 @@ export function QuoteBuilder({
                 client={client}
                 site={site}
                 owner={owner}
+                preparedBy={preparedBy.trim() || undefined}
                 sections={sections}
                 taxRatePct={taxRatePct}
                 discount={discount}
