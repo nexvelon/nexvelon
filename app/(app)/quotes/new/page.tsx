@@ -16,6 +16,7 @@ import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { listClassifications } from "@/lib/api/classifications";
 import { classificationFromDb } from "@/lib/classifications";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { DEFAULT_TERMS_KEY, getSetting } from "@/lib/api/company-settings";
 import { hasPermission } from "@/lib/permissions";
 import type {
   DbClient,
@@ -184,12 +185,22 @@ export default async function NewQuotePage() {
   );
   const classifications = dbClassifications.map(classificationFromDb);
 
+  // Chunk 2: the admin-managed default Terms (null when unset → client falls
+  // back to the DEFAULT_TERMS const). Best-effort — never block quote creation.
+  let defaultTerms: string | undefined;
+  try {
+    defaultTerms = (await getSetting(DEFAULT_TERMS_KEY)) ?? undefined;
+  } catch {
+    defaultTerms = undefined;
+  }
+
   return (
     <NewQuotePageClient
       clients={adaptedClients}
       sitesByClient={adaptedSitesByClient}
       owner={owner}
       classifications={classifications}
+      defaultTerms={defaultTerms}
     />
   );
 }

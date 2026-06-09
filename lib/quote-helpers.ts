@@ -12,11 +12,25 @@ import { isValidQuoteThemeSlug, type QuoteThemeSlug } from "@/lib/quote-themes";
 export const DEFAULT_TAX_RATE = 0.13; // ON HST
 export const DEFAULT_LABOR_RATE = 145;
 
-export const DEFAULT_TERMS = `Quote valid for 30 days from the date issued. Pricing is subject to change based on vendor availability, currency fluctuation, and lead times beyond 4 weeks.
+export const DEFAULT_TERMS = `Parties
+This Quote/Proposal and any resulting agreement are with Nexvelon Integrated Solutions Inc., which carries on business as "Nexvelon Global." All warranties, obligations, and liabilities are those of Nexvelon Integrated Solutions Inc.
 
-Installation is performed during standard business hours unless otherwise noted. After-hours work is billed at 1.5× the standard rate. A 50% deposit is due on acceptance; balance is due Net 30 from substantial completion. Travel beyond 75 km is billed at $0.65/km.
+Payment Terms
+1. Any invoice not paid within the selected payment term accrues interest at 2.5% per month (30% per annum) from the due date until paid in full.
+2. A surcharge of 2.4% plus applicable taxes applies to any payment made by credit card.
+3. For all material orders, 70% of the total material cost is payable in advance; the remaining 30% is due immediately upon receipt of the material.
+4. Once Nexvelon receives the ordered parts, the remaining 30% balance is due immediately. Nexvelon will send an email with photographs of the received items, which the Client accepts as proof of receipt for collecting the remaining balance.
+5. If the Client elects to have parts delivered directly to site, the Client must pay 100% of those parts' cost in advance and is responsible for storing them securely and maintaining a sign-in/sign-out log of all parts removed by any person. This log is the reference for accountability if any items are missing or lost on site.
 
-Site readiness, conduit, and 120V power are by others unless explicitly listed. Nexvelon Inc. is not responsible for delays caused by site access, building permits, or third-party trades.`;
+Site Attendance & Scheduling
+6. If a deficiency has not been resolved, the site or work is not ready, or work cannot proceed for reasons outside Nexvelon's control, and a technician must return to site after a scheduled attendance, the Client will be billed for a full 8 hours per technician scheduled for that visit.
+7. Nexvelon is not responsible for delays to its work caused by other trades or third parties. Where the work of others delays the project, the corresponding deadlines for Nexvelon's work are extended accordingly, and Nexvelon is not liable for any resulting delay. Where the project is compressed or rushed at the end as a result of such delays, Nexvelon cannot guarantee that the security system will be fully operational or complete by the original deadline.
+
+Scope & Security Consulting
+8. Nexvelon Integrated Solutions Inc. is not a security consultant and does not provide security consulting services. Nexvelon does not guarantee against, and assumes no liability for, cyber attacks or security breaches. A Client requiring security consulting must separately engage a qualified security consultant.
+
+Design, Drawings & Device Placement
+9. Shop drawings will be provided for all equipment and parts. Nexvelon is not a consultant; the rough-in, placement, and final locations of all security and intrusion devices are determined by and carried out per the consultant's instructions, whose decision is final. It is the consultant's responsibility to finalize device locations and placement. Nexvelon is not liable for any event or outcome arising from locations or placements made per the consultant's instructions.`;
 
 export const SECTION_PRESETS = [
   "Access Control Hardware",

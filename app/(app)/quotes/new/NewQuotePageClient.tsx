@@ -29,6 +29,8 @@ interface Props {
   sitesByClient: Record<string, Site[]>;
   owner: User;
   classifications: LineItemClassification[];
+  /** Chunk 2: admin-managed default Terms; falls back to DEFAULT_TERMS const. */
+  defaultTerms?: string;
 }
 
 export function NewQuotePageClient({
@@ -36,6 +38,7 @@ export function NewQuotePageClient({
   sitesByClient,
   owner,
   classifications,
+  defaultTerms,
 }: Props) {
   const quotesLoaded = useQuotesLoaded();
 
@@ -63,7 +66,7 @@ export function NewQuotePageClient({
         },
       ],
       items: [],
-      terms: DEFAULT_TERMS,
+      terms: defaultTerms ?? DEFAULT_TERMS,
       internalNotes: "",
       discount: 0,
       discountType: "pct",

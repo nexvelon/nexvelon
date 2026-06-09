@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -13,7 +13,14 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { useRole } from "@/lib/role-context";
+import { DEFAULT_TERMS } from "@/lib/quote-helpers";
+import {
+  getDefaultTermsAction,
+  setDefaultTermsAction,
+} from "@/app/(app)/settings/company-settings-actions";
 import {
   Select,
   SelectContent,
@@ -151,8 +158,73 @@ export function QuoteDefaults() {
         </ul>
       </Card>
 
+      <DefaultTermsEditor />
+
       <SaveBar />
     </div>
+  );
+}
+
+// Chunk 2 — admin-only editor for the default quote Terms & Conditions. Loads
+// the stored value (company_settings) on mount, falling back to the in-code
+// DEFAULT_TERMS const; saves via the requireAdmin-gated action. Hidden entirely
+// for non-Admin roles (UI gate; the action enforces the server gate too).
+function DefaultTermsEditor() {
+  const { role } = useRole();
+  const [value, setValue] = useState<string>(DEFAULT_TERMS);
+  const [loading, setLoading] = useState(true);
+  const [pending, startSave] = useTransition();
+
+  useEffect(() => {
+    if (role !== "Admin") return;
+    let active = true;
+    getDefaultTermsAction()
+      .then((res) => {
+        if (active && res.ok && res.data != null) setValue(res.data);
+      })
+      .catch(() => {
+        // keep the DEFAULT_TERMS fallback already in state
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
+  if (role !== "Admin") return null;
+
+  const handleSave = () => {
+    startSave(async () => {
+      const res = await setDefaultTermsAction(value);
+      if (res.ok) toast.success("Default Terms saved");
+      else toast.error(res.error);
+    });
+  };
+
+  return (
+    <Card className="bg-card p-6 shadow-sm">
+      <h4 className="text-brand-navy font-serif text-base">
+        Default Terms &amp; Conditions
+      </h4>
+      <p className="text-muted-foreground mb-3 text-[11px]">
+        Shown on the Terms schedule of every new quote. Editing this does not
+        change quotes that already exist.
+      </p>
+      <Textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={18}
+        disabled={loading || pending}
+        className="font-mono text-xs leading-relaxed"
+      />
+      <div className="mt-3 flex justify-end">
+        <Button onClick={handleSave} disabled={loading || pending}>
+          {pending ? "Saving…" : "Save Terms"}
+        </Button>
+      </div>
+    </Card>
   );
 }
 
