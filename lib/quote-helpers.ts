@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { products } from "./mock-data/products";
 import { defaultClassificationFor } from "./classifications";
+import { businessQuoteNumber } from "./format";
 import { isValidQuoteThemeSlug, type QuoteThemeSlug } from "@/lib/quote-themes";
 
 export const DEFAULT_TAX_RATE = 0.13; // ON HST
@@ -160,17 +161,14 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function nextQuoteNumber(existing: Quote[]): string {
-  const year = new Date().getFullYear();
-  const yearPrefix = `Q-${year}-`;
-  let max = 0;
-  for (const q of existing) {
-    if (q.number.startsWith(yearPrefix)) {
-      const n = parseInt(q.number.split("-")[2], 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-  }
-  return `${yearPrefix}${(max + 1).toString().padStart(4, "0")}`;
+// Quote number is now a Toronto-time timestamp YYMMDDHHMM (self-contained — no
+// sequence lookup). The previous `existing: Quote[]` argument is no longer read,
+// so the param is dropped; existing callers passing an arg (nextQuoteNumber(
+// allQuotes)) still work — JS ignores the extra argument, so call sites + the
+// useQuotesLoaded guard stay unchanged. The internal id (newId("q")) remains
+// the unique key; minute-precision number collisions are tolerated.
+export function nextQuoteNumber(): string {
+  return businessQuoteNumber();
 }
 
 // Convert a flat seed quote (without sections) into a single-section

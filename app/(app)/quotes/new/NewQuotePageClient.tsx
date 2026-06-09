@@ -9,7 +9,7 @@
 import { useMemo } from "react";
 
 import { QuoteBuilder } from "@/components/modules/quotes/builder/QuoteBuilder";
-import { useQuotes, useQuotesLoaded } from "@/lib/quote-store";
+import { useQuotesLoaded } from "@/lib/quote-store";
 import {
   DEFAULT_TAX_RATE,
   DEFAULT_TERMS,
@@ -37,7 +37,6 @@ export function NewQuotePageClient({
   owner,
   classifications,
 }: Props) {
-  const allQuotes = useQuotes();
   const quotesLoaded = useQuotesLoaded();
 
   const initial = useMemo<Quote>(() => {
@@ -45,7 +44,7 @@ export function NewQuotePageClient({
     // toISOString(), which rolls to tomorrow after ~8pm Eastern.
     return {
       id: newId("q"),
-      number: nextQuoteNumber(allQuotes),
+      number: nextQuoteNumber(),
       name: "",
       clientId: "",
       siteId: "",
