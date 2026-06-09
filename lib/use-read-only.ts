@@ -35,13 +35,14 @@ export function useReadOnly(status: QuoteStatus): ReadOnlyState {
     };
   }
 
-  // Sales reps cannot edit Approved quotes — that authority sits with PMs.
-  if (status === "Approved" && role === "SalesRep") {
+  // Approved quotes are locked to everyone except an Admin. An Admin can edit
+  // directly or reopen the quote to Draft (in the builder) for broader edits.
+  if (status === "Approved" && role !== "Admin") {
     return {
       readOnly: true,
       reason: "status",
       message:
-        "This quote has been approved. A Project Manager must convert it before further edits.",
+        "Approved quotes can only be edited by an Admin. Ask an Admin to reopen it for changes.",
     };
   }
 

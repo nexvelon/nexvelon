@@ -7,6 +7,7 @@ import {
   Eye,
   Loader2,
   PackageCheck,
+  RotateCcw,
   Save,
   Send,
   ThumbsUp,
@@ -28,6 +29,8 @@ interface Props {
   onPreview: () => void;
   onConvert: () => void;
   onCommitStock: () => void;
+  onReopen: () => void;
+  canReopen: boolean;
 }
 
 export function BuilderHeader({
@@ -41,6 +44,8 @@ export function BuilderHeader({
   onPreview,
   onConvert,
   onCommitStock,
+  onReopen,
+  canReopen,
 }: Props) {
   const { role } = useRole();
   const canApprove = hasPermission(role, "quotes", "approve");
@@ -116,6 +121,19 @@ export function BuilderHeader({
             >
               <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />
               Approve
+            </Button>
+          )}
+          {canReopen && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onReopen}
+              className="border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Reopen for Editing
             </Button>
           )}
           {commitVisible && (
