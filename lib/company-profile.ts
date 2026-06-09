@@ -106,12 +106,12 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
   },
   guardian: {
     // Started as a structural copy of integrated_solutions (QB-1b). slug,
-    // displayName, enabled, legalName, and the footerLong legal-name string
-    // are Guardian-specific. The remaining shared placeholders (tradeName,
-    // address, phone/email/web, hstNumber) are intentionally deferred to
-    // QD-1, which owns document content + the legal-name/colour pass per the
-    // Session AA handoff. hstNumber stays 785486770 RT0001 until Guardian
-    // has its own registration (flagged, non-blocking).
+    // displayName, enabled, legalName, hstNumber, and the footerLong legal
+    // line are Guardian-specific. The shared values (tradeName, brandMark,
+    // brandSub, tagline, address, phone/email/web) are intentionally shared:
+    // both entities operate under the licensed "Nexvelon Global" brand and
+    // share the registered office. Guardian now carries its own HST/GST
+    // registration (720125632 RT0001).
     slug: "guardian",
     displayName: "Guardian",
     enabled: true,
@@ -131,9 +131,9 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
     phone: "Toll-Free: 1-855-969-8655",
     email: "SecurityServices@NexvelonGlobal.com",
     web: "www.NexvelonGlobal.com",
-    hstNumber: "785486770 RT0001",
+    hstNumber: "720125632 RT0001",
     footerShort: "NEXVELON · GLOBAL",
-    footerLong: "NEXVELON GUARDIAN INC. — HST/GST 785486770 RT0001",
+    footerLong: "NEXVELON GUARDIAN INC. — HST/GST 720125632 RT0001",
   },
 };
 

@@ -42,6 +42,8 @@ interface Props {
   onThemeChange: (slug: QuoteThemeSlug) => void;
   onShowUnitPriceChange: (value: boolean) => void;
   disabled?: boolean;
+  /** Guardian template selection is Admin-only; non-admins see it disabled. */
+  isAdmin?: boolean;
 }
 
 export function DocumentStyleCard({
@@ -60,6 +62,7 @@ export function DocumentStyleCard({
   onThemeChange,
   onShowUnitPriceChange,
   disabled,
+  isAdmin = false,
 }: Props) {
   const selectedTemplate = templateSlug ? QUOTE_TEMPLATES[templateSlug] : null;
 
@@ -95,18 +98,31 @@ export function DocumentStyleCard({
             <SelectContent>
               {QUOTE_TEMPLATE_SLUGS.map((slug) => {
                 const tpl = QUOTE_TEMPLATES[slug];
+                // Guardian selection is Admin-only. Don't lock it for a quote
+                // that already has Guardian selected — only block non-admins
+                // from switching TO it.
+                const adminLocked =
+                  slug === "guardian" &&
+                  !isAdmin &&
+                  templateSlug !== "guardian";
                 return (
                   <SelectItem
                     key={slug}
                     value={slug}
-                    disabled={!tpl.enabled}
+                    disabled={!tpl.enabled || adminLocked}
                   >
                     <span className="inline-flex items-center gap-2">
                       <span>{tpl.displayName}</span>
-                      {!tpl.enabled && (
+                      {!tpl.enabled ? (
                         <span className="text-muted-foreground text-[10px]">
                           (coming soon — letterhead not yet designed)
                         </span>
+                      ) : (
+                        adminLocked && (
+                          <span className="text-muted-foreground text-[10px]">
+                            (Admin only)
+                          </span>
+                        )
                       )}
                     </span>
                   </SelectItem>
