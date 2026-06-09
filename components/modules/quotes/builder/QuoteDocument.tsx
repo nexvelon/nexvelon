@@ -1575,7 +1575,12 @@ function AcceptancePage({
       <Text style={styles.agreementLine}>
         The undersigned acknowledges having read this Quote/Proposal and{" "}
         {template.legalName}&apos;s Terms and Conditions, which are hereby agreed
-        to and accepted this _____ day of ________________ , 20____.
+        to and accepted this _____ day of ________________ , 20____. The
+        undersigned further confirms that they are signing voluntarily and of
+        their own free will, with full understanding of its contents, are of
+        sound mind and full legal capacity, and are not acting under any duress,
+        coercion, undue influence, or the influence of any substance that would
+        impair their judgment.
       </Text>
 
       <SignatureBlock
