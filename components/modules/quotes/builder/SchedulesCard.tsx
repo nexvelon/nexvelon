@@ -36,23 +36,28 @@ import {
   createAssuranceSchedule,
   createCustomSchedule,
   createDrawingsSchedule,
+  createMonitoringSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
   type DrawingsScheduleInstance,
+  type MonitoringScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { MonitoringEditor } from "./MonitoringEditor";
 import { useRole } from "@/lib/role-context";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
   onChange: (next: QuoteScheduleInstance[]) => void;
   disabled?: boolean;
+  /** GF-1: the "monitoring" add-option is offered only for Guardian quotes. */
+  isGuardian?: boolean;
 }
 
 const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
@@ -63,12 +68,14 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   agreement: "Agreement",
   acceptance: "Acceptance",
   custom: "Custom",
+  monitoring: "Monitoring Services",
 };
 
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
   "assurance",
+  "monitoring",
   "drawings",
   "agreement",
   "acceptance",
@@ -78,6 +85,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
+  if (kind === "monitoring") return createMonitoringSchedule();
   if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
@@ -104,7 +112,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function SchedulesCard({ schedules, onChange, disabled }: Props) {
+export function SchedulesCard({
+  schedules,
+  onChange,
+  disabled,
+  isGuardian = false,
+}: Props) {
   // Chunk 3b: the Agreement (Terms) + Acceptance schedules can only be deleted
   // by an Admin — the remove control is hidden for other roles on those two
   // kinds. Include-toggle, reorder, and all other kinds' deletion are unchanged.
@@ -331,6 +344,24 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                 </div>
               )}
 
+              {schedule.kind === "monitoring" && (
+                <div className="space-y-1 pt-1">
+                  <MonitoringEditor
+                    services={(schedule as MonitoringScheduleInstance).services}
+                    setupLabel={
+                      (schedule as MonitoringScheduleInstance).setupLabel
+                    }
+                    setupAmount={
+                      (schedule as MonitoringScheduleInstance).setupAmount
+                    }
+                    onChange={(patch) =>
+                      patchAt(idx, patch as Partial<QuoteScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
               {schedule.kind === "custom" && (
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px]">Body</Label>
@@ -431,7 +462,9 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
             <span>Add schedule</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {ADDABLE_KINDS.map((kind) => {
+            {ADDABLE_KINDS.filter(
+              (kind) => kind !== "monitoring" || isGuardian
+            ).map((kind) => {
               const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
               const single = !def.allowMultiple && kindAlreadyExists(kind);
               return (

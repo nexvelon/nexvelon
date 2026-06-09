@@ -12,6 +12,7 @@ import {
 import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
 import { quoteTotals, takeoffGroups } from "@/lib/quote-helpers";
+import { monitoringTotals } from "@/lib/quote-schedules";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
 import type {
@@ -21,6 +22,7 @@ import type {
   CoverScheduleInstance,
   CustomScheduleInstance,
   DrawingsScheduleInstance,
+  MonitoringScheduleInstance,
   ParticularsScheduleInstance,
   QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
@@ -1482,6 +1484,112 @@ function ParticularsPage({
   );
 }
 
+// GF-1 — Guardian Monitoring Services page. Self-contained recurring fees:
+// per-service monthly fees → monthly + annual (×12, billed in advance) totals,
+// plus an optional one-time setup line. Independent of quoteTotals.
+interface MonitoringPageProps extends CommonPageProps {
+  schedule: MonitoringScheduleInstance;
+}
+
+function MonitoringPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: MonitoringPageProps) {
+  const subtitleSuffix = schedule.subtitle || "Recurring monitoring fees";
+  const { monthly, annual, setup } = monitoringTotals(schedule);
+  const services = schedule.services.filter(
+    (s) => (s.label && s.label.trim().length > 0) || s.monthlyFee
+  );
+
+  return (
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
+
+      <View style={styles.partTableHead}>
+        <Text style={[styles.partTableHeadText, styles.partCellDesc]}>
+          Service
+        </Text>
+        <Text style={[styles.partTableHeadText, styles.partCellAmount]}>
+          Monthly Fee
+        </Text>
+      </View>
+      {services.map((svc) => (
+        <View style={styles.partRow} key={svc.id}>
+          <View style={styles.partCellDesc}>
+            <Text style={styles.partDescText}>{svc.label || "—"}</Text>
+            {svc.detail ? (
+              <Text style={styles.partDescSku}>{svc.detail}</Text>
+            ) : null}
+          </View>
+          <Text
+            style={[styles.partNumText, styles.partCellAmount, styles.numText]}
+          >
+            {usd(svc.monthlyFee || 0)}
+          </Text>
+        </View>
+      ))}
+
+      <View style={styles.partRule} />
+
+      <View style={styles.partTotalsBlock}>
+        <View style={styles.partTotalsRow}>
+          <Text style={styles.partTotalsLabel}>Monthly total</Text>
+          <Text style={[styles.partTotalsValue, styles.numText]}>
+            {usd(monthly)}
+          </Text>
+        </View>
+        {setup > 0 ? (
+          <View style={styles.partTotalsRow}>
+            <Text style={styles.partTotalsLabel}>
+              {schedule.setupLabel?.trim() || "One-time setup"}
+            </Text>
+            <Text style={[styles.partTotalsValue, styles.numText]}>
+              {usd(setup)}
+            </Text>
+          </View>
+        ) : null}
+        <View style={styles.partGrandRow}>
+          <Text style={styles.partGrandLabel}>
+            Annual total (billed in advance)
+          </Text>
+          <Text style={[styles.partGrandValue, styles.numText]}>
+            {usd(annual)}
+          </Text>
+        </View>
+      </View>
+
+      {schedule.billingNote && schedule.billingNote.trim().length > 0 ? (
+        <Text style={styles.agreementBody}>{schedule.billingNote}</Text>
+      ) : null}
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface AgreementPageProps extends CommonPageProps {
   schedule: AgreementScheduleInstance;
   terms: string;
@@ -2218,6 +2326,14 @@ export function QuoteDocument(props: DocProps) {
           case "assurance":
             return (
               <AssurancePage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "monitoring":
+            return (
+              <MonitoringPage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
