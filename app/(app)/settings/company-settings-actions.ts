@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import {
   DEFAULT_TERMS_KEY,
+  DEFAULT_TERMS_GUARDIAN_KEY,
   getSetting,
   setSetting,
 } from "@/lib/api/company-settings";
@@ -54,6 +55,33 @@ export async function setDefaultTermsAction(
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
     await setSetting(DEFAULT_TERMS_KEY, value);
+    revalidatePath("/settings");
+    revalidatePath("/quotes/new");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// G2 — Guardian default Terms (parallel to the Integrated actions above,
+// keyed by DEFAULT_TERMS_GUARDIAN_KEY). Read open; write requireAdmin-gated.
+export async function getDefaultTermsGuardianAction(): Promise<
+  ActionResult<string | null>
+> {
+  try {
+    return { ok: true, data: await getSetting(DEFAULT_TERMS_GUARDIAN_KEY) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setDefaultTermsGuardianAction(
+  value: string
+): Promise<ActionResult<null>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    await setSetting(DEFAULT_TERMS_GUARDIAN_KEY, value);
     revalidatePath("/settings");
     revalidatePath("/quotes/new");
     return { ok: true, data: null };

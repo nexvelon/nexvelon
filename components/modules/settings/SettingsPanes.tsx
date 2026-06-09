@@ -16,10 +16,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/lib/role-context";
-import { DEFAULT_TERMS } from "@/lib/quote-helpers";
+import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import {
   getDefaultTermsAction,
   setDefaultTermsAction,
+  getDefaultTermsGuardianAction,
+  setDefaultTermsGuardianAction,
 } from "@/app/(app)/settings/company-settings-actions";
 import {
   Select,
@@ -158,32 +160,60 @@ export function QuoteDefaults() {
         </ul>
       </Card>
 
-      <DefaultTermsEditor />
+      <DefaultTermsEditor
+        title="Integrated Solutions — Default Terms"
+        fallback={DEFAULT_TERMS}
+        load={getDefaultTermsAction}
+        save={setDefaultTermsAction}
+      />
+
+      <DefaultTermsEditor
+        title="Guardian — Default Terms"
+        fallback={DEFAULT_TERMS_GUARDIAN}
+        load={getDefaultTermsGuardianAction}
+        save={setDefaultTermsGuardianAction}
+      />
 
       <SaveBar />
     </div>
   );
 }
 
-// Chunk 2 — admin-only editor for the default quote Terms & Conditions. Loads
-// the stored value (company_settings) on mount, falling back to the in-code
-// DEFAULT_TERMS const; saves via the requireAdmin-gated action. Hidden entirely
-// for non-Admin roles (UI gate; the action enforces the server gate too).
-function DefaultTermsEditor() {
+// Chunk 2 / G2 — admin-only editor for a default quote Terms & Conditions
+// value. Loads the stored value (company_settings) on mount via `load`,
+// falling back to the in-code `fallback` const; saves via the requireAdmin-
+// gated `save` action. Hidden entirely for non-Admin roles (UI gate; the
+// action enforces the server gate too). One instance per entity (Integrated
+// + Guardian), each wired to its own get/set actions.
+type TermsActionResult =
+  | { ok: true; data: string | null }
+  | { ok: false; error: string };
+
+function DefaultTermsEditor({
+  title,
+  fallback,
+  load,
+  save,
+}: {
+  title: string;
+  fallback: string;
+  load: () => Promise<TermsActionResult>;
+  save: (value: string) => Promise<{ ok: true; data: null } | { ok: false; error: string }>;
+}) {
   const { role } = useRole();
-  const [value, setValue] = useState<string>(DEFAULT_TERMS);
+  const [value, setValue] = useState<string>(fallback);
   const [loading, setLoading] = useState(true);
   const [pending, startSave] = useTransition();
 
   useEffect(() => {
     if (role !== "Admin") return;
     let active = true;
-    getDefaultTermsAction()
+    load()
       .then((res) => {
         if (active && res.ok && res.data != null) setValue(res.data);
       })
       .catch(() => {
-        // keep the DEFAULT_TERMS fallback already in state
+        // keep the in-code fallback already in state
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -191,13 +221,13 @@ function DefaultTermsEditor() {
     return () => {
       active = false;
     };
-  }, [role]);
+  }, [role, load]);
 
   if (role !== "Admin") return null;
 
   const handleSave = () => {
     startSave(async () => {
-      const res = await setDefaultTermsAction(value);
+      const res = await save(value);
       if (res.ok) toast.success("Default Terms saved");
       else toast.error(res.error);
     });
@@ -205,12 +235,10 @@ function DefaultTermsEditor() {
 
   return (
     <Card className="bg-card p-6 shadow-sm">
-      <h4 className="text-brand-navy font-serif text-base">
-        Default Terms &amp; Conditions
-      </h4>
+      <h4 className="text-brand-navy font-serif text-base">{title}</h4>
       <p className="text-muted-foreground mb-3 text-[11px]">
-        Shown on the Terms schedule of every new quote. Editing this does not
-        change quotes that already exist.
+        Shown on the Terms schedule of every new quote using this entity.
+        Editing this does not change quotes that already exist.
       </p>
       <Textarea
         value={value}

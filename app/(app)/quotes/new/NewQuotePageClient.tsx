@@ -20,7 +20,10 @@ import {
 import { businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
 import { createDefaultSchedules } from "@/lib/quote-schedules";
 import { DEFAULT_QUOTE_THEME_SLUG } from "@/lib/quote-themes";
-import { DEFAULT_QUOTE_TEMPLATE_SLUG } from "@/lib/company-profile";
+import {
+  DEFAULT_QUOTE_TEMPLATE_SLUG,
+  type QuoteTemplateSlug,
+} from "@/lib/company-profile";
 import type { LineItemClassification } from "@/lib/classifications";
 import type { Client, Quote, Site, User } from "@/lib/types";
 
@@ -29,8 +32,12 @@ interface Props {
   sitesByClient: Record<string, Site[]>;
   owner: User;
   classifications: LineItemClassification[];
-  /** Chunk 2: admin-managed default Terms; falls back to DEFAULT_TERMS const. */
-  defaultTerms?: string;
+  /**
+   * G2: per-entity admin-managed default Terms, keyed by template slug. Each
+   * entry falls back to the in-code default const when its setting is unset
+   * (resolved server-side). A new quote seeds from the default template's entry.
+   */
+  defaultTermsByTemplate: Record<QuoteTemplateSlug, string>;
 }
 
 export function NewQuotePageClient({
@@ -38,7 +45,7 @@ export function NewQuotePageClient({
   sitesByClient,
   owner,
   classifications,
-  defaultTerms,
+  defaultTermsByTemplate,
 }: Props) {
   const quotesLoaded = useQuotesLoaded();
 
@@ -66,7 +73,8 @@ export function NewQuotePageClient({
         },
       ],
       items: [],
-      terms: defaultTerms ?? DEFAULT_TERMS,
+      terms:
+        defaultTermsByTemplate[DEFAULT_QUOTE_TEMPLATE_SLUG] ?? DEFAULT_TERMS,
       internalNotes: "",
       discount: 0,
       discountType: "pct",
@@ -110,6 +118,7 @@ export function NewQuotePageClient({
       sitesByClientOverride={sitesByClient}
       ownerOverride={owner}
       classifications={classifications}
+      defaultTermsByTemplate={defaultTermsByTemplate}
     />
   );
 }

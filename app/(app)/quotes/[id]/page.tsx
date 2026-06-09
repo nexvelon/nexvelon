@@ -1,11 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
 import { QuoteBuilder } from "@/components/modules/quotes/builder/QuoteBuilder";
 import { useQuote, useQuotesLoaded } from "@/lib/quote-store";
-import { ensureSections } from "@/lib/quote-helpers";
+import {
+  ensureSections,
+  DEFAULT_TERMS,
+  DEFAULT_TERMS_GUARDIAN,
+} from "@/lib/quote-helpers";
+import type { QuoteTemplateSlug } from "@/lib/company-profile";
+import {
+  getDefaultTermsAction,
+  getDefaultTermsGuardianAction,
+} from "@/app/(app)/settings/company-settings-actions";
 
 export default function QuoteDetailPage({
   params,
@@ -15,6 +24,42 @@ export default function QuoteDetailPage({
   const { id } = use(params);
   const quote = useQuote(id);
   const quotesLoaded = useQuotesLoaded();
+
+  // G2: per-entity default Terms map for the entity-switch reseed in the
+  // builder. Starts from the in-code defaults and is enriched with the
+  // admin-managed settings values (best-effort; reads are open). This map is
+  // ONLY used by the builder's template-change handler — it never overwrites a
+  // saved quote's terms on load.
+  const [defaultTermsByTemplate, setDefaultTermsByTemplate] = useState<
+    Record<QuoteTemplateSlug, string>
+  >({
+    integrated_solutions: DEFAULT_TERMS,
+    guardian: DEFAULT_TERMS_GUARDIAN,
+  });
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([getDefaultTermsAction(), getDefaultTermsGuardianAction()])
+      .then(([integrated, guardian]) => {
+        if (!active) return;
+        setDefaultTermsByTemplate({
+          integrated_solutions:
+            integrated.ok && integrated.data != null
+              ? integrated.data
+              : DEFAULT_TERMS,
+          guardian:
+            guardian.ok && guardian.data != null
+              ? guardian.data
+              : DEFAULT_TERMS_GUARDIAN,
+        });
+      })
+      .catch(() => {
+        // keep the in-code defaults already in state
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const initial = useMemo(
     () => (quote ? { ...quote, sections: ensureSections(quote) } : undefined),
@@ -50,5 +95,11 @@ export default function QuoteDetailPage({
     );
   }
 
-  return <QuoteBuilder initial={initial} isNew={false} />;
+  return (
+    <QuoteBuilder
+      initial={initial}
+      isNew={false}
+      defaultTermsByTemplate={defaultTermsByTemplate}
+    />
+  );
 }

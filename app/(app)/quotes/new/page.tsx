@@ -16,7 +16,13 @@ import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { listClassifications } from "@/lib/api/classifications";
 import { classificationFromDb } from "@/lib/classifications";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { DEFAULT_TERMS_KEY, getSetting } from "@/lib/api/company-settings";
+import {
+  DEFAULT_TERMS_KEY,
+  DEFAULT_TERMS_GUARDIAN_KEY,
+  getSetting,
+} from "@/lib/api/company-settings";
+import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
+import type { QuoteTemplateSlug } from "@/lib/company-profile";
 import { hasPermission } from "@/lib/permissions";
 import type {
   DbClient,
@@ -185,14 +191,24 @@ export default async function NewQuotePage() {
   );
   const classifications = dbClassifications.map(classificationFromDb);
 
-  // Chunk 2: the admin-managed default Terms (null when unset → client falls
-  // back to the DEFAULT_TERMS const). Best-effort — never block quote creation.
-  let defaultTerms: string | undefined;
+  // Chunk 2 / G2: the admin-managed default Terms per entity (null when unset →
+  // fall back to the in-code const). Best-effort — never block quote creation.
+  let integratedTerms: string | null = null;
+  let guardianTerms: string | null = null;
   try {
-    defaultTerms = (await getSetting(DEFAULT_TERMS_KEY)) ?? undefined;
+    integratedTerms = await getSetting(DEFAULT_TERMS_KEY);
   } catch {
-    defaultTerms = undefined;
+    integratedTerms = null;
   }
+  try {
+    guardianTerms = await getSetting(DEFAULT_TERMS_GUARDIAN_KEY);
+  } catch {
+    guardianTerms = null;
+  }
+  const defaultTermsByTemplate: Record<QuoteTemplateSlug, string> = {
+    integrated_solutions: integratedTerms ?? DEFAULT_TERMS,
+    guardian: guardianTerms ?? DEFAULT_TERMS_GUARDIAN,
+  };
 
   return (
     <NewQuotePageClient
@@ -200,7 +216,7 @@ export default async function NewQuotePage() {
       sitesByClient={adaptedSitesByClient}
       owner={owner}
       classifications={classifications}
-      defaultTerms={defaultTerms}
+      defaultTermsByTemplate={defaultTermsByTemplate}
     />
   );
 }
