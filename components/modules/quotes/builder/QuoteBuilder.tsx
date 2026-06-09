@@ -51,6 +51,7 @@ import {
 } from "@/lib/quote-schedules";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
 import { useReadOnly } from "@/lib/use-read-only";
+import { useRole } from "@/lib/role-context";
 import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
 import {
   sites as MOCK_SITES,
@@ -222,6 +223,9 @@ export function QuoteBuilder({
   };
 
   const ro = useReadOnly(status);
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
+  const canReopen = isAdmin && (status === "Sent" || status === "Approved");
 
   // Auto-pick first site when client changes and current site no longer fits.
   useEffect(() => {
@@ -486,9 +490,7 @@ export function QuoteBuilder({
     const next = persist("Sent");
     upsertQuote(next);
     setStatus("Sent");
-    toast.success(`${number} sent for approval`, {
-      description: "Client copy queued; status moved to Sent.",
-    });
+    toast.success(`${number} submitted for approval`);
   };
 
   // F-3a: Sent -> Approved. Mirrors handleSend; gated in the header by the
@@ -501,6 +503,24 @@ export function QuoteBuilder({
     toast.success(`${number} approved`, {
       description: "Status moved to Approved — ready to convert.",
     });
+  };
+
+  // Chunk 3a: Admin-only reopen Sent/Approved → Draft so it's editable by all
+  // roles again (must be re-approved before it's ready). Forward-only re: stock
+  // — committed units are NOT returned.
+  const handleReopen = () => {
+    if (!canReopen) return;
+    if (
+      !window.confirm(
+        "Move this quote back to Draft? It will be editable by all roles and must be re-approved before it's ready to send. This does not return any committed stock."
+      )
+    ) {
+      return;
+    }
+    const next = persist("Draft");
+    upsertQuote(next);
+    setStatus("Draft");
+    toast.success(`${number} reopened — back to Draft`);
   };
 
   const handlePreview = () => {
@@ -626,6 +646,8 @@ export function QuoteBuilder({
         onPreview={handlePreview}
         onConvert={handleConvert}
         onCommitStock={() => setCommitOpen(true)}
+        onReopen={handleReopen}
+        canReopen={canReopen}
       />
 
       <CommandPalette
