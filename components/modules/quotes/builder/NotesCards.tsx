@@ -3,7 +3,7 @@
 import { ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Can } from "@/lib/role-context";
+import { Can, useRole } from "@/lib/role-context";
 
 interface NotesProps {
   terms: string;
@@ -12,6 +12,12 @@ interface NotesProps {
 }
 
 export function NotesCard({ terms, onChange, disabled }: NotesProps) {
+  // Chunk 3b: the Terms editor is Admin-only. Non-Admins don't see the editor
+  // at all (the terms still render on the PDF/preview for everyone — that's the
+  // client document, untouched here).
+  const { role } = useRole();
+  if (role !== "Admin") return null;
+
   return (
     <Card>
       <CardHeader className="pb-3">

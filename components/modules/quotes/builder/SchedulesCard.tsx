@@ -47,6 +47,7 @@ import {
 import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { useRole } from "@/lib/role-context";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
@@ -104,6 +105,11 @@ function formatBytes(bytes: number): string {
 }
 
 export function SchedulesCard({ schedules, onChange, disabled }: Props) {
+  // Chunk 3b: the Agreement (Terms) + Acceptance schedules can only be deleted
+  // by an Admin — the remove control is hidden for other roles on those two
+  // kinds. Include-toggle, reorder, and all other kinds' deletion are unchanged.
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   // Hidden <input type=file> refs, keyed by stable schedule id (survives reorder).
   const fileInputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
@@ -270,17 +276,23 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                       <EyeOff className="text-muted-foreground h-4 w-4" />
                     )}
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                    disabled={disabled}
-                    onClick={() => remove(idx)}
-                    aria-label="Delete schedule"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {/* Agreement (Terms) + Acceptance are delete-protected:
+                      only an Admin sees the remove control on those two kinds. */}
+                  {(isAdmin ||
+                    (schedule.kind !== "agreement" &&
+                      schedule.kind !== "acceptance")) && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                      disabled={disabled}
+                      onClick={() => remove(idx)}
+                      aria-label="Delete schedule"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
