@@ -48,6 +48,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   /** Full profile row when authenticated; null otherwise. */
   profile: DbProfile | null;
+  /** Chunk 3c: the current user's per-user grant keys (allow-only overlay). */
+  grants: Set<string>;
   status: AuthStatus;
   isAuthenticated: boolean;
   signOut: () => Promise<void>;
@@ -153,6 +155,11 @@ async function fetchProfile(userId: string): Promise<DbProfile | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [profile, setProfile] = useState<DbProfile | null>(null);
+  // Chunk 3c: the current user's grant keys. Loaded by a separate effect keyed
+  // on profile.id (decoupled from the auth-flow paths above), so it re-fetches
+  // whenever ANY path sets the profile. Best-effort — empty on failure; never
+  // blocks auth.
+  const [grants, setGrants] = useState<Set<string>>(new Set());
 
   // We use a ref to avoid stale-closure issues inside the auth subscription.
   const mountedRef = useRef(true);
@@ -506,6 +513,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Chunk 3c: load the signed-in user's grants whenever the profile id changes
+  // (covers every auth path: seed, fast-path, getUser, auth-state-change). RLS
+  // lets an authenticated user read user_grants; best-effort, empty on failure.
+  const profileId = profile?.id ?? null;
+  useEffect(() => {
+    if (!profileId) {
+      setGrants(new Set());
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("user_grants")
+          .select("grant_key")
+          .eq("user_id", profileId);
+        if (!active) return;
+        if (error) {
+          setGrants(new Set());
+          return;
+        }
+        setGrants(new Set((data ?? []).map((r) => r.grant_key as string)));
+      } catch {
+        if (active) setGrants(new Set());
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
   const signOut = useCallback(async () => {
     // Fire-and-forget sign-out via /auth/signout (GET) — fixed 2026-05-10.
     //
@@ -609,13 +647,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       profile,
+      grants,
       status,
       isAuthenticated: status === "authenticated",
       signOut,
       refreshProfile,
       seedSession,
     }),
-    [user, profile, status, signOut, refreshProfile, seedSession]
+    [user, profile, grants, status, signOut, refreshProfile, seedSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

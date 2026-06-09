@@ -9,6 +9,7 @@ import {
   terminateUserAdmin,
   type InviteUserPayload,
 } from "@/lib/api/users";
+import { setGrant } from "@/lib/api/user-grants";
 import { writeAuditLog } from "@/lib/auth/audit";
 import { getRequestInfo } from "@/lib/auth/request-info";
 import type { DbRole } from "@/lib/types/database";
@@ -192,4 +193,26 @@ export async function terminateUserAction(
   userId: string
 ): Promise<ActionResult<{ user_id: string }>> {
   return statusChange(userId, "terminate");
+}
+
+// ----------------------------------------------------------------------------
+// Per-user grants (Chunk 3c)
+
+export async function setUserGrantAction(
+  userId: string,
+  grantKey: string,
+  enabled: boolean
+): Promise<ActionResult<{ user_id: string; grant_key: string; enabled: boolean }>> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+  try {
+    await setGrant(userId, grantKey, enabled);
+    revalidatePath("/users");
+    return { ok: true, data: { user_id: userId, grant_key: grantKey, enabled } };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Failed to update grant",
+    };
+  }
 }

@@ -2,6 +2,7 @@ import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { listVisibleProfilesAdmin } from "@/lib/api/users";
+import { listAllUserGrants } from "@/lib/api/user-grants";
 import { getRecentAuditLog, type AuditEventWithProfile } from "@/lib/api/audit";
 import UsersView from "./UsersView";
 
@@ -30,7 +31,23 @@ export default async function UsersPage() {
     console.error("[users page] getRecentAuditLog failed:", e);
   }
 
-  return <UsersView realUsers={realUsers} auditEvents={auditEvents} />;
+  // Chunk 3c: per-user grants → a userId → grant_key[] map for the toggles.
+  const grantsByUser: Record<string, string[]> = {};
+  try {
+    for (const g of await listAllUserGrants()) {
+      (grantsByUser[g.user_id] ??= []).push(g.grant_key);
+    }
+  } catch (e) {
+    console.error("[users page] listAllUserGrants failed:", e);
+  }
+
+  return (
+    <UsersView
+      realUsers={realUsers}
+      auditEvents={auditEvents}
+      grantsByUser={grantsByUser}
+    />
+  );
 }
 
 function RestrictedCard() {
