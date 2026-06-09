@@ -28,6 +28,8 @@ import { PdfPreviewPane } from "./PdfPreviewPane";
 import {
   DEFAULT_TAX_RATE,
   DEFAULT_TERMS,
+  DEFAULT_TERMS_GUARDIAN,
+  DEFAULT_TERMS_BY_TEMPLATE,
   SECTION_PRESETS,
   emptyLineItem,
   newId,
@@ -99,6 +101,11 @@ interface Props {
   // Optional — the /quotes/[id] client route doesn't supply it and the
   // synchronous classificationsFor() falls back to the hardcoded seed.
   classifications?: LineItemClassification[];
+  // G2: per-entity default Terms keyed by template slug. Used to seed a new
+  // quote's terms and to swap terms when the entity changes (only when the
+  // current terms are an unedited default). Optional — falls back to the
+  // in-code DEFAULT_TERMS_BY_TEMPLATE map when not supplied (e.g. legacy paths).
+  defaultTermsByTemplate?: Record<QuoteTemplateSlug, string>;
 }
 
 export function QuoteBuilder({
@@ -108,8 +115,12 @@ export function QuoteBuilder({
   sitesByClientOverride,
   ownerOverride,
   classifications,
+  defaultTermsByTemplate,
 }: Props) {
   const router = useRouter();
+  // Effective per-entity terms map: server-resolved values when provided,
+  // else the in-code defaults.
+  const termsByTemplate = defaultTermsByTemplate ?? DEFAULT_TERMS_BY_TEMPLATE;
   useQuotes(); // subscribe to store updates so the builder re-renders if state changes elsewhere
   const [saving, setSaving] = useState(false);
 
@@ -168,7 +179,15 @@ export function QuoteBuilder({
     initial.projectType ?? "New Install"
   );
   const [sections, setSections] = useState<QuoteSection[]>(initial.sections ?? []);
-  const [terms, setTerms] = useState<string>(initial.terms ?? DEFAULT_TERMS);
+  // Seed from the quote's saved terms when present (existing quotes), else from
+  // the selected entity's default (new quotes). NewQuotePageClient already sets
+  // initial.terms to the default entity's value, so the fallback below mainly
+  // guards the legacy /quotes/[id] path and any quote without terms.
+  const [terms, setTerms] = useState<string>(
+    initial.terms ??
+      termsByTemplate[initial.templateSlug ?? DEFAULT_QUOTE_TEMPLATE_SLUG] ??
+      termsByTemplate.integrated_solutions
+  );
   const [internalNotes, setInternalNotes] = useState<string>(
     initial.internalNotes ?? ""
   );
@@ -220,6 +239,24 @@ export function QuoteBuilder({
   const handleThemeChange = (slug: QuoteThemeSlug) => {
     setThemeSlug(slug);
     writeLastUsedThemeSlug(slug);
+  };
+
+  // G2: switching entity (template) re-seeds the Terms — but ONLY when the
+  // current terms are an unedited default (or empty). If the user has
+  // customized the terms, they are preserved across the switch.
+  const handleTemplateChange = (next: QuoteTemplateSlug) => {
+    setTemplateSlug(next);
+    const knownDefaults = new Set([
+      termsByTemplate.integrated_solutions,
+      termsByTemplate.guardian,
+      DEFAULT_TERMS,
+      DEFAULT_TERMS_GUARDIAN,
+      "",
+    ]);
+    const current = terms ?? "";
+    if (knownDefaults.has(current) || knownDefaults.has(current.trim())) {
+      setTerms(termsByTemplate[next]);
+    }
   };
 
   const ro = useReadOnly(status);
@@ -736,7 +773,7 @@ export function QuoteBuilder({
             onShowNameChange={setShowName}
             showDescription={showDescription}
             onShowDescriptionChange={setShowDescription}
-            onTemplateChange={setTemplateSlug}
+            onTemplateChange={handleTemplateChange}
             onThemeChange={handleThemeChange}
             onShowUnitPriceChange={setShowUnitPrice}
             disabled={ro.readOnly}

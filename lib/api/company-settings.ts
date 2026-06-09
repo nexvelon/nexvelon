@@ -9,6 +9,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const DEFAULT_TERMS_KEY = "default_quote_terms";
+export const DEFAULT_TERMS_GUARDIAN_KEY = "default_quote_terms_guardian";
 
 async function db() {
   return createSupabaseServerClient();
