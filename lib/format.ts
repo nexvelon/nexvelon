@@ -58,6 +58,28 @@ export function businessDatePlusDaysISO(days: number, date: Date = new Date()): 
   return businessDateISO(anchor);
 }
 
+const businessStampFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "2-digit",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23", // 00–23 (NOT hour12:false, which can emit "24")
+});
+
+/**
+ * Timestamp-style quote number: YYMMDDHHMM in America/Toronto. Self-contained —
+ * no sequence lookup. Built via formatToParts (never toISOString) so it reflects
+ * the Toronto wall-clock. e.g. 2026-06-08 23:45 Toronto → "2606082345".
+ */
+export function businessQuoteNumber(date: Date = new Date()): string {
+  const parts = businessStampFmt.formatToParts(date);
+  const get = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return get("year") + get("month") + get("day") + get("hour") + get("minute");
+}
+
 export function formatCurrency(n: number): string {
   return usd2.format(n);
 }
