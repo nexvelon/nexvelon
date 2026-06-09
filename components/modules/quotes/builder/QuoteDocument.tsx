@@ -1013,10 +1013,13 @@ function SectionTitle({
 function SignatureBlock({
   leftLabel,
   rightLabel,
+  clientOnly = false,
   styles,
 }: {
   leftLabel: string;
-  rightLabel: string;
+  rightLabel?: string;
+  /** When true, render only the left (client) column — no counter-signature. */
+  clientOnly?: boolean;
   styles: Styles;
 }) {
   return (
@@ -1030,14 +1033,16 @@ function SignatureBlock({
             Printed name &amp; title
           </Text>
         </View>
-        <View style={styles.signatureColumn}>
-          <View style={styles.signatureLine} />
-          <Text style={styles.signatureLabel}>{rightLabel}</Text>
-          <View style={styles.signaturePrintedLine} />
-          <Text style={styles.signaturePrintedLabel}>
-            Printed name &amp; title
-          </Text>
-        </View>
+        {!clientOnly && (
+          <View style={styles.signatureColumn}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.signatureLabel}>{rightLabel}</Text>
+            <View style={styles.signaturePrintedLine} />
+            <Text style={styles.signaturePrintedLabel}>
+              Printed name &amp; title
+            </Text>
+          </View>
+        )}
       </View>
       <Text style={styles.signatureDateLabel}>
         Date: ____________________________
@@ -1334,8 +1339,6 @@ function ParticularsPage({
         styles={styles}
       />
 
-      <RuleWithOrnament styles={styles} ornament={"✦"} sparkle />
-
       {renderableSections.map((s, sectionIdx) => {
         const prefix = sectionLetterPrefix(sectionIdx);
         return (
@@ -1501,8 +1504,6 @@ function AgreementPage({
         styles={styles}
       />
 
-      <RuleWithOrnament styles={styles} />
-
       {lines.map((line, i) => (
         <Text style={styles.agreementLine} key={i}>
           {line || " "}
@@ -1569,15 +1570,23 @@ function AcceptancePage({
         </View>
       </View>
 
-      <RuleWithOrnament styles={styles} />
+      <Text style={styles.acceptHeading}>Acceptance of Proposal</Text>
 
-      <Text style={styles.acceptHeading}>Witnessed &amp; Agreed</Text>
+      <Text style={styles.agreementLine}>
+        The undersigned acknowledges having read this Quote/Proposal and{" "}
+        {template.legalName}&apos;s Terms and Conditions, which are hereby agreed
+        to and accepted this _____ day of ________________ , 20____.
+      </Text>
 
       <SignatureBlock
         leftLabel="Client signature"
-        rightLabel={`${template.legalName} signature`}
+        clientOnly
         styles={styles}
       />
+
+      <Text style={styles.agreementLine}>
+        I have authority to bind the corporation.
+      </Text>
 
       <View style={styles.acceptRule} />
 
@@ -1696,8 +1705,6 @@ function AssurancePage({
         styles={styles}
       />
 
-      <RuleWithOrnament styles={styles} />
-
       <View style={styles.assuranceGrid}>
         {schedule.cards.map((card) => (
           <View key={card.id} style={styles.assuranceCard} wrap={false}>
@@ -1751,8 +1758,6 @@ function CustomPage({
         title={schedule.title}
         styles={styles}
       />
-
-      <RuleWithOrnament styles={styles} ornament={"✦"} sparkle />
 
       {(doc.content ?? []).map((node, i) =>
         renderRichTextBlock(node, styles, i),
@@ -1842,7 +1847,6 @@ function DrawingsSummaryPage({
         title={schedule.title}
         styles={styles}
       />
-      <RuleWithOrnament styles={styles} ornament={"❦"} />
 
       {/* Title block */}
       <View style={styles.drawingsTitleBlock}>
