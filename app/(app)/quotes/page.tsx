@@ -19,7 +19,7 @@ import { useQuotes, upsertQuote } from "@/lib/quote-store";
 import { clients } from "@/lib/mock-data/clients";
 import { users } from "@/lib/mock-data/users";
 import { projects } from "@/lib/mock-data/projects";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, businessDateISO } from "@/lib/format";
 import {
   newId,
   totalValue,
@@ -98,7 +98,7 @@ export default function QuotesListPage() {
           id: newId("q"),
           number: `${q.number}-COPY`,
           status: "Draft",
-          createdAt: new Date().toISOString().slice(0, 10),
+          createdAt: businessDateISO(),
           projectId: undefined,
         };
         upsertQuote(dup);

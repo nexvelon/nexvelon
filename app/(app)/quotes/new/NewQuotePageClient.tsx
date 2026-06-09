@@ -17,6 +17,7 @@ import {
   newId,
   nextQuoteNumber,
 } from "@/lib/quote-helpers";
+import { businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
 import { createDefaultSchedules } from "@/lib/quote-schedules";
 import { DEFAULT_QUOTE_THEME_SLUG } from "@/lib/quote-themes";
 import { DEFAULT_QUOTE_TEMPLATE_SLUG } from "@/lib/company-profile";
@@ -40,10 +41,8 @@ export function NewQuotePageClient({
   const quotesLoaded = useQuotesLoaded();
 
   const initial = useMemo<Quote>(() => {
-    const today = new Date();
-    const expiry = new Date(today);
-    expiry.setDate(expiry.getDate() + 30);
-
+    // Calendar dates in the business timezone (America/Toronto) — never via
+    // toISOString(), which rolls to tomorrow after ~8pm Eastern.
     return {
       id: newId("q"),
       number: nextQuoteNumber(allQuotes),
@@ -51,8 +50,8 @@ export function NewQuotePageClient({
       clientId: "",
       siteId: "",
       status: "Draft",
-      createdAt: today.toISOString().slice(0, 10),
-      expiresAt: expiry.toISOString().slice(0, 10),
+      createdAt: businessDateISO(),
+      expiresAt: businessDatePlusDaysISO(30),
       ownerId: owner.id,
       paymentTerms: "Net 30",
       taxRate: DEFAULT_TAX_RATE,
