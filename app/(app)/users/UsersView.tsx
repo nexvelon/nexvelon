@@ -30,9 +30,14 @@ type TabKey = (typeof TABS)[number]["key"];
 interface UsersViewProps {
   realUsers: DbProfile[];
   auditEvents: AuditEventWithProfile[];
+  grantsByUser: Record<string, string[]>;
 }
 
-export default function UsersView({ realUsers, auditEvents }: UsersViewProps) {
+export default function UsersView({
+  realUsers,
+  auditEvents,
+  grantsByUser,
+}: UsersViewProps) {
   const { user } = useAuth();
   const [tab, setTab] = useState<TabKey>("users");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -102,7 +107,11 @@ export default function UsersView({ realUsers, auditEvents }: UsersViewProps) {
       </nav>
 
       {tab === "users" && (
-        <UsersTab realUsers={realUsers} onInvite={() => setInviteOpen(true)} />
+        <UsersTab
+          realUsers={realUsers}
+          grantsByUser={grantsByUser}
+          onInvite={() => setInviteOpen(true)}
+        />
       )}
       {tab === "roles" && <RolesTab />}
       {tab === "matrix" && <PermissionsMatrixTab />}

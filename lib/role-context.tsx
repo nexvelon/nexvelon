@@ -20,18 +20,21 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 interface RoleContextValue {
   role: Role;
+  /** Chunk 3c: the current user's per-user grant keys (allow-only overlay). */
+  grants: Set<string>;
 }
 
 const RoleContext = createContext<RoleContextValue | null>(null);
 
 const DEFAULT_ROLE: Role = "ViewOnly";
+const EMPTY_GRANTS: Set<string> = new Set();
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, grants } = useAuth();
 
   const value = useMemo<RoleContextValue>(
-    () => ({ role: user?.role ?? DEFAULT_ROLE }),
-    [user?.role]
+    () => ({ role: user?.role ?? DEFAULT_ROLE, grants: grants ?? EMPTY_GRANTS }),
+    [user?.role, grants]
   );
 
   return (

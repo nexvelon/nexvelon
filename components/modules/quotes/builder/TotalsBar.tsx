@@ -12,6 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
+import { GRANT_EDIT_DISCOUNT } from "@/lib/grants";
 import { formatCurrency } from "@/lib/format";
 import { quoteTotals } from "@/lib/quote-helpers";
 import type { QuoteSection } from "@/lib/types";
@@ -35,8 +36,12 @@ export function TotalsBar({
   onChangeDiscountType,
   disabled,
 }: Props) {
-  const { role } = useRole();
+  const { role, grants } = useRole();
   const showMargin = hasPermission(role, "quotes", "viewMargin");
+  // Chunk 3c: discount editing is Admin-only by default; the quotes.edit_discount
+  // per-user grant unlocks it. Controls stay VISIBLE but disabled when locked.
+  const canEditDiscount = role === "Admin" || grants.has(GRANT_EDIT_DISCOUNT);
+  const discountDisabled = disabled || !canEditDiscount;
 
   const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
 
@@ -54,7 +59,7 @@ export function TotalsBar({
               const n = parseFloat(e.target.value);
               onChangeDiscount(isNaN(n) ? 0 : n);
             }}
-            disabled={disabled}
+            disabled={discountDisabled}
             className="text-right text-xs tabular-nums"
             placeholder="0"
           />
@@ -63,7 +68,7 @@ export function TotalsBar({
             onValueChange={(v) =>
               onChangeDiscountType((v ?? "pct") as "pct" | "amount")
             }
-            disabled={disabled}
+            disabled={discountDisabled}
           >
             <SelectTrigger className="w-20">
               <SelectValue>{discountType === "pct" ? "%" : "$"}</SelectValue>

@@ -57,7 +57,9 @@ import {
   reactivateUserAction,
   suspendUserAction,
   terminateUserAction,
+  setUserGrantAction,
 } from "@/app/(app)/users/actions";
+import { GRANT_EDIT_DISCOUNT } from "@/lib/grants";
 import type { Role } from "@/lib/types";
 import type { DbProfile, DbProfileStatus } from "@/lib/types/database";
 
@@ -104,10 +106,11 @@ function profileDisplayName(p: DbProfile): string {
 
 interface UsersTabProps {
   realUsers: DbProfile[];
+  grantsByUser: Record<string, string[]>;
   onInvite: () => void;
 }
 
-export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
+export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -188,6 +191,7 @@ export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
               <TableHead className="text-[11px] uppercase">Status</TableHead>
               <TableHead className="text-[11px] uppercase">Last Login</TableHead>
               <TableHead className="text-[11px] uppercase">MFA</TableHead>
+              <TableHead className="text-[11px] uppercase">Discounts</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -195,7 +199,7 @@ export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="text-muted-foreground py-12 text-center text-xs"
                 >
                   No matching users.
@@ -254,6 +258,15 @@ export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
                       <X className="text-muted-foreground/40 h-4 w-4" />
                     )}
                   </TableCell>
+                  <TableCell>
+                    <DiscountGrantToggle
+                      userId={u.id}
+                      isAdmin={appRole === "Admin"}
+                      initialEnabled={
+                        grantsByUser[u.id]?.includes(GRANT_EDIT_DISCOUNT) ?? false
+                      }
+                    />
+                  </TableCell>
                   <TableCell className="text-right">
                     <UserRowActions profile={u} />
                   </TableCell>
@@ -264,6 +277,58 @@ export function UsersTab({ realUsers, onInvite }: UsersTabProps) {
         </Table>
       </Card>
     </div>
+  );
+}
+
+// Chunk 3c — per-user "Can edit discounts" toggle. Admins always can (shown
+// on + disabled, the grant is moot); for everyone else it flips the
+// quotes.edit_discount grant via the requireAdmin-gated action. Optimistic.
+function DiscountGrantToggle({
+  userId,
+  isAdmin,
+  initialEnabled,
+}: {
+  userId: string;
+  isAdmin: boolean;
+  initialEnabled: boolean;
+}) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [pending, startTransition] = useTransition();
+
+  if (isAdmin) {
+    return (
+      <span className="text-muted-foreground inline-flex items-center gap-1 text-[10px]">
+        <Check className="text-emerald-600 h-3.5 w-3.5" />
+        Always
+      </span>
+    );
+  }
+
+  const toggle = (next: boolean) => {
+    setEnabled(next); // optimistic
+    startTransition(async () => {
+      const res = await setUserGrantAction(userId, GRANT_EDIT_DISCOUNT, next);
+      if (!res.ok) {
+        setEnabled(!next); // revert
+        toast.error(res.error);
+      } else {
+        toast.success(
+          next ? "Discount editing granted" : "Discount editing revoked"
+        );
+      }
+    });
+  };
+
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs">
+      <input
+        type="checkbox"
+        checked={enabled}
+        disabled={pending}
+        onChange={(e) => toggle(e.target.checked)}
+      />
+      <span className="text-muted-foreground">{enabled ? "On" : "Off"}</span>
+    </label>
   );
 }
 
