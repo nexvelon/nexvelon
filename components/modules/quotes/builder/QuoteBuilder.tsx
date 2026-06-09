@@ -777,6 +777,7 @@ export function QuoteBuilder({
             onThemeChange={handleThemeChange}
             onShowUnitPriceChange={setShowUnitPrice}
             disabled={ro.readOnly}
+            isAdmin={isAdmin}
           />
 
           <SchedulesCard
