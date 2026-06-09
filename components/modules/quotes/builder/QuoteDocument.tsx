@@ -642,6 +642,16 @@ function createStyles(theme: QuoteTheme) {
       lineHeight: 1.5,
       marginBottom: 6,
     },
+    // Compact body rows for the Terms/Agreement page only — small but
+    // legible (~7pt) so the full T&C spans fewer pages. Not used on the
+    // Acceptance page, which keeps agreementLine.
+    agreementBody: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 7,
+      color: theme.ink,
+      lineHeight: 1.25,
+      marginBottom: 2,
+    },
 
     // ----- Acceptance page -----
     acceptBox: {
@@ -1505,7 +1515,7 @@ function AgreementPage({
       />
 
       {lines.map((line, i) => (
-        <Text style={styles.agreementLine} key={i}>
+        <Text style={styles.agreementBody} key={i}>
           {line || " "}
         </Text>
       ))}
