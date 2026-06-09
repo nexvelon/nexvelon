@@ -17,7 +17,7 @@ This Quote/Proposal and any resulting agreement are with Nexvelon Integrated Sol
 
 Payment Terms
 1. Any invoice not paid within the selected payment term accrues interest at 2.5% per month (30% per annum) from the due date until paid in full.
-2. A surcharge of 2.4% plus applicable taxes applies to any payment made by credit card.
+2. A surcharge of 2.5% plus applicable taxes applies to any payment made by credit card.
 3. For all material orders, 70% of the total material cost is payable in advance; the remaining 30% is due immediately upon receipt of the material.
 4. Once Nexvelon receives the ordered parts, the remaining 30% balance is due immediately. Nexvelon will send an email with photographs of the received items, which the Client accepts as proof of receipt for collecting the remaining balance.
 5. If the Client elects to have parts delivered directly to site, the Client must pay 100% of those parts' cost in advance and is responsible for storing them securely and maintaining a sign-in/sign-out log of all parts removed by any person. This log is the reference for accountability if any items are missing or lost on site.
@@ -30,7 +30,11 @@ Scope & Security Consulting
 8. Nexvelon Integrated Solutions Inc. is not a security consultant and does not provide security consulting services. Nexvelon does not guarantee against, and assumes no liability for, cyber attacks or security breaches. A Client requiring security consulting must separately engage a qualified security consultant.
 
 Design, Drawings & Device Placement
-9. Shop drawings will be provided for all equipment and parts. Nexvelon is not a consultant; the rough-in, placement, and final locations of all security and intrusion devices are determined by and carried out per the consultant's instructions, whose decision is final. It is the consultant's responsibility to finalize device locations and placement. Nexvelon is not liable for any event or outcome arising from locations or placements made per the consultant's instructions.`;
+9. Shop drawings will be provided for all equipment and parts. Nexvelon is not a consultant; the rough-in, placement, and final locations of all security and intrusion devices are determined by and carried out per the consultant's instructions, whose decision is final. It is the consultant's responsibility to finalize device locations and placement. Nexvelon is not liable for any event or outcome arising from locations or placements made per the consultant's instructions.
+
+Delivery & Materials
+10. When parts or materials are out for delivery, the Client must ensure a designated contact is available to receive them in accordance with the delivery company's schedule and time window. If the assigned contact is unreachable, or a delivery is returned for any reason attributable to the Client, all costs associated with that delivery — including any re-delivery — are payable by the Client.
+11. Timely availability of parts can only be guaranteed where 100% payment for all parts has been made in advance. If a project is delayed by days, weeks, months, or years — during or after which an ordered part becomes discontinued — no refund will be issued for parts already ordered. Where updated or replacement parts are required, the Client is responsible for the additional cost.`;
 
 export const SECTION_PRESETS = [
   "Access Control Hardware",

@@ -530,12 +530,12 @@ export async function generateSiteTemplate(): Promise<Blob> {
     formula:
       '="Payment terms and conditions:" & CHAR(10) & ' +
       '"1> Invoices not settled beyond the selected payment term accrues interest at a rate of " & ' +
-      "IFERROR(VLOOKUP($B$17,LateFees,2,FALSE),2.91) & " +
+      "IFERROR(VLOOKUP($B$17,LateFees,2,FALSE),2.5) & " +
       '"% per month (" & ' +
-      "IFERROR(VLOOKUP($B$17,LateFees,3,FALSE),35) & " +
+      "IFERROR(VLOOKUP($B$17,LateFees,3,FALSE),30) & " +
       '"% per annum) effective from that due date on all outstanding balances." & CHAR(10) & ' +
       '"2> Credit card payments will incur a " & ' +
-      "IFERROR(VLOOKUP($B$17,LateFees,4,FALSE),2.4) & " +
+      "IFERROR(VLOOKUP($B$17,LateFees,4,FALSE),2.5) & " +
       '"% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT."',
     result: "",
   };

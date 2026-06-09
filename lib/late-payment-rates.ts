@@ -13,8 +13,8 @@
 //     allowed under each country's merchant agreement regulations as
 //     of 2024. Operators in regulated markets (Ireland, UAE) where
 //     surcharges are prohibited see 0%.
-//   * Canada values match the legacy hard-coded constants from
-//     CL-19's PAYMENT_TERMS_AND_CONDITIONS_TEXT (2.91% / 35% / 2.4%).
+//   * Canada values are reconciled with DEFAULT_TERMS (lib/quote-helpers
+//     .ts): 2.5% monthly / 30% annual interest, 2.5% credit-card surcharge.
 
 import type { Country } from "./countries";
 
@@ -30,7 +30,7 @@ export interface LatePaymentRates {
 
 export const LATE_PAYMENT_RATES_BY_COUNTRY: Record<Country, LatePaymentRates> =
   {
-    Canada: { monthlyPct: 2.91, annualPct: 35, ccSurchargePct: 2.4 },
+    Canada: { monthlyPct: 2.5, annualPct: 30, ccSurchargePct: 2.5 },
     USA: { monthlyPct: 1.5, annualPct: 18, ccSurchargePct: 3.0 },
     Ireland: { monthlyPct: 0.84, annualPct: 10.15, ccSurchargePct: 0 },
     India: { monthlyPct: 1.5, annualPct: 18, ccSurchargePct: 2.0 },
