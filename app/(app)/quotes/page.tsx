@@ -22,6 +22,7 @@ import { projects } from "@/lib/mock-data/projects";
 import { formatCurrency, businessDateISO } from "@/lib/format";
 import {
   newId,
+  nextQuoteNumber,
   totalValue,
   weightedPipelineValue,
 } from "@/lib/quote-helpers";
@@ -93,13 +94,25 @@ export default function QuotesListPage() {
     () => ({
       onView: (q: Quote) => router.push(`/quotes/${q.id}`),
       onDuplicate: (q: Quote) => {
+        // Deep-copy sections so we don't mutate the source quote's line objects.
+        // Clear committedStockId on every line (the copy must commit its OWN
+        // stock — F-3b idempotency marker); keep stockUnitId pins intact.
+        const sections = (q.sections ?? []).map((s) => ({
+          ...s,
+          items: s.items.map((it) => {
+            const copy = { ...it };
+            delete copy.committedStockId;
+            return copy;
+          }),
+        }));
         const dup: Quote = {
           ...q,
           id: newId("q"),
-          number: `${q.number}-COPY`,
+          number: nextQuoteNumber(),
           status: "Draft",
           createdAt: businessDateISO(),
           projectId: undefined,
+          sections,
         };
         upsertQuote(dup);
         toast.success(`Duplicated ${q.number}`, {
