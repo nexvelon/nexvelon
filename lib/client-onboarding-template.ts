@@ -19,7 +19,7 @@ import { LATE_PAYMENT_RATES_BY_COUNTRY } from "./late-payment-rates";
 //   * Payment Terms: 4 options only (Due on receipt / NET 7 / NET 15 /
 //     NET 30); drops Credit Limit row; labels prefixed "Select " for
 //     clarity. NO pre-filled defaults across the section.
-//   * NEW locked-looking late-payment / 2.8% interest text block under
+//   * NEW locked-looking late-payment / interest text block under
 //     the payment section (visual-only — italic gray fill, NOT
 //     cell.protection which would lock every input cell too).
 //   * Drops Portal Access + Notes sections entirely.
@@ -605,7 +605,7 @@ export async function generateClientTemplate(): Promise<Blob> {
   // country cell ($B$10). When the operator/client picks a billing
   // country, the locked block auto-rewrites to that country's monthly
   // interest %, annual %, and credit-card surcharge %. IFERROR fallback
-  // uses Canada defaults (2.91 / 35 / 2.4) when no country is selected.
+  // uses Canada defaults (2.5 / 30 / 2.5) when no country is selected.
   //
   // CHAR(10) produces a hard line break — rendered as real newlines
   // thanks to wrapText: true below.
@@ -618,12 +618,12 @@ export async function generateClientTemplate(): Promise<Blob> {
     formula:
       '="Payment terms and conditions:" & CHAR(10) & ' +
       '"1> Invoices not settled beyond the selected payment term accrues interest at a rate of " & ' +
-      "IFERROR(VLOOKUP($B$10,LateFees,2,FALSE),2.91) & " +
+      "IFERROR(VLOOKUP($B$10,LateFees,2,FALSE),2.5) & " +
       '"% per month (" & ' +
-      "IFERROR(VLOOKUP($B$10,LateFees,3,FALSE),35) & " +
+      "IFERROR(VLOOKUP($B$10,LateFees,3,FALSE),30) & " +
       '"% per annum) effective from that due date on all outstanding balances." & CHAR(10) & ' +
       '"2> Credit card payments will incur a " & ' +
-      "IFERROR(VLOOKUP($B$10,LateFees,4,FALSE),2.4) & " +
+      "IFERROR(VLOOKUP($B$10,LateFees,4,FALSE),2.5) & " +
       '"% merchant processing surcharge. To avoid this fee, you may choose to pay via EFT."',
     result: "",
   };
