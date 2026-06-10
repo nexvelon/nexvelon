@@ -36,10 +36,12 @@ import {
   createAssuranceSchedule,
   createCustomSchedule,
   createDrawingsSchedule,
+  createDispatchSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
+  type DispatchScheduleInstance,
   type DrawingsScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
@@ -47,12 +49,15 @@ import {
 import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { DispatchEditor } from "./DispatchEditor";
 import { useRole } from "@/lib/role-context";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
   onChange: (next: QuoteScheduleInstance[]) => void;
   disabled?: boolean;
+  /** GF-2: the "dispatch" add-option is offered only for Guardian quotes. */
+  isGuardian?: boolean;
 }
 
 const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
@@ -63,21 +68,27 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   agreement: "Agreement",
   acceptance: "Acceptance",
   custom: "Custom",
+  dispatch: "Dispatch & False-Alarm Election",
 };
 
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
   "assurance",
+  "dispatch",
   "drawings",
   "agreement",
   "acceptance",
   "custom",
 ];
 
+// GF-2: kinds offered only on Guardian quotes.
+const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = ["dispatch"];
+
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
+  if (kind === "dispatch") return createDispatchSchedule();
   if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
@@ -104,7 +115,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function SchedulesCard({ schedules, onChange, disabled }: Props) {
+export function SchedulesCard({
+  schedules,
+  onChange,
+  disabled,
+  isGuardian = false,
+}: Props) {
   // Chunk 3b: the Agreement (Terms) + Acceptance schedules can only be deleted
   // by an Admin — the remove control is hidden for other roles on those two
   // kinds. Include-toggle, reorder, and all other kinds' deletion are unchanged.
@@ -331,6 +347,31 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
                 </div>
               )}
 
+              {schedule.kind === "dispatch" && (
+                <DispatchEditor
+                  election={(schedule as DispatchScheduleInstance).election}
+                  authorizePolice={
+                    (schedule as DispatchScheduleInstance).authorizePolice
+                  }
+                  authorizeFire={
+                    (schedule as DispatchScheduleInstance).authorizeFire
+                  }
+                  authorizeAmbulance={
+                    (schedule as DispatchScheduleInstance).authorizeAmbulance
+                  }
+                  regionalFeeNote={
+                    (schedule as DispatchScheduleInstance).regionalFeeNote
+                  }
+                  privateResponseNote={
+                    (schedule as DispatchScheduleInstance).privateResponseNote
+                  }
+                  onChange={(patch) =>
+                    patchAt(idx, patch as Partial<QuoteScheduleInstance>)
+                  }
+                  disabled={disabled}
+                />
+              )}
+
               {schedule.kind === "custom" && (
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px]">Body</Label>
@@ -431,7 +472,9 @@ export function SchedulesCard({ schedules, onChange, disabled }: Props) {
             <span>Add schedule</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {ADDABLE_KINDS.map((kind) => {
+            {ADDABLE_KINDS.filter(
+              (kind) => isGuardian || !GUARDIAN_ONLY_KINDS.includes(kind)
+            ).map((kind) => {
               const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
               const single = !def.allowMultiple && kindAlreadyExists(kind);
               return (

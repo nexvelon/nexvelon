@@ -784,6 +784,7 @@ export function QuoteBuilder({
             schedules={schedules}
             onChange={setSchedules}
             disabled={ro.readOnly}
+            isGuardian={templateSlug === "guardian"}
           />
 
           <div className="space-y-4">

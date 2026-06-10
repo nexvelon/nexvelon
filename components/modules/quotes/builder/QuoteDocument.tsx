@@ -18,6 +18,7 @@ import type {
   AcceptanceScheduleInstance,
   AgreementScheduleInstance,
   AssuranceScheduleInstance,
+  DispatchScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
   DrawingsScheduleInstance,
@@ -1745,6 +1746,93 @@ function AssurancePage({
   );
 }
 
+// GF-2 — Guardian Dispatch & False-Alarm Election page. Renders the regional-
+// fee acknowledgment, the dispatch election (marked options), per-authority
+// authorization with initial lines, and a closing responsibility note. No
+// pricing.
+interface DispatchPageProps extends CommonPageProps {
+  schedule: DispatchScheduleInstance;
+}
+
+function DispatchPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: DispatchPageProps) {
+  const subtitleSuffix =
+    schedule.subtitle || "Authority dispatch and regional false-alarm fees";
+  const mark = (on: boolean) => (on ? "[X]" : "[ ]");
+  const authorities: { label: string; on: boolean }[] = [
+    { label: "Police", on: schedule.authorizePolice },
+    { label: "Fire", on: schedule.authorizeFire },
+    { label: "Ambulance", on: schedule.authorizeAmbulance },
+  ];
+
+  return (
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
+
+      {schedule.regionalFeeNote && schedule.regionalFeeNote.trim().length > 0 ? (
+        <Text style={styles.agreementLine}>{schedule.regionalFeeNote}</Text>
+      ) : null}
+
+      <Text style={styles.partSectionHeader}>Dispatch Election</Text>
+      <Text style={styles.agreementLine}>
+        {mark(schedule.election === "accept_regional")} I accept the applicable
+        regional police-dispatch fees and authorize Nexvelon to request dispatch
+        accordingly.
+      </Text>
+      <Text style={styles.agreementLine}>
+        {mark(schedule.election === "decline_police")} I decline police dispatch
+        and rely on keyholder and/or private security guard response.
+      </Text>
+
+      {schedule.election === "decline_police" &&
+      schedule.privateResponseNote &&
+      schedule.privateResponseNote.trim().length > 0 ? (
+        <Text style={styles.agreementLine}>{schedule.privateResponseNote}</Text>
+      ) : null}
+
+      <Text style={styles.partSectionHeader}>Authorized Services</Text>
+      {authorities.map((a) => (
+        <Text style={styles.agreementLine} key={a.label}>
+          {mark(a.on)} {a.label}    Client initial: ______
+        </Text>
+      ))}
+
+      <Text style={styles.agreementLine}>
+        Nexvelon is not responsible for the response, non-response, conduct, or
+        timing of any authority or private guard, or for any false-alarm fees,
+        all of which are the Client&apos;s responsibility.
+      </Text>
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -2218,6 +2306,14 @@ export function QuoteDocument(props: DocProps) {
           case "assurance":
             return (
               <AssurancePage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "dispatch":
+            return (
+              <DispatchPage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
