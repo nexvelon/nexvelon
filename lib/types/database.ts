@@ -505,7 +505,8 @@ export type ActivityEntityType =
   | "site"
   | "contact"
   | "inventory"
-  | "vendor";
+  | "vendor"
+  | "purchase_order";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -705,3 +706,74 @@ export type DbVendorInsert = {
 };
 
 export type DbVendorUpdate = Partial<DbVendorInsert>;
+
+// ----------------------------------------------------------------------------
+// Purchase orders (PO-2, migration 0031) — header + lines. Header FKs vendors
+// (ON DELETE RESTRICT — a vendor with POs can't be deleted). Lines cascade on
+// PO delete and FK inventory_products (RESTRICT). received_qty is reserved for
+// the PO-4 receiving flow; this chunk only reads/writes draft headers + lines.
+// ----------------------------------------------------------------------------
+export type DbPurchaseOrderStatus =
+  | "draft"
+  | "issued"
+  | "partially_received"
+  | "received"
+  | "closed"
+  | "cancelled";
+
+export interface DbPurchaseOrder {
+  id: string;
+  po_number: string;
+  vendor_id: string;
+  status: DbPurchaseOrderStatus;
+  order_date: string | null;
+  expected_date: string | null;
+  reference: string | null;
+  ship_to: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+/** Header insert payload. id / po_number / status / timestamps / audit uids are
+ *  server-managed (status defaults to 'draft'). */
+export type DbPurchaseOrderInsert = {
+  po_number: string;
+  vendor_id: string;
+  status?: DbPurchaseOrderStatus;
+  order_date?: string | null;
+  expected_date?: string | null;
+  reference?: string | null;
+  ship_to?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbPurchaseOrderUpdate = Partial<DbPurchaseOrderInsert>;
+
+export interface DbPurchaseOrderLine {
+  id: string;
+  purchase_order_id: string;
+  product_id: string | null;
+  description: string | null;
+  quantity: number;
+  unit_cost: number;
+  received_qty: number;
+  line_no: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Line insert payload. id / timestamps server-managed; received_qty defaults 0. */
+export type DbPurchaseOrderLineInsert = {
+  purchase_order_id: string;
+  product_id?: string | null;
+  description?: string | null;
+  quantity: number;
+  unit_cost?: number;
+  received_qty?: number;
+  line_no?: number;
+};
