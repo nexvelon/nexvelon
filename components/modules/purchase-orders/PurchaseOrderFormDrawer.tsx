@@ -1,9 +1,9 @@
 "use client";
 
-// PO-2 — create/edit drawer for a DRAFT purchase order. Header fields + a line
-// editor (add/remove rows; optional product picker prefills description +
-// unit_cost; free-text description allowed) with a running total. Status stays
-// 'draft' — the workflow lands in PO-3.
+// PO-2/PO-3 — create/edit/detail drawer for a purchase order. A DRAFT PO is
+// fully editable (header + line editor). Any other status renders READ-ONLY
+// detail (protecting received_qty from the draft full-replace path) plus the
+// status actions (issue / cancel / close / admin-reopen).
 
 import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
@@ -15,6 +15,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,11 +35,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
+import { useRole } from "@/lib/role-context";
 import {
+  cancelPurchaseOrderAction,
+  closePurchaseOrderAction,
   createPurchaseOrderAction,
+  issuePurchaseOrderAction,
+  reopenPurchaseOrderAction,
   updatePurchaseOrderAction,
 } from "@/app/(app)/purchase-orders/actions";
+import {
+  StatusBadge,
+  canCancel,
+  canClose,
+  canIssue,
+  canReopen,
+  isEditableStatus,
+} from "./po-status";
 import type { PurchaseOrderDetail } from "@/lib/api/purchase-orders";
+import type { DbPurchaseOrderStatus } from "@/lib/types/database";
 
 export interface VendorOption {
   id: string;
@@ -87,6 +109,11 @@ export function PurchaseOrderFormDrawer({
 }: Props) {
   const isEdit = mode.kind === "edit";
   const init = mode.kind === "edit" ? mode.detail : null;
+  const status: DbPurchaseOrderStatus =
+    mode.kind === "edit" ? mode.detail.header.status : "draft";
+  const editable = mode.kind === "create" || isEditableStatus(status);
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
 
   const [vendorId, setVendorId] = useState(init?.header.vendor_id ?? "");
   const [orderDate, setOrderDate] = useState(init?.header.order_date ?? "");
@@ -143,17 +170,25 @@ export function PurchaseOrderFormDrawer({
     );
   };
 
-  const handleSave = async () => {
+  const [confirm, setConfirm] = useState<
+    | null
+    | { title: string; body: string; cta: string; run: () => Promise<void> }
+  >(null);
+  const [working, setWorking] = useState(false);
+
+  // Persist the form (create or update). Returns the PO id on success so the
+  // caller can chain a transition (e.g. Issue = save-then-issue).
+  const persist = async (): Promise<{ ok: boolean; id?: string }> => {
     if (vendorId.trim() === "") {
       toast.error("A vendor is required.");
-      return;
+      return { ok: false };
     }
     const cleaned = lines.filter(
       (l) => l.product_id || l.description.trim() !== ""
     );
     if (cleaned.length === 0) {
       toast.error("Add at least one line.");
-      return;
+      return { ok: false };
     }
     setSaving(true);
     const payload = {
@@ -177,8 +212,31 @@ export function PurchaseOrderFormDrawer({
       ? await updatePurchaseOrderAction(mode.detail.header.id, payload)
       : await createPurchaseOrderAction(payload);
     setSaving(false);
-    if (res.ok) {
+    if (!res.ok) {
+      toast.error(res.error);
+      return { ok: false };
+    }
+    return { ok: true, id: isEdit ? mode.detail.header.id : res.data.id };
+  };
+
+  const handleSave = async () => {
+    const r = await persist();
+    if (r.ok) {
       toast.success(isEdit ? "Purchase order updated" : "Purchase order created");
+      onSaved();
+      onClose();
+    }
+  };
+
+  // Issue (draft only) = persist the current edits, then transition to 'issued'.
+  const handleIssue = async () => {
+    const r = await persist();
+    if (!r.ok || !r.id) return;
+    setWorking(true);
+    const res = await issuePurchaseOrderAction(r.id);
+    setWorking(false);
+    if (res.ok) {
+      toast.success("Purchase order issued");
       onSaved();
       onClose();
     } else {
@@ -186,21 +244,48 @@ export function PurchaseOrderFormDrawer({
     }
   };
 
+  // Run a status transition on the persisted PO (cancel / close / reopen).
+  const runTransition = (
+    fn: (id: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>,
+    successMsg: string
+  ) => {
+    if (mode.kind !== "edit") return;
+    const id = mode.detail.header.id;
+    setWorking(true);
+    fn(id).then((res) => {
+      setWorking(false);
+      if (res.ok) {
+        toast.success(successMsg);
+        onSaved();
+        onClose();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const busy = saving || working;
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && !saving && onClose()}>
       <SheetContent side="right" className="w-[560px] overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle className="font-serif text-2xl">
-            {isEdit ? `Edit ${mode.detail.header.po_number}` : "New purchase order"}
+          <SheetTitle className="flex items-center gap-2 font-serif text-2xl">
+            {isEdit ? mode.detail.header.po_number : "New purchase order"}
+            {isEdit && <StatusBadge status={status} />}
           </SheetTitle>
           <SheetDescription>
-            {isEdit
-              ? "Update this draft purchase order. Changes save immediately."
-              : "Raise a draft purchase order against a vendor."}
+            {!isEdit
+              ? "Raise a draft purchase order against a vendor."
+              : editable
+                ? "Draft — editable. Changes save immediately."
+                : "Read-only. Use the actions below to advance this order."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-4 px-4 pb-8">
+          {editable && (
+          <>
           {/* Header */}
           <div className="space-y-1">
             <Label className="text-xs">
@@ -381,17 +466,207 @@ export function PurchaseOrderFormDrawer({
               rows={2}
             />
           </div>
+          </>
+          )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Cancel
+          {/* Read-only detail (any non-draft PO) */}
+          {!editable && init && (
+            <ReadOnlyDetail detail={init} />
+          )}
+
+          {/* ─── Footer / actions ─────────────────────────────────────── */}
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
+            <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+              Close
             </Button>
-            <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : isEdit ? "Save draft" : "Create draft"}
-            </Button>
+
+            {editable && (
+              <Button type="button" onClick={handleSave} disabled={busy}>
+                {saving ? "Saving…" : isEdit ? "Save draft" : "Create draft"}
+              </Button>
+            )}
+
+            {/* Issue (draft, edit mode only — needs a persisted PO) */}
+            {isEdit && canIssue(status) && (
+              <Button type="button" onClick={handleIssue} disabled={busy}>
+                {working ? "Issuing…" : "Issue"}
+              </Button>
+            )}
+
+            {/* Admin reopen (issued → draft) */}
+            {isEdit && isAdmin && canReopen(status) && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  setConfirm({
+                    title: "Reopen to draft?",
+                    body: "This moves the issued PO back to Draft so it can be edited again.",
+                    cta: "Reopen",
+                    run: async () =>
+                      runTransition(reopenPurchaseOrderAction, "Purchase order reopened"),
+                  })
+                }
+              >
+                Reopen
+              </Button>
+            )}
+
+            {/* Close (issued / partially_received / received) */}
+            {isEdit && canClose(status) && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  setConfirm({
+                    title: "Close purchase order?",
+                    body: "Closing marks the PO complete. This is terminal — it can't be reopened.",
+                    cta: "Close PO",
+                    run: async () =>
+                      runTransition(closePurchaseOrderAction, "Purchase order closed"),
+                  })
+                }
+              >
+                Close
+              </Button>
+            )}
+
+            {/* Cancel PO (draft / issued / partially_received) */}
+            {isEdit && canCancel(status) && (
+              <Button
+                type="button"
+                disabled={busy}
+                className="bg-red-600 text-white hover:bg-red-700"
+                onClick={() =>
+                  setConfirm({
+                    title: "Cancel purchase order?",
+                    body: `${mode.detail.header.po_number} will be marked cancelled. This is terminal.`,
+                    cta: "Cancel PO",
+                    run: async () =>
+                      runTransition(cancelPurchaseOrderAction, "Purchase order cancelled"),
+                  })
+                }
+              >
+                Cancel PO
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>
+
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && !working && setConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">{confirm?.title}</DialogTitle>
+            <DialogDescription>{confirm?.body}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setConfirm(null)}
+              disabled={working}
+              className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={working}
+              onClick={() => {
+                const c = confirm;
+                if (!c) return;
+                setConfirm(null);
+                void c.run();
+              }}
+              className="rounded-md bg-brand-navy px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm disabled:opacity-60"
+            >
+              {confirm?.cta}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
+  );
+}
+
+// Read-only rendering of a non-draft PO: header facts + a lines table with a
+// per-line received/ordered indicator (ready for PO-4) and the running total.
+function ReadOnlyDetail({ detail }: { detail: PurchaseOrderDetail }) {
+  const { header, lines } = detail;
+  const total = lines.reduce(
+    (s, l) => s + Number(l.quantity) * Number(l.unit_cost),
+    0
+  );
+  return (
+    <div className="space-y-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+        <Fact label="Vendor" value={header.vendor_name} />
+        <Fact label="Order date" value={header.order_date ?? "—"} />
+        <Fact label="Expected" value={header.expected_date ?? "—"} />
+        <Fact label="Reference" value={header.reference ?? "—"} />
+        <Fact label="Ship to" value={header.ship_to ?? "—"} />
+      </dl>
+
+      <div>
+        <div className="text-muted-foreground mb-1 flex items-center justify-between text-[11px] uppercase tracking-wide">
+          <span>Lines</span>
+          <span>
+            Total{" "}
+            <span className="text-brand-navy font-medium">
+              {formatCurrency(total)}
+            </span>
+          </span>
+        </div>
+        <ul className="space-y-1.5">
+          {lines.map((l) => (
+            <li
+              key={l.id}
+              className="rounded-md border border-[var(--border)] bg-background p-2 text-xs"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate">
+                  {l.product_sku ? (
+                    <span className="text-muted-foreground">{l.product_sku} · </span>
+                  ) : null}
+                  {l.product_name ?? l.description ?? "—"}
+                </span>
+                <span className="text-brand-navy font-medium">
+                  {formatCurrency(Number(l.quantity) * Number(l.unit_cost))}
+                </span>
+              </div>
+              <div className="text-muted-foreground mt-0.5 flex items-center gap-3 text-[11px]">
+                <span>Qty {l.quantity}</span>
+                <span>@ {formatCurrency(Number(l.unit_cost))}</span>
+                <span>
+                  Received {l.received_qty} / {l.quantity}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {header.notes ? (
+        <div>
+          <div className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wide">
+            Notes
+          </div>
+          <p className="text-xs leading-relaxed">{header.notes}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground text-[10px] uppercase tracking-wide">
+        {label}
+      </dt>
+      <dd className="text-brand-charcoal">{value}</dd>
+    </div>
   );
 }
