@@ -95,6 +95,14 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [category, setCategory] = useState(existing?.category ?? "");
   const [manufacturer, setManufacturer] = useState(existing?.manufacturer ?? "");
   const [vendor, setVendor] = useState(existing?.vendor ?? "");
+  // CAT-1: part-number identifiers (migration 0032).
+  const [upc, setUpc] = useState(existing?.upc ?? "");
+  const [masterPartNumber, setMasterPartNumber] = useState(
+    existing?.master_part_number ?? ""
+  );
+  const [replacementPartNumber, setReplacementPartNumber] = useState(
+    existing?.replacement_part_number ?? ""
+  );
   const [trackingMode, setTrackingMode] = useState<InventoryTrackingMode>(
     existing?.tracking_mode ?? "serialized"
   );
@@ -266,6 +274,9 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       search_aliases: searchAliases,
       notify_addons: notifyAddons,
       addons,
+      upc: upc.trim() || null,
+      master_part_number: masterPartNumber.trim() || null,
+      replacement_part_number: replacementPartNumber.trim() || null,
     };
 
     startTransition(async () => {
@@ -315,6 +326,47 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             placeholder="Optional description"
           />
         </Field>
+      </section>
+
+      {/* Part identifiers — CAT-1 (migration 0032) */}
+      <section className="space-y-4">
+        <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          Part Identifiers
+        </h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Field label="UPC / Barcode">
+            <Input
+              id="product-upc"
+              value={upc}
+              onChange={(e) => setUpc(e.target.value)}
+              placeholder="Scan or type…"
+            />
+            <p className="text-muted-foreground text-[11px]">
+              Click here and scan with a USB/Bluetooth barcode scanner, or type
+              it.
+            </p>
+          </Field>
+          <Field label="Master Part #">
+            <Input
+              value={masterPartNumber}
+              onChange={(e) => setMasterPartNumber(e.target.value)}
+              placeholder="e.g. NX-1024"
+            />
+            <p className="text-muted-foreground text-[11px]">
+              Our own part number — can be shown on customer quotes.
+            </p>
+          </Field>
+          <Field label="Replacement Part #">
+            <Input
+              value={replacementPartNumber}
+              onChange={(e) => setReplacementPartNumber(e.target.value)}
+              placeholder="Alternate part #"
+            />
+            <p className="text-muted-foreground text-[11px]">
+              An alternate part to order if this one is unavailable.
+            </p>
+          </Field>
+        </div>
       </section>
 
       {/* Classification — free-text with seeded suggestions */}

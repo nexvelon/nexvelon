@@ -268,6 +268,12 @@ export function ProductDetailClient({
           <Detail label="Category" value={product.category} />
           <Detail label="Manufacturer" value={product.manufacturer} />
           <Detail label="Vendor" value={product.vendor} />
+          <Detail label="UPC / Barcode" value={product.upc} />
+          <Detail label="Master Part #" value={product.master_part_number} />
+          <Detail
+            label="Replacement Part #"
+            value={product.replacement_part_number}
+          />
           <Detail
             label="Tracking mode"
             value={
