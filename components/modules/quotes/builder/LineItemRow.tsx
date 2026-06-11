@@ -100,6 +100,9 @@ export function LineItemRow({
         productId: p.id,
         name: p.name,
         sku: p.sku,
+        // CAT-2: snapshot part identifiers from the product at add-time.
+        upc: p.upc,
+        masterPartNumber: p.masterPartNumber,
         vendor: p.vendor,
         // INV-4: unitCost snapshots the catalog default_unit_cost (Product.cost
         // via the INV-2a adapter); §2.2 — the copied value is the snapshot.

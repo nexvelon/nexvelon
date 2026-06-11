@@ -70,6 +70,7 @@ export interface Product {
   reorderQty?: number;
   avgCost?: number;
   upc?: string;
+  masterPartNumber?: string; // CAT-2: snapshotted onto quote lines
   lastReceived?: string;
   byLocation?: Partial<Record<string, number>>;
   searchAliases?: string[];
@@ -147,6 +148,10 @@ export interface BuilderLineItem {
   vendor?: Vendor;
   productId?: ID;
   sku?: string;
+  // CAT-2: part-identifier snapshots captured from the product at add-time
+  // (§2.2 snapshot — not recalculated later).
+  upc?: string;
+  masterPartNumber?: string;
   description: string;
   classification?: string; // see lib/classifications.ts
   name: string;
@@ -208,6 +213,8 @@ export interface Quote {
   showSku?: boolean; // QB-4
   showName?: boolean; // QB-4
   showDescription?: boolean; // QB-4
+  showUpc?: boolean; // CAT-2: show line UPC
+  showMasterPart?: boolean; // CAT-2: show master part # as the line part number
 }
 
 export interface Site {

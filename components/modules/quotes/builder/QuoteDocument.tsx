@@ -1313,6 +1313,8 @@ interface ParticularsPageProps extends CommonPageProps {
   showUnitPrice: boolean;
   showVendor: boolean;
   showSku: boolean;
+  showUpc: boolean;
+  showMasterPart: boolean;
   showName: boolean;
   showDescription: boolean;
 }
@@ -1333,6 +1335,8 @@ function ParticularsPage({
   showUnitPrice,
   showVendor,
   showSku,
+  showUpc,
+  showMasterPart,
   showName,
   showDescription,
 }: ParticularsPageProps) {
@@ -1395,9 +1399,22 @@ function ParticularsPage({
                     : "—";
               const showSecondaryDesc =
                 showName && it.name && showDescription && it.description;
-              const showSkuPart = showSku && it.sku;
-              const showVendorPart = showVendor && it.vendor;
-              const showTertiaryLine = showSkuPart || showVendorPart;
+              // CAT-2: the displayed part number is the Master Part # when that
+              // toggle is on and the line has one (our own number on the quote);
+              // otherwise it falls back to SKU per showSku.
+              const masterPart =
+                showMasterPart && it.masterPartNumber
+                  ? it.masterPartNumber
+                  : null;
+              const partNumber =
+                masterPart ?? (showSku && it.sku ? it.sku : null);
+              const upcPart = showUpc && it.upc ? it.upc : null;
+              const vendorPart = showVendor && it.vendor ? it.vendor : null;
+              const tertiarySegments = [
+                partNumber ? `Part # ${partNumber}` : null,
+                upcPart ? `UPC ${upcPart}` : null,
+                vendorPart,
+              ].filter((s): s is string => !!s);
               return (
                 <View style={styles.partRow} key={it.id}>
                   <View style={styles.partCellRef}>
@@ -1408,11 +1425,9 @@ function ParticularsPage({
                     {showSecondaryDesc ? (
                       <Text style={styles.partDescSku}>{it.description}</Text>
                     ) : null}
-                    {showTertiaryLine ? (
+                    {tertiarySegments.length > 0 ? (
                       <Text style={styles.partDescSku}>
-                        {showSkuPart ? `Part # ${it.sku}` : ""}
-                        {showSkuPart && showVendorPart ? " · " : ""}
-                        {showVendorPart ? it.vendor : ""}
+                        {tertiarySegments.join(" · ")}
                       </Text>
                     ) : null}
                   </View>
@@ -2413,6 +2428,8 @@ interface DocProps {
   showUnitPrice: boolean;
   showVendor?: boolean;
   showSku?: boolean;
+  showUpc?: boolean;
+  showMasterPart?: boolean;
   showName?: boolean;
   showDescription?: boolean;
   // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.
@@ -2458,6 +2475,8 @@ export function QuoteDocument(props: DocProps) {
     showUnitPrice,
     showVendor = false,
     showSku = false,
+    showUpc = false,
+    showMasterPart = false,
     showName = true,
     showDescription = true,
     drawingsImagesByPath = {},
@@ -2590,6 +2609,8 @@ export function QuoteDocument(props: DocProps) {
                 showUnitPrice={showUnitPrice}
                 showVendor={showVendor}
                 showSku={showSku}
+                showUpc={showUpc}
+                showMasterPart={showMasterPart}
                 showName={showName}
                 showDescription={showDescription}
               />

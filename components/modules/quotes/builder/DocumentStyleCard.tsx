@@ -34,6 +34,10 @@ interface Props {
   onShowVendorChange: (value: boolean) => void;
   showSku: boolean;
   onShowSkuChange: (value: boolean) => void;
+  showUpc: boolean;
+  onShowUpcChange: (value: boolean) => void;
+  showMasterPart: boolean;
+  onShowMasterPartChange: (value: boolean) => void;
   showName: boolean;
   onShowNameChange: (value: boolean) => void;
   showDescription: boolean;
@@ -54,6 +58,10 @@ export function DocumentStyleCard({
   onShowVendorChange,
   showSku,
   onShowSkuChange,
+  showUpc,
+  onShowUpcChange,
+  showMasterPart,
+  onShowMasterPartChange,
   showName,
   onShowNameChange,
   showDescription,
@@ -237,6 +245,58 @@ export function DocumentStyleCard({
                 className="min-w-[3.5rem]"
               >
                 {showSku ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
+
+          {/* CAT-2: Show Master Part # toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-master-part" className="text-xs">
+                  Show Master Part #
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Shows our own Master Part # as the line part number where set.
+                </p>
+              </div>
+              <Button
+                id="quote-show-master-part"
+                type="button"
+                size="sm"
+                variant={showMasterPart ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowMasterPartChange(!showMasterPart)}
+                aria-pressed={showMasterPart}
+                className="min-w-[3.5rem]"
+              >
+                {showMasterPart ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
+
+          {/* CAT-2: Show UPC toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="quote-show-upc" className="text-xs">
+                  Show UPC
+                </Label>
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  Adds the UPC / barcode to the part info line where set.
+                </p>
+              </div>
+              <Button
+                id="quote-show-upc"
+                type="button"
+                size="sm"
+                variant={showUpc ? "default" : "outline"}
+                disabled={disabled}
+                onClick={() => onShowUpcChange(!showUpc)}
+                aria-pressed={showUpc}
+                className="min-w-[3.5rem]"
+              >
+                {showUpc ? "On" : "Off"}
               </Button>
             </div>
           </div>

@@ -218,6 +218,10 @@ export function QuoteBuilder({
     initial.showVendor ?? false
   );
   const [showSku, setShowSku] = useState<boolean>(initial.showSku ?? false);
+  const [showUpc, setShowUpc] = useState<boolean>(initial.showUpc ?? false);
+  const [showMasterPart, setShowMasterPart] = useState<boolean>(
+    initial.showMasterPart ?? false
+  );
   const [showName, setShowName] = useState<boolean>(
     initial.showName ?? true
   );
@@ -424,6 +428,9 @@ export function QuoteBuilder({
                   productId: p.id,
                   vendor: p.vendor,
                   sku: p.sku,
+                  // CAT-2: snapshot part identifiers from the product at add-time.
+                  upc: p.upc,
+                  masterPartNumber: p.masterPartNumber,
                   name: p.name,
                   description: "",
                   classification: "Materials",
@@ -525,6 +532,8 @@ export function QuoteBuilder({
       showUnitPrice,
       showVendor,
       showSku,
+      showUpc,
+      showMasterPart,
       showName,
       showDescription,
       schedules,
@@ -793,6 +802,10 @@ export function QuoteBuilder({
             onShowVendorChange={setShowVendor}
             showSku={showSku}
             onShowSkuChange={setShowSku}
+            showUpc={showUpc}
+            onShowUpcChange={setShowUpc}
+            showMasterPart={showMasterPart}
+            onShowMasterPartChange={setShowMasterPart}
             showName={showName}
             onShowNameChange={setShowName}
             showDescription={showDescription}
@@ -941,6 +954,8 @@ export function QuoteBuilder({
                 showUnitPrice={showUnitPrice}
                 showVendor={showVendor}
                 showSku={showSku}
+                showUpc={showUpc}
+                showMasterPart={showMasterPart}
                 showName={showName}
                 showDescription={showDescription}
                 drawingsImagesByPath={drawingsImagesByPath}
