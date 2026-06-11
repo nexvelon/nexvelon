@@ -500,7 +500,12 @@ export interface DbAuthOtp {
 // ACT-1 (migration 0016): activity log
 // ============================================================================
 
-export type ActivityEntityType = "client" | "site" | "contact" | "inventory";
+export type ActivityEntityType =
+  | "client"
+  | "site"
+  | "contact"
+  | "inventory"
+  | "vendor";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -647,3 +652,56 @@ export type DbInventoryStockInsert = {
 };
 
 export type DbInventoryStockUpdate = Partial<DbInventoryStockInsert>;
+
+// ----------------------------------------------------------------------------
+// Vendors (PO-1, migration 0030) — supplier master records. Mirrors the
+// clients posture: free-text fields, is_active soft-state, created_by/updated_by
+// audit uids, shared handle_updated_at() trigger, RLS authenticated read+write
+// (mutations additionally gated by hasPermission(inventory) at the action
+// layer). Independent of the hardcoded lib/types.ts Vendor union and the
+// free-text inventory_products.vendor column — both left untouched.
+// ----------------------------------------------------------------------------
+export interface DbVendor {
+  id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  account_number: string | null;
+  payment_terms: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+/** Payload for creating a vendor. id / timestamps / audit uids are
+ *  server-managed; is_active has a DB default. Only `name` is required. */
+export type DbVendorInsert = {
+  name: string;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  account_number?: string | null;
+  payment_terms?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+};
+
+export type DbVendorUpdate = Partial<DbVendorInsert>;
