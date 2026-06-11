@@ -47,6 +47,8 @@ interface Props {
   showUnitPrice: boolean;
   showVendor?: boolean;
   showSku?: boolean;
+  showUpc?: boolean;
+  showMasterPart?: boolean;
   showName?: boolean;
   showDescription?: boolean;
   // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.

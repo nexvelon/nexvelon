@@ -90,6 +90,8 @@ export function NewQuotePageClient({
       showUnitPrice: false,
       showVendor: false, // QB-4 default OFF
       showSku: false, // QB-4 default OFF
+      showUpc: false, // CAT-2 default OFF
+      showMasterPart: false, // CAT-2 default OFF
       showName: true, // QB-4 default ON
       showDescription: true, // QB-4 default ON
     };

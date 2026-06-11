@@ -102,6 +102,8 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     searchAliases: p.search_aliases ?? [],
     notifyAddons: p.notify_addons ?? false,
     addons: p.addons ?? [],
+    upc: p.upc ?? undefined,
+    masterPartNumber: p.master_part_number ?? undefined,
   };
 }
 
