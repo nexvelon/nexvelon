@@ -21,6 +21,7 @@ import type {
   AssuranceScheduleInstance,
   DispatchScheduleInstance,
   KeyholdersScheduleInstance,
+  PadScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
   DrawingsScheduleInstance,
@@ -2081,6 +2082,74 @@ function KeyholdersPage({
   );
 }
 
+// GF-4 — Guardian Pre-Authorized Payment (PAD) Authorization page. Renders the
+// authorization prose, blank payment-method checkboxes for the client to mark
+// on paper, the collection note, and a signature block. DELIBERATELY captures
+// no account/card numbers.
+interface PadPageProps extends CommonPageProps {
+  schedule: PadScheduleInstance;
+}
+
+function PadPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: PadPageProps) {
+  const subtitleSuffix = schedule.subtitle || "Annual pre-authorized billing";
+
+  return (
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
+
+      {schedule.authorizationText &&
+      schedule.authorizationText.trim().length > 0 ? (
+        <Text style={styles.agreementLine}>{schedule.authorizationText}</Text>
+      ) : null}
+
+      <Text style={styles.partSectionHeader}>Payment Method</Text>
+      <Text style={styles.agreementLine}>
+        [  ] Pre-authorized debit (bank account)    [  ] Credit card
+      </Text>
+
+      {schedule.collectionNote && schedule.collectionNote.trim().length > 0 ? (
+        <Text style={styles.agreementLine}>{schedule.collectionNote}</Text>
+      ) : null}
+
+      <Text style={styles.partSectionHeader}>Authorization</Text>
+      <Text style={styles.agreementLine}>
+        Authorized signature: ______________________   Date: ______________
+      </Text>
+      <Text style={styles.agreementLine}>
+        Name / title: ______________________
+      </Text>
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -2578,6 +2647,14 @@ export function QuoteDocument(props: DocProps) {
           case "keyholders":
             return (
               <KeyholdersPage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "pad":
+            return (
+              <PadPage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
