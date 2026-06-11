@@ -39,6 +39,7 @@ import {
   createMonitoringSchedule,
   createDispatchSchedule,
   createKeyholdersSchedule,
+  createPadSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
@@ -47,6 +48,7 @@ import {
   type DrawingsScheduleInstance,
   type KeyholdersScheduleInstance,
   type MonitoringScheduleInstance,
+  type PadScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
@@ -56,6 +58,7 @@ import { AssuranceCardEditor } from "./AssuranceCardEditor";
 import { MonitoringEditor } from "./MonitoringEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import { KeyholdersEditor } from "./KeyholdersEditor";
+import { PadEditor } from "./PadEditor";
 import { useRole } from "@/lib/role-context";
 
 interface Props {
@@ -77,6 +80,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   monitoring: "Monitoring Services",
   dispatch: "Dispatch & False-Alarm Election",
   keyholders: "Keyholders & Response Protocol",
+  pad: "Pre-Authorized Payment Authorization",
 };
 
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
@@ -86,17 +90,19 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "monitoring",
   "dispatch",
   "keyholders",
+  "pad",
   "drawings",
   "agreement",
   "acceptance",
   "custom",
 ];
 
-// GF-1/GF-2/GF-3: kinds offered only on Guardian quotes.
+// GF-1/GF-2/GF-3/GF-4: kinds offered only on Guardian quotes.
 const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = [
   "monitoring",
   "dispatch",
   "keyholders",
+  "pad",
 ];
 
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
@@ -105,6 +111,7 @@ function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "monitoring") return createMonitoringSchedule();
   if (kind === "dispatch") return createDispatchSchedule();
   if (kind === "keyholders") return createKeyholdersSchedule();
+  if (kind === "pad") return createPadSchedule();
   if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
@@ -416,6 +423,22 @@ export function SchedulesCard({
                   duress={(schedule as KeyholdersScheduleInstance).duress}
                   medical={(schedule as KeyholdersScheduleInstance).medical}
                   note={(schedule as KeyholdersScheduleInstance).note}
+                  onChange={(patch) =>
+                    patchAt(idx, patch as Partial<QuoteScheduleInstance>)
+                  }
+                  disabled={disabled}
+                />
+              )}
+
+              {schedule.kind === "pad" && (
+                <PadEditor
+                  authorizationText={
+                    (schedule as PadScheduleInstance).authorizationText
+                  }
+                  noticeDays={(schedule as PadScheduleInstance).noticeDays}
+                  collectionNote={
+                    (schedule as PadScheduleInstance).collectionNote
+                  }
                   onChange={(patch) =>
                     patchAt(idx, patch as Partial<QuoteScheduleInstance>)
                   }
