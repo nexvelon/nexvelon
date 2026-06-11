@@ -37,10 +37,12 @@ import {
   createCustomSchedule,
   createDrawingsSchedule,
   createMonitoringSchedule,
+  createDispatchSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
   type CustomScheduleInstance,
+  type DispatchScheduleInstance,
   type DrawingsScheduleInstance,
   type MonitoringScheduleInstance,
   type QuoteScheduleInstance,
@@ -50,13 +52,14 @@ import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
 import { MonitoringEditor } from "./MonitoringEditor";
+import { DispatchEditor } from "./DispatchEditor";
 import { useRole } from "@/lib/role-context";
 
 interface Props {
   schedules: QuoteScheduleInstance[];
   onChange: (next: QuoteScheduleInstance[]) => void;
   disabled?: boolean;
-  /** GF-1: the "monitoring" add-option is offered only for Guardian quotes. */
+  /** GF-1/GF-2: Guardian-only add-options (monitoring, dispatch). */
   isGuardian?: boolean;
 }
 
@@ -69,6 +72,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   acceptance: "Acceptance",
   custom: "Custom",
   monitoring: "Monitoring Services",
+  dispatch: "Dispatch & False-Alarm Election",
 };
 
 const ADDABLE_KINDS: QuoteScheduleKind[] = [
@@ -76,16 +80,21 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "particulars",
   "assurance",
   "monitoring",
+  "dispatch",
   "drawings",
   "agreement",
   "acceptance",
   "custom",
 ];
 
+// GF-1/GF-2: kinds offered only on Guardian quotes.
+const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = ["monitoring", "dispatch"];
+
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
   if (kind === "monitoring") return createMonitoringSchedule();
+  if (kind === "dispatch") return createDispatchSchedule();
   if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
   const base = {
@@ -362,6 +371,31 @@ export function SchedulesCard({
                 </div>
               )}
 
+              {schedule.kind === "dispatch" && (
+                <DispatchEditor
+                  election={(schedule as DispatchScheduleInstance).election}
+                  authorizePolice={
+                    (schedule as DispatchScheduleInstance).authorizePolice
+                  }
+                  authorizeFire={
+                    (schedule as DispatchScheduleInstance).authorizeFire
+                  }
+                  authorizeAmbulance={
+                    (schedule as DispatchScheduleInstance).authorizeAmbulance
+                  }
+                  regionalFeeNote={
+                    (schedule as DispatchScheduleInstance).regionalFeeNote
+                  }
+                  privateResponseNote={
+                    (schedule as DispatchScheduleInstance).privateResponseNote
+                  }
+                  onChange={(patch) =>
+                    patchAt(idx, patch as Partial<QuoteScheduleInstance>)
+                  }
+                  disabled={disabled}
+                />
+              )}
+
               {schedule.kind === "custom" && (
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px]">Body</Label>
@@ -463,7 +497,7 @@ export function SchedulesCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {ADDABLE_KINDS.filter(
-              (kind) => kind !== "monitoring" || isGuardian
+              (kind) => isGuardian || !GUARDIAN_ONLY_KINDS.includes(kind)
             ).map((kind) => {
               const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
               const single = !def.allowMultiple && kindAlreadyExists(kind);
