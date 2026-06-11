@@ -12,7 +12,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
+import {
+  listInventoryVocabAction,
+  listSubcategoriesAction,
+} from "@/app/(app)/settings/inventory-vocab-actions";
+import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -93,6 +97,8 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [category, setCategory] = useState(existing?.category ?? "");
+  // CAT-3: sub-category (dependent on category). Stored as a name like category.
+  const [subcategory, setSubcategory] = useState(existing?.subcategory ?? "");
   const [manufacturer, setManufacturer] = useState(existing?.manufacturer ?? "");
   const [vendor, setVendor] = useState(existing?.vendor ?? "");
   // CAT-1: part-number identifiers (migration 0032).
@@ -214,6 +220,10 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [manufacturerOptions, setManufacturerOptions] =
     useState<string[]>(MANUFACTURER_OPTIONS);
   const [unitOptions, setUnitOptions] = useState<string[]>(UNIT_FALLBACK);
+  // CAT-3: category rows (with ids) + active subcategories, for the dependent
+  // sub-category select.
+  const [categoryRows, setCategoryRows] = useState<DbInventoryVocab[]>([]);
+  const [subcatRows, setSubcatRows] = useState<DbInventoryVocab[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -221,13 +231,18 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       listInventoryVocabAction("category"),
       listInventoryVocabAction("manufacturer"),
       listInventoryVocabAction("unit_of_measure"),
+      listSubcategoriesAction(),
     ])
-      .then(([cat, man, uom]) => {
+      .then(([cat, man, uom, sub]) => {
         if (!active) return;
-        if (cat.ok && cat.data.length) setCategoryOptions(cat.data.map((r) => r.name));
+        if (cat.ok) {
+          setCategoryRows(cat.data);
+          if (cat.data.length) setCategoryOptions(cat.data.map((r) => r.name));
+        }
         if (man.ok && man.data.length)
           setManufacturerOptions(man.data.map((r) => r.name));
         if (uom.ok && uom.data.length) setUnitOptions(uom.data.map((r) => r.name));
+        if (sub.ok) setSubcatRows(sub.data);
       })
       .catch(() => {
         // keep the hardcoded fallbacks
@@ -236,6 +251,27 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       active = false;
     };
   }, []);
+
+  // Sub-categories available for the currently-selected category (by name → id).
+  const selectedCategoryId = categoryRows.find((c) => c.name === category)?.id;
+  const availableSubcategories = subcatRows.filter(
+    (s) => s.parent_id === selectedCategoryId
+  );
+
+  // Reset the sub-category when the category changes and the current value no
+  // longer belongs to it (keeps an unrelated subcategory from sticking). Guarded
+  // until the vocab fetch resolves so an existing product's saved value isn't
+  // cleared before its parent category has loaded.
+  useEffect(() => {
+    if (categoryRows.length === 0) return; // not loaded yet
+    if (
+      subcategory !== "" &&
+      !availableSubcategories.some((s) => s.name === subcategory)
+    ) {
+      setSubcategory("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, subcatRows, categoryRows]);
 
   const [pending, startTransition] = useTransition();
 
@@ -264,6 +300,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       name: name.trim(),
       description: description.trim() || null,
       category: category.trim() || null,
+      subcategory: subcategory.trim() || null,
       manufacturer: manufacturer.trim() || null,
       vendor: vendor.trim() || null,
       tracking_mode: trackingMode,
@@ -387,6 +424,29 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
                 <option key={o} value={o} />
               ))}
             </datalist>
+          </Field>
+          {/* CAT-3: dependent sub-category select (options scoped to the chosen
+              category; disabled until a category with sub-categories is picked). */}
+          <Field label="Sub-category">
+            <select
+              value={subcategory}
+              onChange={(e) => setSubcategory(e.target.value)}
+              disabled={!selectedCategoryId || availableSubcategories.length === 0}
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">
+                {!selectedCategoryId
+                  ? "Choose a category first"
+                  : availableSubcategories.length === 0
+                    ? "No sub-categories"
+                    : "None"}
+              </option>
+              {availableSubcategories.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Manufacturer">
             <Input

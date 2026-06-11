@@ -1,18 +1,25 @@
 "use client";
 
-// Chunk B-1 — settings pane to manage the inventory vocabularies. Segmented by
-// kind (Categories / Manufacturers / Units / Storage Locations). Per kind:
-// add, inline-rename, deactivate (soft-delete) with a restore path. The seeded
-// 'Default' storage location is protected (no delete control). Mirrors the
-// ClassificationsPane UX; writes go through requireAdmin-gated server actions.
+// CAT-3 — Settings management for inventory sub-categories. A sub-category is an
+// inventory_vocab row of kind 'subcategory' whose parent_id points at a
+// 'category' row. Mirrors the InventoryVocabPane UX (add / inline-rename /
+// deactivate + restore) but adds a required parent-category selector and groups
+// the list under each parent. Writes go through the requireAdmin-gated actions.
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,43 +28,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   createInventoryVocabAction,
   deleteInventoryVocabAction,
   listInventoryVocabAction,
+  listSubcategoriesAction,
   restoreInventoryVocabAction,
   updateInventoryVocabAction,
 } from "@/app/(app)/settings/inventory-vocab-actions";
-import { SubcategoryManager } from "./SubcategoryManager";
-import type {
-  DbInventoryVocab,
-  VocabKind,
-} from "@/lib/api/inventory-vocab";
+import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
 
-const KINDS: { key: VocabKind; label: string }[] = [
-  { key: "category", label: "Categories" },
-  { key: "subcategory", label: "Sub-categories" },
-  { key: "manufacturer", label: "Manufacturers" },
-  { key: "unit_of_measure", label: "Units" },
-  { key: "storage_location", label: "Storage Locations" },
-];
-
-export function InventoryVocabPane() {
-  const [kind, setKind] = useState<VocabKind>("category");
-  const [rows, setRows] = useState<DbInventoryVocab[]>([]);
+export function SubcategoryManager() {
+  const [categories, setCategories] = useState<DbInventoryVocab[]>([]);
+  const [subs, setSubs] = useState<DbInventoryVocab[]>([]);
   const [loading, setLoading] = useState(true);
   const [includeInactive, setIncludeInactive] = useState(false);
 
   const [newName, setNewName] = useState("");
+  const [newParentId, setNewParentId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<DbInventoryVocab | null>(
@@ -67,24 +56,50 @@ export function InventoryVocabPane() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await listInventoryVocabAction(kind, { includeInactive });
-    if (result.ok) setRows(result.data);
-    else toast.error(result.error);
+    const [cats, subRows] = await Promise.all([
+      listInventoryVocabAction("category"),
+      listSubcategoriesAction({ includeInactive }),
+    ]);
+    if (cats.ok) setCategories(cats.data);
+    else toast.error(cats.error);
+    if (subRows.ok) setSubs(subRows.data);
+    else toast.error(subRows.error);
     setLoading(false);
-  }, [kind, includeInactive]);
+  }, [includeInactive]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const isProtected = (r: DbInventoryVocab) =>
-    r.kind === "storage_location" && r.name === "Default";
+  const categoryName = useCallback(
+    (id: string | null) =>
+      categories.find((c) => c.id === id)?.name ?? "(unknown category)",
+    [categories]
+  );
+
+  // Group subcategories under their parent, ordered by parent name.
+  const grouped = useMemo(() => {
+    const byParent = new Map<string, DbInventoryVocab[]>();
+    for (const s of subs) {
+      const key = s.parent_id ?? "";
+      const list = byParent.get(key);
+      if (list) list.push(s);
+      else byParent.set(key, [s]);
+    }
+    return [...byParent.entries()].sort((a, b) =>
+      categoryName(a[0]).localeCompare(categoryName(b[0]))
+    );
+  }, [subs, categoryName]);
 
   function handleAdd() {
     const name = newName.trim();
-    if (name === "") return;
+    if (name === "" || newParentId === "") return;
     start(async () => {
-      const result = await createInventoryVocabAction(kind, name);
+      const result = await createInventoryVocabAction(
+        "subcategory",
+        name,
+        newParentId
+      );
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -138,44 +153,12 @@ export function InventoryVocabPane() {
     });
   }
 
+  const activeCategories = categories.filter((c) => c.is_active);
+
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-brand-navy font-serif text-lg">Inventory Lists</h2>
-        <p className="text-muted-foreground text-sm">
-          Manage the dropdown values used across the inventory module. Existing
-          free-text values keep working; these power the suggestions.
-        </p>
-      </div>
-
-      {/* Kind segmented control */}
-      <div className="bg-muted/40 inline-flex flex-wrap gap-1 rounded-lg border p-1">
-        {KINDS.map((k) => (
-          <button
-            key={k.key}
-            type="button"
-            onClick={() => {
-              setKind(k.key);
-              setEditingId(null);
-            }}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              kind === k.key
-                ? "bg-brand-navy text-white"
-                : "text-muted-foreground hover:bg-muted hover:text-brand-charcoal"
-            )}
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
-
-      {kind === "subcategory" && <SubcategoryManager />}
-
-      {kind !== "subcategory" && (
-        <>
-      {/* Add row */}
-      <div className="flex items-center gap-2">
+      {/* Add row — name + parent category */}
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -185,11 +168,26 @@ export function InventoryVocabPane() {
               handleAdd();
             }
           }}
-          placeholder={`Add a ${KINDS.find((k) => k.key === kind)?.label.replace(/s$/, "").toLowerCase()}…`}
+          placeholder="Add a sub-category…"
           className="max-w-xs"
           disabled={pending}
         />
-        <Button onClick={handleAdd} disabled={pending || newName.trim() === ""}>
+        <Select value={newParentId} onValueChange={(v) => setNewParentId(v ?? "")}>
+          <SelectTrigger className="h-9 w-56 text-sm">
+            <SelectValue placeholder="Parent category…" />
+          </SelectTrigger>
+          <SelectContent>
+            {activeCategories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={handleAdd}
+          disabled={pending || newName.trim() === "" || newParentId === ""}
+        >
           <Plus className="h-3.5 w-3.5" />
           Add
         </Button>
@@ -203,36 +201,39 @@ export function InventoryVocabPane() {
         </label>
       </div>
 
-      <Card className="bg-card overflow-hidden p-0 shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-[11px] uppercase">Name</TableHead>
-              <TableHead className="text-[11px] uppercase">Status</TableHead>
-              <TableHead className="w-32 text-right text-[11px] uppercase">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-muted-foreground py-8 text-center text-sm">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-muted-foreground py-8 text-center text-sm">
-                  No values yet. Add one above.
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              rows.map((r) => (
-                <TableRow key={r.id} className={cn(!r.is_active && "opacity-60")}>
-                  <TableCell className="text-sm">
+      {activeCategories.length === 0 && (
+        <p className="text-muted-foreground text-xs">
+          Add a category first (Categories tab) — every sub-category needs a
+          parent.
+        </p>
+      )}
+
+      <Card className="bg-card p-4 shadow-sm">
+        {loading && (
+          <p className="text-muted-foreground py-6 text-center text-sm">
+            Loading…
+          </p>
+        )}
+        {!loading && subs.length === 0 && (
+          <p className="text-muted-foreground py-6 text-center text-sm">
+            No sub-categories yet. Add one above.
+          </p>
+        )}
+        {!loading &&
+          grouped.map(([parentId, rows]) => (
+            <div key={parentId} className="mb-4 last:mb-0">
+              <h4 className="text-muted-foreground mb-1.5 text-[11px] font-semibold uppercase tracking-wider">
+                {categoryName(parentId)}
+              </h4>
+              <ul className="space-y-1">
+                {rows.map((r) => (
+                  <li
+                    key={r.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-1.5",
+                      !r.is_active && "opacity-60"
+                    )}
+                  >
                     {editingId === r.id ? (
                       <Input
                         autoFocus
@@ -250,23 +251,15 @@ export function InventoryVocabPane() {
                         disabled={pending}
                       />
                     ) : (
-                      <span className="text-brand-charcoal">{r.name}</span>
+                      <span className="text-brand-charcoal flex-1 text-sm">
+                        {r.name}
+                      </span>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        r.is_active
-                          ? "text-emerald-700"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      {r.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
+                    {!r.is_active && (
+                      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                        Inactive
+                      </Badge>
+                    )}
                     <div className="inline-flex items-center gap-1">
                       {editingId === r.id ? (
                         <>
@@ -303,18 +296,16 @@ export function InventoryVocabPane() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          {!isProtected(r) && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => setConfirmDelete(r)}
-                              disabled={pending}
-                              aria-label="Deactivate"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setConfirmDelete(r)}
+                            disabled={pending}
+                            aria-label="Deactivate"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </>
                       ) : (
                         <Button
@@ -329,14 +320,13 @@ export function InventoryVocabPane() {
                         </Button>
                       )}
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-          </TableBody>
-        </Table>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
       </Card>
 
-      {/* Deactivate confirm */}
       <Dialog
         open={confirmDelete !== null}
         onOpenChange={(o) => !o && setConfirmDelete(null)}
@@ -345,10 +335,8 @@ export function InventoryVocabPane() {
           <DialogHeader>
             <DialogTitle>Deactivate “{confirmDelete?.name}”?</DialogTitle>
             <DialogDescription>
-              It will be hidden from the dropdowns. You can restore it later.
-              {confirmDelete?.kind === "storage_location" && (
-                <> Stock in this location will move to Default.</>
-              )}
+              It will be hidden from the sub-category dropdowns. You can restore
+              it later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -369,8 +357,6 @@ export function InventoryVocabPane() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-        </>
-      )}
     </div>
   );
 }

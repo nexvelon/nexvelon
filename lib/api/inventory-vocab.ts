@@ -15,7 +15,10 @@ export type VocabKind =
   | "category"
   | "manufacturer"
   | "unit_of_measure"
-  | "storage_location";
+  | "storage_location"
+  // CAT-3 (migration 0033): a "subcategory" row sits under a "category" row via
+  // parent_id (self-FK on inventory_vocab, ON DELETE CASCADE).
+  | "subcategory";
 
 export interface DbInventoryVocab {
   id: string;
@@ -23,6 +26,9 @@ export interface DbInventoryVocab {
   name: string;
   display_order: number;
   is_active: boolean;
+  // CAT-3 (migration 0033): for kind='subcategory', the parent category row id.
+  // null for top-level kinds.
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -50,13 +56,20 @@ export async function listVocab(
   return (data ?? []) as DbInventoryVocab[];
 }
 
-/** Create a vocab value, appended after the current max display_order. */
+/**
+ * Create a vocab value, appended after the current max display_order. For a
+ * 'subcategory' kind, pass `parentId` (the parent category row id).
+ */
 export async function createVocab(
   kind: VocabKind,
-  name: string
+  name: string,
+  parentId: string | null = null
 ): Promise<DbInventoryVocab> {
   const trimmed = name.trim();
   if (trimmed === "") throw new Error("Name is required.");
+  if (kind === "subcategory" && !parentId) {
+    throw new Error("A sub-category requires a parent category.");
+  }
 
   const supabase = await db();
   const {
@@ -79,6 +92,7 @@ export async function createVocab(
       name: trimmed,
       display_order: nextOrder,
       is_active: true,
+      parent_id: kind === "subcategory" ? parentId : null,
       created_by: user?.id ?? null,
       updated_by: user?.id ?? null,
     })
@@ -93,10 +107,15 @@ export async function createVocab(
   return data as DbInventoryVocab;
 }
 
-/** Update a vocab row (rename / reorder / activate). uid-stamped. */
+/** Update a vocab row (rename / reorder / activate / re-parent). uid-stamped. */
 export async function updateVocab(
   id: string,
-  payload: Partial<{ name: string; display_order: number; is_active: boolean }>
+  payload: Partial<{
+    name: string;
+    display_order: number;
+    is_active: boolean;
+    parent_id: string | null;
+  }>
 ): Promise<DbInventoryVocab> {
   const supabase = await db();
   const {
@@ -165,6 +184,28 @@ export async function softDeleteVocab(id: string): Promise<boolean> {
     .select("id");
   if (error) throw new Error(`softDeleteVocab: ${error.message}`);
   return (data?.length ?? 0) > 0;
+}
+
+/**
+ * CAT-3 — list 'subcategory' rows, optionally filtered to one parent category.
+ * Returns parent_id on each row so the Settings UI can group under categories
+ * and the product form can filter by the selected category.
+ */
+export async function listSubcategories(
+  opts: { parentId?: string; includeInactive?: boolean } = {}
+): Promise<DbInventoryVocab[]> {
+  const supabase = await db();
+  let query = supabase
+    .from("inventory_vocab")
+    .select("*")
+    .eq("kind", "subcategory");
+  if (opts.parentId) query = query.eq("parent_id", opts.parentId);
+  if (!opts.includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query
+    .order("display_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`listSubcategories: ${error.message}`);
+  return (data ?? []) as DbInventoryVocab[];
 }
 
 /** Restore a deactivated vocab value — sets is_active=true. */

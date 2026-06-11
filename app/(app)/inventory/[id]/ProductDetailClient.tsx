@@ -266,6 +266,7 @@ export function ProductDetailClient({
       <Card className="bg-card p-5 shadow-sm">
         <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Category" value={product.category} />
+          <Detail label="Sub-category" value={product.subcategory} />
           <Detail label="Manufacturer" value={product.manufacturer} />
           <Detail label="Vendor" value={product.vendor} />
           <Detail label="UPC / Barcode" value={product.upc} />
