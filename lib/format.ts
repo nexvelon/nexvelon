@@ -69,15 +69,20 @@ const businessStampFmt = new Intl.DateTimeFormat("en-CA", {
 });
 
 /**
- * Timestamp-style quote number: YYMMDDHHMM in America/Toronto. Self-contained —
- * no sequence lookup. Built via formatToParts (never toISOString) so it reflects
- * the Toronto wall-clock. e.g. 2026-06-08 23:45 Toronto → "2606082345".
+ * Timestamp-style quote number: "Q-" + YYMMDDHHMM in America/Toronto.
+ * Self-contained — no sequence lookup. Built via formatToParts (never
+ * toISOString) so it reflects the Toronto wall-clock. e.g. 2026-06-08 23:45
+ * Toronto → "Q-2606082345". NUM-1: the "Q-" prefix marks the value as a quote
+ * number; the timestamp logic/precision is unchanged. Only newly generated
+ * numbers carry the prefix — existing quotes keep their stored numbers.
  */
 export function businessQuoteNumber(date: Date = new Date()): string {
   const parts = businessStampFmt.formatToParts(date);
   const get = (t: Intl.DateTimeFormatPartTypes) =>
     parts.find((p) => p.type === t)?.value ?? "";
-  return get("year") + get("month") + get("day") + get("hour") + get("minute");
+  return (
+    "Q-" + get("year") + get("month") + get("day") + get("hour") + get("minute")
+  );
 }
 
 // Seconds-precision variant of the stamp formatter — used by businessPONumber
