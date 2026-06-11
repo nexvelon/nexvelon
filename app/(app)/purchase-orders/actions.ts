@@ -10,6 +10,7 @@ import {
   deletePurchaseOrder,
   getPurchaseOrderById,
   getPurchaseOrders,
+  setPurchaseOrderStatus,
   updatePurchaseOrder,
   type PurchaseOrderDetail,
   type PurchaseOrderListRow,
@@ -19,7 +20,7 @@ import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
-import type { DbRole } from "@/lib/types/database";
+import type { DbPurchaseOrderStatus, DbRole } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -178,4 +179,75 @@ export async function deletePurchaseOrderAction(
   } catch (e) {
     return fail(e);
   }
+}
+
+// ─── PO-3: status transitions ────────────────────────────────────────────
+// Shared core: edit-gate, load current status, run the (validated) transition
+// via setPurchaseOrderStatus, log "prev→next", revalidate. The transition map
+// in lib/api/purchase-orders.ts is the source of truth for legality; callers
+// pass the target status (+ any extra precondition).
+async function transitionStatus(
+  id: string,
+  next: DbPurchaseOrderStatus,
+  opts: { adminOnly?: boolean; precheck?: (d: PurchaseOrderDetail) => string | null } = {}
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const denied = await requireInventory("edit");
+    if (denied) return denied;
+    if (opts.adminOnly) {
+      const me = await getCurrentProfile();
+      if (!me || me.role !== "Admin") {
+        return { ok: false, error: "Only admins can reopen a purchase order." };
+      }
+    }
+
+    const detail = await getPurchaseOrderById(id);
+    if (!detail) return { ok: false, error: "Purchase order not found" };
+    const prev = detail.header.status;
+
+    if (opts.precheck) {
+      const msg = opts.precheck(detail);
+      if (msg) return { ok: false, error: msg };
+    }
+
+    await setPurchaseOrderStatus(id, next); // validates the transition map
+    await logActivity("purchase_order", id, "update", {
+      status: { from: prev, to: next },
+    });
+    revalidatePath("/purchase-orders");
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** draft → issued. Rejected when the PO has no lines. */
+export async function issuePurchaseOrderAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  return transitionStatus(id, "issued", {
+    precheck: (d) =>
+      d.lines.length === 0 ? "Add at least one line before issuing." : null,
+  });
+}
+
+/** → cancelled (from draft / issued / partially_received). */
+export async function cancelPurchaseOrderAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  return transitionStatus(id, "cancelled");
+}
+
+/** → closed (from issued / partially_received / received). */
+export async function closePurchaseOrderAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  return transitionStatus(id, "closed");
+}
+
+/** issued → draft. Admin only (reopen for re-editing). */
+export async function reopenPurchaseOrderAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  return transitionStatus(id, "draft", { adminOnly: true });
 }

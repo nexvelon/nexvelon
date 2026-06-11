@@ -13,8 +13,25 @@ import type {
   DbPurchaseOrderInsert,
   DbPurchaseOrderLine,
   DbPurchaseOrderLineInsert,
+  DbPurchaseOrderStatus,
   DbPurchaseOrderUpdate,
 } from "@/lib/types/database";
+
+// PO-3 — allowed status transitions. partially_received / received are entered
+// only by the PO-4 receiving flow (not here); from those states the workflow
+// can still Close or Cancel. closed / cancelled are terminal. issued→draft is
+// the admin reopen.
+export const PO_STATUS_TRANSITIONS: Record<
+  DbPurchaseOrderStatus,
+  DbPurchaseOrderStatus[]
+> = {
+  draft: ["issued", "cancelled"],
+  issued: ["closed", "cancelled", "draft"],
+  partially_received: ["closed", "cancelled"],
+  received: ["closed"],
+  closed: [],
+  cancelled: [],
+};
 
 async function db() {
   return createSupabaseServerClient();
@@ -218,6 +235,46 @@ export async function updatePurchaseOrder(
 
   await insertLines(supabase, id, input.lines);
   return po as DbPurchaseOrder;
+}
+
+/**
+ * PO-3 — transition a PO's status, validating against PO_STATUS_TRANSITIONS.
+ * Loads the current status, rejects an illegal transition, then updates (the
+ * updated_by uid + updated_at trigger fire as usual). Returns the new header.
+ */
+export async function setPurchaseOrderStatus(
+  id: string,
+  nextStatus: DbPurchaseOrderStatus
+): Promise<DbPurchaseOrder> {
+  const supabase = await db();
+
+  const { data: current, error: loadErr } = await supabase
+    .from("purchase_orders")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadErr) throw new Error(`setPurchaseOrderStatus: ${loadErr.message}`);
+  if (!current) throw new Error("Purchase order not found.");
+
+  const from = current.status as DbPurchaseOrderStatus;
+  if (from === nextStatus) {
+    throw new Error(`Purchase order is already ${nextStatus}.`);
+  }
+  if (!PO_STATUS_TRANSITIONS[from].includes(nextStatus)) {
+    throw new Error(`Cannot move a ${from} purchase order to ${nextStatus}.`);
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .update({ status: nextStatus, updated_by: user?.id ?? null })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(`setPurchaseOrderStatus: ${error.message}`);
+  return data as DbPurchaseOrder;
 }
 
 /** Delete a PO (lines cascade via FK). Returns true when a row was removed. */

@@ -43,17 +43,8 @@ import {
   getPurchaseOrderAction,
   listPurchaseOrdersAction,
 } from "@/app/(app)/purchase-orders/actions";
+import { StatusBadge } from "./po-status";
 import type { PurchaseOrderDetail, PurchaseOrderListRow } from "@/lib/api/purchase-orders";
-import type { DbPurchaseOrderStatus } from "@/lib/types/database";
-
-const STATUS_BADGE: Record<DbPurchaseOrderStatus, { label: string; bg: string; text: string }> = {
-  draft: { label: "Draft", bg: "#E8E8EA", text: "#52525B" },
-  issued: { label: "Issued", bg: "#DBEAFE", text: "#1E40AF" },
-  partially_received: { label: "Partial", bg: "#FEF3C7", text: "#92400E" },
-  received: { label: "Received", bg: "#DCFCE7", text: "#166534" },
-  closed: { label: "Closed", bg: "#E0E7FF", text: "#3730A3" },
-  cancelled: { label: "Cancelled", bg: "#FEE2E2", text: "#991B1B" },
-};
 
 interface Props {
   orders: PurchaseOrderListRow[];
@@ -243,7 +234,6 @@ function PORow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const badge = STATUS_BADGE[po.status];
   return (
     <li className="group">
       <div
@@ -271,12 +261,7 @@ function PORow({
             </p>
           </div>
         </button>
-        <span
-          className="flex items-center rounded-sm px-2 py-0.5 text-[10px] font-bold"
-          style={{ background: badge.bg, color: badge.text }}
-        >
-          {badge.label}
-        </span>
+        <StatusBadge status={po.status} />
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
