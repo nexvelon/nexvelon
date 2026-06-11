@@ -80,6 +80,39 @@ export function businessQuoteNumber(date: Date = new Date()): string {
   return get("year") + get("month") + get("day") + get("hour") + get("minute");
 }
 
+// Seconds-precision variant of the stamp formatter — used by businessPONumber
+// so two POs minted in the same minute don't collide.
+const businessStampSecFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "2-digit",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * Timestamp-style purchase-order number: "PO-"+YYMMDDHHMMSS in America/Toronto.
+ * Mirrors businessQuoteNumber but with second precision for uniqueness.
+ * e.g. 2026-06-08 23:45:07 Toronto → "PO-260608234507".
+ */
+export function businessPONumber(date: Date = new Date()): string {
+  const parts = businessStampSecFmt.formatToParts(date);
+  const get = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return (
+    "PO-" +
+    get("year") +
+    get("month") +
+    get("day") +
+    get("hour") +
+    get("minute") +
+    get("second")
+  );
+}
+
 export function formatCurrency(n: number): string {
   return usd2.format(n);
 }
