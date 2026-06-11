@@ -40,3 +40,6 @@ export const canClose = (s: DbPurchaseOrderStatus): boolean =>
   s === "issued" || s === "partially_received" || s === "received";
 /** Admin-only reopen (issued → draft). Caller also checks isAdmin. */
 export const canReopen = (s: DbPurchaseOrderStatus): boolean => s === "issued";
+/** Receiving is possible on an issued or partially_received PO. */
+export const canReceive = (s: DbPurchaseOrderStatus): boolean =>
+  s === "issued" || s === "partially_received";

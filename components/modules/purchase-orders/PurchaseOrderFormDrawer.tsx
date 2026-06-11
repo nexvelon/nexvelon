@@ -49,9 +49,11 @@ import {
   canCancel,
   canClose,
   canIssue,
+  canReceive,
   canReopen,
   isEditableStatus,
 } from "./po-status";
+import { ReceivePanel } from "./ReceivePanel";
 import type { PurchaseOrderDetail } from "@/lib/api/purchase-orders";
 import type { DbPurchaseOrderStatus } from "@/lib/types/database";
 
@@ -77,6 +79,7 @@ interface Props {
   mode: Mode;
   vendorOptions: VendorOption[];
   productOptions: ProductOption[];
+  locationOptions: string[];
 }
 
 interface LineDraft {
@@ -106,6 +109,7 @@ export function PurchaseOrderFormDrawer({
   mode,
   vendorOptions,
   productOptions,
+  locationOptions,
 }: Props) {
   const isEdit = mode.kind === "edit";
   const init = mode.kind === "edit" ? mode.detail : null;
@@ -114,6 +118,7 @@ export function PurchaseOrderFormDrawer({
   const editable = mode.kind === "create" || isEditableStatus(status);
   const { role } = useRole();
   const isAdmin = role === "Admin";
+  const [receiving, setReceiving] = useState(false);
 
   const [vendorId, setVendorId] = useState(init?.header.vendor_id ?? "");
   const [orderDate, setOrderDate] = useState(init?.header.order_date ?? "");
@@ -470,11 +475,23 @@ export function PurchaseOrderFormDrawer({
           )}
 
           {/* Read-only detail (any non-draft PO) */}
-          {!editable && init && (
-            <ReadOnlyDetail detail={init} />
+          {!editable && init && !receiving && <ReadOnlyDetail detail={init} />}
+
+          {/* Receive panel (issued / partially_received) */}
+          {!editable && init && receiving && (
+            <ReceivePanel
+              detail={init}
+              locationOptions={locationOptions}
+              onCancel={() => setReceiving(false)}
+              onDone={() => {
+                onSaved();
+                onClose();
+              }}
+            />
           )}
 
           {/* ─── Footer / actions ─────────────────────────────────────── */}
+          {!receiving && (
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
               Close
@@ -483,6 +500,13 @@ export function PurchaseOrderFormDrawer({
             {editable && (
               <Button type="button" onClick={handleSave} disabled={busy}>
                 {saving ? "Saving…" : isEdit ? "Save draft" : "Create draft"}
+              </Button>
+            )}
+
+            {/* Receive (issued / partially_received) */}
+            {isEdit && canReceive(status) && (
+              <Button type="button" onClick={() => setReceiving(true)} disabled={busy}>
+                Receive
               </Button>
             )}
 
@@ -553,6 +577,7 @@ export function PurchaseOrderFormDrawer({
               </Button>
             )}
           </div>
+          )}
         </div>
       </SheetContent>
 

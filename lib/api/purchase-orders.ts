@@ -8,6 +8,7 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessPONumber } from "@/lib/format";
+import { receiveStock } from "@/lib/api/products";
 import type {
   DbPurchaseOrder,
   DbPurchaseOrderInsert,
@@ -15,6 +16,7 @@ import type {
   DbPurchaseOrderLineInsert,
   DbPurchaseOrderStatus,
   DbPurchaseOrderUpdate,
+  InventoryTrackingMode,
 } from "@/lib/types/database";
 
 // PO-3 — allowed status transitions. partially_received / received are entered
@@ -25,9 +27,12 @@ export const PO_STATUS_TRANSITIONS: Record<
   DbPurchaseOrderStatus,
   DbPurchaseOrderStatus[]
 > = {
+  // partially_received / received targets are entered ONLY by the PO-4
+  // receiving flow (no manual UI button); the manual workflow exposes just
+  // issue / cancel / close / admin-reopen.
   draft: ["issued", "cancelled"],
-  issued: ["closed", "cancelled", "draft"],
-  partially_received: ["closed", "cancelled"],
+  issued: ["closed", "cancelled", "draft", "partially_received", "received"],
+  partially_received: ["closed", "cancelled", "received"],
   received: ["closed"],
   closed: [],
   cancelled: [],
@@ -44,10 +49,12 @@ export interface PurchaseOrderListRow extends DbPurchaseOrder {
   line_count: number;
 }
 
-/** A line enriched with the product name (when product_id is set). */
+/** A line enriched with the product name + tracking mode (when product_id set).
+ *  product_tracking_mode drives the receive flow (serialized lines need serials). */
 export interface PurchaseOrderLineWithProduct extends DbPurchaseOrderLine {
   product_name: string | null;
   product_sku: string | null;
+  product_tracking_mode: InventoryTrackingMode | null;
 }
 
 /** Detail: the header + vendor name + ordered enriched lines. */
@@ -149,16 +156,20 @@ export async function getPurchaseOrderById(
   const productIds = [
     ...new Set(lines.map((l) => l.product_id).filter((v): v is string => !!v)),
   ];
-  const productMap = new Map<string, { name: string; sku: string }>();
+  const productMap = new Map<
+    string,
+    { name: string; sku: string; tracking_mode: InventoryTrackingMode }
+  >();
   if (productIds.length > 0) {
     const { data: products } = await supabase
       .from("inventory_products")
-      .select("id, name, sku")
+      .select("id, name, sku, tracking_mode")
       .in("id", productIds);
     for (const p of products ?? []) {
       productMap.set(p.id as string, {
         name: p.name as string,
         sku: p.sku as string,
+        tracking_mode: p.tracking_mode as InventoryTrackingMode,
       });
     }
   }
@@ -171,6 +182,7 @@ export async function getPurchaseOrderById(
         ...l,
         product_name: prod?.name ?? null,
         product_sku: prod?.sku ?? null,
+        product_tracking_mode: prod?.tracking_mode ?? null,
       };
     }),
   };
@@ -275,6 +287,143 @@ export async function setPurchaseOrderStatus(
     .single();
   if (error) throw new Error(`setPurchaseOrderStatus: ${error.message}`);
   return data as DbPurchaseOrder;
+}
+
+// PO-4 — one receipt against one PO line.
+export interface ReceiptInput {
+  lineId: string;
+  quantity: number;
+  serials?: string[];
+  location?: string | null;
+  acquired_at?: string | null;
+}
+
+/**
+ * PO-4 — receive stock against PO lines. The ONLY path that writes
+ * received_qty. For each receipt (quantity > 0):
+ *   - loads the line; rejects when quantity exceeds remaining, the line has no
+ *     product_id (free-text lines aren't receivable), or a serialized product
+ *     isn't given exactly `quantity` serials;
+ *   - calls the existing receiveStock() once (PO unit_cost as the cost snapshot,
+ *     supplier = vendor name, PO number stamped) — cost model untouched;
+ *   - IMMEDIATELY increments received_qty (targeted UPDATE) so a retry can't
+ *     double-receive.
+ * Then advances status: all lines fully received → 'received'; some → it's
+ * 'partially_received'. Returns the updated PO header.
+ */
+export async function receivePurchaseOrderLines(
+  poId: string,
+  receipts: ReceiptInput[]
+): Promise<DbPurchaseOrder> {
+  const supabase = await db();
+
+  const { data: poRow, error: poErr } = await supabase
+    .from("purchase_orders")
+    .select("*")
+    .eq("id", poId)
+    .maybeSingle();
+  if (poErr) throw new Error(`receivePurchaseOrderLines: ${poErr.message}`);
+  if (!poRow) throw new Error("Purchase order not found.");
+  const header = poRow as DbPurchaseOrder;
+
+  const { data: vendor } = await supabase
+    .from("vendors")
+    .select("name")
+    .eq("id", header.vendor_id)
+    .maybeSingle();
+  const supplier = (vendor?.name as string) ?? null;
+
+  const { data: lineRows, error: lErr } = await supabase
+    .from("purchase_order_lines")
+    .select("*")
+    .eq("purchase_order_id", poId);
+  if (lErr) throw new Error(`receivePurchaseOrderLines/lines: ${lErr.message}`);
+  const lines = (lineRows ?? []) as DbPurchaseOrderLine[];
+  const byId = new Map(lines.map((l) => [l.id, l]));
+
+  // Tracking modes for the products being received (serialized needs serials).
+  const receivedProductIds = [
+    ...new Set(
+      receipts
+        .map((r) => byId.get(r.lineId)?.product_id)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const trackingById = new Map<string, InventoryTrackingMode>();
+  if (receivedProductIds.length > 0) {
+    const { data: products } = await supabase
+      .from("inventory_products")
+      .select("id, tracking_mode")
+      .in("id", receivedProductIds);
+    for (const p of products ?? []) {
+      trackingById.set(
+        p.id as string,
+        p.tracking_mode as InventoryTrackingMode
+      );
+    }
+  }
+
+  for (const r of receipts) {
+    const qty = Number(r.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+
+    const line = byId.get(r.lineId);
+    if (!line) throw new Error("A receipt references a line not on this PO.");
+    if (!line.product_id) {
+      throw new Error("Only catalog (product) lines can be received.");
+    }
+    const remaining = line.quantity - line.received_qty;
+    if (qty > remaining) {
+      throw new Error(
+        `Cannot receive ${qty} — only ${remaining} remaining on that line.`
+      );
+    }
+
+    const tracking = trackingById.get(line.product_id);
+    const serials = (r.serials ?? [])
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+    if (tracking === "serialized" && serials.length !== qty) {
+      throw new Error(
+        `Serialized line needs exactly ${qty} serial number${qty === 1 ? "" : "s"}.`
+      );
+    }
+
+    await receiveStock(line.product_id, {
+      quantity: qty,
+      unit_cost: Number(line.unit_cost),
+      supplier,
+      poNumber: header.po_number,
+      location: r.location ?? null,
+      acquired_at: r.acquired_at ?? null,
+      serials: tracking === "serialized" ? serials : undefined,
+    });
+
+    // Increment immediately so a retry can't double-receive this delta.
+    const { error: upErr } = await supabase
+      .from("purchase_order_lines")
+      .update({ received_qty: line.received_qty + qty })
+      .eq("id", line.id);
+    if (upErr) {
+      throw new Error(`receivePurchaseOrderLines/markReceived: ${upErr.message}`);
+    }
+    line.received_qty += qty; // keep the in-memory copy for the status recompute
+  }
+
+  // Advance status from the (now-updated) in-memory lines.
+  const allReceived =
+    lines.length > 0 && lines.every((l) => l.received_qty >= l.quantity);
+  const anyReceived = lines.some((l) => l.received_qty > 0);
+  const next: DbPurchaseOrderStatus | null = allReceived
+    ? "received"
+    : anyReceived
+      ? "partially_received"
+      : null;
+
+  if (next && next !== header.status) {
+    return setPurchaseOrderStatus(poId, next);
+  }
+  return header;
 }
 
 /** Delete a PO (lines cascade via FK). Returns true when a row was removed. */
