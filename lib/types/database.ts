@@ -595,6 +595,8 @@ export interface DbInventoryProduct {
   upc: string | null;
   master_part_number: string | null;
   replacement_part_number: string | null;
+  // CAT-3 (migration 0033): sub-category (free-text name, mirrors `category`).
+  subcategory: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -621,6 +623,8 @@ export type DbInventoryProductInsert = {
   upc?: string | null;
   master_part_number?: string | null;
   replacement_part_number?: string | null;
+  // CAT-3 (migration 0033): sub-category.
+  subcategory?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;

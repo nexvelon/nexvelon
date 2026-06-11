@@ -9,6 +9,7 @@ import {
   type DbInventoryVocab,
   type VocabKind,
   createVocab,
+  listSubcategories,
   listVocab,
   restoreVocab,
   softDeleteVocab,
@@ -58,12 +59,13 @@ export async function listInventoryVocabAction(
 
 export async function createInventoryVocabAction(
   kind: VocabKind,
-  name: string
+  name: string,
+  parentId: string | null = null
 ): Promise<ActionResult<DbInventoryVocab>> {
   try {
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
-    const row = await createVocab(kind, name);
+    const row = await createVocab(kind, name, parentId);
     revalidate();
     return { ok: true, data: row };
   } catch (e) {
@@ -71,9 +73,25 @@ export async function createInventoryVocabAction(
   }
 }
 
+/** CAT-3: list subcategories (optionally for one parent), for Settings + form. */
+export async function listSubcategoriesAction(
+  opts: { parentId?: string; includeInactive?: boolean } = {}
+): Promise<ActionResult<DbInventoryVocab[]>> {
+  try {
+    return { ok: true, data: await listSubcategories(opts) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function updateInventoryVocabAction(
   id: string,
-  payload: Partial<{ name: string; display_order: number; is_active: boolean }>
+  payload: Partial<{
+    name: string;
+    display_order: number;
+    is_active: boolean;
+    parent_id: string | null;
+  }>
 ): Promise<ActionResult<DbInventoryVocab>> {
   try {
     const gate = await requireAdmin();
