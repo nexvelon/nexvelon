@@ -48,6 +48,8 @@ import {
 } from "@/lib/company-profile";
 import {
   createDefaultSchedules,
+  createGuardianDefaultSchedules,
+  GUARDIAN_ONLY_KINDS,
   type DrawingsScheduleInstance,
   type QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
@@ -246,6 +248,7 @@ export function QuoteBuilder({
   // customized the terms, they are preserved across the switch.
   const handleTemplateChange = (next: QuoteTemplateSlug) => {
     setTemplateSlug(next);
+    // G2: swap the terms when they are still an unedited default (or empty).
     const knownDefaults = new Set([
       termsByTemplate.integrated_solutions,
       termsByTemplate.guardian,
@@ -256,6 +259,27 @@ export function QuoteBuilder({
     const current = terms ?? "";
     if (knownDefaults.has(current) || knownDefaults.has(current.trim())) {
       setTerms(termsByTemplate[next]);
+    }
+
+    // GF-5: switching TO Guardian auto-assembles its four sections — but only
+    // when none are already present, so a deliberately-removed section is not
+    // forced back on a later switch. Never duplicates; never removes anything
+    // when switching away (QuoteDocument entity-scopes the render instead).
+    if (next === "guardian") {
+      const hasGuardianSection = schedules.some((s) =>
+        GUARDIAN_ONLY_KINDS.includes(s.kind)
+      );
+      if (!hasGuardianSection) {
+        let insertAt = schedules.findIndex((s) => s.kind === "agreement");
+        if (insertAt === -1)
+          insertAt = schedules.findIndex((s) => s.kind === "acceptance");
+        if (insertAt === -1) insertAt = schedules.length;
+        setSchedules([
+          ...schedules.slice(0, insertAt),
+          ...createGuardianDefaultSchedules(),
+          ...schedules.slice(insertAt),
+        ]);
+      }
     }
   };
 

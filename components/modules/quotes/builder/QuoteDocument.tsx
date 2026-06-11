@@ -12,7 +12,7 @@ import {
 import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
 import { quoteTotals, takeoffGroups } from "@/lib/quote-helpers";
-import { monitoringTotals } from "@/lib/quote-schedules";
+import { monitoringTotals, GUARDIAN_ONLY_KINDS } from "@/lib/quote-schedules";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
 import type {
@@ -2464,7 +2464,13 @@ export function QuoteDocument(props: DocProps) {
   } = props;
 
   const styles = createStyles(theme);
-  const included = schedules.filter((s) => s.included);
+  // GF-5: Guardian-only sections never render on a non-Guardian quote, even if
+  // present in the data (e.g. after switching entity away from Guardian).
+  const isGuardianDoc = template.slug === "guardian";
+  const included = schedules.filter(
+    (s) =>
+      s.included && (isGuardianDoc || !GUARDIAN_ONLY_KINDS.includes(s.kind))
+  );
   // QD-2 Phase 5c — a drawings schedule expands to 1 + N pages, so the total
   // is the sum of each schedule's page count rather than included.length.
   const totalPages = included.reduce(
