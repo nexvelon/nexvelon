@@ -20,6 +20,7 @@ import type {
   AgreementScheduleInstance,
   AssuranceScheduleInstance,
   DispatchScheduleInstance,
+  KeyholdersScheduleInstance,
   CoverScheduleInstance,
   CustomScheduleInstance,
   DrawingsScheduleInstance,
@@ -1941,6 +1942,145 @@ function DispatchPage({
   );
 }
 
+// GF-3 — Guardian Keyholders & Response Protocol page. Renders the keyholder /
+// pass-card table (blank ruled rows when the list is empty, like a printed
+// form), the per-event response sequences, and the note. Keyholder contacts
+// only — no pricing or card data.
+interface KeyholdersPageProps extends CommonPageProps {
+  schedule: KeyholdersScheduleInstance;
+}
+
+const KH_COLS = {
+  name: "22%",
+  priority: "11%",
+  home: "16%",
+  mobile: "16%",
+  business: "16%",
+  passcard: "11%",
+  auth: "8%",
+} as const;
+
+function KeyholdersPage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: KeyholdersPageProps) {
+  const subtitleSuffix =
+    schedule.subtitle || "Authorized keyholders and response sequence";
+  const rows =
+    schedule.keyholders.length > 0
+      ? schedule.keyholders
+      : // Empty → blank ruled rows so the client can hand-write, like a
+        // printed keyholder form.
+        (Array.from({ length: 4 }, (_, i) => ({
+          id: `blank-${i}`,
+          name: "",
+          priority: "",
+          homePhone: "",
+          mobilePhone: "",
+          businessPhone: "",
+          passcard: "",
+          authorizedToChange: false,
+        })) as KeyholdersScheduleInstance["keyholders"]);
+
+  const protocol: { label: string; seq?: string }[] = [
+    { label: "Burglar", seq: schedule.burglar },
+    { label: "Fire", seq: schedule.fire },
+    { label: "Duress", seq: schedule.duress },
+    { label: "Medical", seq: schedule.medical },
+  ];
+
+  return (
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix}`}
+        title={schedule.title}
+        styles={styles}
+      />
+
+      <View style={styles.partTableHead}>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.name }]}>
+          Name
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.priority }]}>
+          Priority
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.home }]}>
+          Home
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.mobile }]}>
+          Mobile
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.business }]}>
+          Business
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.passcard }]}>
+          Passcard
+        </Text>
+        <Text style={[styles.partTableHeadText, { width: KH_COLS.auth }]}>
+          Auth
+        </Text>
+      </View>
+      {rows.map((k) => (
+        <View style={[styles.partRow, { minHeight: 18 }]} key={k.id}>
+          <Text style={[styles.partNumText, { width: KH_COLS.name }]}>
+            {k.name || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.priority }]}>
+            {k.priority || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.home }]}>
+            {k.homePhone || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.mobile }]}>
+            {k.mobilePhone || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.business }]}>
+            {k.businessPhone || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.passcard }]}>
+            {k.passcard || " "}
+          </Text>
+          <Text style={[styles.partNumText, { width: KH_COLS.auth }]}>
+            {k.authorizedToChange ? "✓" : " "}
+          </Text>
+        </View>
+      ))}
+
+      <Text style={styles.partSectionHeader}>Response Protocol</Text>
+      {protocol.map((p) => (
+        <Text style={styles.agreementLine} key={p.label}>
+          {p.label}: {p.seq && p.seq.trim().length > 0 ? p.seq : "______"}
+        </Text>
+      ))}
+
+      {schedule.note && schedule.note.trim().length > 0 ? (
+        <Text style={styles.agreementLine}>{schedule.note}</Text>
+      ) : null}
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 interface CustomPageProps extends CommonPageProps {
   schedule: CustomScheduleInstance;
 }
@@ -2430,6 +2570,14 @@ export function QuoteDocument(props: DocProps) {
           case "dispatch":
             return (
               <DispatchPage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "keyholders":
+            return (
+              <KeyholdersPage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
