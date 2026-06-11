@@ -29,7 +29,11 @@ import {
   stockStatus,
   totalAllocated,
 } from "@/lib/inventory-data";
-import { listInventoryVocabAction } from "@/app/(app)/settings/inventory-vocab-actions";
+import {
+  listInventoryVocabAction,
+  listSubcategoriesAction,
+} from "@/app/(app)/settings/inventory-vocab-actions";
+import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product, ProductCategory, Vendor } from "@/lib/types";
@@ -57,6 +61,10 @@ export function StockTab({ products }: { products: Product[] }) {
   const [search, setSearch] = useState("");
   const [vendor, setVendor] = useState<(typeof VENDORS)[number]>("All");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
+  // CAT-3b: dependent sub-category filter ("All" = no sub-filter).
+  const [subcategory, setSubcategory] = useState<string>("All");
+  const [catRows, setCatRows] = useState<DbInventoryVocab[]>([]);
+  const [subRows, setSubRows] = useState<DbInventoryVocab[]>([]);
   const [location, setLocation] = useState<string>("All");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
   const [sortKey, setSortKey] = useState<"sku" | "available" | "value">("sku");
@@ -79,6 +87,42 @@ export function StockTab({ products }: { products: Product[] }) {
       active = false;
     };
   }, []);
+
+  // CAT-3b: categories (with ids) + active subcategories for the dependent filter.
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      listInventoryVocabAction("category"),
+      listSubcategoriesAction(),
+    ])
+      .then(([cat, sub]) => {
+        if (!active) return;
+        if (cat.ok) setCatRows(cat.data);
+        if (sub.ok) setSubRows(sub.data);
+      })
+      .catch(() => {
+        // leave empty — sub-category filter simply offers "All".
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedCatId = catRows.find((c) => c.name === category)?.id;
+  const availableSubs = useMemo(
+    () => subRows.filter((s) => s.parent_id === selectedCatId),
+    [subRows, selectedCatId]
+  );
+  // Reset the sub-category when it no longer belongs to the selected category.
+  useEffect(() => {
+    if (
+      subcategory !== "All" &&
+      !availableSubs.some((s) => s.name === subcategory)
+    ) {
+      setSubcategory("All");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, subRows, catRows]);
 
   // Dynamic location set = managed vocab ∪ locations actually present in the
   // data (deduped, managed order first), so stock in 'Default' or any operator-
@@ -107,6 +151,7 @@ export function StockTab({ products }: { products: Product[] }) {
     search !== "" ||
     vendor !== "All" ||
     category !== "All" ||
+    subcategory !== "All" ||
     location !== "All" ||
     status !== "All";
 
@@ -114,6 +159,8 @@ export function StockTab({ products }: { products: Product[] }) {
     const out = products.filter((p) => {
       if (vendor !== "All" && p.vendor !== vendor) return false;
       if (category !== "All" && p.category !== category) return false;
+      if (subcategory !== "All" && (p.subcategory ?? "") !== subcategory)
+        return false;
       if (location !== "All") {
         const breakdown = locationBreakdown(p);
         if ((breakdown[location] ?? 0) === 0) return false;
@@ -142,7 +189,7 @@ export function StockTab({ products }: { products: Product[] }) {
       }
       return a.sku.localeCompare(b.sku);
     });
-  }, [products, search, vendor, category, location, status, sortKey]);
+  }, [products, search, vendor, category, subcategory, location, status, sortKey]);
 
   return (
     <div className="space-y-4">
@@ -185,6 +232,26 @@ export function StockTab({ products }: { products: Product[] }) {
               </SelectContent>
             </Select>
           </div>
+          {/* CAT-3b: dependent sub-category filter. */}
+          <div className="md:col-span-2">
+            <Select
+              value={subcategory}
+              onValueChange={(v) => setSubcategory(v ?? "All")}
+              disabled={category === "All" || availableSubs.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All sub-categories</SelectItem>
+                {availableSubs.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="md:col-span-2">
             <Select value={location} onValueChange={(v) => setLocation((v ?? "All") as typeof location)}>
               <SelectTrigger>
@@ -222,6 +289,7 @@ export function StockTab({ products }: { products: Product[] }) {
                 setSearch("");
                 setVendor("All");
                 setCategory("All");
+                setSubcategory("All");
                 setLocation("All");
                 setStatus("All");
               }}

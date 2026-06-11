@@ -11,6 +11,11 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useCatalogProducts } from "./catalog-context";
+import {
+  CategorySubcategoryFilter,
+  matchesCatFilter,
+  type CatFilterValue,
+} from "@/components/modules/inventory/CategorySubcategoryFilter";
 import { formatCurrency } from "@/lib/format";
 import type { Product, QuoteSection } from "@/lib/types";
 
@@ -22,6 +27,12 @@ interface Props {
 export function CommandPalette({ sections, onAddProductToSection }: Props) {
   const products = useCatalogProducts();
   const [open, setOpen] = useState(false);
+  const [catFilter, setCatFilter] = useState<CatFilterValue>({
+    category: "",
+    subcategory: "",
+  });
+  // CAT-3b: category/sub-category filters combine WITH the cmdk text search.
+  const filteredProducts = products.filter((p) => matchesCatFilter(p, catFilter));
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -44,6 +55,9 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
       description="Search the catalog by Part #, name, or manufacturer. Press Enter to add to the first section."
     >
       <CommandInput placeholder="Search Part #, manufacturer, or product name…" />
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
+        <CategorySubcategoryFilter value={catFilter} onChange={setCatFilter} />
+      </div>
       <CommandList>
         <CommandEmpty>No matching products.</CommandEmpty>
         {sections.length > 1 && (
@@ -68,7 +82,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
           </>
         )}
         <CommandGroup heading="Catalog">
-          {products.slice(0, 50).map((p) => (
+          {filteredProducts.slice(0, 50).map((p) => (
             <CommandItem
               key={p.id}
               value={`${p.sku} ${p.name} ${p.manufacturer}`}

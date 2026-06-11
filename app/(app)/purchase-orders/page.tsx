@@ -27,6 +27,8 @@ export default async function PurchaseOrdersPage() {
     sku: p.sku,
     name: p.name,
     cost: p.cost,
+    category: p.category || undefined,
+    subcategory: p.subcategory,
   }));
   // Receive-to-location picker (active storage locations).
   const locationOptions = locations.map((l) => l.name);
