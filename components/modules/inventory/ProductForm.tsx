@@ -17,6 +17,7 @@ import {
   listSubcategoriesAction,
 } from "@/app/(app)/settings/inventory-vocab-actions";
 import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
+import { ProductImageField } from "./ProductImageField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -363,6 +364,11 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             placeholder="Optional description"
           />
         </Field>
+        {/* IMG-1: image upload (edit mode; create mode shows a save-first hint) */}
+        <ProductImageField
+          productId={existing?.id ?? null}
+          initialImagePath={existing?.image_path ?? null}
+        />
       </section>
 
       {/* Part identifiers — CAT-1 (migration 0032) */}

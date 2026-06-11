@@ -597,6 +597,8 @@ export interface DbInventoryProduct {
   replacement_part_number: string | null;
   // CAT-3 (migration 0033): sub-category (free-text name, mirrors `category`).
   subcategory: string | null;
+  // IMG-1 (migration 0034): storage path in the public "product-images" bucket.
+  image_path: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -625,6 +627,8 @@ export type DbInventoryProductInsert = {
   replacement_part_number?: string | null;
   // CAT-3 (migration 0033): sub-category.
   subcategory?: string | null;
+  // IMG-1 (migration 0034): product image storage path.
+  image_path?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;

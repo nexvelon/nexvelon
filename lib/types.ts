@@ -72,6 +72,7 @@ export interface Product {
   avgCost?: number;
   upc?: string;
   masterPartNumber?: string; // CAT-2: snapshotted onto quote lines
+  imageUrl?: string; // IMG-1: public URL when the product has an image
   lastReceived?: string;
   byLocation?: Partial<Record<string, number>>;
   searchAliases?: string[];

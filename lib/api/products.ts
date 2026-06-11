@@ -39,6 +39,8 @@ import type {
   Vendor,
 } from "@/lib/types";
 
+import { productImagePublicUrl } from "@/lib/product-image-url";
+
 async function db() {
   return createSupabaseServerClient();
 }
@@ -105,6 +107,7 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     addons: p.addons ?? [],
     upc: p.upc ?? undefined,
     masterPartNumber: p.master_part_number ?? undefined,
+    imageUrl: productImagePublicUrl(p.image_path),
   };
 }
 
