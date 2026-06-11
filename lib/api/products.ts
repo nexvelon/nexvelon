@@ -90,6 +90,7 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     // DB is source of truth — cast rather than redefining the UI unions.
     manufacturer: (p.manufacturer ?? "") as ProductManufacturer,
     category: (p.category ?? "") as ProductCategory,
+    subcategory: p.subcategory ?? undefined,
     vendor: (p.vendor ?? "") as Vendor,
     cost: p.default_unit_cost != null ? Number(p.default_unit_cost) : 0,
     price: p.list_price != null ? Number(p.list_price) : 0,

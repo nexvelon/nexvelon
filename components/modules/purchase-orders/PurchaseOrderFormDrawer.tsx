@@ -45,6 +45,11 @@ import {
   updatePurchaseOrderAction,
 } from "@/app/(app)/purchase-orders/actions";
 import {
+  CategorySubcategoryFilter,
+  matchesCatFilter,
+  type CatFilterValue,
+} from "@/components/modules/inventory/CategorySubcategoryFilter";
+import {
   StatusBadge,
   canCancel,
   canClose,
@@ -66,6 +71,9 @@ export interface ProductOption {
   sku: string;
   name: string;
   cost: number;
+  // CAT-3b: for the category / sub-category line-picker filter.
+  category?: string;
+  subcategory?: string;
 }
 
 type Mode =
@@ -148,6 +156,11 @@ export function PurchaseOrderFormDrawer({
     () => new Map(productOptions.map((p) => [p.id, p])),
     [productOptions]
   );
+  // CAT-3b: category / sub-category filter for the line product pickers.
+  const [poFilter, setPoFilter] = useState<CatFilterValue>({
+    category: "",
+    subcategory: "",
+  });
 
   const total = useMemo(
     () => lines.reduce((s, l) => s + l.quantity * l.unit_cost, 0),
@@ -360,7 +373,16 @@ export function PurchaseOrderFormDrawer({
               </span>
             </div>
 
-            {lines.map((l) => (
+            {/* CAT-3b: narrow the part pickers below by category / sub-category. */}
+            <CategorySubcategoryFilter value={poFilter} onChange={setPoFilter} />
+
+            {lines.map((l) => {
+              // Show filtered parts, but always keep this line's already-picked
+              // part in its own list so the selected label still renders.
+              const lineOptions = productOptions.filter(
+                (p) => matchesCatFilter(p, poFilter) || p.id === l.product_id
+              );
+              return (
               <div
                 key={l.key}
                 className="bg-background space-y-1.5 rounded-md border border-[var(--border)] p-2"
@@ -374,7 +396,7 @@ export function PurchaseOrderFormDrawer({
                       <SelectValue placeholder="Pick a part (optional)…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {productOptions.map((p) => (
+                      {lineOptions.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.sku} — {p.name}
                         </SelectItem>
@@ -450,7 +472,8 @@ export function PurchaseOrderFormDrawer({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             <Button
               type="button"

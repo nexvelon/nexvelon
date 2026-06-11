@@ -62,6 +62,7 @@ export interface Product {
   name: string;
   manufacturer: ProductManufacturer;
   category: ProductCategory;
+  subcategory?: string; // CAT-3b: sub-category name for catalog filtering
   vendor: Vendor;
   cost: number;
   price: number;
