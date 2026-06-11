@@ -33,6 +33,7 @@ import {
 import { RichTextEditor } from "./RichTextEditor";
 import {
   QUOTE_SCHEDULE_DEFINITIONS,
+  GUARDIAN_ONLY_KINDS,
   createAssuranceSchedule,
   createCustomSchedule,
   createDrawingsSchedule,
@@ -97,13 +98,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "custom",
 ];
 
-// GF-1/GF-2/GF-3/GF-4: kinds offered only on Guardian quotes.
-const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = [
-  "monitoring",
-  "dispatch",
-  "keyholders",
-  "pad",
-];
+// GF-5: GUARDIAN_ONLY_KINDS is now the single source in lib/quote-schedules.
 
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();

@@ -268,6 +268,16 @@ export const DEFAULT_QUOTE_SCHEDULE_KINDS: QuoteScheduleKind[] = [
   "acceptance",
 ];
 
+// GF-5 — canonical list of schedule kinds that exist only on Guardian quotes.
+// Single source of truth: the SchedulesCard picker filter, the QuoteBuilder
+// auto-assembly, and the QuoteDocument entity-scoped render all read this.
+export const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = [
+  "monitoring",
+  "dispatch",
+  "keyholders",
+  "pad",
+];
+
 export function createAssuranceSchedule(): AssuranceScheduleInstance {
   return {
     id: newId("sch"),
@@ -362,6 +372,17 @@ export function createPadSchedule(): PadScheduleInstance {
     collectionNote:
       "Bank account or credit-card details are collected on Nexvelon's separate secure pre-authorized payment authorization form and are not stored on this proposal.",
   };
+}
+
+// GF-5 — the four Guardian sections, fresh, in canonical render order. Used to
+// auto-assemble a Guardian quote on entity switch (QuoteBuilder).
+export function createGuardianDefaultSchedules(): QuoteScheduleInstance[] {
+  return [
+    createMonitoringSchedule(),
+    createDispatchSchedule(),
+    createKeyholdersSchedule(),
+    createPadSchedule(),
+  ];
 }
 
 export function createDefaultSchedules(): QuoteScheduleInstance[] {
