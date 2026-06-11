@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
+import { productImagePublicUrl } from "@/lib/product-image-url";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
   allocateUnitAction,
@@ -261,6 +262,18 @@ export function ProductDetailClient({
           </>
         }
       />
+
+      {/* IMG-1: product image (when set) */}
+      {productImagePublicUrl(product.image_path) ? (
+        <Card className="bg-card p-5 shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={productImagePublicUrl(product.image_path)}
+            alt={product.name}
+            className="max-h-64 rounded-md border border-[var(--border)] object-contain"
+          />
+        </Card>
+      ) : null}
 
       {/* Catalog fields */}
       <Card className="bg-card p-5 shadow-sm">

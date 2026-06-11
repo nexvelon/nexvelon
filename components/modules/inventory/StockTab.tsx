@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ImageIcon, Search, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -391,7 +391,24 @@ function FragmentRow({
           </button>
         </TableCell>
         <TableCell className="text-brand-navy font-mono text-xs font-semibold">{p.sku}</TableCell>
-        <TableCell className="max-w-[280px] text-xs">{p.name}</TableCell>
+        <TableCell className="max-w-[280px] text-xs">
+          <div className="flex items-center gap-2">
+            {/* IMG-1: row thumbnail / neutral placeholder */}
+            {p.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={p.imageUrl}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded border border-[var(--border)] object-cover"
+              />
+            ) : (
+              <span className="bg-muted/40 flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--border)]">
+                <ImageIcon className="text-muted-foreground h-3.5 w-3.5" />
+              </span>
+            )}
+            <span className="truncate">{p.name}</span>
+          </div>
+        </TableCell>
         <TableCell className="text-xs">{p.vendor}</TableCell>
         <TableCell className="text-xs">{p.category}</TableCell>
         <TableCell className="text-muted-foreground text-xs">{p.manufacturer}</TableCell>
