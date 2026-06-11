@@ -6,14 +6,16 @@ import { PurchaseOrdersView } from "@/components/modules/purchase-orders/Purchas
 import { getPurchaseOrders } from "@/lib/api/purchase-orders";
 import { getVendors } from "@/lib/api/vendors";
 import { listProducts } from "@/lib/api/products";
+import { listVocab } from "@/lib/api/inventory-vocab";
 
 export const dynamic = "force-dynamic";
 
 export default async function PurchaseOrdersPage() {
-  const [orders, vendors, products] = await Promise.all([
+  const [orders, vendors, products, locations] = await Promise.all([
     getPurchaseOrders(),
     getVendors(),
     listProducts(),
+    listVocab("storage_location"),
   ]);
 
   // Vendor select offers active vendors only; product picker is sku/name/cost.
@@ -26,12 +28,15 @@ export default async function PurchaseOrdersPage() {
     name: p.name,
     cost: p.cost,
   }));
+  // Receive-to-location picker (active storage locations).
+  const locationOptions = locations.map((l) => l.name);
 
   return (
     <PurchaseOrdersView
       orders={orders}
       vendorOptions={vendorOptions}
       productOptions={productOptions}
+      locationOptions={locationOptions}
     />
   );
 }

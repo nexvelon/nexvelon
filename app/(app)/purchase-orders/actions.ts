@@ -10,11 +10,13 @@ import {
   deletePurchaseOrder,
   getPurchaseOrderById,
   getPurchaseOrders,
+  receivePurchaseOrderLines,
   setPurchaseOrderStatus,
   updatePurchaseOrder,
   type PurchaseOrderDetail,
   type PurchaseOrderListRow,
   type PurchaseOrderWrite,
+  type ReceiptInput,
 } from "@/lib/api/purchase-orders";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -250,4 +252,50 @@ export async function reopenPurchaseOrderAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   return transitionStatus(id, "draft", { adminOnly: true });
+}
+
+/**
+ * PO-4 — receive stock against PO lines. Gated by inventory "edit" (same posture
+ * as the other PO mutations + receiveStock's callers). Only an issued or
+ * partially_received PO can be received into.
+ */
+export async function receivePurchaseOrderAction(
+  poId: string,
+  receipts: ReceiptInput[]
+): Promise<ActionResult<{ id: string; status: DbPurchaseOrderStatus }>> {
+  try {
+    const denied = await requireInventory("edit");
+    if (denied) return denied;
+
+    const detail = await getPurchaseOrderById(poId);
+    if (!detail) return { ok: false, error: "Purchase order not found" };
+    const status = detail.header.status;
+    if (status !== "issued" && status !== "partially_received") {
+      return {
+        ok: false,
+        error: `A ${status} purchase order can't be received into.`,
+      };
+    }
+
+    const valid = receipts.filter((r) => Number(r.quantity) > 0);
+    if (valid.length === 0) {
+      return { ok: false, error: "Enter a quantity to receive on at least one line." };
+    }
+
+    const updated = await receivePurchaseOrderLines(poId, valid);
+
+    const units = valid.reduce((s, r) => s + Number(r.quantity), 0);
+    await logActivity("purchase_order", poId, "update", {
+      received: {
+        from: status,
+        to: `${updated.status} (+${units} unit${units === 1 ? "" : "s"} across ${valid.length} line${valid.length === 1 ? "" : "s"})`,
+      },
+    });
+
+    revalidatePath("/purchase-orders");
+    revalidatePath("/inventory");
+    return { ok: true, data: { id: poId, status: updated.status } };
+  } catch (e) {
+    return fail(e);
+  }
 }

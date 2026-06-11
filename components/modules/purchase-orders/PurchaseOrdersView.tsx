@@ -50,9 +50,15 @@ interface Props {
   orders: PurchaseOrderListRow[];
   vendorOptions: VendorOption[];
   productOptions: ProductOption[];
+  locationOptions: string[];
 }
 
-export function PurchaseOrdersView({ orders, vendorOptions, productOptions }: Props) {
+export function PurchaseOrdersView({
+  orders,
+  vendorOptions,
+  productOptions,
+  locationOptions,
+}: Props) {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<PurchaseOrderListRow[]>(orders);
   const [drawer, setDrawer] = useState<
@@ -163,6 +169,7 @@ export function PurchaseOrdersView({ orders, vendorOptions, productOptions }: Pr
           mode={drawer.mode}
           vendorOptions={vendorOptions}
           productOptions={productOptions}
+          locationOptions={locationOptions}
           onClose={() => setDrawer({ open: false })}
           onSaved={() => void reload()}
         />
