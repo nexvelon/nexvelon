@@ -36,6 +36,7 @@ import {
   createAssuranceSchedule,
   createCustomSchedule,
   createDrawingsSchedule,
+  createMonitoringSchedule,
   createDispatchSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
@@ -43,12 +44,14 @@ import {
   type CustomScheduleInstance,
   type DispatchScheduleInstance,
   type DrawingsScheduleInstance,
+  type MonitoringScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { MonitoringEditor } from "./MonitoringEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import { useRole } from "@/lib/role-context";
 
@@ -56,7 +59,7 @@ interface Props {
   schedules: QuoteScheduleInstance[];
   onChange: (next: QuoteScheduleInstance[]) => void;
   disabled?: boolean;
-  /** GF-2: the "dispatch" add-option is offered only for Guardian quotes. */
+  /** GF-1/GF-2: Guardian-only add-options (monitoring, dispatch). */
   isGuardian?: boolean;
 }
 
@@ -68,6 +71,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   agreement: "Agreement",
   acceptance: "Acceptance",
   custom: "Custom",
+  monitoring: "Monitoring Services",
   dispatch: "Dispatch & False-Alarm Election",
 };
 
@@ -75,6 +79,7 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "cover",
   "particulars",
   "assurance",
+  "monitoring",
   "dispatch",
   "drawings",
   "agreement",
@@ -82,12 +87,13 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "custom",
 ];
 
-// GF-2: kinds offered only on Guardian quotes.
-const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = ["dispatch"];
+// GF-1/GF-2: kinds offered only on Guardian quotes.
+const GUARDIAN_ONLY_KINDS: QuoteScheduleKind[] = ["monitoring", "dispatch"];
 
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
+  if (kind === "monitoring") return createMonitoringSchedule();
   if (kind === "dispatch") return createDispatchSchedule();
   if (kind === "drawings") return createDrawingsSchedule();
   const def = QUOTE_SCHEDULE_DEFINITIONS[kind];
@@ -341,6 +347,24 @@ export function SchedulesCard({
                       patchAt(idx, {
                         cards: next,
                       } as Partial<AssuranceScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
+              {schedule.kind === "monitoring" && (
+                <div className="space-y-1 pt-1">
+                  <MonitoringEditor
+                    services={(schedule as MonitoringScheduleInstance).services}
+                    setupLabel={
+                      (schedule as MonitoringScheduleInstance).setupLabel
+                    }
+                    setupAmount={
+                      (schedule as MonitoringScheduleInstance).setupAmount
+                    }
+                    onChange={(patch) =>
+                      patchAt(idx, patch as Partial<QuoteScheduleInstance>)
                     }
                     disabled={disabled}
                   />
