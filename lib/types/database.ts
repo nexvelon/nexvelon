@@ -591,6 +591,10 @@ export interface DbInventoryProduct {
   // D-1 (migration 0026): companion add-ons.
   notify_addons: boolean;
   addons: AddonEntry[];
+  // Migration 0032: additional part-number identifiers (all free-text, nullable).
+  upc: string | null;
+  master_part_number: string | null;
+  replacement_part_number: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -613,6 +617,10 @@ export type DbInventoryProductInsert = {
   search_aliases?: string[];
   notify_addons?: boolean;
   addons?: AddonEntry[];
+  // Migration 0032: additional part-number identifiers.
+  upc?: string | null;
+  master_part_number?: string | null;
+  replacement_part_number?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
