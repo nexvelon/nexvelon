@@ -54,6 +54,7 @@ import {
   type QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
+import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { useReadOnly } from "@/lib/use-read-only";
 import { useRole } from "@/lib/role-context";
 import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
@@ -912,6 +913,23 @@ export function QuoteBuilder({
             onChange={setInternalNotes}
             disabled={ro.readOnly}
           />
+
+          {/* ATTACH-2: quote attachments — only on a saved (persisted) quote */}
+          {!isNew ? (
+            <AttachmentsSection
+              entityType="quote"
+              entityId={String(initial.id)}
+              folders={["Documents"]}
+              allowCustomFolders
+              title="Attachments"
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-card p-5 text-center">
+              <p className="text-muted-foreground text-sm">
+                Save this quote first, then reopen it to attach files.
+              </p>
+            </div>
+          )}
 
           <TotalsBar
             sections={sections}

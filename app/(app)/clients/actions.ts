@@ -18,6 +18,7 @@ import {
   updateSite,
 } from "@/lib/api/clients";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
+import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -291,6 +292,8 @@ export async function deleteClientAction(
     if (!deleted) {
       return { ok: false, error: "Client not found" };
     }
+    // ATTACH-2: remove this client's attachments (objects + rows). Best-effort.
+    await deleteAttachmentsForEntity("client", id).catch(() => {});
     // ACT-1: log survives the hard delete (no FK on activity_log.entity_id).
     await logActivity("client", id, "delete", {});
     revalidatePath("/clients");
