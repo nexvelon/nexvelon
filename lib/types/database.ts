@@ -506,7 +506,8 @@ export type ActivityEntityType =
   | "contact"
   | "inventory"
   | "vendor"
-  | "purchase_order";
+  | "purchase_order"
+  | "attachment";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -793,3 +794,39 @@ export type DbPurchaseOrderLineInsert = {
   received_qty?: number;
   line_no?: number;
 };
+
+// ----------------------------------------------------------------------------
+// Attachments (ATTACH-1, migration 0035) — generic, table-backed file records
+// keyed by (entity_type, entity_id). Files live in the PRIVATE "attachments"
+// Storage bucket (signed URLs only). entity_type is free-text (no CHECK) so new
+// entity kinds need no migration.
+// ----------------------------------------------------------------------------
+export interface DbAttachment {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  folder: string;
+  bucket: string;
+  path: string;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Insert payload. id / timestamps server-managed; folder/bucket have DB defaults. */
+export type DbAttachmentInsert = {
+  entity_type: string;
+  entity_id: string;
+  folder?: string;
+  bucket?: string;
+  path: string;
+  filename: string;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  uploaded_by?: string | null;
+};
+
+export type DbAttachmentUpdate = Partial<DbAttachmentInsert>;
