@@ -53,6 +53,7 @@ import {
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
 import { productImagePublicUrl } from "@/lib/product-image-url";
+import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
   allocateUnitAction,
@@ -539,6 +540,15 @@ export function ProductDetailClient({
           </Table>
         </Card>
       </div>
+
+      {/* ATTACH-1: product documents */}
+      <AttachmentsSection
+        entityType="product"
+        entityId={product.id}
+        folders={["Shop Drawings", "Data Sheets"]}
+        allowCustomFolders={false}
+        title="Documents"
+      />
 
       <ReceiveStockForm
         productId={product.id}

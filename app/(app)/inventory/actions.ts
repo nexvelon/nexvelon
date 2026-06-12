@@ -30,6 +30,7 @@ import {
   type ReceiveStockInput,
 } from "@/lib/api/products";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
+import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -194,6 +195,10 @@ export async function deleteProductAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    // ATTACH-1: remove this product's attachments (objects + rows) first so
+    // they don't orphan. Best-effort — a storage hiccup never blocks the
+    // product delete.
+    await deleteAttachmentsForEntity("product", id).catch(() => {});
     await deleteProduct(id);
     await logActivity("inventory", id, "delete", {});
     revalidatePath("/inventory");
