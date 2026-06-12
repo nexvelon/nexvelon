@@ -16,6 +16,7 @@ import {
   matchesCatFilter,
   type CatFilterValue,
 } from "@/components/modules/inventory/CategorySubcategoryFilter";
+import { ProductThumb } from "@/components/modules/inventory/ProductThumb";
 import { formatCurrency } from "@/lib/format";
 import type { Product, QuoteSection } from "@/lib/types";
 
@@ -95,6 +96,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
               }}
             >
               <div className="flex w-full items-center justify-between gap-3">
+                <ProductThumb imageUrl={p.imageUrl} size={30} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-brand-navy font-mono text-xs font-semibold">
