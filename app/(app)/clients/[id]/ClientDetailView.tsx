@@ -25,6 +25,7 @@ import { SitesPane } from "../_components/SitesPane";
 import { ContactsPane } from "../_components/ContactsPane";
 import { PlaceholderPane } from "../_components/PlaceholderPane";
 import { ClientFormDrawer } from "../ClientFormDrawer";
+import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { SiteFormDrawer } from "../SiteFormDrawer";
 import { ContactFormDrawer } from "../ContactFormDrawer";
 import { ActivityLog } from "@/components/activity/ActivityLog";
@@ -184,7 +185,15 @@ export function ClientDetailView({
       {tab === "Service History" && (
         <PlaceholderPane label="Service history" />
       )}
-      {tab === "Documents" && <PlaceholderPane label="Documents" />}
+      {tab === "Documents" && (
+        <AttachmentsSection
+          entityType="client"
+          entityId={client.id}
+          folders={["Documents"]}
+          allowCustomFolders
+          title="Documents"
+        />
+      )}
       {tab === "Activity" && <ActivityLog entries={activityLog} />}
 
       {/* Drawers */}

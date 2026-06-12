@@ -11,6 +11,7 @@ import {
   listQuotes,
   upsertQuote,
 } from "@/lib/api/quotes";
+import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import type { Quote } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
@@ -64,6 +65,8 @@ export async function deleteQuoteAction(
   try {
     const deleted = await deleteQuote(id);
     if (!deleted) return { ok: false, error: "Quote not found" };
+    // ATTACH-2: remove this quote's attachments (objects + rows). Best-effort.
+    await deleteAttachmentsForEntity("quote", id).catch(() => {});
     revalidatePath("/quotes");
     return { ok: true, data: { id } };
   } catch (e) {

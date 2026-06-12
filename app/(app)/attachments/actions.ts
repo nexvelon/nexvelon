@@ -9,7 +9,7 @@
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission, type Action } from "@/lib/permissions";
+import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import type { DbAttachment, DbRole } from "@/lib/types/database";
 
@@ -49,13 +49,26 @@ function adaptRole(r: DbRole): Role {
   }
 }
 
-async function requireInventory(
+// ATTACH-2: each entity_type gates on its own permission resource; anything
+// unmapped falls back to "inventory".
+const ENTITY_RESOURCE: Record<string, Resource> = {
+  product: "inventory",
+  client: "clients",
+  quote: "quotes",
+};
+
+function resourceFor(entityType: string): Resource {
+  return ENTITY_RESOURCE[entityType] ?? "inventory";
+}
+
+async function requireEntityPermission(
+  entityType: string,
   action: Action
 ): Promise<{ ok: false; error: string } | null> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };
-  if (!hasPermission(adaptRole(me.role), "inventory", action)) {
-    return { ok: false, error: "You don't have permission to manage attachments." };
+  if (!hasPermission(adaptRole(me.role), resourceFor(entityType), action)) {
+    return { ok: false, error: "You don't have permission to manage these attachments." };
   }
   return null;
 }
@@ -87,7 +100,7 @@ export async function createAttachment(
   file: { path: string; filename: string; contentType?: string | null; size?: number | null }
 ): Promise<ActionResult<DbAttachment>> {
   try {
-    const denied = await requireInventory("create");
+    const denied = await requireEntityPermission(entityType, "create");
     if (denied) return denied;
 
     const supabase = await createSupabaseServerClient();
@@ -126,9 +139,6 @@ export async function deleteAttachment(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const denied = await requireInventory("delete");
-    if (denied) return denied;
-
     const supabase = await createSupabaseServerClient();
     const { data: row, error: loadErr } = await supabase
       .from("attachments")
@@ -138,6 +148,10 @@ export async function deleteAttachment(
     if (loadErr) throw new Error(loadErr.message);
     if (!row) return { ok: false, error: "Attachment not found" };
     const att = row as DbAttachment;
+
+    // Gate on the row's own entity resource (loaded above so we know the type).
+    const denied = await requireEntityPermission(att.entity_type, "delete");
+    if (denied) return denied;
 
     // Remove the storage object first, then the row (best-effort on the object
     // so a missing object never blocks clearing the row).
@@ -167,7 +181,7 @@ export async function deleteAttachmentsForEntity(
   entityId: string
 ): Promise<ActionResult<{ removed: number }>> {
   try {
-    const denied = await requireInventory("delete");
+    const denied = await requireEntityPermission(entityType, "delete");
     if (denied) return denied;
 
     const supabase = await createSupabaseServerClient();
