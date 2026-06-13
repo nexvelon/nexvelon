@@ -54,6 +54,8 @@ function adaptRole(r: DbRole): Role {
 const ENTITY_RESOURCE: Record<string, Resource> = {
   product: "inventory",
   client: "clients",
+  // SITE-DETAIL: sites live in the clients domain → gate on the same resource.
+  site: "clients",
   quote: "quotes",
 };
 

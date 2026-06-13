@@ -218,6 +218,7 @@ export function SitesView({ initialSites, clients }: Props) {
                 <SiteRow
                   key={s.id}
                   site={s}
+                  onOpen={() => router.push(`/sites/${s.id}`)}
                   onEdit={() => setEditDrawer({ open: true, site: s })}
                   onDelete={() => setConfirmDelete(s)}
                 />
@@ -279,10 +280,12 @@ export function SitesView({ initialSites, clients }: Props) {
 
 function SiteRow({
   site,
+  onOpen,
   onEdit,
   onDelete,
 }: {
   site: DbSiteWithClient;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -290,7 +293,7 @@ function SiteRow({
     [site.city, site.province].filter(Boolean).join(" · ") || "—";
 
   return (
-    <TableRow className="group">
+    <TableRow className="group cursor-pointer" onClick={onOpen}>
       <TableCell className="font-mono text-xs">
         {site.site_code ?? "—"}
       </TableCell>
@@ -316,7 +319,10 @@ function SiteRow({
         <div className="inline-flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
-            onClick={onEdit}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
             aria-label="Edit site"
             className="text-muted-foreground hover:bg-muted hover:text-brand-charcoal rounded p-1"
           >
@@ -324,7 +330,10 @@ function SiteRow({
           </button>
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             aria-label="Delete site"
             className="text-muted-foreground hover:bg-muted rounded p-1 hover:text-red-600"
           >

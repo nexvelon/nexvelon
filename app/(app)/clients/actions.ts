@@ -369,6 +369,9 @@ export async function deleteSiteAction(
     if (!deleted) {
       return { ok: false, error: "Site not found" };
     }
+    // SITE-DETAIL: remove this site's attachments (objects + rows). Best-effort,
+    // mirrors the client/quote/product hard-delete cleanup.
+    await deleteAttachmentsForEntity("site", id).catch(() => {});
     await logActivity("site", id, "delete", {});
     revalidatePath("/clients");
     return { ok: true, data: { id } };
