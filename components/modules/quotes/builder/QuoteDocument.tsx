@@ -41,10 +41,6 @@ function mutedFor(theme: QuoteTheme): string {
   return `${theme.ink}99`; // 60% alpha
 }
 
-function borderFor(theme: QuoteTheme): string {
-  return `${theme.accent}33`; // 20% alpha
-}
-
 function ink70(theme: QuoteTheme): string {
   return `${theme.ink}B3`; // 70% alpha
 }
@@ -561,8 +557,6 @@ function createStyles(theme: QuoteTheme) {
     partRow: {
       flexDirection: "row",
       paddingVertical: 5,
-      borderBottomWidth: 0.4,
-      borderBottomColor: borderFor(theme),
     },
     partCellRef: { width: "10%", paddingRight: 4 },
     partCellDesc: { width: "60%", paddingRight: 6 },
@@ -654,8 +648,17 @@ function createStyles(theme: QuoteTheme) {
       fontFamily: "Cormorant Garamond",
       fontSize: 7,
       color: theme.ink,
-      lineHeight: 1.25,
-      marginBottom: 2,
+      // PDF-FIX-1 #8 — tightened from 1.25 / 2 to pull the Integrated T&C from
+      // 5 pages onto 4 without cutting any clause text.
+      lineHeight: 1.2,
+      marginBottom: 1.5,
+    },
+    // PDF-FIX-1 #16 — leading clause numbers (e.g. "1.", "1.1", "(1)") render
+    // in a plain numeric font (Inter) instead of the decorative Cormorant
+    // oldstyle figures. Numbers only; clause text styling is unchanged.
+    agreementClauseNum: {
+      fontFamily: "Inter",
+      fontSize: 6.5,
     },
 
     // ----- Acceptance page -----
@@ -1016,7 +1019,6 @@ function SectionTitle({
 }) {
   return (
     <View style={{ alignItems: "center", marginBottom: 16 }}>
-      <RuleWithOrnament styles={styles} ornament="❦" />
       <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
       {title ? <Text style={styles.sectionDisplay}>{title}</Text> : null}
     </View>
@@ -1640,11 +1642,26 @@ function AgreementPage({
         styles={styles}
       />
 
-      {lines.map((line, i) => (
-        <Text style={styles.agreementBody} key={i}>
-          {line || " "}
-        </Text>
-      ))}
+      {lines.map((line, i) => {
+        // PDF-FIX-1 #16 — split a leading clause number ("1.", "1.1", "(1)",
+        // "(a)") onto a plain Inter run; the rest of the line keeps the body
+        // (Cormorant) styling. Same characters — visual only, no text change.
+        const m = line.match(/^(\d+(?:\.\d+)*\.?|\(\d+\)|\([a-z]\))(\s+)(.*)$/);
+        if (m) {
+          return (
+            <Text style={styles.agreementBody} key={i}>
+              <Text style={styles.agreementClauseNum}>{m[1]}</Text>
+              {m[2]}
+              {m[3]}
+            </Text>
+          );
+        }
+        return (
+          <Text style={styles.agreementBody} key={i}>
+            {line || " "}
+          </Text>
+        );
+      })}
 
       <SharedFooter
         styles={styles}
@@ -1711,7 +1728,7 @@ function AcceptancePage({
       <Text style={styles.agreementLine}>
         The undersigned acknowledges having read this Quote/Proposal and{" "}
         {template.legalName}&apos;s Terms and Conditions, which are hereby agreed
-        to and accepted this _____ day of ________________ , 20____. The
+        to and accepted this _____ day of ________________, 20__. The
         undersigned further confirms that they are signing voluntarily and of
         their own free will, with full understanding of its contents, are of
         sound mind and full legal capacity, and are not acting under any duress,
@@ -1719,15 +1736,15 @@ function AcceptancePage({
         impair their judgment.
       </Text>
 
+      <Text style={styles.agreementLine}>
+        I have authority to bind the corporation.
+      </Text>
+
       <SignatureBlock
         leftLabel="Client signature"
         clientOnly
         styles={styles}
       />
-
-      <Text style={styles.agreementLine}>
-        I have authority to bind the corporation.
-      </Text>
 
       <View style={styles.acceptRule} />
 
