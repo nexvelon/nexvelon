@@ -58,6 +58,7 @@ import {
   canReopen,
   isEditableStatus,
 } from "./po-status";
+import { ProductThumb } from "@/components/modules/inventory/ProductThumb";
 import { ReceivePanel } from "./ReceivePanel";
 import type { PurchaseOrderDetail } from "@/lib/api/purchase-orders";
 import type { DbPurchaseOrderStatus } from "@/lib/types/database";
@@ -74,6 +75,8 @@ export interface ProductOption {
   // CAT-3b: for the category / sub-category line-picker filter.
   category?: string;
   subcategory?: string;
+  // PICKER-IMG: public product-images URL for the line-picker thumbnail.
+  imageUrl?: string;
 }
 
 type Mode =
@@ -398,7 +401,12 @@ export function PurchaseOrderFormDrawer({
                     <SelectContent>
                       {lineOptions.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.sku} — {p.name}
+                          <span className="flex items-center gap-2">
+                            <ProductThumb imageUrl={p.imageUrl} size={22} />
+                            <span>
+                              {p.sku} — {p.name}
+                            </span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
