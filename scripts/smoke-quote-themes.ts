@@ -4,7 +4,11 @@ import { renderToFile } from "@react-pdf/renderer";
 import React from "react";
 import { QuoteDocument } from "../components/modules/quotes/builder/QuoteDocument";
 import { registerQuoteFonts } from "../lib/quote-fonts";
-import { QUOTE_THEME_SLUGS, getQuoteTheme } from "../lib/quote-themes";
+import {
+  QUOTE_THEME_SLUGS,
+  getQuoteTheme,
+  type QuoteThemeSlug,
+} from "../lib/quote-themes";
 import {
   getQuoteTemplate,
   DEFAULT_QUOTE_TEMPLATE_SLUG,
@@ -18,7 +22,7 @@ import { serializeRichTextBody } from "../lib/quote-rich-text";
 const OUTPUT_DIR = path.resolve("tmp/smoke");
 const FONTS_DIR = path.resolve("public/fonts");
 
-const SMOKE_CLIENT: any = {
+const SMOKE_CLIENT = {
   id: "smoke-client-1",
   name: "Meridian Tower Holdings Inc.",
   contactName: "Jane Doe",
@@ -28,7 +32,7 @@ const SMOKE_CLIENT: any = {
   email: "jane.doe@example.com",
 };
 
-const SMOKE_SITE: any = {
+const SMOKE_SITE = {
   id: "smoke-site-1",
   name: "Meridian Tower — Phase II Build-Out",
   address: "145 King Street West",
@@ -36,13 +40,13 @@ const SMOKE_SITE: any = {
   state: "Ontario M5H 1J8",
 };
 
-const SMOKE_OWNER: any = {
+const SMOKE_OWNER = {
   id: "smoke-owner-1",
   name: "Ishani Pandya",
   email: "ishani@nexvelonglobal.com",
 };
 
-const SMOKE_SECTIONS: any[] = [
+const SMOKE_SECTIONS = [
   {
     id: "sec-1",
     name: "Access Control",
@@ -227,17 +231,23 @@ function makeSchedules(variant: "default" | "with-custom" | "reordered") {
 }
 
 async function renderTheme(
-  themeSlug: string,
+  themeSlug: QuoteThemeSlug,
   variant: "default" | "with-custom" | "reordered",
 ) {
-  const theme = getQuoteTheme(themeSlug as any);
+  const theme = getQuoteTheme(themeSlug);
   const template = getQuoteTemplate(DEFAULT_QUOTE_TEMPLATE_SLUG);
   const schedules = makeSchedules(variant);
 
   const filename = `Q-SMOKE_${themeSlug}_${variant}.pdf`;
   const outputPath = path.join(OUTPUT_DIR, filename);
 
-  const element = React.createElement(QuoteDocument as any, {
+  // The smoke fixtures above are intentionally minimal stand-ins, so we render
+  // QuoteDocument through a loosened props-bag type rather than its full
+  // DocProps; the element is cast back to the renderer's expected type at the
+  // renderToFile boundary below so tsc + Next.js's build typecheck pass.
+  const element = React.createElement(
+    QuoteDocument as unknown as React.ComponentType<Record<string, unknown>>,
+    {
     number: "Q-2026-0001",
     name: "Meridian Tower — Phase II Build-Out",
     createdAt: "2026-05-14T00:00:00.000Z",
@@ -258,9 +268,6 @@ async function renderTheme(
     showUnitPrice: false,
   });
 
-  // The React.createElement(QuoteDocument as any, ...) above intentionally
-  // loses the DocumentProps shape; cast back to the renderer's expected
-  // type at the call boundary so tsc + Next.js's build typecheck pass.
   await renderToFile(element as Parameters<typeof renderToFile>[0], outputPath);
   const s = await stat(outputPath);
   return { filename, size: s.size };
@@ -277,13 +284,14 @@ async function main() {
       const { filename, size } = await renderTheme(slug, "default");
       results.push({ file: filename, ok: true, size });
       console.log(`✓ ${filename} (${(size / 1024).toFixed(1)} KB)`);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
       results.push({
         file: `Q-SMOKE_${slug}_default.pdf`,
         ok: false,
-        error: e.message,
+        error: message,
       });
-      console.log(`✗ Q-SMOKE_${slug}_default.pdf — ${e.message}`);
+      console.log(`✗ Q-SMOKE_${slug}_default.pdf — ${message}`);
     }
   }
 
@@ -292,14 +300,15 @@ async function main() {
       const { filename, size } = await renderTheme("solid_white", variant);
       results.push({ file: filename, ok: true, size });
       console.log(`✓ ${filename} (${(size / 1024).toFixed(1)} KB)`);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
       results.push({
         file: `Q-SMOKE_solid_white_${variant}.pdf`,
         ok: false,
-        error: e.message,
+        error: message,
       });
       console.log(
-        `✗ Q-SMOKE_solid_white_${variant}.pdf — ${e.message}`,
+        `✗ Q-SMOKE_solid_white_${variant}.pdf — ${message}`,
       );
     }
   }
