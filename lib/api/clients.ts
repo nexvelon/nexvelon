@@ -269,6 +269,25 @@ export async function listSites(
   return (data ?? []) as DbSiteWithClient[];
 }
 
+/**
+ * SITE-DETAIL — fetch one site joined with a thin slice of its parent client
+ * (id/name/code/opco), for the /sites/[id] detail header + back-link. Mirrors
+ * getClientById's single-row shape; returns null when the id is unknown.
+ */
+export async function getSiteById(
+  id: string
+): Promise<DbSiteWithClient | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("sites")
+    .select("*, client:clients(id,name,client_code,default_opco)")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getSiteById: ${error.message}`);
+  if (!data) return null;
+  return data as DbSiteWithClient;
+}
+
 export async function createSite(payload: DbSiteInsert): Promise<DbSite> {
   const supabase = await db();
 
