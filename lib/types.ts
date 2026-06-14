@@ -217,7 +217,15 @@ export interface Quote {
   showDescription?: boolean; // QB-4
   showUpc?: boolean; // CAT-2: show line UPC
   showMasterPart?: boolean; // CAT-2: show master part # as the line part number
+  // REJECT — captured by "Mark as Rejected". All optional + jsonb-stored (no
+  // migration); surfaced in a banner when status === "Rejected".
+  rejectionReason?: string;
+  rejectionSource?: QuoteRejectionSource;
+  rejectedAt?: string; // ISO timestamp
+  rejectedByUser?: string; // display name of who marked it rejected
 }
+
+export type QuoteRejectionSource = "Client" | "Approver" | "Other";
 
 export interface Site {
   id: ID;
