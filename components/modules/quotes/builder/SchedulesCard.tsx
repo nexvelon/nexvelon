@@ -41,6 +41,7 @@ import {
   createDispatchSchedule,
   createKeyholdersSchedule,
   createPadSchedule,
+  createScopeSchedule,
   type AssuranceCard,
   type AssuranceScheduleInstance,
   type CoverScheduleInstance,
@@ -52,10 +53,13 @@ import {
   type PadScheduleInstance,
   type QuoteScheduleInstance,
   type QuoteScheduleKind,
+  type ScopeScheduleInstance,
+  type ScopeSubSection,
 } from "@/lib/quote-schedules";
 import { newId } from "@/lib/quote-helpers";
 import { deleteDrawingsPdf, uploadDrawingsPdf } from "@/lib/api/drawings";
 import { AssuranceCardEditor } from "./AssuranceCardEditor";
+import { ScopeEditor } from "./ScopeEditor";
 import { MonitoringEditor } from "./MonitoringEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import { KeyholdersEditor } from "./KeyholdersEditor";
@@ -78,6 +82,7 @@ const KIND_BADGE_LABEL: Record<QuoteScheduleKind, string> = {
   agreement: "Agreement",
   acceptance: "Acceptance",
   custom: "Custom",
+  scope: "Scope of Work",
   monitoring: "Monitoring Services",
   dispatch: "Dispatch & False-Alarm Election",
   keyholders: "Keyholders & Response Protocol",
@@ -96,12 +101,14 @@ const ADDABLE_KINDS: QuoteScheduleKind[] = [
   "agreement",
   "acceptance",
   "custom",
+  "scope",
 ];
 
 // GF-5: GUARDIAN_ONLY_KINDS is now the single source in lib/quote-schedules.
 
 function buildScheduleOfKind(kind: QuoteScheduleKind): QuoteScheduleInstance {
   if (kind === "custom") return createCustomSchedule();
+  if (kind === "scope") return createScopeSchedule();
   if (kind === "assurance") return createAssuranceSchedule();
   if (kind === "monitoring") return createMonitoringSchedule();
   if (kind === "dispatch") return createDispatchSchedule();
@@ -359,6 +366,20 @@ export function SchedulesCard({
                       patchAt(idx, {
                         cards: next,
                       } as Partial<AssuranceScheduleInstance>)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
+              {schedule.kind === "scope" && (
+                <div className="space-y-1 pt-1">
+                  <ScopeEditor
+                    sections={(schedule as ScopeScheduleInstance).sections}
+                    onChange={(next: ScopeSubSection[]) =>
+                      patchAt(idx, {
+                        sections: next,
+                      } as Partial<ScopeScheduleInstance>)
                     }
                     disabled={disabled}
                   />
