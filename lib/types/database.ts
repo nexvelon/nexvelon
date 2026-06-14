@@ -48,6 +48,7 @@ export type DbClientPaymentMethod =
 export type DbClientCurrency = "CAD" | "USD" | "AED" | "INR" | "EUR";
 
 export type DbSiteStatus =
+  | "In Quote"
   | "Active"
   | "In Project"
   | "Maintained"

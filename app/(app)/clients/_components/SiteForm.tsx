@@ -23,7 +23,7 @@
 // values (one-time copy) so the operator has a starting point, then
 // edits and we persist the site's own values.
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -74,6 +74,7 @@ import type { ParsedContact } from "@/lib/site-form-template";
 // ─── Module-level constants ────────────────────────────────────────────────
 
 const STATUSES: DbSiteStatus[] = [
+  "In Quote",
   "Active",
   "In Project",
   "Maintained",
@@ -389,19 +390,17 @@ export function SiteForm({
   const errors: Record<string, string> = {};
   if (!selectedClientId) errors.client = "Client is required.";
   if (!name.trim()) errors.name = "Site/Project name is required.";
-  if (!inheritFromClient && portalEnabled) {
+  // SITE-FIELDS: fields are always real/editable now, so validate them
+  // unconditionally (no longer skipped while "inheriting" from the client).
+  if (portalEnabled) {
     if (!portalEmail.trim())
       errors.portalEmail = "Portal contact email is required.";
     else if (!EMAIL_RE.test(portalEmail.trim()))
       errors.portalEmail = "Enter a valid email address.";
   }
-  if (!inheritFromClient && taxExempt && !taxExemptCert.trim())
+  if (taxExempt && !taxExemptCert.trim())
     errors.taxExemptCert = "Certificate number is required when tax-exempt.";
-  if (
-    !inheritFromClient &&
-    paymentTerms === "custom" &&
-    !paymentTermsCustom.trim()
-  )
+  if (paymentTerms === "custom" && !paymentTermsCustom.trim())
     errors.paymentTermsCustom = "Custom terms text is required.";
   contacts.forEach((c, i) => {
     if (isContactActive(c)) {
@@ -461,33 +460,57 @@ export function SiteForm({
     setMailSameAsBilling(inherit);
   }
 
+  // SITE-FIELDS: copy the client's current tax/payment/portal values into the
+  // site's own (editable) fields. Used as a prefill convenience — it never
+  // locks the fields; the site always stores its own values.
+  function prefillTaxPaymentPortalFromClient(client: DbClient) {
+    setSiteHstGst(client.client_hst_gst_number ?? "");
+    setTaxExempt(client.tax_exempt ?? false);
+    setTaxExemptCert(client.tax_exempt_certificate_number ?? "");
+    // Client has no tax_rate column — fall back to the province default.
+    setTaxRate(suggestedTaxRate != null ? String(suggestedTaxRate) : "");
+    setPaymentTerms(client.payment_terms ?? "net_30");
+    setPaymentTermsCustom(client.payment_terms_custom ?? "");
+    setPayMethod(client.preferred_payment_method ?? "eft");
+    setCcSurcharge(client.apply_cc_surcharge ?? true);
+    setCreditLimit(
+      client.credit_limit != null ? String(client.credit_limit) : ""
+    );
+    setCreditHold(client.credit_hold ?? false);
+    setCurrency(client.preferred_currency ?? "CAD");
+    setPortalEnabled(client.portal_access_enabled ?? false);
+    setPortalEmail(client.portal_contact_email ?? "");
+  }
+
+  // SITE-FIELDS: the inherit toggle is now a PREFILL convenience, not a lock.
+  // Turning it ON copies the client's current values into the (still editable)
+  // site fields; turning it OFF leaves the current values untouched. The flag
+  // is persisted to record "these were taken from the client"; editing any
+  // field flips it OFF (markOverridden) since the values then diverge.
   function handleInheritFromClientToggle(inherit: boolean) {
-    if (!inherit && parentClient) {
-      // Toggling OFF — copy client's tax/payment/portal values so the
-      // operator can edit from a known starting point.
-      setSiteHstGst(parentClient.client_hst_gst_number ?? "");
-      setTaxExempt(parentClient.tax_exempt ?? false);
-      setTaxExemptCert(parentClient.tax_exempt_certificate_number ?? "");
-      // Client has no tax_rate column — leave blank or use province default.
-      setTaxRate(
-        suggestedTaxRate != null ? String(suggestedTaxRate) : ""
-      );
-      setPaymentTerms(parentClient.payment_terms ?? "net_30");
-      setPaymentTermsCustom(parentClient.payment_terms_custom ?? "");
-      setPayMethod(parentClient.preferred_payment_method ?? "eft");
-      setCcSurcharge(parentClient.apply_cc_surcharge ?? true);
-      setCreditLimit(
-        parentClient.credit_limit != null
-          ? String(parentClient.credit_limit)
-          : ""
-      );
-      setCreditHold(parentClient.credit_hold ?? false);
-      setCurrency(parentClient.preferred_currency ?? "CAD");
-      setPortalEnabled(parentClient.portal_access_enabled ?? false);
-      setPortalEmail(parentClient.portal_contact_email ?? "");
-    }
+    if (inherit && parentClient) prefillTaxPaymentPortalFromClient(parentClient);
     setInheritFromClient(inherit);
   }
+
+  // SITE-FIELDS: any manual edit to a tax/payment/portal field means the site
+  // no longer simply mirrors the client — drop the "inherited" flag.
+  function markOverridden() {
+    setInheritFromClient(false);
+  }
+
+  // SITE-FIELDS: new sites default to inherit ON and are prefilled from the
+  // parent client once it's known (e.g. preset from a client page, or picked).
+  // Runs once; an existing site loads its own stored values, and any edit
+  // (markOverridden) clears the flag so this won't clobber overrides.
+  const didPrefillRef = useRef(false);
+  useEffect(() => {
+    if (isEdit || didPrefillRef.current) return;
+    if (inheritFromClient && parentClient) {
+      prefillTaxPaymentPortalFromClient(parentClient);
+      didPrefillRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentClient]);
 
   // ─── SITES-3: template download / upload ─────────────────────────────
   // Hidden file input ref for the "Upload filled template" trigger.
@@ -798,38 +821,31 @@ export function SiteForm({
       // SITES-2a DB defaults (NOT NULL with DEFAULT) when inheriting so
       // the DB doesn't reject the insert; the inherit flag is the source
       // of truth at read time anyway.
+      // SITE-FIELDS: the flag now records "prefilled from client" only; the
+      // site ALWAYS persists its own tax/payment/portal values (no forcing).
       inherit_payment_terms_from_client: inheritFromClient,
-      site_hst_gst_number: inheritFromClient ? null : siteHstGst.trim() || null,
-      tax_exempt: inheritFromClient ? false : taxExempt,
-      tax_exempt_certificate_number: inheritFromClient
-        ? null
-        : taxExemptCert.trim() || null,
-      tax_rate: inheritFromClient
-        ? null
-        : parsedTaxRate != null && Number.isFinite(parsedTaxRate)
+      site_hst_gst_number: siteHstGst.trim() || null,
+      tax_exempt: taxExempt,
+      tax_exempt_certificate_number: taxExemptCert.trim() || null,
+      tax_rate:
+        parsedTaxRate != null && Number.isFinite(parsedTaxRate)
           ? parsedTaxRate
           : null,
-      payment_terms: inheritFromClient ? "net_30" : paymentTerms,
-      payment_terms_custom: inheritFromClient
-        ? null
-        : paymentTerms === "custom"
-          ? paymentTermsCustom.trim() || null
-          : null,
-      preferred_payment_method: inheritFromClient ? "eft" : payMethod,
-      apply_cc_surcharge: inheritFromClient ? true : ccSurcharge,
-      credit_limit: inheritFromClient
-        ? null
-        : parsedCredit != null && Number.isFinite(parsedCredit)
+      payment_terms: paymentTerms,
+      payment_terms_custom:
+        paymentTerms === "custom" ? paymentTermsCustom.trim() || null : null,
+      preferred_payment_method: payMethod,
+      apply_cc_surcharge: ccSurcharge,
+      credit_limit:
+        parsedCredit != null && Number.isFinite(parsedCredit)
           ? parsedCredit
           : null,
-      credit_hold: inheritFromClient ? false : creditHold,
-      preferred_currency: inheritFromClient ? "CAD" : currency,
-      portal_access_enabled: inheritFromClient ? false : portalEnabled,
-      portal_contact_email: inheritFromClient
-        ? null
-        : portalEnabled
-          ? portalEmail.trim() || null
-          : null,
+      credit_hold: creditHold,
+      preferred_currency: currency,
+      portal_access_enabled: portalEnabled,
+      portal_contact_email: portalEnabled
+        ? portalEmail.trim() || null
+        : null,
     };
 
     startTransition(async () => {
@@ -1119,50 +1135,50 @@ export function SiteForm({
 
       {/* SECTION 5/6/7 banner — single inherit flag controls all three */}
       <Section title="Tax">
+        {/* SITE-FIELDS: prefill convenience, not a lock. Turning this ON copies
+            the client's current Tax/Payment/Portal values into the editable
+            fields below; the fields are always editable and the site stores its
+            own values. Editing any field switches it to site-specific. */}
         <InheritRadio
           name="inherit_payment_terms_from_client"
-          inheritedLabel="Use client's terms"
-          overrideLabel="Override at site level"
+          inheritedLabel="Prefill from client"
+          overrideLabel="Site-specific"
           value={inheritFromClient}
           onChange={handleInheritFromClientToggle}
           parentClientName={parentClient?.name}
-          helpText="Controls Tax, Payment, and Portal sections together."
+          helpText="Prefill copies the client's current Tax, Payment, and Portal values into the editable fields below. Editing any field switches to site-specific."
         />
 
         <Field label="HST / GST number">
           <Input
-            value={
-              inheritFromClient
-                ? parentClient?.client_hst_gst_number ?? ""
-                : siteHstGst
-            }
-            onChange={(e) => setSiteHstGst(e.target.value)}
+            value={siteHstGst}
+            onChange={(e) => {
+              setSiteHstGst(e.target.value);
+              markOverridden();
+            }}
             placeholder="123456789 RT0001"
-            disabled={inheritFromClient}
           />
         </Field>
         <Toggle
           label="Tax-exempt"
-          value={inheritFromClient ? parentClient?.tax_exempt ?? false : taxExempt}
-          onChange={setTaxExempt}
-          disabled={inheritFromClient}
+          value={taxExempt}
+          onChange={(v) => {
+            setTaxExempt(v);
+            markOverridden();
+          }}
         />
-        {(inheritFromClient
-          ? parentClient?.tax_exempt
-          : taxExempt) && (
+        {taxExempt && (
           <Field
             label="Tax-exempt certificate number *"
             error={errors.taxExemptCert}
           >
             <Input
-              value={
-                inheritFromClient
-                  ? parentClient?.tax_exempt_certificate_number ?? ""
-                  : taxExemptCert
-              }
-              onChange={(e) => setTaxExemptCert(e.target.value)}
+              value={taxExemptCert}
+              onChange={(e) => {
+                setTaxExemptCert(e.target.value);
+                markOverridden();
+              }}
               placeholder="Certificate / exemption ref."
-              disabled={inheritFromClient}
             />
           </Field>
         )}
@@ -1173,21 +1189,26 @@ export function SiteForm({
               min={0}
               step="0.001"
               value={taxRate}
-              onChange={(e) => setTaxRate(e.target.value)}
+              onChange={(e) => {
+                setTaxRate(e.target.value);
+                markOverridden();
+              }}
               placeholder={
                 suggestedTaxRate != null ? String(suggestedTaxRate) : "Optional"
               }
-              disabled={inheritFromClient}
               className="max-w-[140px]"
             />
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() =>
-                suggestedTaxRate != null && setTaxRate(String(suggestedTaxRate))
-              }
-              disabled={inheritFromClient || suggestedTaxRate == null}
+              onClick={() => {
+                if (suggestedTaxRate != null) {
+                  setTaxRate(String(suggestedTaxRate));
+                  markOverridden();
+                }
+              }}
+              disabled={suggestedTaxRate == null}
             >
               Use{" "}
               {taxCountryForLookup && taxProvinceForLookup
@@ -1206,15 +1227,11 @@ export function SiteForm({
       <Section title="Payment Terms & Method">
         <Field label="Payment terms">
           <Select
-            value={
-              inheritFromClient
-                ? parentClient?.payment_terms ?? "net_30"
-                : paymentTerms
-            }
-            onValueChange={(v) =>
-              setPaymentTerms((v ?? "net_30") as DbClientPaymentTerms)
-            }
-            disabled={inheritFromClient}
+            value={paymentTerms}
+            onValueChange={(v) => {
+              setPaymentTerms((v ?? "net_30") as DbClientPaymentTerms);
+              markOverridden();
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -1228,55 +1245,42 @@ export function SiteForm({
             </SelectContent>
           </Select>
         </Field>
-        {(inheritFromClient
-          ? parentClient?.payment_terms === "custom"
-          : paymentTerms === "custom") && (
+        {paymentTerms === "custom" && (
           <Field
             label="Custom payment terms *"
             error={errors.paymentTermsCustom}
           >
             <Input
-              value={
-                inheritFromClient
-                  ? parentClient?.payment_terms_custom ?? ""
-                  : paymentTermsCustom
-              }
-              onChange={(e) => setPaymentTermsCustom(e.target.value)}
+              value={paymentTermsCustom}
+              onChange={(e) => {
+                setPaymentTermsCustom(e.target.value);
+                markOverridden();
+              }}
               placeholder="e.g. 50% deposit, balance NET 45"
-              disabled={inheritFromClient}
             />
           </Field>
         )}
         <Field label="Preferred payment method">
           <Select
-            value={
-              inheritFromClient
-                ? parentClient?.preferred_payment_method ?? "eft"
-                : payMethod
-            }
-            onValueChange={(v) =>
-              setPayMethod((v ?? "eft") as DbClientPaymentMethod)
-            }
-            disabled={inheritFromClient}
+            value={payMethod}
+            onValueChange={(v) => {
+              setPayMethod((v ?? "eft") as DbClientPaymentMethod);
+              markOverridden();
+            }}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {/* CL-11: conditional Cheque-legacy option. Inheritance
-                  twist: the currently-displayed value is the parent
-                  client's when inheritFromClient is true, otherwise
-                  the site's own. Include the legacy option whenever
-                  either side currently shows 'cheque'. */}
-              {(
-                (inheritFromClient
-                  ? parentClient?.preferred_payment_method
-                  : payMethod) === "cheque"
-                  ? [
-                      ...PAYMENT_METHODS,
-                      { value: "cheque" as const, label: "Cheque (legacy)" },
-                    ]
-                  : PAYMENT_METHODS
+              {/* CL-11: existing 'cheque' sites render with a "Cheque
+                  (legacy)" option spliced in; once a non-cheque value is
+                  picked the option disappears on next render. */}
+              {(payMethod === "cheque"
+                ? [
+                    ...PAYMENT_METHODS,
+                    { value: "cheque" as const, label: "Cheque (legacy)" },
+                  ]
+                : PAYMENT_METHODS
               ).map((p) => (
                 <SelectItem key={p.value} value={p.value}>
                   {p.label}
@@ -1287,40 +1291,32 @@ export function SiteForm({
         </Field>
         <Toggle
           label="Apply credit-card surcharge"
-          value={
-            inheritFromClient
-              ? parentClient?.apply_cc_surcharge ?? true
-              : ccSurcharge
-          }
-          onChange={setCcSurcharge}
-          disabled={inheritFromClient}
+          value={ccSurcharge}
+          onChange={(v) => {
+            setCcSurcharge(v);
+            markOverridden();
+          }}
         />
         <Field label="Credit limit (CAD)">
           <Input
             type="number"
             min={0}
             step="0.01"
-            value={
-              inheritFromClient
-                ? parentClient?.credit_limit != null
-                  ? String(parentClient.credit_limit)
-                  : ""
-                : creditLimit
-            }
-            onChange={(e) => setCreditLimit(e.target.value)}
+            value={creditLimit}
+            onChange={(e) => {
+              setCreditLimit(e.target.value);
+              markOverridden();
+            }}
             placeholder="Optional"
-            disabled={inheritFromClient}
           />
         </Field>
         <Toggle
           label="Credit hold"
-          value={
-            inheritFromClient
-              ? parentClient?.credit_hold ?? false
-              : creditHold
-          }
-          onChange={setCreditHold}
-          disabled={inheritFromClient}
+          value={creditHold}
+          onChange={(v) => {
+            setCreditHold(v);
+            markOverridden();
+          }}
         />
         <Field label="Preferred currency">
           <div className="flex gap-4">
@@ -1328,18 +1324,15 @@ export function SiteForm({
               <label
                 key={c}
                 className="flex items-center gap-2 text-sm"
-                style={{ opacity: inheritFromClient ? 0.6 : 1 }}
               >
                 <input
                   type="radio"
                   name="currency"
-                  checked={
-                    inheritFromClient
-                      ? parentClient?.preferred_currency === c
-                      : currency === c
-                  }
-                  onChange={() => setCurrency(c)}
-                  disabled={inheritFromClient}
+                  checked={currency === c}
+                  onChange={() => {
+                    setCurrency(c);
+                    markOverridden();
+                  }}
                 />
                 {c}
               </label>
@@ -1352,29 +1345,23 @@ export function SiteForm({
       <Section title="Portal Access">
         <Toggle
           label="Portal access enabled"
-          value={
-            inheritFromClient
-              ? parentClient?.portal_access_enabled ?? false
-              : portalEnabled
-          }
-          onChange={setPortalEnabled}
-          disabled={inheritFromClient}
+          value={portalEnabled}
+          onChange={(v) => {
+            setPortalEnabled(v);
+            markOverridden();
+          }}
           help="Login provisioning ships with the Users module."
         />
-        {(inheritFromClient
-          ? parentClient?.portal_access_enabled
-          : portalEnabled) && (
+        {portalEnabled && (
           <Field label="Portal contact email *" error={errors.portalEmail}>
             <Input
               type="email"
-              value={
-                inheritFromClient
-                  ? parentClient?.portal_contact_email ?? ""
-                  : portalEmail
-              }
-              onChange={(e) => setPortalEmail(e.target.value)}
+              value={portalEmail}
+              onChange={(e) => {
+                setPortalEmail(e.target.value);
+                markOverridden();
+              }}
               placeholder="ap@client.com"
-              disabled={inheritFromClient}
             />
           </Field>
         )}

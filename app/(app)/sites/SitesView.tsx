@@ -42,6 +42,7 @@ import type {
 } from "@/lib/types/database";
 
 const STATUSES: DbSiteStatus[] = [
+  "In Quote",
   "Active",
   "In Project",
   "Maintained",
@@ -49,6 +50,12 @@ const STATUSES: DbSiteStatus[] = [
 ];
 
 const STATUS_STYLE: Record<DbSiteStatus, { bg: string; text: string }> = {
+  // SITE-FIELDS: pre-engagement "being quoted" stage — amber/pending tone,
+  // distinct from the green Active and blue In Project.
+  "In Quote": {
+    bg: "color-mix(in oklab, #f59e0b 18%, transparent)",
+    text: "#b45309",
+  },
   Active: {
     bg: "color-mix(in oklab, var(--brand-status-green) 18%, transparent)",
     text: "var(--brand-status-green)",
