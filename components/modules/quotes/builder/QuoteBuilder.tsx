@@ -333,7 +333,12 @@ export function QuoteBuilder({
   const ro = useReadOnly(status);
   const { role } = useRole();
   const isAdmin = role === "Admin";
-  const canReopen = isAdmin && (status === "Sent" || status === "Approved");
+  // APPROVAL-REOPEN: admin-only revert back to unapproved (Draft) from any
+  // post-Draft awaiting/decided state — Sent, Approved, OR Rejected — so a
+  // rejected quote can also re-enter the edit + re-request-approval loop.
+  const canReopen =
+    isAdmin &&
+    (status === "Sent" || status === "Approved" || status === "Rejected");
 
   // QB-FIX-1 #5: do NOT auto-select a site. When the client changes, only
   // CLEAR a now-stale site (one that doesn't belong to the new client) so the
@@ -729,9 +734,9 @@ export function QuoteBuilder({
     });
   };
 
-  // Chunk 3a: Admin-only reopen Sent/Approved → Draft so it's editable by all
-  // roles again (must be re-approved before it's ready). Forward-only re: stock
-  // — committed units are NOT returned.
+  // Chunk 3a / APPROVAL-REOPEN: Admin-only reopen Sent/Approved/Rejected →
+  // Draft so it's editable by all roles again (must be re-approved before it's
+  // ready). Forward-only re: stock — committed units are NOT returned.
   const handleReopen = () => {
     if (!canReopen) return;
     if (
