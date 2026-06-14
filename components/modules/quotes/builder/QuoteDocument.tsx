@@ -27,6 +27,7 @@ import type {
   DrawingsScheduleInstance,
   MonitoringScheduleInstance,
   ParticularsScheduleInstance,
+  ScopeScheduleInstance,
   QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
 import { parseRichTextBody } from "@/lib/quote-rich-text";
@@ -1894,6 +1895,66 @@ function AssurancePage({
   );
 }
 
+// SCOPE-1 — structured Scope of Work page. Renders the section title, then each
+// sub-section as a subtitle sub-heading followed by its body with newlines
+// preserved (split on \n into separate lines). Empty sub-sections are skipped.
+interface ScopePageProps extends CommonPageProps {
+  schedule: ScopeScheduleInstance;
+}
+
+function ScopePage({
+  schedule,
+  pageNumber,
+  totalPages,
+  footerLabel,
+  romanForTitle,
+  styles,
+  template,
+  number,
+}: ScopePageProps) {
+  const subtitleSuffix = schedule.subtitle || "Scope of Work";
+  const visibleSections = schedule.sections.filter(
+    (s) => s.subtitle.trim() !== "" || s.body.trim() !== ""
+  );
+  return (
+    <Page size="A4" style={styles.page} wrap>      <PageHeader
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+      />
+      <SectionTitle
+        eyebrow={`Schedule ${romanForTitle} · ${subtitleSuffix.toUpperCase()}`}
+        title={schedule.title}
+        styles={styles}
+      />
+
+      {visibleSections.map((section) => (
+        <View key={section.id} wrap={false}>
+          {section.subtitle.trim() !== "" ? (
+            <Text style={styles.customHeading2}>{section.subtitle}</Text>
+          ) : null}
+          {section.body.split("\n").map((line, i) => (
+            <Text style={styles.customParagraph} key={i}>
+              {line || " "}
+            </Text>
+          ))}
+        </View>
+      ))}
+
+      <SharedFooter
+        styles={styles}
+        template={template}
+        number={number}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        footerLabel={footerLabel}
+      />
+    </Page>
+  );
+}
+
 // GF-2 — Guardian Dispatch & False-Alarm Election page. Renders the regional-
 // fee acknowledgment, the dispatch election (marked options), per-authority
 // authorization with initial lines, and a closing responsibility note. No
@@ -2673,6 +2734,14 @@ export function QuoteDocument(props: DocProps) {
           case "assurance":
             return (
               <AssurancePage
+                key={schedule.id}
+                {...common}
+                schedule={schedule}
+              />
+            );
+          case "scope":
+            return (
+              <ScopePage
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
