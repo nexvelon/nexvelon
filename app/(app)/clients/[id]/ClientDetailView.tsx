@@ -20,6 +20,7 @@ import type {
   DbSite,
 } from "@/lib/types/database";
 import { ClientHeader, ClientStatsRow } from "../_components/ClientHeader";
+import { BillingPortalCard } from "../_components/BillingPortalCard";
 import { TabBar, type TabKey } from "../_components/TabBar";
 import { SitesPane } from "../_components/SitesPane";
 import { ContactsPane } from "../_components/ContactsPane";
@@ -136,6 +137,8 @@ export function ClientDetailView({
       />
 
       <ClientStatsRow client={client} />
+
+      <BillingPortalCard client={client} />
 
       <TabBar
         tab={tab}
