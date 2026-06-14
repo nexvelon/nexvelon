@@ -111,6 +111,18 @@ interface Props {
   defaultTermsByTemplate?: Record<QuoteTemplateSlug, string>;
 }
 
+// QB-FIX-1 #6: trailing-edge debounce. Returns `value` only after it has stayed
+// unchanged for `delayMs`; the reference is stable between updates so a
+// React.memo'd consumer (PdfPreviewPane) doesn't re-render mid-typing.
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export function QuoteBuilder({
   initial,
   isNew,
@@ -293,12 +305,14 @@ export function QuoteBuilder({
   const isAdmin = role === "Admin";
   const canReopen = isAdmin && (status === "Sent" || status === "Approved");
 
-  // Auto-pick first site when client changes and current site no longer fits.
+  // QB-FIX-1 #5: do NOT auto-select a site. When the client changes, only
+  // CLEAR a now-stale site (one that doesn't belong to the new client) so the
+  // user must explicitly pick a site from the list — no pre-selected default.
   useEffect(() => {
     if (!clientId) return;
     const valid = sitesForClient(clientId).map((s) => s.id);
-    if (!valid.includes(siteId) && valid.length > 0) {
-      setSiteId(valid[0]);
+    if (siteId && !valid.includes(siteId)) {
+      setSiteId("");
     }
     // sitesForClient is a stable closure over sitesByClientOverride; depending
     // on the override (not the function ref) avoids infinite re-runs.
@@ -351,6 +365,71 @@ export function QuoteBuilder({
   const client = clients.find((c) => c.id === clientId);
   const site = allSites.find((s) => s.id === siteId);
   const owner = users.find((u) => u.id === ownerId);
+
+  // QB-FIX-1 #6: assemble the live PDF-preview inputs into one memoized object,
+  // then hand a debounced copy to the (memoized) PdfPreviewPane. Form inputs
+  // keep their own state and update instantly; the expensive @react-pdf
+  // re-layout only runs ~350ms after the user stops typing. The SAVE path uses
+  // the live state below — debouncing affects the preview only, never output.
+  const previewProps = useMemo(
+    () => ({
+      number,
+      name,
+      createdAt: initial.createdAt,
+      validUntil,
+      paymentTerms,
+      projectType,
+      client,
+      site,
+      owner,
+      preparedBy: preparedBy.trim() || undefined,
+      sections,
+      taxRatePct,
+      discount,
+      discountType,
+      terms,
+      themeSlug,
+      templateSlug,
+      schedules,
+      showUnitPrice,
+      showVendor,
+      showSku,
+      showUpc,
+      showMasterPart,
+      showName,
+      showDescription,
+      drawingsImagesByPath,
+    }),
+    [
+      number,
+      name,
+      initial.createdAt,
+      validUntil,
+      paymentTerms,
+      projectType,
+      client,
+      site,
+      owner,
+      preparedBy,
+      sections,
+      taxRatePct,
+      discount,
+      discountType,
+      terms,
+      themeSlug,
+      templateSlug,
+      schedules,
+      showUnitPrice,
+      showVendor,
+      showSku,
+      showUpc,
+      showMasterPart,
+      showName,
+      showDescription,
+      drawingsImagesByPath,
+    ]
+  );
+  const deferredPreviewProps = useDebouncedValue(previewProps, 350);
 
   const owners = useMemo(
     () =>
@@ -950,34 +1029,9 @@ export function QuoteBuilder({
         {!previewCollapsed && (
           <div className="lg:col-span-1" id="pdf-preview-pane">
             <div className="sticky top-32 h-[calc(100vh-9rem)]">
-              <PdfPreviewPane
-                number={number}
-                name={name}
-                createdAt={initial.createdAt}
-                validUntil={validUntil}
-                paymentTerms={paymentTerms}
-                projectType={projectType}
-                client={client}
-                site={site}
-                owner={owner}
-                preparedBy={preparedBy.trim() || undefined}
-                sections={sections}
-                taxRatePct={taxRatePct}
-                discount={discount}
-                discountType={discountType}
-                terms={terms}
-                themeSlug={themeSlug}
-                templateSlug={templateSlug}
-                schedules={schedules}
-                showUnitPrice={showUnitPrice}
-                showVendor={showVendor}
-                showSku={showSku}
-                showUpc={showUpc}
-                showMasterPart={showMasterPart}
-                showName={showName}
-                showDescription={showDescription}
-                drawingsImagesByPath={drawingsImagesByPath}
-              />
+              {/* QB-FIX-1 #6: debounced props — preview catches up after a
+                  pause instead of re-rendering @react-pdf on every keystroke. */}
+              <PdfPreviewPane {...deferredPreviewProps} />
             </div>
           </div>
         )}
