@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import dynamic from "next/dynamic";
 import { Download, FileText, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -55,7 +56,9 @@ interface Props {
   drawingsImagesByPath: Record<string, string[]>;
 }
 
-export function PdfPreviewPane(props: Props) {
+// QB-FIX-1 #6: memoized so the heavy @react-pdf re-layout only fires when the
+// (debounced) props from QuoteBuilder actually change — not on every keystroke.
+export const PdfPreviewPane = memo(function PdfPreviewPane(props: Props) {
   // Chunk F: theme/template/schedules/showUnitPrice are now operator-
   // controlled via QuoteBuilder's DocumentStyleCard + SchedulesCard.
   // Resolve full theme + template objects from the slugs and pass through.
@@ -118,7 +121,7 @@ export function PdfPreviewPane(props: Props) {
       </div>
     </Card>
   );
-}
+});
 
 function PreviewLoader() {
   return (
