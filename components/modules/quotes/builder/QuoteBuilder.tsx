@@ -985,6 +985,7 @@ export function QuoteBuilder({
             terms={terms}
             onChange={setTerms}
             disabled={ro.readOnly}
+            standardTerms={termsByTemplate[templateSlug] ?? ""}
           />
 
           <InternalNotesCard
