@@ -1466,7 +1466,13 @@ function ParticularsPage({
         </View>
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
-            <Text style={styles.partTotalsLabel}>Discount</Text>
+            {/* QB-FIX-2: show the discount unit — "Discount (10%)" for a
+                percent, "Discount ($500.00)" for a flat amount. */}
+            <Text style={styles.partTotalsLabel}>
+              {discountType === "amount"
+                ? `Discount (${usd(discount)})`
+                : `Discount (${discount}%)`}
+            </Text>
             <Text style={[styles.partTotalsValue, styles.numText]}>
               −{usd(totals.discountAmount)}
             </Text>
