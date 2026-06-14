@@ -12,6 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 import { BuilderHeader } from "./BuilderHeader";
 import { ClientSiteCard } from "./ClientSiteCard";
@@ -57,6 +67,7 @@ import { upsertQuote, useQuotes } from "@/lib/quote-store";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { useReadOnly } from "@/lib/use-read-only";
 import { useRole } from "@/lib/role-context";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
 import {
   sites as MOCK_SITES,
@@ -71,6 +82,7 @@ import type {
   Product,
   Quote,
   QuoteProjectType,
+  QuoteRejectionSource,
   QuoteSection,
   QuoteStatus,
   Site,
@@ -175,8 +187,26 @@ export function QuoteBuilder({
       : mockSitesForClient(cid);
   const users: User[] = ownerOverride ? [ownerOverride] : MOCK_USERS;
 
+  const { user: authUser } = useAuth();
   const [number] = useState(initial.number);
   const [status, setStatus] = useState<QuoteStatus>(initial.status);
+  // REJECT — committed rejection metadata (jsonb-persisted; banner-displayed
+  // when status === "Rejected") + the dialog's draft fields.
+  const [rejection, setRejection] = useState<{
+    reason: string;
+    source?: QuoteRejectionSource;
+    rejectedAt?: string;
+    rejectedByUser?: string;
+  }>({
+    reason: initial.rejectionReason ?? "",
+    source: initial.rejectionSource,
+    rejectedAt: initial.rejectedAt,
+    rejectedByUser: initial.rejectedByUser,
+  });
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReasonDraft, setRejectReasonDraft] = useState("");
+  const [rejectSourceDraft, setRejectSourceDraft] =
+    useState<QuoteRejectionSource>("Client");
   const [name, setName] = useState(initial.name ?? "");
   const [clientId, setClientId] = useState(initial.clientId ?? "");
   const [siteId, setSiteId] = useState(initial.siteId ?? "");
@@ -617,6 +647,11 @@ export function QuoteBuilder({
       showName,
       showDescription,
       schedules,
+      // REJECT — preserve rejection metadata across normal saves.
+      rejectionReason: rejection.reason || undefined,
+      rejectionSource: rejection.source,
+      rejectedAt: rejection.rejectedAt,
+      rejectedByUser: rejection.rejectedByUser,
     };
     return out;
   };
@@ -652,6 +687,45 @@ export function QuoteBuilder({
     setStatus("Approved");
     toast.success(`${number} approved`, {
       description: "Status moved to Approved — ready to convert.",
+    });
+  };
+
+  // REJECT — open the reason+source dialog. Available from Sent/Approved to any
+  // editor (gated in the header). Resets the draft fields each open.
+  const openReject = () => {
+    if (status !== "Sent" && status !== "Approved") return;
+    setRejectReasonDraft("");
+    setRejectSourceDraft("Client");
+    setRejectOpen(true);
+  };
+
+  // REJECT — confirm: reason is REQUIRED. Stamps who/when, sets status =
+  // Rejected, and persists the rejection metadata in the quote jsonb.
+  const confirmReject = () => {
+    const reason = rejectReasonDraft.trim();
+    if (!reason) return;
+    const rejectedAt = new Date().toISOString();
+    const rejectedByUser = authUser?.name;
+    const nextRejection = {
+      reason,
+      source: rejectSourceDraft,
+      rejectedAt,
+      rejectedByUser,
+    };
+    const base = persist("Rejected");
+    const next: Quote = {
+      ...base,
+      rejectionReason: reason,
+      rejectionSource: rejectSourceDraft,
+      rejectedAt,
+      rejectedByUser,
+    };
+    upsertQuote(next);
+    setStatus("Rejected");
+    setRejection(nextRejection);
+    setRejectOpen(false);
+    toast.success(`${number} marked as Rejected`, {
+      description: `Source: ${rejectSourceDraft}.`,
     });
   };
 
@@ -798,6 +872,7 @@ export function QuoteBuilder({
         onCommitStock={() => setCommitOpen(true)}
         onReopen={handleReopen}
         canReopen={canReopen}
+        onReject={openReject}
       />
 
       <CommandPalette
@@ -809,6 +884,93 @@ export function QuoteBuilder({
       />
 
       <ReadOnlyBanner state={ro} quote={{ ...initial, status, projectId: initial.projectId }} />
+
+      {/* REJECT — rejection banner (reason + source + by/at) when Rejected. */}
+      {status === "Rejected" && (
+        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm">
+          <p className="font-medium">
+            Rejected
+            {rejection.source ? ` · ${rejection.source}` : ""}
+          </p>
+          {rejection.reason ? (
+            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">
+              {rejection.reason}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[11px] text-red-700">
+            {rejection.rejectedByUser ? `by ${rejection.rejectedByUser}` : ""}
+            {rejection.rejectedByUser && rejection.rejectedAt ? " · " : ""}
+            {rejection.rejectedAt
+              ? new Date(rejection.rejectedAt).toLocaleString()
+              : ""}
+          </p>
+          <p className="mt-1 text-[11px] text-red-700">
+            An Admin can reopen this quote for editing and re-approval.
+          </p>
+        </div>
+      )}
+
+      {/* REJECT — required reason + source dialog. */}
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Mark as Rejected</DialogTitle>
+            <DialogDescription>
+              Record why this quote was declined. The reason is required and is
+              stored on the quote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Reason *</Label>
+              <Textarea
+                rows={3}
+                value={rejectReasonDraft}
+                onChange={(e) => setRejectReasonDraft(e.target.value)}
+                placeholder="e.g. Client chose another vendor on price."
+                className="text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Source</Label>
+              <Select
+                value={rejectSourceDraft}
+                onValueChange={(v) =>
+                  setRejectSourceDraft((v ?? "Client") as QuoteRejectionSource)
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Client">Client</SelectItem>
+                  <SelectItem value="Approver">Approver</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRejectOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!rejectReasonDraft.trim()}
+              onClick={confirmReject}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Mark as Rejected
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="mb-3 flex justify-end">
         <button

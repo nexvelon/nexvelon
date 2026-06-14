@@ -11,6 +11,7 @@ import {
   Save,
   Send,
   ThumbsUp,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuoteStatusBadge } from "../QuoteStatusBadge";
@@ -31,6 +32,7 @@ interface Props {
   onCommitStock: () => void;
   onReopen: () => void;
   canReopen: boolean;
+  onReject: () => void;
 }
 
 export function BuilderHeader({
@@ -46,6 +48,7 @@ export function BuilderHeader({
   onCommitStock,
   onReopen,
   canReopen,
+  onReject,
 }: Props) {
   const { role } = useRole();
   const canApprove = hasPermission(role, "quotes", "approve");
@@ -55,6 +58,12 @@ export function BuilderHeader({
   const canCommitStock = hasPermission(role, "inventory", "edit");
   const commitVisible =
     canCommitStock && (status === "Approved" || status === "Converted");
+  // REJECT — any quote editor (sales/PM/admin) can mark a presented quote
+  // (Sent/Approved) as rejected; NOT approve-gated, and not blocked by the
+  // Approved content-lock (it's a decision-capture, not a content edit).
+  const rejectVisible =
+    hasPermission(role, "quotes", "edit") &&
+    (status === "Sent" || status === "Approved");
 
   return (
     <div className="bg-background/85 sticky top-16 z-20 -mx-8 border-b border-[var(--border)] px-8 py-3 backdrop-blur">
@@ -121,6 +130,19 @@ export function BuilderHeader({
             >
               <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />
               Approve
+            </Button>
+          )}
+          {rejectVisible && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onReject}
+              className="border-red-300 text-red-700 hover:bg-red-50"
+            >
+              <XCircle className="mr-1.5 h-3.5 w-3.5" />
+              Mark as Rejected
             </Button>
           )}
           {canReopen && (
