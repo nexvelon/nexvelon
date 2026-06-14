@@ -844,6 +844,26 @@ function createStyles(theme: QuoteTheme) {
       lineHeight: 1.5,
       marginVertical: 2,
     },
+    // RT-FIX — Sub-body (heading level 3): smaller, muted; a quiet sub-note
+    // beneath Body text.
+    customSubBody: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 9,
+      color: mutedFor(theme),
+      lineHeight: 1.4,
+      marginTop: 3,
+      marginBottom: 1,
+    },
+    // RT-FIX — Big Heading (heading level 1): largest, bold, accent.
+    customHeading1: {
+      fontFamily: "Cormorant Garamond",
+      fontSize: 20,
+      fontWeight: "bold",
+      color: theme.accent,
+      lineHeight: 1.3,
+      marginTop: 10,
+      marginBottom: 4,
+    },
     customHeading2: {
       fontFamily: "Cormorant Garamond",
       fontSize: 16,
@@ -852,15 +872,6 @@ function createStyles(theme: QuoteTheme) {
       lineHeight: 1.3,
       marginTop: 8,
       marginBottom: 3,
-    },
-    customHeading3: {
-      fontFamily: "Cormorant Garamond",
-      fontSize: 12,
-      fontWeight: "bold",
-      color: theme.ink,
-      lineHeight: 1.3,
-      marginTop: 5,
-      marginBottom: 2,
     },
     customList: {
       marginVertical: 4,
@@ -1777,6 +1788,11 @@ function renderRichTextInline(
 ): React.ReactNode {
   if (!nodes) return null;
   return nodes.map((n, i) => {
+    // RT-FIX: render soft line breaks (Shift+Enter) instead of dropping them —
+    // a newline inside a react-pdf <Text> wraps to the next line.
+    if (n.type === "hardBreak") {
+      return <Text key={i}>{"\n"}</Text>;
+    }
     if (n.type !== "text") return null;
     const text = n.text ?? "";
     const marks = n.marks ?? [];
@@ -1804,8 +1820,14 @@ function renderRichTextBlock(
         </Text>
       );
     case "heading": {
+      // RT-FIX: level 1 = Big Heading, level 2 = Title, level 3 = Sub-body.
       const level = (node.attrs?.level as number) ?? 2;
-      const style = level === 2 ? styles.customHeading2 : styles.customHeading3;
+      const style =
+        level === 1
+          ? styles.customHeading1
+          : level === 2
+            ? styles.customHeading2
+            : styles.customSubBody;
       return (
         <Text key={key} style={style}>
           {renderRichTextInline(node.content)}
