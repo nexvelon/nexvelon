@@ -280,6 +280,14 @@ function labelValueRow(
       formulae: [`"${[DROPDOWN_PLACEHOLDER, ...options.dropdown].join(",")}"`],
       showErrorMessage: false,
     };
+    // XLSX-FIX-1: center the placeholder dropdown cell horizontally; keep the
+    // existing vertical-middle + wrapText. Dropdown cells only (free-text value
+    // cells in the else branch stay left-aligned).
+    row.getCell(2).alignment = {
+      vertical: "middle",
+      wrapText: true,
+      horizontal: "center",
+    };
   } else {
     row.getCell(2).value = "";
   }
@@ -316,6 +324,9 @@ function applyCountryDropdown(cell: Cell) {
     formulae: [`"${[DROPDOWN_PLACEHOLDER, ...COUNTRIES].join(",")}"`],
     showErrorMessage: false,
   };
+  // XLSX-FIX-1: center the placeholder horizontally, preserving the cell's
+  // existing vertical-middle + wrapText alignment from labelValueRow.
+  cell.alignment = { ...cell.alignment, horizontal: "center" };
 }
 
 /**
@@ -339,6 +350,9 @@ function applyProvinceIndirectDropdown(cell: Cell, countryCellRef: string) {
     formulae: [`=INDIRECT(${countryCellRef} & "_Regions")`],
     showErrorMessage: false,
   };
+  // XLSX-FIX-1: center the placeholder horizontally, preserving the cell's
+  // existing vertical-middle + wrapText alignment from labelValueRow.
+  cell.alignment = { ...cell.alignment, horizontal: "center" };
 }
 
 /**
