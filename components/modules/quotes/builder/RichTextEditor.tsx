@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import {
   Bold,
@@ -38,6 +39,48 @@ const EDITOR_CONTENT_CLASS = cn(
   "[&_em]:italic",
 );
 
+// RT-BULLETS — default + designer bullet glyphs.
+const DEFAULT_BULLET_SYMBOL = "•";
+const BULLET_SYMBOLS = [
+  "•",
+  "◦",
+  "▪",
+  "◆",
+  "❖",
+  "➤",
+  "✦",
+  "‣",
+  "—",
+  "◉",
+];
+
+// RT-BULLETS — adds a `symbol` attribute to the existing StarterKit bulletList
+// node (via a global attribute, so StarterKit's bulletList behaviour is kept).
+// Persists in the Tiptap JSON (data-symbol round-trips through HTML); the PDF
+// renderer reads node.attrs.symbol. Existing lists default to "•".
+const BulletSymbol = Extension.create({
+  name: "bulletSymbol",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["bulletList"],
+        attributes: {
+          symbol: {
+            default: DEFAULT_BULLET_SYMBOL,
+            parseHTML: (element: HTMLElement) =>
+              element.getAttribute("data-symbol") || DEFAULT_BULLET_SYMBOL,
+            renderHTML: (attributes: Record<string, unknown>) => {
+              const sym = attributes.symbol as string | undefined;
+              if (!sym || sym === DEFAULT_BULLET_SYMBOL) return {};
+              return { "data-symbol": sym };
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
 interface Props {
   value: string;
   onChange: (next: string) => void;
@@ -56,6 +99,7 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
         horizontalRule: false,
         strike: false,
       }),
+      BulletSymbol,
     ],
     content: parseRichTextBody(value),
     editable: !disabled,
@@ -88,6 +132,9 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
       });
     }
   }, [value, editor]);
+
+  // RT-BULLETS — toolbar bullet-symbol picker open state.
+  const [symbolOpen, setSymbolOpen] = useState(false);
 
   if (!editor) {
     return (
@@ -135,6 +182,21 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
   const Divider = () => (
     <span className="border-l border-[var(--border)] h-5 mx-1" aria-hidden />
   );
+
+  // RT-BULLETS — ensure the current block is a bullet list, then set its glyph.
+  // Selection-scoped (.focus() restores the saved selection); the picker
+  // buttons preventDefault on mousedown so the selection isn't lost first.
+  const applyBulletSymbol = (symbol: string) => {
+    const chain = editor.chain().focus();
+    if (!editor.isActive("bulletList")) chain.toggleBulletList();
+    chain.updateAttributes("bulletList", { symbol }).run();
+    setSymbolOpen(false);
+  };
+
+  const activeBulletSymbol = editor.isActive("bulletList")
+    ? (editor.getAttributes("bulletList").symbol as string) ||
+      DEFAULT_BULLET_SYMBOL
+    : DEFAULT_BULLET_SYMBOL;
 
   return (
     <div className="bg-background rounded-md border border-[var(--border)] overflow-hidden">
@@ -198,6 +260,63 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
           active={editor.isActive("orderedList")}
           label="Numbered list"
         />
+
+        {/* RT-BULLETS — bullet-symbol picker. Trigger shows the active list's
+            glyph; the popover's inner buttons preventDefault on mousedown so the
+            editor selection survives (consistent with RT-FIX). */}
+        <div className="relative">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setSymbolOpen((o) => !o)}
+            disabled={disabled}
+            aria-haspopup="menu"
+            aria-expanded={symbolOpen}
+            title="Bullet symbol"
+            aria-label="Bullet symbol"
+            className="h-7 min-w-7 px-1 text-sm"
+          >
+            {activeBulletSymbol}
+          </Button>
+          {symbolOpen && !disabled && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setSymbolOpen(false);
+                }}
+                aria-hidden
+              />
+              <div
+                role="menu"
+                className="bg-background absolute left-0 top-full z-20 mt-1 grid grid-cols-5 gap-0.5 rounded-md border border-[var(--border)] p-1 shadow-md"
+              >
+                {BULLET_SYMBOLS.map((sym) => (
+                  <button
+                    key={sym}
+                    type="button"
+                    role="menuitem"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyBulletSymbol(sym)}
+                    title={`Bullet ${sym}`}
+                    aria-label={`Bullet ${sym}`}
+                    className={cn(
+                      "hover:bg-muted flex h-7 w-7 items-center justify-center rounded text-sm",
+                      sym === activeBulletSymbol &&
+                        editor.isActive("bulletList") &&
+                        "bg-muted text-foreground"
+                    )}
+                  >
+                    {sym}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <EditorContent editor={editor} />
     </div>

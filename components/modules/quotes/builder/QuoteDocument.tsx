@@ -1837,12 +1837,15 @@ function renderRichTextBlock(
     case "bulletList":
     case "orderedList": {
       const ordered = node.type === "orderedList";
+      // RT-BULLETS — bullet lists carry a chosen `symbol` glyph (default "•");
+      // ordered lists are unaffected.
+      const bulletSymbol = (node.attrs?.symbol as string) || "•";
       return (
         <View key={key} style={styles.customList}>
           {(node.content ?? []).map((item, i) => (
             <View key={i} style={styles.customListItem}>
               <Text style={styles.customListBullet}>
-                {ordered ? `${i + 1}.` : "•"}
+                {ordered ? `${i + 1}.` : bulletSymbol}
               </Text>
               <View style={styles.customListContent}>
                 {(item.content ?? []).map((child, j) =>
