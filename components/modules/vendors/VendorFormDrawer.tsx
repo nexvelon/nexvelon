@@ -47,6 +47,8 @@ const blank: DbVendorInsert = {
   payment_terms: "",
   notes: "",
   is_active: true,
+  min_order_amount: null,
+  excluded_parts: [],
 };
 
 function seed(mode: Mode): DbVendorInsert {
@@ -68,12 +70,19 @@ function seed(mode: Mode): DbVendorInsert {
     payment_terms: v.payment_terms ?? "",
     notes: v.notes ?? "",
     is_active: v.is_active,
+    min_order_amount: v.min_order_amount != null ? Number(v.min_order_amount) : null,
+    excluded_parts: v.excluded_parts ?? [],
   };
 }
 
 export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
   const isEdit = mode.kind === "edit";
   const [form, setForm] = useState<DbVendorInsert>(() => seed(mode));
+  // PARTS-4: excluded part numbers edited as comma-separated text; parsed to an
+  // array at save (so typing "A, B" stays smooth).
+  const [excludedText, setExcludedText] = useState(() =>
+    (seed(mode).excluded_parts ?? []).join(", ")
+  );
   const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof DbVendorInsert>(
@@ -86,10 +95,17 @@ export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
       toast.error("Vendor name is required.");
       return;
     }
+    const payload: DbVendorInsert = {
+      ...form,
+      excluded_parts: excludedText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
     setSaving(true);
     const res = isEdit
-      ? await updateVendorAction(mode.vendor.id, form)
-      : await createVendorAction(form);
+      ? await updateVendorAction(mode.vendor.id, payload)
+      : await createVendorAction(payload);
     setSaving(false);
     if (res.ok) {
       toast.success(isEdit ? "Vendor updated" : "Vendor created");
@@ -169,6 +185,33 @@ export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
               />
             </Field>
           </div>
+
+          {/* PARTS-4: purchasing — min order amount + excluded parts. */}
+          <Field label="Minimum order amount ($)">
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.min_order_amount ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const n = raw === "" ? null : Number(raw);
+                set("min_order_amount", n != null && Number.isFinite(n) ? n : null);
+              }}
+              placeholder="e.g. 250 (free-shipping threshold)"
+            />
+          </Field>
+          <Field label="Excluded parts">
+            <Textarea
+              rows={2}
+              value={excludedText}
+              onChange={(e) => setExcludedText(e.target.value)}
+              placeholder="Comma-separated part numbers this vendor doesn't carry, e.g. HID-1234, LP4502"
+            />
+            <p className="text-muted-foreground mt-1 text-[11px]">
+              Separate part numbers with commas.
+            </p>
+          </Field>
 
           <Field label="Address line 1">
             <Input

@@ -711,6 +711,9 @@ export interface DbVendor {
   payment_terms: string | null;
   notes: string | null;
   is_active: boolean;
+  // PARTS-4 (migration 0039) — purchasing fields.
+  min_order_amount: number | null; // minimum / free-shipping threshold ($)
+  excluded_parts: string[]; // part numbers this vendor does NOT carry (jsonb)
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -735,6 +738,9 @@ export type DbVendorInsert = {
   payment_terms?: string | null;
   notes?: string | null;
   is_active?: boolean;
+  // PARTS-4 — excluded_parts has a DB default ([]); both optional on write.
+  min_order_amount?: number | null;
+  excluded_parts?: string[];
 };
 
 export type DbVendorUpdate = Partial<DbVendorInsert>;

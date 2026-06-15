@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { VendorFormDrawer } from "./VendorFormDrawer";
 import { deleteVendorAction, listVendorsAction } from "@/app/(app)/vendors/actions";
+import { formatCurrency } from "@/lib/format";
 import type { DbVendor } from "@/lib/types/database";
 
 interface Props {
@@ -233,6 +234,24 @@ function VendorRow({
             {vendor.phone ? ` · ${vendor.phone}` : ""}
             {vendor.payment_terms ? ` · ${vendor.payment_terms}` : ""}
           </p>
+          {/* PARTS-4: purchasing summary — only when set. */}
+          {(vendor.min_order_amount != null ||
+            (vendor.excluded_parts?.length ?? 0) > 0) && (
+            <p className="text-muted-foreground mt-0.5 truncate text-[11px]">
+              {vendor.min_order_amount != null
+                ? `Min order ${formatCurrency(Number(vendor.min_order_amount))}`
+                : ""}
+              {vendor.min_order_amount != null &&
+              (vendor.excluded_parts?.length ?? 0) > 0
+                ? " · "
+                : ""}
+              {(vendor.excluded_parts?.length ?? 0) > 0
+                ? `${vendor.excluded_parts.length} excluded part${
+                    vendor.excluded_parts.length === 1 ? "" : "s"
+                  }`
+                : ""}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
