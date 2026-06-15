@@ -253,8 +253,12 @@ export async function deleteProduct(id: string): Promise<void> {
     .eq("id", id);
   if (error) {
     if (error.code === "23503") {
+      // PARTS-1: the FK RESTRICT can fire from inventory_stock OR
+      // purchase_order_lines — name both so the message is accurate.
       throw new Error(
-        "Cannot delete a product that still has stock units. Remove its stock first."
+        "Cannot delete this part — it's still referenced by stock units or " +
+          "purchase-order lines. Remove its stock and detach it from any " +
+          "purchase orders first."
       );
     }
     throw new Error(`deleteProduct: ${error.message}`);

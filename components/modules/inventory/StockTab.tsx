@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { ChevronDown, ChevronRight, ImageIcon, Search, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -55,6 +56,7 @@ const CATEGORIES: ("All" | ProductCategory)[] = [
 const STATUSES = ["All", "In Stock", "Low", "Out", "Overstock"] as const;
 
 export function StockTab({ products }: { products: Product[] }) {
+  const router = useRouter();
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
 
@@ -347,6 +349,7 @@ export function StockTab({ products }: { products: Product[] }) {
                   available={available}
                   locations={locationList}
                   onToggle={() => setExpanded((s) => ({ ...s, [p.id]: !s[p.id] }))}
+                  onOpen={() => router.push(`/inventory/${p.id}`)}
                 />
               );
             })}
@@ -366,6 +369,7 @@ function FragmentRow({
   available,
   locations,
   onToggle,
+  onOpen,
 }: {
   p: Product;
   isOpen: boolean;
@@ -375,16 +379,28 @@ function FragmentRow({
   available: number;
   locations: string[];
   onToggle: () => void;
+  onOpen: () => void;
 }) {
   const breakdown = locationBreakdown(p, locations);
   const movements = movementHistory(p, 8);
   return (
     <>
-      <TableRow className={cn(isLow && "bg-amber-50/60 hover:bg-amber-50")}>
+      {/* PARTS-1: the row opens the part detail (Edit/Delete live there). The
+          chevron stops propagation so it only toggles the inline breakdown. */}
+      <TableRow
+        onClick={onOpen}
+        className={cn(
+          "cursor-pointer",
+          isLow && "bg-amber-50/60 hover:bg-amber-50"
+        )}
+      >
         <TableCell>
           <button
             type="button"
-            onClick={onToggle}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
             className="text-muted-foreground hover:text-brand-charcoal"
           >
             {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}

@@ -84,6 +84,8 @@ export function ProductDetailClient({
   const router = useRouter();
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
+  // PARTS-1: deleting a part is gated; the server action enforces the same.
+  const canDelete = hasPermission(role, "inventory", "delete");
 
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -252,14 +254,16 @@ export function ProductDetailClient({
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="text-red-600 hover:text-red-700"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
+            {canDelete && (
+              <Button
+                variant="outline"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-red-600 hover:text-red-700"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
+            )}
           </>
         }
       />

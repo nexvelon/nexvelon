@@ -33,17 +33,43 @@ import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission } from "@/lib/permissions";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
   DbInventoryStock,
   DbInventoryStockUpdate,
+  DbRole,
 } from "@/lib/types/database";
-import type { Product } from "@/lib/types";
+import type { Product, Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
+
+// PARTS-1: DbRole (11) → app Role (7) for hasPermission; mirrors the
+// vendors / PO / attachments action helpers.
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
 
 function fail(err: unknown): { ok: false; error: string } {
   const message =
@@ -195,6 +221,12 @@ export async function deleteProductAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    // PARTS-1: gate deletion on the inventory:delete permission (UI gates the
+    // button too; this is the authoritative server-side check).
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "inventory", "delete")) {
+      return { ok: false, error: "You don't have permission to delete parts." };
+    }
     // ATTACH-1: remove this product's attachments (objects + rows) first so
     // they don't orphan. Best-effort — a storage hiccup never blocks the
     // product delete.
