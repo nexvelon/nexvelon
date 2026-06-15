@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useRole } from "@/lib/role-context";
 import { BUSINESS_TIMEZONE } from "@/lib/format";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
+import type { QuoteDiffChange } from "@/lib/quote-audit-diff";
 import { getQuoteAuditEventsAction } from "@/app/(app)/quotes/actions";
 
 const TS_FMT = new Intl.DateTimeFormat("en-CA", {
@@ -29,7 +30,30 @@ type AuditChanges = {
   status?: { from: string | null; to: string };
   rejectionReason?: string | null;
   rejectionSource?: string | null;
+  items?: QuoteDiffChange[];
 };
+
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "on" : "off";
+  return String(v);
+}
+
+// AUDIT-2 — one content change → a short phrase.
+function describeChange(c: QuoteDiffChange): string {
+  if ("field" in c) {
+    if (c.field === "terms") return "terms edited";
+    const fc = c as { field: string; from: unknown; to: unknown };
+    return `${fc.field}: '${fmtVal(fc.from)}' → '${fmtVal(fc.to)}'`;
+  }
+  const [noun, verb] = c.type.split("_"); // e.g. "line","added"
+  const label = `'${c.label}'`;
+  if (verb === "added") return `added ${noun} ${label}`;
+  if (verb === "removed") return `removed ${noun} ${label}`;
+  if (verb === "moved") return `moved ${noun} ${label}`;
+  if (verb === "edited") return `edited ${noun} ${label}`;
+  return `${c.type} ${label}`;
+}
 
 function describe(ev: DbQuoteAuditLog): string {
   const c = (ev.changes ?? {}) as AuditChanges;
@@ -43,6 +67,11 @@ function describe(ev: DbQuoteAuditLog): string {
       return `Rejected${src}${reason}`;
     }
     return `Status: ${from} → ${to ?? "—"}`;
+  }
+  if (ev.event_type === "updated") {
+    const items = c.items ?? [];
+    if (items.length === 0) return "Updated";
+    return `Updated — ${items.map(describeChange).join("; ")}`;
   }
   return ev.event_type;
 }
