@@ -746,6 +746,75 @@ export type DbVendorInsert = {
 export type DbVendorUpdate = Partial<DbVendorInsert>;
 
 // ----------------------------------------------------------------------------
+// Projects (PROJ-1, migration 0041) — projects + project_quotes +
+// project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
+// text); client_id / site_id are uuid. 1:1 with the 0041 columns.
+// ----------------------------------------------------------------------------
+export interface DbProject {
+  id: string;
+  project_number: string;
+  opco: string;
+  client_id: string;
+  site_id: string | null;
+  title: string | null;
+  status: string;
+  originating_quote_id: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbProjectInsert = {
+  project_number: string;
+  opco: string;
+  client_id: string;
+  site_id?: string | null;
+  title?: string | null;
+  status?: string;
+  originating_quote_id?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbProjectUpdate = Partial<DbProjectInsert>;
+
+export interface DbProjectQuote {
+  id: string;
+  project_id: string;
+  quote_id: string;
+  role: string; // 'original' | 'change_order'
+  created_at: string;
+}
+
+export type DbProjectQuoteInsert = {
+  project_id: string;
+  quote_id: string;
+  role?: string;
+};
+
+export interface DbProjectCostCenter {
+  id: string;
+  project_id: string;
+  cc_number: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbProjectCostCenterInsert = {
+  project_id: string;
+  cc_number: string;
+  name: string;
+  sort_order?: number;
+};
+
+export type DbProjectCostCenterUpdate = Partial<
+  Omit<DbProjectCostCenterInsert, "project_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Purchase orders (PO-2, migration 0031) — header + lines. Header FKs vendors
 // (ON DELETE RESTRICT — a vendor with POs can't be deleted). Lines cascade on
 // PO delete and FK inventory_products (RESTRICT). received_qty is reserved for

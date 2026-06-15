@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LayoutGrid, List, Plus } from "lucide-react";
-import { toast } from "sonner";
 import { parseISO } from "date-fns";
 import type { SortingState } from "@tanstack/react-table";
 
@@ -18,34 +17,93 @@ import {
 import { ProjectsTable } from "@/components/modules/projects/ProjectsTable";
 import { ProjectsCardView } from "@/components/modules/projects/ProjectsCardView";
 
-import { projects as ALL_PROJECTS } from "@/lib/mock-data/projects";
-import { clients as ALL_CLIENTS } from "@/lib/mock-data/clients";
-import { users as ALL_USERS } from "@/lib/mock-data/users";
-import { projectStats } from "@/lib/project-data";
+import { listProjectsAction } from "./actions";
+import type { ProjectListRow } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
-import type { Project, ProjectStatus } from "@/lib/types";
+import type { Client, Project, ProjectStatus, User } from "@/lib/types";
+
+// PROJ-1: real DbProject status → the mock ProjectStatus view-model. Only
+// 'active' exists today; richer lifecycle statuses arrive with later slices.
+const STATUS_MAP: Record<string, ProjectStatus> = {
+  active: "In Progress",
+};
+
+// PROJ-1: real DbProject (rolled up with client/site names) → the existing
+// Project view-model. Fields the domain doesn't model yet (manager, systems,
+// budget/progress, dates) are placeholders until those slices land.
+function dbToProject(r: ProjectListRow): Project {
+  return {
+    id: r.id,
+    code: r.project_number,
+    name: r.title || r.project_number,
+    clientId: r.client_id,
+    siteId: r.site_id ?? undefined,
+    status: STATUS_MAP[r.status] ?? "In Progress",
+    startDate: r.created_at,
+    targetDate: r.created_at,
+    managerId: "",
+    systemTypes: [],
+    budget: 0,
+    spent: 0,
+    progress: 0,
+    description: "",
+    quoteId: r.originating_quote_id ?? undefined,
+  };
+}
 
 export default function ProjectsListPage() {
   const router = useRouter();
+  const [rows, setRows] = useState<ProjectListRow[]>([]);
   const [filters, setFilters] = useState<ProjectFilterValue>(EMPTY_PROJECT_FILTERS);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "startDate", desc: true },
   ]);
   const [view, setView] = useState<"list" | "card">("list");
 
-  const stats = useMemo(() => projectStats(), []);
+  useEffect(() => {
+    let active = true;
+    listProjectsAction()
+      .then((data) => {
+        if (active) setRows(data);
+      })
+      .catch(() => {
+        /* leave empty */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const pms = useMemo(
-    () =>
-      ALL_USERS.filter(
-        (u) => u.role === "ProjectManager" || u.role === "Admin"
-      ),
-    []
+  const allProjects = useMemo(() => rows.map(dbToProject), [rows]);
+
+  // Synthesize the client lookup the table/filters expect from the rolled-up
+  // names (managerId is a placeholder for now, so users stays empty).
+  const clients = useMemo<Client[]>(() => {
+    const byId = new Map<string, Client>();
+    for (const r of rows) {
+      if (!byId.has(r.client_id)) {
+        byId.set(r.client_id, {
+          id: r.client_id,
+          name: r.client_name ?? "—",
+        } as Client);
+      }
+    }
+    return [...byId.values()];
+  }, [rows]);
+
+  const stats = useMemo(
+    () => ({
+      active: allProjects.length,
+      atRisk: 0,
+      completedMTD: 0,
+      totalBacklog: 0,
+    }),
+    [allProjects]
   );
 
   const counts = useMemo(() => {
     const c: Record<"All" | ProjectStatus, number> = {
-      All: ALL_PROJECTS.length,
+      All: allProjects.length,
       Planning: 0,
       Scheduled: 0,
       "In Progress": 0,
@@ -55,9 +113,9 @@ export default function ProjectsListPage() {
       Completed: 0,
       Closed: 0,
     };
-    for (const p of ALL_PROJECTS) c[p.status] += 1;
+    for (const p of allProjects) c[p.status] += 1;
     return c;
-  }, []);
+  }, [allProjects]);
 
   const filtered = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -66,7 +124,7 @@ export default function ProjectsListPage() {
       ? parseISO(filters.toDate).getTime() + 24 * 60 * 60 * 1000 - 1
       : Infinity;
 
-    return ALL_PROJECTS.filter((p) => {
+    return allProjects.filter((p) => {
       if (filters.status !== "All" && p.status !== filters.status) return false;
       if (filters.clientId !== "all" && p.clientId !== filters.clientId) return false;
       if (filters.pmId !== "all" && p.managerId !== filters.pmId) return false;
@@ -86,7 +144,7 @@ export default function ProjectsListPage() {
       }
       return true;
     });
-  }, [filters]);
+  }, [allProjects, filters]);
 
   const sorted = useMemo(() => {
     if (sorting.length === 0) return filtered;
@@ -100,22 +158,13 @@ export default function ProjectsListPage() {
     });
   }, [filtered, sorting]);
 
-  const handlers = {
-    onView: (p: Project) => router.push(`/projects/${p.id}`),
-    onDuplicate: (p: Project) =>
-      toast(`Duplicating ${p.code}`, {
-        description: "Demo: a real build would clone this project as Planning.",
-      }),
-    onArchive: (p: Project) =>
-      toast(`Archived ${p.code}`, {
-        description: "Demo: archive is a soft action.",
-      }),
-  };
+  const noUsers: User[] = [];
+  const onView = (p: Project) => router.push(`/projects/${p.id}`);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`${ALL_PROJECTS.length} active engagements · ${stats.atRisk} at risk · ${stats.completedMTD} completed MTD`}
+        eyebrow={`${allProjects.length} project${allProjects.length === 1 ? "" : "s"}`}
         title="Projects"
         description="Active installations, service contracts, and commissioning."
         actions={
@@ -135,8 +184,8 @@ export default function ProjectsListPage() {
       <ProjectFilters
         value={filters}
         onChange={setFilters}
-        clients={ALL_CLIENTS}
-        pms={pms}
+        clients={clients}
+        pms={noUsers}
         counts={counts}
       />
 
@@ -146,7 +195,7 @@ export default function ProjectsListPage() {
           <span className="text-brand-charcoal font-semibold">
             {filtered.length}
           </span>{" "}
-          of {ALL_PROJECTS.length} projects
+          of {allProjects.length} projects
         </p>
         <div className="bg-muted inline-flex items-center rounded-md p-0.5">
           <button
@@ -181,20 +230,20 @@ export default function ProjectsListPage() {
       {view === "list" ? (
         <ProjectsTable
           projects={sorted}
-          clients={ALL_CLIENTS}
-          users={ALL_USERS}
-          onView={handlers.onView}
-          onDuplicate={handlers.onDuplicate}
-          onArchive={handlers.onArchive}
+          clients={clients}
+          users={noUsers}
+          onView={onView}
+          onDuplicate={onView}
+          onArchive={onView}
           sorting={sorting}
           onSortingChange={setSorting}
         />
       ) : (
         <ProjectsCardView
           projects={sorted}
-          clients={ALL_CLIENTS}
-          users={ALL_USERS}
-          onView={handlers.onView}
+          clients={clients}
+          users={noUsers}
+          onView={onView}
         />
       )}
     </div>
