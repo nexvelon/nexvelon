@@ -1,64 +1,48 @@
 "use client";
 
+// PROJ-1b — lean /projects list over REAL data only. Renders ProjectListRow
+// directly (no mock Project view-model): P-number, title, client, site, opco,
+// status, created. Columns/stats/filters that needed un-modelled fields
+// (manager, systems, budget, progress, dates) were dropped — they return as the
+// job-costing / scheduling / services slices land.
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutGrid, List, Plus } from "lucide-react";
-import { parseISO } from "date-fns";
-import type { SortingState } from "@tanstack/react-table";
+import { Plus, Search, X } from "lucide-react";
+import { format, parseISO } from "date-fns";
 
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ProjectStatsStrip } from "@/components/modules/projects/ProjectStatsStrip";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  ProjectFilters,
-  EMPTY_PROJECT_FILTERS,
-  type ProjectFilterValue,
-} from "@/components/modules/projects/ProjectFilters";
-import { ProjectsTable } from "@/components/modules/projects/ProjectsTable";
-import { ProjectsCardView } from "@/components/modules/projects/ProjectsCardView";
-
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { listProjectsAction } from "./actions";
 import type { ProjectListRow } from "@/lib/api/projects";
-import { cn } from "@/lib/utils";
-import type { Client, Project, ProjectStatus, User } from "@/lib/types";
 
-// PROJ-1: real DbProject status → the mock ProjectStatus view-model. Only
-// 'active' exists today; richer lifecycle statuses arrive with later slices.
-const STATUS_MAP: Record<string, ProjectStatus> = {
-  active: "In Progress",
+const OPCO_LABEL: Record<string, string> = {
+  integrated_solutions: "Integrated",
+  guardian: "Guardian",
 };
-
-// PROJ-1: real DbProject (rolled up with client/site names) → the existing
-// Project view-model. Fields the domain doesn't model yet (manager, systems,
-// budget/progress, dates) are placeholders until those slices land.
-function dbToProject(r: ProjectListRow): Project {
-  return {
-    id: r.id,
-    code: r.project_number,
-    name: r.title || r.project_number,
-    clientId: r.client_id,
-    siteId: r.site_id ?? undefined,
-    status: STATUS_MAP[r.status] ?? "In Progress",
-    startDate: r.created_at,
-    targetDate: r.created_at,
-    managerId: "",
-    systemTypes: [],
-    budget: 0,
-    spent: 0,
-    progress: 0,
-    description: "",
-    quoteId: r.originating_quote_id ?? undefined,
-  };
-}
 
 export default function ProjectsListPage() {
   const router = useRouter();
   const [rows, setRows] = useState<ProjectListRow[]>([]);
-  const [filters, setFilters] = useState<ProjectFilterValue>(EMPTY_PROJECT_FILTERS);
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "startDate", desc: true },
-  ]);
-  const [view, setView] = useState<"list" | "card">("list");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<string>("All");
 
   useEffect(() => {
     let active = true;
@@ -74,97 +58,37 @@ export default function ProjectsListPage() {
     };
   }, []);
 
-  const allProjects = useMemo(() => rows.map(dbToProject), [rows]);
-
-  // Synthesize the client lookup the table/filters expect from the rolled-up
-  // names (managerId is a placeholder for now, so users stays empty).
-  const clients = useMemo<Client[]>(() => {
-    const byId = new Map<string, Client>();
-    for (const r of rows) {
-      if (!byId.has(r.client_id)) {
-        byId.set(r.client_id, {
-          id: r.client_id,
-          name: r.client_name ?? "—",
-        } as Client);
-      }
-    }
-    return [...byId.values()];
-  }, [rows]);
-
-  const stats = useMemo(
-    () => ({
-      active: allProjects.length,
-      atRisk: 0,
-      completedMTD: 0,
-      totalBacklog: 0,
-    }),
-    [allProjects]
+  // Status options come from the data (only 'active' exists today).
+  const statuses = useMemo(
+    () => [...new Set(rows.map((r) => r.status))].sort(),
+    [rows]
   );
 
-  const counts = useMemo(() => {
-    const c: Record<"All" | ProjectStatus, number> = {
-      All: allProjects.length,
-      Planning: 0,
-      Scheduled: 0,
-      "In Progress": 0,
-      "On Hold": 0,
-      "At Risk": 0,
-      Commissioning: 0,
-      Completed: 0,
-      Closed: 0,
-    };
-    for (const p of allProjects) c[p.status] += 1;
-    return c;
-  }, [allProjects]);
+  // Count-based stats: total + per-status breakdown.
+  const byStatus = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.status, (m.get(r.status) ?? 0) + 1);
+    return [...m.entries()].sort();
+  }, [rows]);
 
   const filtered = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    const from = filters.fromDate ? parseISO(filters.fromDate).getTime() : -Infinity;
-    const to = filters.toDate
-      ? parseISO(filters.toDate).getTime() + 24 * 60 * 60 * 1000 - 1
-      : Infinity;
-
-    return allProjects.filter((p) => {
-      if (filters.status !== "All" && p.status !== filters.status) return false;
-      if (filters.clientId !== "all" && p.clientId !== filters.clientId) return false;
-      if (filters.pmId !== "all" && p.managerId !== filters.pmId) return false;
-      if (filters.systemType !== "All") {
-        if (filters.systemType === "Mixed") {
-          if (p.systemTypes.length < 2) return false;
-        } else if (!p.systemTypes.includes(filters.systemType)) return false;
-      }
-      const t = parseISO(p.startDate).getTime();
-      if (t < from || t > to) return false;
-      if (search) {
-        if (
-          !p.code.toLowerCase().includes(search) &&
-          !p.name.toLowerCase().includes(search)
-        )
-          return false;
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (status !== "All" && r.status !== status) return false;
+      if (q) {
+        const hay = `${r.project_number} ${r.title ?? ""} ${
+          r.client_name ?? ""
+        }`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [allProjects, filters]);
-
-  const sorted = useMemo(() => {
-    if (sorting.length === 0) return filtered;
-    const [s] = sorting;
-    const dir = s.desc ? -1 : 1;
-    return [...filtered].sort((a, b) => {
-      const av = (a as unknown as Record<string, unknown>)[s.id];
-      const bv = (b as unknown as Record<string, unknown>)[s.id];
-      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-      return String(av ?? "").localeCompare(String(bv ?? "")) * dir;
-    });
-  }, [filtered, sorting]);
-
-  const noUsers: User[] = [];
-  const onView = (p: Project) => router.push(`/projects/${p.id}`);
+  }, [rows, search, status]);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`${allProjects.length} project${allProjects.length === 1 ? "" : "s"}`}
+        eyebrow={`${rows.length} project${rows.length === 1 ? "" : "s"}`}
         title="Projects"
         description="Active installations, service contracts, and commissioning."
         actions={
@@ -179,73 +103,131 @@ export default function ProjectsListPage() {
         }
       />
 
-      <ProjectStatsStrip {...stats} />
+      {/* Count-based stats */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs shadow-sm">
+          <span className="text-muted-foreground">Total</span>
+          <span className="text-brand-navy font-semibold tabular-nums">
+            {rows.length}
+          </span>
+        </span>
+        {byStatus.map(([s, n]) => (
+          <span
+            key={s}
+            className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs shadow-sm"
+          >
+            <span className="text-muted-foreground capitalize">{s}</span>
+            <span className="text-brand-charcoal font-semibold tabular-nums">
+              {n}
+            </span>
+          </span>
+        ))}
+      </div>
 
-      <ProjectFilters
-        value={filters}
-        onChange={setFilters}
-        clients={clients}
-        pms={noUsers}
-        counts={counts}
-      />
-
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-xs">
+      {/* Filters: status + text search */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search className="text-muted-foreground absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search P-number, title, client…"
+            className="h-8 pl-8 text-xs"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="text-muted-foreground hover:text-brand-charcoal absolute right-2 top-1/2 -translate-y-1/2"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Select value={status} onValueChange={(v) => setStatus(v ?? "All")}>
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All statuses</SelectItem>
+            {statuses.map((s) => (
+              <SelectItem key={s} value={s} className="capitalize">
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-muted-foreground ml-auto text-xs">
           Showing{" "}
           <span className="text-brand-charcoal font-semibold">
             {filtered.length}
           </span>{" "}
-          of {allProjects.length} projects
+          of {rows.length}
         </p>
-        <div className="bg-muted inline-flex items-center rounded-md p-0.5">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
-              view === "list"
-                ? "bg-card text-brand-navy shadow-sm"
-                : "text-muted-foreground hover:text-brand-charcoal"
-            )}
-          >
-            <List className="h-3.5 w-3.5" />
-            List
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("card")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
-              view === "card"
-                ? "bg-card text-brand-navy shadow-sm"
-                : "text-muted-foreground hover:text-brand-charcoal"
-            )}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Cards
-          </button>
-        </div>
       </div>
 
-      {view === "list" ? (
-        <ProjectsTable
-          projects={sorted}
-          clients={clients}
-          users={noUsers}
-          onView={onView}
-          onDuplicate={onView}
-          onArchive={onView}
-          sorting={sorting}
-          onSortingChange={setSorting}
-        />
-      ) : (
-        <ProjectsCardView
-          projects={sorted}
-          clients={clients}
-          users={noUsers}
-          onView={onView}
-        />
-      )}
+      <Card className="bg-card overflow-hidden p-0 shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Project #</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Site</TableHead>
+              <TableHead>Opco</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                  className="text-muted-foreground py-8 text-center text-sm"
+                >
+                  {rows.length === 0
+                    ? "No projects yet. Convert an approved quote to create one."
+                    : "No projects match your filters."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((r) => (
+                <TableRow
+                  key={r.id}
+                  onClick={() => router.push(`/projects/${r.id}`)}
+                  className="cursor-pointer"
+                >
+                  <TableCell className="text-brand-navy font-mono text-xs font-semibold">
+                    {r.project_number}
+                  </TableCell>
+                  <TableCell className="text-brand-charcoal max-w-[240px] truncate text-sm">
+                    {r.title || "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">{r.client_name ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {r.site_name ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <span className="bg-muted text-brand-primary rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                      {OPCO_LABEL[r.opco] ?? r.opco}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="rounded-full bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--brand-status-green)] capitalize">
+                      {r.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs tabular-nums">
+                    {format(parseISO(r.created_at), "MMM d, yyyy")}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }
