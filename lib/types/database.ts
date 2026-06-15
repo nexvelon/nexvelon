@@ -799,6 +799,9 @@ export interface DbProjectCostCenter {
   cc_number: string;
   name: string;
   sort_order: number;
+  // PROJ-2 (migration 0042) — the quote this cost center came from (original
+  // or change-order). text FK to quotes.id.
+  source_quote_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -808,6 +811,7 @@ export type DbProjectCostCenterInsert = {
   cc_number: string;
   name: string;
   sort_order?: number;
+  source_quote_id?: string | null;
 };
 
 export type DbProjectCostCenterUpdate = Partial<

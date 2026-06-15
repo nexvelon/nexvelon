@@ -156,6 +156,8 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
       cc_number: costCenterNumber(projectNumber, i + 1),
       name: s.name || `Cost center ${i + 1}`,
       sort_order: i,
+      // PROJ-2: provenance — these centers came from the originating quote.
+      source_quote_id: quote.id,
     }));
     const { error: ccErr } = await supabase
       .from("project_cost_centers")
@@ -167,18 +169,107 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
   return project;
 }
 
-// Next PJ number + sort order for a project — continues the sequence even
-// across deletes (max parsed -PJ-NN + 1).
-async function nextCostCenterSlot(
+/** PROJ-2 — projects a quote may be merged into: SAME client + SAME opco. */
+export interface MergeCandidate {
+  id: string;
+  project_number: string;
+  title: string | null;
+  status: string;
+}
+
+export async function listProjectsForClient(
+  clientId: string,
+  opco: string
+): Promise<MergeCandidate[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, project_number, title, status")
+    .eq("client_id", clientId)
+    .eq("opco", opco)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`listProjectsForClient: ${error.message}`);
+  return (data ?? []) as MergeCandidate[];
+}
+
+/**
+ * PROJ-2 — merge a quote into an EXISTING project as a change order: link it
+ * (role 'change_order') and seed its sections as ADDITIONAL cost centers that
+ * CONTINUE the project's PJ sequence (never restart, never reuse). Rejects a
+ * cross-client or cross-opco merge. Returns the project.
+ */
+export async function mergeQuoteIntoProject(
+  quote: Quote,
+  projectId: string
+): Promise<DbProject> {
+  const supabase = await db();
+
+  const { data: proj, error: pErr } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (pErr) throw new Error(`mergeQuoteIntoProject: ${pErr.message}`);
+  if (!proj) throw new Error("Project not found.");
+  const project = proj as DbProject;
+
+  // Guard: never merge across opco or client.
+  if (project.opco !== (quote.templateSlug ?? "integrated_solutions")) {
+    throw new Error(
+      "This quote's entity (opco) doesn't match the project's — can't merge."
+    );
+  }
+  if (project.client_id !== quote.clientId) {
+    throw new Error(
+      "This quote's client doesn't match the project's — can't merge."
+    );
+  }
+
+  // Link as a change order (UNIQUE(project_id, quote_id) blocks a double-merge).
+  const { error: linkErr } = await supabase.from("project_quotes").insert({
+    project_id: project.id,
+    quote_id: quote.id,
+    role: "change_order",
+  });
+  if (linkErr) {
+    if (linkErr.code === "23505") {
+      throw new Error("This quote is already linked to that project.");
+    }
+    throw new Error(`mergeQuoteIntoProject/link: ${linkErr.message}`);
+  }
+
+  // Seed cost centers CONTINUING the PJ sequence (after the current max).
+  const sections = quote.sections ?? [];
+  if (sections.length > 0) {
+    const { maxPj, maxSort } = await currentCostCenterMax(supabase, project.id);
+    const ccRows = sections.map((s, i) => ({
+      project_id: project.id,
+      cc_number: costCenterNumber(project.project_number, maxPj + 1 + i),
+      name: s.name || `Cost center ${maxPj + 1 + i}`,
+      sort_order: maxSort + 1 + i,
+      source_quote_id: quote.id,
+    }));
+    const { error: ccErr } = await supabase
+      .from("project_cost_centers")
+      .insert(ccRows);
+    if (ccErr)
+      throw new Error(`mergeQuoteIntoProject/costCenters: ${ccErr.message}`);
+  }
+
+  return project;
+}
+
+// Current highest PJ number + sort_order for a project's cost centers — the
+// PJ sequence NEVER reuses a number, even across deletes (max parsed + N).
+async function currentCostCenterMax(
   supabase: Awaited<ReturnType<typeof db>>,
-  projectId: string,
-  projectNumber: string
-): Promise<{ ccNumber: string; sortOrder: number }> {
+  projectId: string
+): Promise<{ maxPj: number; maxSort: number }> {
   const { data, error } = await supabase
     .from("project_cost_centers")
     .select("cc_number, sort_order")
     .eq("project_id", projectId);
-  if (error) throw new Error(`nextCostCenterSlot: ${error.message}`);
+  if (error) throw new Error(`currentCostCenterMax: ${error.message}`);
   let maxPj = 0;
   let maxSort = -1;
   for (const r of (data ?? []) as { cc_number: string; sort_order: number }[]) {
@@ -186,6 +277,15 @@ async function nextCostCenterSlot(
     if (m) maxPj = Math.max(maxPj, parseInt(m[1], 10));
     maxSort = Math.max(maxSort, Number(r.sort_order));
   }
+  return { maxPj, maxSort };
+}
+
+async function nextCostCenterSlot(
+  supabase: Awaited<ReturnType<typeof db>>,
+  projectId: string,
+  projectNumber: string
+): Promise<{ ccNumber: string; sortOrder: number }> {
+  const { maxPj, maxSort } = await currentCostCenterMax(supabase, projectId);
   return {
     ccNumber: costCenterNumber(projectNumber, maxPj + 1),
     sortOrder: maxSort + 1,

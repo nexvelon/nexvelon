@@ -9,11 +9,14 @@ import {
   listProjects,
   getProjectById,
   createProjectFromQuote,
+  listProjectsForClient,
+  mergeQuoteIntoProject,
   addCostCenter,
   renameCostCenter,
   deleteCostCenter,
   type ProjectListRow,
   type ProjectDetail,
+  type MergeCandidate,
 } from "@/lib/api/projects";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -77,6 +80,33 @@ export async function createProjectFromQuoteAction(
     if (denied) return { ok: false, error: denied };
     const project = await createProjectFromQuote(quote);
     revalidatePath("/projects");
+    return {
+      ok: true,
+      data: { id: project.id, project_number: project.project_number },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listProjectsForClientAction(
+  clientId: string,
+  opco: string
+): Promise<MergeCandidate[]> {
+  if (!clientId) return [];
+  return listProjectsForClient(clientId, opco);
+}
+
+export async function mergeQuoteIntoProjectAction(
+  quote: Quote,
+  projectId: string
+): Promise<ActionResult<{ id: string; project_number: string }>> {
+  try {
+    const denied = await requireConvert();
+    if (denied) return { ok: false, error: denied };
+    const project = await mergeQuoteIntoProject(quote, projectId);
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${project.id}`);
     return {
       ok: true,
       data: { id: project.id, project_number: project.project_number },
