@@ -23,6 +23,7 @@ import { hasPermission } from "@/lib/permissions";
 import { useThemeColors } from "@/lib/theme-context";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { getInventoryReportDataAction } from "@/app/(app)/inventory/actions";
+import { LowStockReport } from "./LowStockReport";
 import type { InventoryReportData } from "@/lib/api/products";
 
 export function ReportsTab() {
@@ -51,21 +52,29 @@ export function ReportsTab() {
     };
   }, []);
 
+  // PARTS-3: the Low Stock report is self-contained, so it renders in every
+  // state — even while the aggregate charts load or fail.
   if (loading) {
     return (
-      <Card className="bg-card p-8 text-center shadow-sm">
-        <p className="text-muted-foreground text-sm">Loading reports…</p>
-      </Card>
+      <div className="space-y-6">
+        <LowStockReport showCost={showCost} />
+        <Card className="bg-card p-8 text-center shadow-sm">
+          <p className="text-muted-foreground text-sm">Loading reports…</p>
+        </Card>
+      </div>
     );
   }
 
   if (error || !data) {
     return (
-      <Card className="bg-card p-8 text-center shadow-sm">
-        <p className="text-muted-foreground text-sm">
-          Couldn’t load reports. Try again shortly.
-        </p>
-      </Card>
+      <div className="space-y-6">
+        <LowStockReport showCost={showCost} />
+        <Card className="bg-card p-8 text-center shadow-sm">
+          <p className="text-muted-foreground text-sm">
+            Couldn’t load reports. Try again shortly.
+          </p>
+        </Card>
+      </div>
     );
   }
 
@@ -84,6 +93,9 @@ export function ReportsTab() {
 
   return (
     <div className="space-y-6">
+      {/* PARTS-3: Low Stock report — most actionable, shown first. */}
+      <LowStockReport showCost={showCost} />
+
       {/* Stock Valuation */}
       <Card className="bg-card p-5 shadow-sm">
         <div className="mb-3 flex items-baseline justify-between">
