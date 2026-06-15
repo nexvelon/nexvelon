@@ -65,6 +65,7 @@ import {
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import type { ProductPurchaseHistoryRow } from "@/lib/api/purchase-orders";
 import type {
   DbInventoryProduct,
   DbInventoryStock,
@@ -76,10 +77,12 @@ export function ProductDetailClient({
   product,
   stock,
   sites,
+  poHistory,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
   sites: DbSiteWithClient[];
+  poHistory: ProductPurchaseHistoryRow[];
 }) {
   const router = useRouter();
   const { role } = useRole();
@@ -542,6 +545,68 @@ export function ProductDetailClient({
               })}
             </TableBody>
           </Table>
+        </Card>
+      </div>
+
+      {/* PARTS-2: per-part Purchase Order history (read-only). */}
+      <div>
+        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
+          Purchase Orders{" "}
+          <span className="text-muted-foreground font-normal normal-case">
+            ({poHistory.length})
+          </span>
+        </h2>
+        <Card className="bg-card overflow-hidden p-0 shadow-sm">
+          {poHistory.length === 0 ? (
+            <p className="text-muted-foreground p-5 text-xs">
+              This part has never been on a purchase order.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>PO #</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Order date</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  {showCost && (
+                    <TableHead className="text-right">Unit cost</TableHead>
+                  )}
+                  <TableHead className="text-right">Received</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {poHistory.map((r) => (
+                  <TableRow key={`${r.po_id}-${r.po_number}`}>
+                    <TableCell className="text-brand-navy font-mono text-xs font-semibold">
+                      {r.po_number}
+                    </TableCell>
+                    <TableCell className="text-xs">{r.vendor_name}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs capitalize">
+                      {r.status.replace(/_/g, " ")}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {r.order_date
+                        ? format(parseISO(r.order_date), "MMM d, yyyy")
+                        : format(parseISO(r.created_at), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {formatNumber(r.quantity)}
+                    </TableCell>
+                    {showCost && (
+                      <TableCell className="text-right text-xs tabular-nums">
+                        {formatCurrency(r.unit_cost)}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {formatNumber(r.received_qty)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Card>
       </div>
 

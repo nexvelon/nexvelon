@@ -63,6 +63,19 @@ export interface PurchaseOrderDetail {
   lines: PurchaseOrderLineWithProduct[];
 }
 
+/** PARTS-2 — one PO that included a given product, with this product's line. */
+export interface ProductPurchaseHistoryRow {
+  po_id: string;
+  po_number: string;
+  vendor_name: string;
+  status: DbPurchaseOrderStatus;
+  order_date: string | null;
+  created_at: string;
+  quantity: number;
+  unit_cost: number;
+  received_qty: number;
+}
+
 // The header + lines payload used by create/update.
 export interface PurchaseOrderWrite {
   header: DbPurchaseOrderInsert | DbPurchaseOrderUpdate;
@@ -71,6 +84,67 @@ export interface PurchaseOrderWrite {
 
 function lineTotal(l: { quantity: number; unit_cost: number }): number {
   return Number(l.quantity) * Number(l.unit_cost);
+}
+
+/**
+ * PARTS-2 — every PO that included `productId`, newest first, with this
+ * product's ordered qty / unit cost / received qty on each. Reuses the
+ * purchase_order_lines.product_id FK + its index (0031). Returns [] when the
+ * part has never been on a PO.
+ */
+export async function getPurchaseOrdersByProduct(
+  productId: string
+): Promise<ProductPurchaseHistoryRow[]> {
+  const supabase = await db();
+
+  const { data: lines, error: lErr } = await supabase
+    .from("purchase_order_lines")
+    .select("purchase_order_id, quantity, unit_cost, received_qty")
+    .eq("product_id", productId);
+  if (lErr) throw new Error(`getPurchaseOrdersByProduct/lines: ${lErr.message}`);
+  if (!lines || lines.length === 0) return [];
+
+  const poIds = [...new Set(lines.map((l) => l.purchase_order_id as string))];
+  const { data: pos, error: pErr } = await supabase
+    .from("purchase_orders")
+    .select("*")
+    .in("id", poIds);
+  if (pErr) throw new Error(`getPurchaseOrdersByProduct/pos: ${pErr.message}`);
+  const headers = (pos ?? []) as DbPurchaseOrder[];
+  const headerById = new Map(headers.map((h) => [h.id, h]));
+
+  const vendorIds = [...new Set(headers.map((h) => h.vendor_id))];
+  const { data: vendors, error: vErr } = await supabase
+    .from("vendors")
+    .select("id, name")
+    .in("id", vendorIds);
+  if (vErr) throw new Error(`getPurchaseOrdersByProduct/vendors: ${vErr.message}`);
+  const vendorName = new Map(
+    (vendors ?? []).map((v) => [v.id as string, v.name as string])
+  );
+
+  const rows: ProductPurchaseHistoryRow[] = [];
+  for (const l of lines) {
+    const h = headerById.get(l.purchase_order_id as string);
+    if (!h) continue;
+    rows.push({
+      po_id: h.id,
+      po_number: h.po_number,
+      vendor_name: vendorName.get(h.vendor_id) ?? "—",
+      status: h.status,
+      order_date: h.order_date,
+      created_at: h.created_at,
+      quantity: Number(l.quantity),
+      unit_cost: Number(l.unit_cost),
+      received_qty: Number(l.received_qty),
+    });
+  }
+
+  // Newest first by order date (fall back to created_at).
+  rows.sort((a, b) =>
+    (b.order_date ?? b.created_at).localeCompare(a.order_date ?? a.created_at)
+  );
+  return rows;
 }
 
 /**

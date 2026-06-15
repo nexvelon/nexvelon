@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { getProductRowById, listStockForProduct } from "@/lib/api/products";
 import { listSites } from "@/lib/api/clients";
+import { getPurchaseOrdersByProduct } from "@/lib/api/purchase-orders";
 import { ProductDetailClient } from "./ProductDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,18 @@ export default async function ProductDetailPage({
     );
   }
 
-  const [stock, sites] = await Promise.all([
+  const [stock, sites, poHistory] = await Promise.all([
     listStockForProduct(id),
     listSites(),
+    getPurchaseOrdersByProduct(id),
   ]);
 
-  return <ProductDetailClient product={product} stock={stock} sites={sites} />;
+  return (
+    <ProductDetailClient
+      product={product}
+      stock={stock}
+      sites={sites}
+      poHistory={poHistory}
+    />
+  );
 }
