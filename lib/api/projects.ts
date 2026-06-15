@@ -7,6 +7,7 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessProjectNumber, costCenterNumber } from "@/lib/format";
+import { sectionSubtotal, round2 } from "@/lib/quote-helpers";
 import type {
   DbProject,
   DbProjectCostCenter,
@@ -158,6 +159,9 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
       sort_order: i,
       // PROJ-2: provenance — these centers came from the originating quote.
       source_quote_id: quote.id,
+      // INVOICE-1: seed the contracted value from the quote section total; an
+      // invoice draw later pulls a full or partial % of this.
+      contract_value: round2(sectionSubtotal(s)),
     }));
     const { error: ccErr } = await supabase
       .from("project_cost_centers")
@@ -248,6 +252,8 @@ export async function mergeQuoteIntoProject(
       name: s.name || `Cost center ${maxPj + 1 + i}`,
       sort_order: maxSort + 1 + i,
       source_quote_id: quote.id,
+      // INVOICE-1: seed the contracted value from the quote section total.
+      contract_value: round2(sectionSubtotal(s)),
     }));
     const { error: ccErr } = await supabase
       .from("project_cost_centers")
