@@ -75,7 +75,12 @@ import {
   sitesForClient as mockSitesForClient,
 } from "@/lib/mock-data/sites";
 import { users as MOCK_USERS } from "@/lib/mock-data/users";
-import { createProjectFromQuoteAction } from "@/app/(app)/projects/actions";
+import {
+  createProjectFromQuoteAction,
+  listProjectsForClientAction,
+  mergeQuoteIntoProjectAction,
+} from "@/app/(app)/projects/actions";
+import type { MergeCandidate } from "@/lib/api/projects";
 import type {
   BuilderLineItem,
   Client,
@@ -208,6 +213,12 @@ export function QuoteBuilder({
   const [rejectReasonDraft, setRejectReasonDraft] = useState("");
   const [rejectSourceDraft, setRejectSourceDraft] =
     useState<QuoteRejectionSource>("Client");
+  // PROJ-2: convert dialog — New project vs. Add to existing (change order).
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [convertMode, setConvertMode] = useState<"new" | "existing">("new");
+  const [mergeProjectId, setMergeProjectId] = useState("");
+  const [mergeCandidates, setMergeCandidates] = useState<MergeCandidate[]>([]);
+  const [converting, setConverting] = useState(false);
   const [name, setName] = useState(initial.name ?? "");
   const [clientId, setClientId] = useState(initial.clientId ?? "");
   const [siteId, setSiteId] = useState(initial.siteId ?? "");
@@ -833,31 +844,54 @@ export function QuoteBuilder({
         .map((it) => it.id)
     );
 
+  // PROJ-2: Convert now opens a New-vs-Existing dialog. Open it and fetch the
+  // eligible merge targets (same client + same opco) for Mode B.
   const handleConvert = async () => {
     if (status !== "Approved") return;
-    // F-3b: auto-commit any pinned-uncommitted lines before finalizing the
-    // conversion (idempotent — already-committed lines are skipped). Use the
-    // returned sections so the converted quote persists with the markers.
-    const committedSections = await commitLines(
-      pinnedUncommittedLineIds(),
-      "Converted"
-    );
-    // PROJ-1: create the REAL project from this quote (replaces the old fake
-    // NX- code). Done BEFORE flipping the quote so a failure leaves it Approved.
-    const converted = persist("Converted", committedSections);
-    const res = await createProjectFromQuoteAction(converted);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    setConvertMode("new");
+    setMergeProjectId("");
+    setMergeCandidates([]);
+    setConvertOpen(true);
+    if (clientId) {
+      const cands = await listProjectsForClientAction(clientId, templateSlug);
+      setMergeCandidates(cands);
     }
-    // Link the quote to the real project, then flip to Converted (locks it).
-    converted.projectId = res.data.id;
-    upsertQuote(converted);
-    setStatus("Converted");
-    toast.success(`Converted to ${res.data.project_number}`, {
-      description: "Project created and linked. Quote is now read-only.",
-    });
-    router.push(`/projects/${res.data.id}`);
+  };
+
+  // PROJ-2: run the chosen conversion. KEEP the stock-commit; create/merge the
+  // project BEFORE flipping the quote so a failure leaves it Approved.
+  const confirmConvert = async () => {
+    if (status !== "Approved") return;
+    if (convertMode === "existing" && !mergeProjectId) return;
+    setConverting(true);
+    try {
+      const committedSections = await commitLines(
+        pinnedUncommittedLineIds(),
+        "Converted"
+      );
+      const converted = persist("Converted", committedSections);
+      const res =
+        convertMode === "existing"
+          ? await mergeQuoteIntoProjectAction(converted, mergeProjectId)
+          : await createProjectFromQuoteAction(converted);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      converted.projectId = res.data.id;
+      upsertQuote(converted);
+      setStatus("Converted");
+      setConvertOpen(false);
+      toast.success(
+        convertMode === "existing"
+          ? `Added to ${res.data.project_number} as a change order`
+          : `Converted to ${res.data.project_number}`,
+        { description: "Quote is now read-only." }
+      );
+      router.push(`/projects/${res.data.id}`);
+    } finally {
+      setConverting(false);
+    }
   };
 
   return (
@@ -972,6 +1006,102 @@ export function QuoteBuilder({
               className="bg-red-600 text-white hover:bg-red-700"
             >
               Mark as Rejected
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PROJ-2 — convert: New project vs. Add to existing (change order). */}
+      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Convert to project</DialogTitle>
+            <DialogDescription>
+              Create a new project from this quote, or add it to an existing
+              project for the same client and entity as a change order.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="convertMode"
+                className="mt-0.5"
+                checked={convertMode === "new"}
+                onChange={() => setConvertMode("new")}
+              />
+              <span>
+                <span className="font-medium">New project</span>
+                <span className="text-muted-foreground block text-xs">
+                  Mint a fresh P-number; this quote becomes the original.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="convertMode"
+                className="mt-0.5"
+                checked={convertMode === "existing"}
+                disabled={mergeCandidates.length === 0}
+                onChange={() => setConvertMode("existing")}
+              />
+              <span className="flex-1">
+                <span className="font-medium">Add to existing project</span>
+                <span className="text-muted-foreground block text-xs">
+                  Link as a change order; sections add new cost centers.
+                </span>
+              </span>
+            </label>
+            {convertMode === "existing" && (
+              <div className="pl-6">
+                <Select
+                  value={mergeProjectId}
+                  onValueChange={(v) => setMergeProjectId(v ?? "")}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select a project…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mergeCandidates.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">
+                        {p.project_number} — {p.title || "Untitled"} ({p.status})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {mergeCandidates.length === 0 && (
+              <p className="text-muted-foreground pl-6 text-[11px]">
+                No existing projects for this client and entity.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConvertOpen(false)}
+              disabled={converting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={confirmConvert}
+              disabled={
+                converting ||
+                (convertMode === "existing" && !mergeProjectId)
+              }
+            >
+              {converting
+                ? "Converting…"
+                : convertMode === "existing"
+                  ? "Add to project"
+                  : "Create project"}
             </Button>
           </DialogFooter>
         </DialogContent>

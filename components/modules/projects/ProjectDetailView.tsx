@@ -37,6 +37,17 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
   const { role } = useRole();
   const canEdit = hasPermission(role, "quotes", "convert");
 
+  // PROJ-2: quote_id → business number, to label change-order cost centers.
+  const quoteNumberById = new Map(quotes.map((q) => [q.quote_id, q.number]));
+  // A cost center is a change-order center when its source quote differs from
+  // the project's originating quote.
+  const coLabel = (sourceQuoteId: string | null): string | null => {
+    if (!sourceQuoteId || sourceQuoteId === project.originating_quote_id) {
+      return null;
+    }
+    return `CO ${quoteNumberById.get(sourceQuoteId) ?? sourceQuoteId}`;
+  };
+
   const [costCenters, setCostCenters] = useState<DbProjectCostCenter[]>(
     detail.costCenters
   );
@@ -177,6 +188,11 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
                       <span className="text-brand-charcoal flex-1 truncate">
                         {cc.name}
                       </span>
+                      {coLabel(cc.source_quote_id) && (
+                        <span className="text-muted-foreground shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[10px]">
+                          {coLabel(cc.source_quote_id)}
+                        </span>
+                      )}
                       {canEdit && (
                         <div className="flex items-center gap-1">
                           <button
