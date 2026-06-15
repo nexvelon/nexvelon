@@ -9,7 +9,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Unlink } from "lucide-react";
+import { FileText, Plus, Trash2, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
 import type { InvoiceDetail } from "@/lib/api/invoices";
 import type { DbInvoice, DbInvoiceLine } from "@/lib/types/database";
 import { OPCO_LABEL, STATUS_TONE } from "./shared";
+import { InvoicePdfPane } from "./InvoicePdfPane";
 
 function toNum(s: string): number {
   const n = Number(s);
@@ -51,6 +52,7 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
 
   const [invoice, setInvoice] = useState<DbInvoice>(detail.invoice);
   const [lines, setLines] = useState<DbInvoiceLine[]>(detail.lines);
+  const [showPdf, setShowPdf] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const isDraft = invoice.status === "draft";
@@ -190,6 +192,15 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={showPdf ? "secondary" : "outline"}
+              onClick={() => setShowPdf((v) => !v)}
+            >
+              <FileText className="mr-1 h-3.5 w-3.5" />
+              {showPdf ? "Hide PDF" : "Preview PDF"}
+            </Button>
             <span className="bg-muted rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand-primary">
               {OPCO_LABEL[invoice.opco] ?? invoice.opco}
             </span>
@@ -201,6 +212,11 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
           </div>
         </div>
       </Card>
+
+      {/* PDF preview + download — render-on-open; reflects current edits. */}
+      {showPdf && (
+        <InvoicePdfPane detail={{ ...detail, invoice, lines }} />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         {/* Line editor */}
