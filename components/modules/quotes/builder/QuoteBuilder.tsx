@@ -32,6 +32,7 @@ import { SectionCard } from "./SectionCard";
 import { CommandPalette } from "./CommandPalette";
 import { TotalsBar } from "./TotalsBar";
 import { NotesCard, InternalNotesCard } from "./NotesCards";
+import { QuoteHistoryPanel } from "./QuoteHistoryPanel";
 import { ReadOnlyBanner } from "./ReadOnlyBanner";
 import { PdfPreviewPane } from "./PdfPreviewPane";
 
@@ -1160,6 +1161,12 @@ export function QuoteBuilder({
             onChange={setInternalNotes}
             disabled={ro.readOnly}
           />
+
+          {/* AUDIT-1: admin-only, read-only quote history (self-gates to admin).
+              Only on a saved quote — a brand-new one has no audit rows yet. */}
+          {!isNew && (
+            <QuoteHistoryPanel quoteId={String(initial.id)} status={status} />
+          )}
 
           {/* ATTACH-2: quote attachments — only on a saved (persisted) quote */}
           {!isNew ? (

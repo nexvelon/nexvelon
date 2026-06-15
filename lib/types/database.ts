@@ -534,6 +534,20 @@ export interface DbActivityLog {
   created_at: string;
 }
 
+// AUDIT-1 — one row in public.quote_audit_log (migration 0038). Immutable,
+// append-only; written by the service-role client, read admin-only via RLS.
+// 1:1 with the table. `event_type` is "created" | "status_changed" (more in
+// AUDIT-2); `changes` holds { from, to } and, for rejections, reason/source.
+export interface DbQuoteAuditLog {
+  id: string;
+  quote_id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  event_type: string;
+  changes: Record<string, unknown>;
+  created_at: string;
+}
+
 /**
  * Activity log row enriched with the actor's profile slice (for display).
  * `actor` is null when actor_id is null (system action) OR when the
