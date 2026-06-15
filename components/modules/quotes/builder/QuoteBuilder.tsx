@@ -75,7 +75,7 @@ import {
   sitesForClient as mockSitesForClient,
 } from "@/lib/mock-data/sites";
 import { users as MOCK_USERS } from "@/lib/mock-data/users";
-import { projects } from "@/lib/mock-data/projects";
+import { createProjectFromQuoteAction } from "@/app/(app)/projects/actions";
 import type {
   BuilderLineItem,
   Client,
@@ -842,23 +842,22 @@ export function QuoteBuilder({
       pinnedUncommittedLineIds(),
       "Converted"
     );
-    const yearProjects = projects.filter((p) =>
-      p.code.includes(`-${new Date().getFullYear()}-`)
-    );
-    const projectCode = `NX-${new Date().getFullYear()}-${(
-      yearProjects.length +
-      16 +
-      Math.floor(Math.random() * 100)
-    )
-      .toString()
-      .padStart(3, "0")}`;
-    const next = persist("Converted", committedSections);
-    next.projectId = projectCode;
-    upsertQuote(next);
+    // PROJ-1: create the REAL project from this quote (replaces the old fake
+    // NX- code). Done BEFORE flipping the quote so a failure leaves it Approved.
+    const converted = persist("Converted", committedSections);
+    const res = await createProjectFromQuoteAction(converted);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    // Link the quote to the real project, then flip to Converted (locks it).
+    converted.projectId = res.data.id;
+    upsertQuote(converted);
     setStatus("Converted");
-    toast.success(`Converted to ${projectCode}`, {
+    toast.success(`Converted to ${res.data.project_number}`, {
       description: "Project created and linked. Quote is now read-only.",
     });
+    router.push(`/projects/${res.data.id}`);
   };
 
   return (

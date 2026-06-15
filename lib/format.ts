@@ -118,6 +118,34 @@ export function businessPONumber(date: Date = new Date()): string {
   );
 }
 
+/**
+ * PROJ-1 — timestamp-style project number: "P-"+YYMMDDHHMMSS in America/Toronto.
+ * Same second-precision stamp as businessPONumber (uniqueness on convert).
+ * e.g. 2026-06-08 23:45:07 Toronto → "P-260608234507".
+ */
+export function businessProjectNumber(date: Date = new Date()): string {
+  const parts = businessStampSecFmt.formatToParts(date);
+  const get = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return (
+    "P-" +
+    get("year") +
+    get("month") +
+    get("day") +
+    get("hour") +
+    get("minute") +
+    get("second")
+  );
+}
+
+/**
+ * PROJ-1 — a project's nested cost-center number: the project number + a
+ * 2-digit PJ sequence, e.g. "P-260608234507-PJ-01".
+ */
+export function costCenterNumber(projectNumber: string, n: number): string {
+  return `${projectNumber}-PJ-${String(n).padStart(2, "0")}`;
+}
+
 export function formatCurrency(n: number): string {
   return usd2.format(n);
 }
