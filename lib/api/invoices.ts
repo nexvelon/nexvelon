@@ -38,12 +38,29 @@ export interface InvoiceListRow extends DbInvoice {
   project_number: string | null;
 }
 
+/** A named address block — the Bill-To client or the service-location site. */
+export interface InvoiceParty {
+  name: string | null;
+  legal_name: string | null;
+  street: string | null;
+  unit: string | null;
+  city: string | null;
+  province: string | null;
+  postal: string | null;
+  country: string | null;
+}
+
 export interface InvoiceDetail {
   invoice: DbInvoice;
   lines: DbInvoiceLine[];
   client_name: string | null;
   site_name: string | null;
   project_number: string | null;
+  project_title: string | null;
+  /** Bill-To: client + billing address (for the PDF letterhead). */
+  billTo: InvoiceParty | null;
+  /** Service location: site + address, when the invoice has a site. */
+  serviceLocation: InvoiceParty | null;
   /** The project's cost centers, available to pull as lines. */
   costCenters: InvoiceCostCenterOption[];
 }
@@ -93,19 +110,48 @@ export async function listInvoices(): Promise<InvoiceListRow[]> {
   });
 }
 
+// Shapes of the richer client/site joins used by getInvoiceById (for the PDF
+// Bill-To + service-location address blocks).
+type ClientPartyJoin = {
+  name: string;
+  legal_name: string | null;
+  billing_street: string | null;
+  billing_unit: string | null;
+  billing_city: string | null;
+  billing_province: string | null;
+  billing_postal: string | null;
+  billing_country: string | null;
+};
+type SitePartyJoin = {
+  name: string;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+};
+
 export async function getInvoiceById(id: string): Promise<InvoiceDetail | null> {
   const supabase = await db();
   const { data: inv, error } = await supabase
     .from("invoices")
     .select(
-      "*, client:clients(name), site:sites(name), project:projects(project_number)"
+      "*, " +
+        "client:clients(name, legal_name, billing_street, billing_unit, billing_city, billing_province, billing_postal, billing_country), " +
+        "site:sites(name, address_line1, address_line2, city, province, postal_code, country), " +
+        "project:projects(project_number, title)"
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getInvoiceById: ${error.message}`);
   if (!inv) return null;
 
-  const row = inv as InvoiceJoinRow & { site: { name: string } | null };
+  const row = inv as unknown as DbInvoice & {
+    client: ClientPartyJoin | null;
+    site: SitePartyJoin | null;
+    project: { project_number: string; title: string | null } | null;
+  };
   const { client, site, project, ...invoice } = row;
 
   // The project's cost centers are the menu of draws this invoice can pull.
@@ -122,12 +168,41 @@ export async function getInvoiceById(id: string): Promise<InvoiceDetail | null> 
 
   const lines = await fetchLines(supabase, id);
 
+  const billTo: InvoiceParty | null = client
+    ? {
+        name: client.name,
+        legal_name: client.legal_name,
+        street: client.billing_street,
+        unit: client.billing_unit,
+        city: client.billing_city,
+        province: client.billing_province,
+        postal: client.billing_postal,
+        country: client.billing_country,
+      }
+    : null;
+
+  const serviceLocation: InvoiceParty | null = site
+    ? {
+        name: site.name,
+        legal_name: null,
+        street: site.address_line1,
+        unit: site.address_line2,
+        city: site.city,
+        province: site.province,
+        postal: site.postal_code,
+        country: site.country,
+      }
+    : null;
+
   return {
     invoice: invoice as DbInvoice,
     lines,
     client_name: client?.name ?? null,
     site_name: site?.name ?? null,
     project_number: project?.project_number ?? null,
+    project_title: project?.title ?? null,
+    billTo,
+    serviceLocation,
     costCenters,
   };
 }

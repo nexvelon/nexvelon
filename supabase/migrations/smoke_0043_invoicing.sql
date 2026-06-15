@@ -65,10 +65,10 @@ INSERT INTO smoke_results SELECT 'invoices.invoice_number is UNIQUE',
     JOIN pg_class t ON t.oid=c.conrelid
     JOIN pg_namespace n ON n.oid=t.relnamespace
     WHERE n.nspname='public' AND t.relname='invoices' AND c.contype='u'
-      AND (SELECT array_agg(att.attname ORDER BY att.attnum)
+      AND (SELECT array_agg(att.attname::text ORDER BY att.attnum)
            FROM unnest(c.conkey) k
            JOIN pg_attribute att ON att.attrelid=c.conrelid AND att.attnum=k)
-          = ARRAY['invoice_number'])
+          = ARRAY['invoice_number']::text[])
   THEN 'PASS' ELSE 'FAIL' END;
 -- FK column types
 INSERT INTO smoke_results SELECT 'invoices.project_id is uuid',
