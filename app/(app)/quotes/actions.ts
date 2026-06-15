@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/quote-audit";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { diffQuote } from "@/lib/quote-audit-diff";
 import type { Quote } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
@@ -77,21 +78,36 @@ export async function upsertQuoteAction(
           eventType: "created",
           changes: { status: { from: null, to: saved.status } },
         });
-      } else if (prior.status !== saved.status) {
-        const changes: Record<string, unknown> = {
-          status: { from: prior.status, to: saved.status },
-        };
-        if (saved.status === "Rejected") {
-          changes.rejectionReason = saved.rejectionReason ?? null;
-          changes.rejectionSource = saved.rejectionSource ?? null;
+      } else {
+        // AUDIT-1: status transition (its own event).
+        if (prior.status !== saved.status) {
+          const changes: Record<string, unknown> = {
+            status: { from: prior.status, to: saved.status },
+          };
+          if (saved.status === "Rejected") {
+            changes.rejectionReason = saved.rejectionReason ?? null;
+            changes.rejectionSource = saved.rejectionSource ?? null;
+          }
+          await logQuoteAuditEvent({
+            quoteId: quote.id,
+            actorId: actor.id,
+            actorName: actor.name,
+            eventType: "status_changed",
+            changes,
+          });
         }
-        await logQuoteAuditEvent({
-          quoteId: quote.id,
-          actorId: actor.id,
-          actorName: actor.name,
-          eventType: "status_changed",
-          changes,
-        });
+        // AUDIT-2: content diff. ONE "updated" event per save listing every
+        // change. A single save may emit BOTH status_changed AND updated.
+        const contentChanges = diffQuote(prior, saved);
+        if (contentChanges.length > 0) {
+          await logQuoteAuditEvent({
+            quoteId: quote.id,
+            actorId: actor.id,
+            actorName: actor.name,
+            eventType: "updated",
+            changes: { items: contentChanges },
+          });
+        }
       }
     } catch (auditErr) {
       console.error("[quote_audit_log] event logging failed:", auditErr);
