@@ -146,6 +146,27 @@ export function costCenterNumber(projectNumber: string, n: number): string {
   return `${projectNumber}-PJ-${String(n).padStart(2, "0")}`;
 }
 
+/**
+ * INVOICE-1 — per-entity invoice-number prefix. Each opco numbers its invoices
+ * on its OWN gapless counter (next_invoice_seq), so the prefixes never collide:
+ *   guardian             → "GIN" (Guardian Invoice Number)
+ *   integrated_solutions → "NIS" (Nexvelon Integrated Solutions)
+ */
+const INVOICE_PREFIX: Record<string, string> = {
+  guardian: "GIN",
+  integrated_solutions: "NIS",
+};
+
+/**
+ * INVOICE-1 — a per-entity invoice number from an opco + a counter sequence,
+ * e.g. ("guardian", 1) → "GIN-0001". The sequence is minted only on ISSUE
+ * (rpc next_invoice_seq), so deleted drafts never burn a number.
+ */
+export function formatInvoiceNumber(opco: string, seq: number): string {
+  const prefix = INVOICE_PREFIX[opco] ?? "INV";
+  return `${prefix}-${String(seq).padStart(4, "0")}`;
+}
+
 export function formatCurrency(n: number): string {
   return usd2.format(n);
 }

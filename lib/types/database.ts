@@ -802,6 +802,9 @@ export interface DbProjectCostCenter {
   // PROJ-2 (migration 0042) — the quote this cost center came from (original
   // or change-order). text FK to quotes.id.
   source_quote_id: string | null;
+  // INVOICE-1 (migration 0043) — the section's contracted value, seeded from
+  // the originating quote section total. An invoice draw pulls a % of this.
+  contract_value: number;
   created_at: string;
   updated_at: string;
 }
@@ -812,10 +815,106 @@ export type DbProjectCostCenterInsert = {
   name: string;
   sort_order?: number;
   source_quote_id?: string | null;
+  contract_value?: number;
 };
 
 export type DbProjectCostCenterUpdate = Partial<
   Omit<DbProjectCostCenterInsert, "project_id">
+>;
+
+// ----------------------------------------------------------------------------
+// Invoicing (INVOICE-1, migration 0043) — header + flexible lines.
+//   invoices       — per-entity number (nullable until issued, then unique),
+//                    project/client/site FKs (uuid), tax + holdback rates, and
+//                    computed money columns recomputed on every line/setting
+//                    change. opco drives the GIN-/NIS- number minted on issue.
+//   invoice_lines  — manual OR sourced from a project_cost_centers row at a
+//                    full/partial % (progress/deposit). Sourced lines stay
+//                    editable; unlinking flips source_type back to 'manual'.
+// ----------------------------------------------------------------------------
+export type DbInvoiceStatus = "draft" | "sent" | "paid" | "void";
+
+export interface DbInvoice {
+  id: string;
+  invoice_number: string | null;
+  opco: string;
+  project_id: string | null;
+  client_id: string;
+  site_id: string | null;
+  status: string;
+  issue_date: string | null;
+  due_date: string | null;
+  currency: string;
+  tax_rate: number;
+  tax_exempt: boolean;
+  holdback_rate: number;
+  subtotal: number;
+  tax_amount: number;
+  holdback_amount: number;
+  total: number;
+  amount_due: number;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbInvoiceInsert = {
+  invoice_number?: string | null;
+  opco: string;
+  project_id?: string | null;
+  client_id: string;
+  site_id?: string | null;
+  status?: string;
+  issue_date?: string | null;
+  due_date?: string | null;
+  currency?: string;
+  tax_rate?: number;
+  tax_exempt?: boolean;
+  holdback_rate?: number;
+  subtotal?: number;
+  tax_amount?: number;
+  holdback_amount?: number;
+  total?: number;
+  amount_due?: number;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbInvoiceUpdate = Partial<DbInvoiceInsert>;
+
+export type DbInvoiceLineSourceType = "manual" | "cost_center";
+
+export interface DbInvoiceLine {
+  id: string;
+  invoice_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  source_type: string; // 'manual' | 'cost_center'
+  source_id: string | null;
+  source_pct: number | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export type DbInvoiceLineInsert = {
+  invoice_id: string;
+  description?: string;
+  quantity?: number;
+  unit_price?: number;
+  amount?: number;
+  source_type?: string;
+  source_id?: string | null;
+  source_pct?: number | null;
+  sort_order?: number;
+};
+
+export type DbInvoiceLineUpdate = Partial<
+  Omit<DbInvoiceLineInsert, "invoice_id">
 >;
 
 // ----------------------------------------------------------------------------

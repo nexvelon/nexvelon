@@ -4,21 +4,30 @@
 // opco, status) + Cost Centers (add / rename / delete) + linked Quotes. The
 // richer Tasks/Schedule/Materials/etc. tabs are future domain — not wired here.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Pencil, Plus, Trash2, Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { format, parseISO } from "date-fns";
+import { Pencil, Plus, Trash2, Check, X, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
+import { formatCurrency } from "@/lib/format";
 import {
   addCostCenterAction,
   renameCostCenterAction,
   deleteCostCenterAction,
 } from "@/app/(app)/projects/actions";
+import {
+  createInvoiceForProjectAction,
+  listInvoicesForProjectAction,
+} from "@/app/(app)/invoices/actions";
+import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
+import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { DbProjectCostCenter } from "@/lib/types/database";
 
 const OPCO_LABEL: Record<string, string> = {
@@ -35,7 +44,36 @@ function roleLabel(role: string): string {
 export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
   const { project, client_name, site_name, quotes } = detail;
   const { role } = useRole();
+  const router = useRouter();
   const canEdit = hasPermission(role, "quotes", "convert");
+  // Invoicing is financial-sensitive — gated separately from project edits.
+  const canInvoice = hasPermission(role, "financials", "edit");
+
+  const [invoices, setInvoices] = useState<InvoiceListRow[]>([]);
+  useEffect(() => {
+    let active = true;
+    listInvoicesForProjectAction(project.id)
+      .then((rows) => {
+        if (active) setInvoices(rows);
+      })
+      .catch(() => {
+        /* leave empty */
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
+
+  const handleCreateInvoice = () => {
+    startTransition(async () => {
+      const res = await createInvoiceForProjectAction(project.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      router.push(`/invoices/${res.data.id}`);
+    });
+  };
 
   // PROJ-2: quote_id → business number, to label change-order cost centers.
   const quoteNumberById = new Map(quotes.map((q) => [q.quote_id, q.number]));
@@ -242,6 +280,63 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
                 Add
               </Button>
             </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Invoices */}
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="nx-eyebrow-soft">
+            Invoices{" "}
+            <span className="text-muted-foreground font-normal normal-case">
+              · {invoices.length}
+            </span>
+          </p>
+          {canInvoice && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleCreateInvoice}
+              disabled={pending}
+            >
+              <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
+              Create invoice
+            </Button>
+          )}
+        </div>
+        <Card className="bg-card p-0 shadow-sm">
+          {invoices.length === 0 ? (
+            <p className="text-muted-foreground p-4 text-xs">
+              No invoices yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--border)]">
+              {invoices.map((inv) => (
+                <li key={inv.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <Link
+                    href={`/invoices/${inv.id}`}
+                    className="text-brand-navy font-mono text-xs font-semibold hover:underline"
+                  >
+                    {inv.invoice_number ?? "Draft"}
+                  </Link>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {inv.issue_date
+                      ? format(parseISO(inv.issue_date), "MMM d, yyyy")
+                      : "—"}
+                  </span>
+                  <span
+                    className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide capitalize ${STATUS_TONE[inv.status] ?? STATUS_TONE.draft}`}
+                  >
+                    {inv.status}
+                  </span>
+                  <span className="text-brand-charcoal w-24 text-right text-xs font-semibold tabular-nums">
+                    {formatCurrency(Number(inv.total))}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>
