@@ -406,6 +406,50 @@ export async function receiveStock(
   return { created: data?.length ?? 0 };
 }
 
+// PART-DETAIL B2 — manual stock-add (no PO). Creates ONE inventory_stock row
+// at status 'in_stock' with no po_number. acquired_at is OPTIONAL and is NOT
+// force-stamped to today (unlike receiveStock) — blank stays null.
+export type AddManualStockInput = {
+  quantity: number;
+  unit_cost: number;
+  location?: string | null;
+  acquired_at?: string | null;
+};
+
+export async function addManualStock(
+  productId: string,
+  input: AddManualStockInput
+): Promise<{ id: string }> {
+  if (!Number.isFinite(input.quantity) || input.quantity < 1) {
+    throw new Error("addManualStock: quantity must be a positive integer.");
+  }
+  if (!Number.isFinite(input.unit_cost) || input.unit_cost < 0) {
+    throw new Error("addManualStock: unit cost must be zero or greater.");
+  }
+
+  const product = await getProductRowById(productId);
+  if (!product) throw new Error("addManualStock: product not found.");
+
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .insert({
+      product_id: productId,
+      unit_cost: input.unit_cost,
+      quantity: input.quantity,
+      location: input.location ?? null,
+      status: "in_stock" as const,
+      po_number: null,
+      serial_number: null,
+      // OPTIONAL — not defaulted to today; blank stays null.
+      acquired_at: input.acquired_at ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`addManualStock: ${error.message}`);
+  return { id: (data as { id: string }).id };
+}
+
 /** Patch a stock unit (status flips, etc.). Stamps updated_at. */
 export async function updateStockUnit(
   id: string,
