@@ -92,6 +92,26 @@ function lineTotal(l: { quantity: number; unit_cost: number }): number {
  * purchase_order_lines.product_id FK + its index (0031). Returns [] when the
  * part has never been on a PO.
  */
+// REORDER-1 — the vendor on this product's most recent PO, to prefill the
+// Reorder dialog's vendor picker. Null when the part has never been ordered.
+export async function getLastVendorIdForProduct(
+  productId: string
+): Promise<string | null> {
+  const supabase = await db();
+  const { data: lines, error } = await supabase
+    .from("purchase_order_lines")
+    .select("purchase_order:purchase_orders(vendor_id, created_at)")
+    .eq("product_id", productId);
+  if (error) throw new Error(`getLastVendorIdForProduct: ${error.message}`);
+  const pos = ((lines ?? []) as unknown as {
+    purchase_order: { vendor_id: string; created_at: string } | null;
+  }[])
+    .map((l) => l.purchase_order)
+    .filter((p): p is { vendor_id: string; created_at: string } => !!p)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return pos[0]?.vendor_id ?? null;
+}
+
 export async function getPurchaseOrdersByProduct(
   productId: string
 ): Promise<ProductPurchaseHistoryRow[]> {
