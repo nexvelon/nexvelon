@@ -52,12 +52,14 @@ import {
 } from "@/components/ui/select";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
+import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
   allocateUnitAction,
   deleteProductAction,
+  deleteReceivedPurchaseOrderAction,
   deleteStockUnitAction,
   returnUnitAction,
   updateStockUnitAction,
@@ -92,6 +94,7 @@ export function ProductDetailClient({
 
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [addStockOpen, setAddStockOpen] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
@@ -160,6 +163,33 @@ export function ProductDetailClient({
         return;
       }
       toast.success("Stock unit deleted");
+      router.refresh();
+    });
+  };
+
+  // PART-DETAIL B2 (item 15): reverse a whole received PO (by its po_number).
+  const removeReceivedPO = (poNumber: string) => {
+    if (
+      !window.confirm(
+        `Reverse the entire received PO ${poNumber}?\n\nThis removes all in-stock units from that receipt and resets the PO's received quantities. If any units are already allocated, consumed, or retired, the action is blocked.`
+      )
+    ) {
+      return;
+    }
+    startUnitAction(async () => {
+      const result = await deleteReceivedPurchaseOrderAction(
+        poNumber,
+        product.id
+      );
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        `Reversed PO ${result.data.poNumber} — removed ${result.data.deletedRows} unit${
+          result.data.deletedRows === 1 ? "" : "s"
+        }`
+      );
       router.refresh();
     });
   };
@@ -333,6 +363,16 @@ export function ProductDetailClient({
         </dl>
       </Card>
 
+      {/* ATTACH-1 / PART-DETAIL B2 (item 8): product documents, ABOVE stock.
+          Four independently-uploadable folders. */}
+      <AttachmentsSection
+        entityType="product"
+        entityId={product.id}
+        folders={["Shop Drawings", "Data Sheets", "Manual", "Misc"]}
+        allowCustomFolders={false}
+        title="Documents"
+      />
+
       {/* Stock units */}
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -342,10 +382,22 @@ export function ProductDetailClient({
               ({stock.length})
             </span>
           </h2>
-          <Button size="sm" onClick={() => setReceiveOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            Receive stock
-          </Button>
+          <div className="flex items-center gap-2">
+            {canDelete && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAddStockOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add stock
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setReceiveOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Receive stock
+            </Button>
+          </div>
         </div>
         <Card className="bg-card overflow-hidden p-0 shadow-sm">
           <Table>
@@ -456,12 +508,12 @@ export function ProductDetailClient({
                                         : "—"}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-xs">
-                                      {s.acquired_at
-                                        ? format(
-                                            parseISO(s.acquired_at),
-                                            "MMM d, yyyy"
-                                          )
-                                        : "—"}
+                                      {/* PART-DETAIL B2: show acquired_at, fall
+                                          back to created_at when unset. */}
+                                      {format(
+                                        parseISO(s.acquired_at ?? s.created_at),
+                                        "MMM d, yyyy"
+                                      )}
                                     </TableCell>
                                     <TableCell>
                                       <DropdownMenu>
@@ -529,6 +581,17 @@ export function ProductDetailClient({
                                           >
                                             Delete unit
                                           </DropdownMenuItem>
+                                          {canDelete && s.po_number && (
+                                            <DropdownMenuItem
+                                              className="text-red-600 focus:text-red-700"
+                                              onClick={() =>
+                                                removeReceivedPO(s.po_number!)
+                                              }
+                                            >
+                                              Delete entire received PO (
+                                              {s.po_number})
+                                            </DropdownMenuItem>
+                                          )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     </TableCell>
@@ -610,15 +673,6 @@ export function ProductDetailClient({
         </Card>
       </div>
 
-      {/* ATTACH-1: product documents */}
-      <AttachmentsSection
-        entityType="product"
-        entityId={product.id}
-        folders={["Shop Drawings", "Data Sheets"]}
-        allowCustomFolders={false}
-        title="Documents"
-      />
-
       <ReceiveStockForm
         productId={product.id}
         trackingMode={product.tracking_mode}
@@ -626,6 +680,16 @@ export function ProductDetailClient({
         onOpenChange={setReceiveOpen}
         onReceived={() => {
           setReceiveOpen(false);
+          router.refresh();
+        }}
+      />
+
+      <AddStockForm
+        productId={product.id}
+        open={addStockOpen}
+        onOpenChange={setAddStockOpen}
+        onAdded={() => {
+          setAddStockOpen(false);
           router.refresh();
         }}
       />

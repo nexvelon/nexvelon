@@ -500,6 +500,84 @@ export async function receivePurchaseOrderLines(
   return header;
 }
 
+// PART-DETAIL B2 — reverse an entire received PO (item 15). Identified by its
+// po_number (the stamp every receipt row carries — there is no po_id on stock).
+//   • Removes all inventory_stock rows for that po_number, then zeroes the PO's
+//     received_qty and returns its status to 'issued' (the pre-receipt state).
+//   • GUARD: if any of those units have left 'in_stock' (allocated / consumed /
+//     retired), the action is BLOCKED entirely with a message naming what's in
+//     use — nothing is deleted, so allocated/consumed stock is never corrupted.
+export interface DeleteReceiptResult {
+  poNumber: string;
+  deletedRows: number;
+}
+
+export async function deleteReceivedPurchaseOrder(
+  poNumber: string
+): Promise<DeleteReceiptResult> {
+  const supabase = await db();
+
+  const { data: poRow, error: poErr } = await supabase
+    .from("purchase_orders")
+    .select("id, po_number")
+    .eq("po_number", poNumber)
+    .maybeSingle();
+  if (poErr) throw new Error(`deleteReceivedPurchaseOrder: ${poErr.message}`);
+  if (!poRow) throw new Error(`Purchase order ${poNumber} not found.`);
+  const poId = (poRow as { id: string }).id;
+
+  // All stock rows from this receipt.
+  const { data: stockRows, error: sErr } = await supabase
+    .from("inventory_stock")
+    .select("id, status")
+    .eq("po_number", poNumber);
+  if (sErr) throw new Error(`deleteReceivedPurchaseOrder/stock: ${sErr.message}`);
+  const rows = (stockRows ?? []) as { id: string; status: string }[];
+
+  // Guard: block if any unit has left 'in_stock' (would corrupt jobs/sites).
+  const inUse = rows.filter((r) => r.status !== "in_stock");
+  if (inUse.length > 0) {
+    const counts = inUse.reduce<Record<string, number>>((acc, r) => {
+      acc[r.status] = (acc[r.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    const breakdown = Object.entries(counts)
+      .map(([s, n]) => `${n} ${s.replace("_", " ")}`)
+      .join(", ");
+    throw new Error(
+      `Can't reverse PO ${poNumber}: ${inUse.length} unit(s) are still in use ` +
+        `(${breakdown}). Return or restore them to stock first, then retry.`
+    );
+  }
+
+  // Safe to delete every receipt row.
+  if (rows.length > 0) {
+    const { error: delErr } = await supabase
+      .from("inventory_stock")
+      .delete()
+      .eq("po_number", poNumber);
+    if (delErr)
+      throw new Error(`deleteReceivedPurchaseOrder/delete: ${delErr.message}`);
+  }
+
+  // Zero this PO's received quantities and return it to the ordered state.
+  const { error: lineErr } = await supabase
+    .from("purchase_order_lines")
+    .update({ received_qty: 0 })
+    .eq("purchase_order_id", poId);
+  if (lineErr)
+    throw new Error(`deleteReceivedPurchaseOrder/lines: ${lineErr.message}`);
+
+  const { error: stErr } = await supabase
+    .from("purchase_orders")
+    .update({ status: "issued" })
+    .eq("id", poId);
+  if (stErr)
+    throw new Error(`deleteReceivedPurchaseOrder/status: ${stErr.message}`);
+
+  return { poNumber, deletedRows: rows.length };
+}
+
 /** Delete a PO (lines cascade via FK). Returns true when a row was removed. */
 export async function deletePurchaseOrder(id: string): Promise<boolean> {
   const supabase = await db();

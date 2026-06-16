@@ -12,6 +12,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  addManualStock,
   allocateUnitToSite,
   bulkCreateProducts,
   consumeStock,
@@ -26,9 +27,11 @@ import {
   returnUnitToStock,
   updateProduct,
   updateStockUnit,
+  type AddManualStockInput,
   type InventoryReportData,
   type ReceiveStockInput,
 } from "@/lib/api/products";
+import { deleteReceivedPurchaseOrder } from "@/lib/api/purchase-orders";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
@@ -259,6 +262,58 @@ export async function importProductsAction(
 }
 
 // ── Stock units (INV-2d) ───────────────────────────────────────────────────
+
+// PART-DETAIL B2: admin-level gate for the new destructive/manual stock ops,
+// reusing the same inventory:delete permission that gates product deletion.
+async function requireInventoryAdmin(): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "inventory", "delete")) {
+    return "You don't have permission to manage stock.";
+  }
+  return null;
+}
+
+// PART-DETAIL B2 (item 14): manual stock-add — no PO required, date optional.
+export async function addManualStockAction(
+  productId: string,
+  input: AddManualStockInput
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const denied = await requireInventoryAdmin();
+    if (denied) return { ok: false, error: denied };
+    const result = await addManualStock(productId, input);
+    await logActivity("inventory", productId, "update", {
+      manual_stock_added: { from: null, to: result.id },
+    });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// PART-DETAIL B2 (item 15): reverse an entire received PO. Gated admin-level;
+// blocks when any unit has left stock (clear message), never partial-corrupts.
+export async function deleteReceivedPurchaseOrderAction(
+  poNumber: string,
+  productId: string
+): Promise<ActionResult<{ deletedRows: number; poNumber: string }>> {
+  try {
+    const denied = await requireInventoryAdmin();
+    if (denied) return { ok: false, error: denied };
+    const result = await deleteReceivedPurchaseOrder(poNumber);
+    await logActivity("inventory", productId, "update", {
+      receipt_reversed: { from: poNumber, to: null },
+    });
+    revalidatePath(`/inventory/${productId}`);
+    revalidatePath("/inventory");
+    revalidatePath("/purchase-orders");
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
 
 export async function receiveStockAction(
   productId: string,
