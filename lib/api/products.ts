@@ -42,6 +42,7 @@ import type {
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { getDefaultWarehouse } from "@/lib/api/stock-locations";
 import { recordOriginMovement } from "@/lib/api/stock-movements";
+import { isSerializedProduct } from "@/lib/inventory-serial";
 
 async function db() {
   return createSupabaseServerClient();
@@ -435,20 +436,23 @@ export async function receiveStock(
   return { created: created.length };
 }
 
-// PART-DETAIL B2 — manual stock-add (no PO). Creates ONE inventory_stock row
-// at status 'in_stock' with no po_number. acquired_at is OPTIONAL and is NOT
+// PART-DETAIL B2 — manual stock-add (no PO). Creates inventory_stock row(s) at
+// status 'in_stock' with no po_number. acquired_at is OPTIONAL and is NOT
 // force-stamped to today (unlike receiveStock) — blank stays null.
+// SERIAL-1: a SERIALIZED part creates N rows of quantity 1, each requiring a
+// serial; a non-serialized part is unchanged (one quantity-N row, no serial).
 export type AddManualStockInput = {
   quantity: number;
   unit_cost: number;
   location?: string | null;
   acquired_at?: string | null;
+  serials?: string[]; // serialized only; one per unit
 };
 
 export async function addManualStock(
   productId: string,
   input: AddManualStockInput
-): Promise<{ id: string }> {
+): Promise<{ created: number; id: string }> {
   if (!Number.isFinite(input.quantity) || input.quantity < 1) {
     throw new Error("addManualStock: quantity must be a positive integer.");
   }
@@ -462,39 +466,62 @@ export async function addManualStock(
   const supabase = await db();
   // MOVE-1 (CHANGE 5): manual stock lands in the default Main Warehouse.
   const warehouse = await getDefaultWarehouse();
-  const { data, error } = await supabase
-    .from("inventory_stock")
-    .insert({
-      product_id: productId,
-      unit_cost: input.unit_cost,
-      quantity: input.quantity,
-      location: input.location ?? null,
-      status: "in_stock" as const,
-      po_number: null,
-      serial_number: null,
-      // OPTIONAL — not defaulted to today; blank stays null.
-      acquired_at: input.acquired_at ?? null,
-      current_location_id: warehouse?.id ?? null,
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(`addManualStock: ${error.message}`);
-  const id = (data as { id: string }).id;
+  const serialized = isSerializedProduct(product);
 
-  // Append an origin movement (manual → warehouse).
-  if (warehouse) {
-    await recordOriginMovement({
-      productId,
-      stockId: id,
-      quantity: input.quantity,
-      fromType: "manual",
-      fromLabel: "Manual add",
-      toLocationId: warehouse.id,
-      toLabel: warehouse.name,
-    });
+  const base = {
+    product_id: productId,
+    unit_cost: input.unit_cost,
+    location: input.location ?? null,
+    status: "in_stock" as const,
+    po_number: null,
+    // OPTIONAL — not defaulted to today; blank stays null.
+    acquired_at: input.acquired_at ?? null,
+    current_location_id: warehouse?.id ?? null,
+  };
+
+  let toInsert: DbInventoryStockInsert[];
+  if (serialized) {
+    // SERIAL-1: one row per unit, each with its serial (required).
+    const serials = (input.serials ?? []).map((s) => s.trim());
+    if (serials.length !== input.quantity || serials.some((s) => s === "")) {
+      throw new Error(
+        `A serial number is required for each of the ${input.quantity} unit${
+          input.quantity === 1 ? "" : "s"
+        }.`
+      );
+    }
+    toInsert = serials.map((serial) => ({
+      ...base,
+      serial_number: serial,
+      quantity: 1,
+    }));
+  } else {
+    toInsert = [{ ...base, serial_number: null, quantity: input.quantity }];
   }
 
-  return { id };
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .insert(toInsert)
+    .select("id, quantity");
+  if (error) throw new Error(`addManualStock: ${error.message}`);
+  const created = (data ?? []) as { id: string; quantity: number }[];
+
+  // Append an origin movement (manual → warehouse) per created row.
+  if (warehouse) {
+    for (const row of created) {
+      await recordOriginMovement({
+        productId,
+        stockId: row.id,
+        quantity: Number(row.quantity),
+        fromType: "manual",
+        fromLabel: "Manual add",
+        toLocationId: warehouse.id,
+        toLabel: warehouse.name,
+      });
+    }
+  }
+
+  return { created: created.length, id: created[0]?.id ?? "" };
 }
 
 /** Patch a stock unit (status flips, etc.). Stamps updated_at. */
@@ -503,6 +530,26 @@ export async function updateStockUnit(
   patch: DbInventoryStockUpdate
 ): Promise<void> {
   const supabase = await db();
+
+  // SERIAL-1 (CHANGE 5): a serialized part's rows are always quantity 1, so a
+  // unit can never be split. Block any attempt to set quantity > 1 on a row
+  // whose product is serialized.
+  if (patch.quantity !== undefined && Number(patch.quantity) > 1) {
+    const { data: row } = await supabase
+      .from("inventory_stock")
+      .select("product:inventory_products(is_serialized, tracking_mode)")
+      .eq("id", id)
+      .maybeSingle();
+    const prod = (row as {
+      product: { is_serialized: boolean; tracking_mode: string } | null;
+    } | null)?.product;
+    if (prod && isSerializedProduct(prod)) {
+      throw new Error(
+        "A serialized part's units are always quantity 1 — they can't be combined."
+      );
+    }
+  }
+
   const { error } = await supabase
     .from("inventory_stock")
     .update({ ...patch, updated_at: new Date().toISOString() })

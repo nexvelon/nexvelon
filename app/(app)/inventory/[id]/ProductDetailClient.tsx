@@ -54,6 +54,7 @@ import {
 } from "@/app/(app)/inventory/actions";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
+import { isSerializedProduct } from "@/lib/inventory-serial";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { ProductPurchaseHistoryRow } from "@/lib/api/purchase-orders";
 import type {
@@ -89,6 +90,8 @@ export function ProductDetailClient({
   const canDelete = hasPermission(role, "inventory", "delete");
   // MOVE-1: moving/assigning stock is an operational op (Admin + PM).
   const canMove = hasPermission(role, "inventory", "edit");
+  // SERIAL-1: serialized parts intake one row per unit, each with a serial.
+  const isSerialized = isSerializedProduct(product);
 
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -353,11 +356,19 @@ export function ProductDetailClient({
       {/* Stock units */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          <h2 className="text-brand-navy flex items-center gap-2 text-sm font-semibold tracking-wide uppercase">
             Stock units{" "}
             <span className="text-muted-foreground font-normal">
               ({stock.length})
             </span>
+            {isSerialized && (
+              <Badge
+                variant="outline"
+                className="text-brand-navy border-brand-navy/30 text-[10px] font-medium normal-case"
+              >
+                Serialized
+              </Badge>
+            )}
           </h2>
           <div className="flex items-center gap-2">
             {canDelete && (
@@ -721,6 +732,7 @@ export function ProductDetailClient({
 
       <AddStockForm
         productId={product.id}
+        isSerialized={isSerialized}
         open={addStockOpen}
         onOpenChange={setAddStockOpen}
         onAdded={() => {

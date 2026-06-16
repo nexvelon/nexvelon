@@ -19,15 +19,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { addManualStockAction } from "@/app/(app)/inventory/actions";
 
 export function AddStockForm({
   productId,
+  isSerialized = false,
   open,
   onOpenChange,
   onAdded,
 }: {
   productId: string;
+  // SERIAL-1: serialized parts intake one row per unit, each requiring a serial.
+  isSerialized?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdded: () => void;
@@ -37,6 +41,7 @@ export function AddStockForm({
   const [location, setLocation] = useState("");
   // Optional — blank by default; not force-stamped to today.
   const [acquiredAt, setAcquiredAt] = useState("");
+  const [serials, setSerials] = useState("");
   const [pending, startTransition] = useTransition();
 
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
@@ -61,6 +66,7 @@ export function AddStockForm({
     setUnitCost("");
     setLocation("");
     setAcquiredAt("");
+    setSerials("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -77,12 +83,27 @@ export function AddStockForm({
       return;
     }
 
+    // SERIAL-1: serialized parts require exactly one serial per unit.
+    const serialList = isSerialized
+      ? serials
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+    if (isSerialized && serialList.length !== qty) {
+      toast.error(
+        `Enter exactly ${qty} serial number${qty === 1 ? "" : "s"}, one per line.`
+      );
+      return;
+    }
+
     startTransition(async () => {
       const result = await addManualStockAction(productId, {
         quantity: qty,
         unit_cost: cost,
         location: location.trim() || null,
         acquired_at: acquiredAt || null,
+        serials: isSerialized ? serialList : undefined,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -102,6 +123,9 @@ export function AddStockForm({
           <DialogDescription>
             Add stock directly, with no purchase order. The acquired date is
             optional — leave it blank if unknown.
+            {isSerialized
+              ? " This is a serialized part — add one serial per unit."
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -155,6 +179,24 @@ export function AddStockForm({
               />
             </div>
           </div>
+
+          {isSerialized && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                Serial numbers (one per line)<span className="text-red-500"> *</span>
+              </Label>
+              <Textarea
+                value={serials}
+                onChange={(e) => setSerials(e.target.value)}
+                rows={3}
+                placeholder={"SN-0001\nSN-0002\nSN-0003"}
+              />
+              <p className="text-muted-foreground text-[11px] leading-snug">
+                One serial per unit — must match the quantity above. Each becomes
+                its own tracked unit.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button
