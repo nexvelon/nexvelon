@@ -13,7 +13,6 @@
 import { revalidatePath } from "next/cache";
 import {
   addManualStock,
-  allocateUnitToSite,
   bulkCreateProducts,
   consumeStock,
   createProduct,
@@ -372,23 +371,10 @@ export async function deleteStockUnitAction(
 
 // ── Site allocation (INV-3b) ───────────────────────────────────────────────
 
-export async function allocateUnitAction(
-  stockId: string,
-  productId: string,
-  siteId: string
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    await allocateUnitToSite(stockId, siteId);
-    await logActivity("inventory", productId, "update", {
-      allocated_to: { from: null, to: siteId },
-    });
-    revalidatePath(`/inventory/${productId}`);
-    revalidatePath("/inventory");
-    return { ok: true, data: { id: stockId } };
-  } catch (e) {
-    return fail(e);
-  }
-}
+// ASSIGN-LOCK (item 16a): allocateUnitAction is REMOVED — a part can no longer
+// be assigned directly to a site. Job / cost-center assignment lands with the
+// movement ledger (Batch D). returnUnitAction is kept so historically
+// site-allocated units can still be returned to stock.
 
 export async function returnUnitAction(
   stockId: string,

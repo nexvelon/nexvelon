@@ -4,11 +4,14 @@
 // fields with Edit (swaps in the shared ProductForm) and Delete (friendly
 // RESTRICT error surfaced as a toast). Below: the product's stock units with
 // per-unit lifecycle actions —
-//   • in_stock  → Allocate to site (site-picker dialog) · Mark consumed ·
-//                 Mark retired · Delete
+//   • in_stock  → Mark consumed · Mark retired · Delete
 //   • allocated → Return to stock · Delete (no consume/retire — return first)
 //   • consumed/retired → Restore to stock · Delete
-// Allocated rows show the site name. unit_cost is gated behind inventory:viewCost.
+// ASSIGN-LOCK (item 16a): assigning a part DIRECTLY to a site is removed — a
+// part may only sit on a quote (unallocated) for now; job / cost-center
+// assignment arrives with the movement ledger (Batch D). Historically
+// site-allocated rows still display their site name (read-only) and can still
+// be returned to stock. unit_cost is gated behind inventory:viewCost.
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
@@ -35,21 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
 import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
@@ -57,7 +45,6 @@ import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
-  allocateUnitAction,
   deleteProductAction,
   deleteReceivedPurchaseOrderAction,
   deleteStockUnitAction,
@@ -98,9 +85,8 @@ export function ProductDetailClient({
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
-  // Site allocation dialog state.
-  const [allocTarget, setAllocTarget] = useState<string | null>(null);
-  const [selectedSiteId, setSelectedSiteId] = useState("");
+  // ASSIGN-LOCK: site-direct allocation is removed. `siteById` is retained
+  // only to label historically site-allocated rows (read-only display).
   const siteById = new Map(sites.map((s) => [s.id, s]));
 
   const onHand = stock
@@ -202,27 +188,6 @@ export function ProductDetailClient({
         return;
       }
       toast.success("Returned to stock");
-      router.refresh();
-    });
-  };
-
-  const confirmAllocate = () => {
-    if (!allocTarget) return;
-    if (!selectedSiteId) {
-      toast.error("Pick a site to allocate to.");
-      return;
-    }
-    const unitId = allocTarget;
-    const siteId = selectedSiteId;
-    startUnitAction(async () => {
-      const result = await allocateUnitAction(unitId, product.id, siteId);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success(`Allocated to ${siteById.get(siteId)?.name ?? "site"}`);
-      setAllocTarget(null);
-      setSelectedSiteId("");
       router.refresh();
     });
   };
@@ -533,13 +498,17 @@ export function ProductDetailClient({
                                           <DropdownMenuSeparator />
                                           {s.status === "in_stock" && (
                                             <>
+                                              {/* ASSIGN-LOCK (item 16a): no
+                                                  direct part→site assignment.
+                                                  Job / cost-center assignment
+                                                  arrives with the movement
+                                                  ledger (Batch D). */}
                                               <DropdownMenuItem
-                                                onClick={() => {
-                                                  setSelectedSiteId("");
-                                                  setAllocTarget(s.id);
-                                                }}
+                                                disabled
+                                                className="text-muted-foreground"
                                               >
-                                                Allocate to site
+                                                Assign to job — from Projects
+                                                (coming soon)
                                               </DropdownMenuItem>
                                               <DropdownMenuItem
                                                 onClick={() =>
@@ -710,70 +679,6 @@ export function ProductDetailClient({
           }}
         />
       )}
-
-      {/* Allocate-to-site picker */}
-      <Dialog
-        open={allocTarget !== null}
-        onOpenChange={(o) => {
-          if (!o) {
-            setAllocTarget(null);
-            setSelectedSiteId("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Allocate to site</DialogTitle>
-            <DialogDescription>
-              The selected unit moves to status “allocated” against the chosen
-              site. Return it to stock to free it again.
-            </DialogDescription>
-          </DialogHeader>
-
-          {sites.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No sites available. Create a site first.
-            </p>
-          ) : (
-            <Select
-              value={selectedSiteId}
-              onValueChange={(v) => setSelectedSiteId(v ?? "")}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a site…" />
-              </SelectTrigger>
-              <SelectContent>
-                {sites.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.site_code ? `${s.site_code} · ` : ""}
-                    {s.name}
-                    {s.client?.name ? ` — ${s.client.name}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAllocTarget(null);
-                setSelectedSiteId("");
-              }}
-              disabled={unitPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={confirmAllocate}
-              disabled={unitPending || sites.length === 0}
-            >
-              {unitPending ? "Allocating…" : "Allocate"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
