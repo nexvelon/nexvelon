@@ -959,6 +959,10 @@ export interface DbInvoice {
   total: number;
   amount_due: number;
   notes: string | null;
+  // MATERIALS-1 (migration 0049): which part identifiers compose a material
+  // line's text — any combination of
+  // 'master_part_number' | 'part_number' | 'name' | 'description'. Default {name}.
+  line_identifier_fields: string[];
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -999,10 +1003,14 @@ export interface DbInvoiceLine {
   quantity: number;
   unit_price: number;
   amount: number;
-  source_type: string; // 'manual' | 'cost_center'
-  source_id: string | null;
+  source_type: string; // 'manual' | 'cost_center' | 'material'
+  source_id: string | null; // cost-center id for 'cost_center' AND 'material' lines
   source_pct: number | null;
   sort_order: number;
+  // MATERIALS-1 (migration 0049): a material line bills a catalog part and
+  // (for a single serialized unit) the specific stock row it came from.
+  product_id: string | null;
+  source_stock_id: string | null;
   created_at: string;
 }
 
@@ -1016,6 +1024,8 @@ export type DbInvoiceLineInsert = {
   source_id?: string | null;
   source_pct?: number | null;
   sort_order?: number;
+  product_id?: string | null;
+  source_stock_id?: string | null;
 };
 
 export type DbInvoiceLineUpdate = Partial<

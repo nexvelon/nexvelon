@@ -11,6 +11,7 @@ import {
   getCurrentLocationLabels,
   listMovementsByProduct,
 } from "@/lib/api/stock-movements";
+import { listInvoicesForProduct } from "@/lib/api/invoices";
 import { ProductDetailClient } from "./ProductDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -37,13 +38,15 @@ export default async function ProductDetailPage({
     );
   }
 
-  const [stock, sites, poHistory, locations, movements] = await Promise.all([
-    listStockForProduct(id),
-    listSites(),
-    getPurchaseOrdersByProduct(id),
-    listStockLocations(),
-    listMovementsByProduct(id),
-  ]);
+  const [stock, sites, poHistory, locations, movements, invoices] =
+    await Promise.all([
+      listStockForProduct(id),
+      listSites(),
+      getPurchaseOrdersByProduct(id),
+      listStockLocations(),
+      listMovementsByProduct(id),
+      listInvoicesForProduct(id),
+    ]);
 
   // MOVE-1: resolve each stock row's current warehouse/truck/job label.
   const currentLabels = await getCurrentLocationLabels(stock);
@@ -57,6 +60,7 @@ export default async function ProductDetailPage({
       locations={locations}
       movements={movements}
       currentLabels={currentLabels}
+      invoices={invoices}
     />
   );
 }

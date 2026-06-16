@@ -68,6 +68,8 @@ import { hasPermission } from "@/lib/permissions";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { ProductPurchaseHistoryRow } from "@/lib/api/purchase-orders";
+import type { InvoiceListRow } from "@/lib/api/invoices";
+import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type {
   DbInventoryProduct,
   DbInventoryStock,
@@ -85,6 +87,7 @@ export function ProductDetailClient({
   locations,
   movements,
   currentLabels,
+  invoices,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
@@ -93,6 +96,7 @@ export function ProductDetailClient({
   locations: DbStockLocation[];
   movements: DbStockMovement[];
   currentLabels: Record<string, string>;
+  invoices: InvoiceListRow[];
 }) {
   const router = useRouter();
   const { role } = useRole();
@@ -875,6 +879,65 @@ export function ProductDetailClient({
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[200px] truncate text-xs">
                       {m.note ?? "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      {/* MATERIALS-1: invoices that bill this part. */}
+      <div>
+        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
+          Invoices{" "}
+          <span className="text-muted-foreground font-normal normal-case">
+            ({invoices.length})
+          </span>
+        </h2>
+        <Card className="bg-card overflow-hidden p-0 shadow-sm">
+          {invoices.length === 0 ? (
+            <p className="text-muted-foreground p-5 text-xs">
+              This part isn&rsquo;t on any invoice yet.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice #</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="text-brand-navy font-mono text-xs font-semibold">
+                      <Link
+                        href={`/invoices/${inv.id}`}
+                        className="hover:underline"
+                      >
+                        {inv.invoice_number ?? "Draft"}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {inv.client_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">
+                      {inv.project_number ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide capitalize ${STATUS_TONE[inv.status] ?? STATUS_TONE.draft}`}
+                      >
+                        {inv.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-brand-charcoal text-right text-xs font-semibold tabular-nums">
+                      {formatCurrency(Number(inv.total))}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -27,6 +27,9 @@ import { formatCurrency } from "@/lib/format";
 import {
   addManualLineAction,
   addCostCenterLineAction,
+  addMaterialLineAction,
+  setLineIdentifierFieldsAction,
+  listBillableMaterialsForProjectAction,
   updateLineAction,
   unlinkLineAction,
   deleteLineAction,
@@ -36,8 +39,16 @@ import {
   issueInvoiceAction,
   setInvoiceStatusAction,
 } from "@/app/(app)/invoices/actions";
-import type { InvoiceDetail } from "@/lib/api/invoices";
+import type {
+  InvoiceDetail,
+  BillableMaterialGroup,
+} from "@/lib/api/invoices";
 import type { DbInvoice, DbInvoiceLine } from "@/lib/types/database";
+import {
+  INVOICE_IDENTIFIER_FIELDS,
+  composeIdentifier,
+} from "@/lib/invoice-identifiers";
+import { cn } from "@/lib/utils";
 import { OPCO_LABEL, STATUS_TONE } from "./shared";
 import { InvoicePdfPane } from "./InvoicePdfPane";
 
@@ -63,6 +74,75 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
     setInvoice(res.invoice);
     setLines(res.lines);
   };
+
+  // MATERIALS-1: a project's billable parts (grouped by part × cost-center),
+  // reloaded after each bill so already-billed groups grey out.
+  const [materials, setMaterials] = useState<BillableMaterialGroup[]>([]);
+  const reloadMaterials = () => {
+    if (!invoice.project_id) return;
+    listBillableMaterialsForProjectAction(invoice.project_id)
+      .then(setMaterials)
+      .catch(() => setMaterials([]));
+  };
+  useEffect(() => {
+    if (!invoice.project_id) return;
+    listBillableMaterialsForProjectAction(invoice.project_id)
+      .then(setMaterials)
+      .catch(() => setMaterials([]));
+  }, [invoice.project_id]);
+
+  const identifierFields = invoice.line_identifier_fields ?? ["name"];
+
+  const handleSetIdentifierFields = (fields: string[]) =>
+    startTransition(async () => {
+      const res = await setLineIdentifierFieldsAction(invoice.id, fields);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      apply(res.data);
+    });
+
+  // Bill a material group. Serialized → one line per unbilled unit (serial +
+  // source_stock_id); non-serialized → one line for the chosen qty.
+  const billMaterial = (g: BillableMaterialGroup, qty: number, unitPrice: number) =>
+    startTransition(async () => {
+      let last: { invoice: DbInvoice; lines: DbInvoiceLine[] } | null = null;
+      if (g.is_serialized) {
+        const unbilled = g.units.slice(g.billed_qty);
+        const toBill = unbilled.slice(0, Math.max(1, qty));
+        for (const u of toBill) {
+          const res = await addMaterialLineAction(invoice.id, {
+            product_id: g.product_id,
+            cost_center_id: g.cost_center_id,
+            qty: 1,
+            unit_price: unitPrice,
+            source_stock_ids: [u.stock_id],
+          });
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          last = res.data;
+        }
+      } else {
+        const res = await addMaterialLineAction(invoice.id, {
+          product_id: g.product_id,
+          cost_center_id: g.cost_center_id,
+          qty,
+          unit_price: unitPrice,
+          source_stock_ids: g.units.map((u) => u.stock_id),
+        });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        last = res.data;
+      }
+      if (last) apply(last);
+      reloadMaterials();
+      toast.success("Billed to invoice");
+    });
 
   // ── Line ops ───────────────────────────────────────────────────────────
   const handleAddManual = () =>
@@ -227,6 +307,37 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
               · {lines.length}
             </span>
           </p>
+
+          {/* MATERIALS-1: per-invoice identifier display toggle. */}
+          {editable && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground text-[11px]">
+                Identifier display:
+              </span>
+              {INVOICE_IDENTIFIER_FIELDS.map((f) => {
+                const on = identifierFields.includes(f.key);
+                return (
+                  <Button
+                    key={f.key}
+                    type="button"
+                    size="xs"
+                    variant={on ? "secondary" : "outline"}
+                    disabled={pending}
+                    onClick={() => {
+                      const next = on
+                        ? identifierFields.filter((k) => k !== f.key)
+                        : [...identifierFields, f.key];
+                      // Keep at least one field — empty would blank descriptions.
+                      handleSetIdentifierFields(next.length > 0 ? next : ["name"]);
+                    }}
+                  >
+                    {f.label}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+
           <Card className="bg-card p-0 shadow-sm">
             {lines.length === 0 ? (
               <p className="text-muted-foreground p-4 text-xs">No lines yet.</p>
@@ -276,6 +387,14 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
                     })
                   }
                 />
+                {invoice.project_id && (
+                  <MaterialsPicker
+                    materials={materials}
+                    identifierFields={identifierFields}
+                    pending={pending}
+                    onBill={billMaterial}
+                  />
+                )}
               </div>
             )}
           </Card>
@@ -521,6 +640,7 @@ function LineRow({
   useEffect(() => setAmount(String(line.amount)), [line.amount]);
 
   const sourced = line.source_type === "cost_center";
+  const isMaterial = line.source_type === "material";
 
   if (!editable) {
     return (
@@ -530,6 +650,11 @@ function LineRow({
           {sourced && line.source_pct != null && (
             <span className="text-muted-foreground ml-2 rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px]">
               {Number(line.source_pct)}% draw
+            </span>
+          )}
+          {isMaterial && (
+            <span className="text-brand-navy ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+              material
             </span>
           )}
         </span>
@@ -556,6 +681,11 @@ function LineRow({
         {sourced && (
           <span className="text-muted-foreground shrink-0 rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px]">
             {line.source_pct != null ? `${Number(line.source_pct)}% draw` : "draw"}
+          </span>
+        )}
+        {isMaterial && (
+          <span className="text-brand-navy shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+            material
           </span>
         )}
       </div>
@@ -599,14 +729,14 @@ function LineRow({
             className="h-7 w-24 text-right text-xs font-semibold tabular-nums"
           />
         </label>
-        {sourced && (
+        {(sourced || isMaterial) && (
           <button
             type="button"
             onClick={() => onUnlink(line.id)}
             disabled={pending}
             className="text-muted-foreground hover:text-brand-charcoal"
-            aria-label="Unlink from cost center"
-            title="Unlink from cost center"
+            aria-label="Unlink line"
+            title={isMaterial ? "Unlink material (make manual)" : "Unlink from cost center"}
           >
             <Unlink className="h-3.5 w-3.5" />
           </button>
@@ -683,6 +813,148 @@ function CostCenterPicker({
         <Plus className="mr-1 h-3.5 w-3.5" />
         Pull
       </Button>
+    </div>
+  );
+}
+
+// MATERIALS-1 — "Pull materials" picker: a project's billable parts grouped by
+// cost-center, each with editable qty + price and a Bill button. Fully-billed
+// groups grey out (no silent double-billing).
+function MaterialsPicker({
+  materials,
+  identifierFields,
+  pending,
+  onBill,
+}: {
+  materials: BillableMaterialGroup[];
+  identifierFields: string[];
+  pending: boolean;
+  onBill: (g: BillableMaterialGroup, qty: number, unitPrice: number) => void;
+}) {
+  if (materials.length === 0) {
+    return (
+      <p className="text-muted-foreground border-t border-[var(--border)] pt-2 text-[11px]">
+        No project materials to bill yet (parts assigned/installed on this
+        project&rsquo;s cost-centers appear here).
+      </p>
+    );
+  }
+
+  // Group by cost-center for display.
+  const byCc = new Map<string, BillableMaterialGroup[]>();
+  for (const g of materials) {
+    const arr = byCc.get(g.cost_center_label) ?? [];
+    arr.push(g);
+    byCc.set(g.cost_center_label, arr);
+  }
+
+  return (
+    <div className="space-y-2 border-t border-[var(--border)] pt-2">
+      <p className="text-muted-foreground text-[11px] font-medium">Pull materials</p>
+      {[...byCc.entries()].map(([cc, groups]) => (
+        <div key={cc} className="space-y-1">
+          <p className="text-brand-navy text-[10px] font-semibold uppercase tracking-wide">
+            {cc}
+          </p>
+          {groups.map((g) => (
+            <MaterialRow
+              key={`${g.product_id}-${g.cost_center_id}`}
+              group={g}
+              identifierFields={identifierFields}
+              pending={pending}
+              onBill={onBill}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MaterialRow({
+  group,
+  identifierFields,
+  pending,
+  onBill,
+}: {
+  group: BillableMaterialGroup;
+  identifierFields: string[];
+  pending: boolean;
+  onBill: (g: BillableMaterialGroup, qty: number, unitPrice: number) => void;
+}) {
+  const [qty, setQty] = useState(String(group.remaining_qty));
+  const [price, setPrice] = useState(String(group.suggested_unit_price));
+  useEffect(
+    () => setQty(String(group.remaining_qty)),
+    [group.remaining_qty]
+  );
+
+  const preview = composeIdentifier(
+    {
+      master_part_number: group.master_part_number,
+      sku: group.part_number,
+      name: group.name,
+      description: group.description,
+    },
+    identifierFields
+  );
+  const fullyBilled = group.remaining_qty <= 0;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] px-2 py-1.5",
+        fullyBilled && "opacity-60"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-brand-charcoal truncate text-xs">{preview}</p>
+        <p className="text-muted-foreground text-[10px] tabular-nums">
+          {group.qty} on job · {group.billed_qty} billed
+          {group.is_serialized ? " · serialized" : ""}
+        </p>
+      </div>
+      {fullyBilled ? (
+        <span className="text-muted-foreground rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
+          Billed
+        </span>
+      ) : (
+        <>
+          <label className="text-muted-foreground flex items-center gap-1 text-[10px]">
+            Qty
+            <Input
+              value={qty}
+              inputMode="decimal"
+              disabled={group.is_serialized}
+              onChange={(e) => setQty(e.target.value)}
+              className="h-7 w-14 text-right text-xs tabular-nums"
+            />
+          </label>
+          <label className="text-muted-foreground flex items-center gap-1 text-[10px]">
+            Price
+            <Input
+              value={price}
+              inputMode="decimal"
+              onChange={(e) => setPrice(e.target.value)}
+              className="h-7 w-20 text-right text-xs tabular-nums"
+            />
+          </label>
+          <Button
+            type="button"
+            size="xs"
+            onClick={() => {
+              const q = group.is_serialized
+                ? group.remaining_qty
+                : Math.min(toNum(qty) || group.remaining_qty, group.remaining_qty);
+              if (q < 1) return;
+              onBill(group, q, toNum(price));
+            }}
+            disabled={pending}
+          >
+            Bill
+          </Button>
+        </>
+      )}
     </div>
   );
 }
