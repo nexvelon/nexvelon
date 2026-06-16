@@ -87,8 +87,11 @@ export interface AssuranceScheduleInstance extends BaseScheduleInstance {
 // available to all templates. Lives in the quote schedules jsonb (no migration).
 export interface ScopeSubSection {
   id: string;
+  // QUOTE-FIX (Batch A): subtitle + body are serialized rich-text documents
+  // (RichTextDocument JSON, same as custom sections). Legacy plain strings are
+  // parsed forward via parseRichTextBody on read — backward-compatible, no SQL.
   subtitle: string;
-  body: string; // plain text; newlines preserved when rendered to PDF
+  body: string;
 }
 
 export interface ScopeScheduleInstance extends BaseScheduleInstance {
