@@ -276,7 +276,7 @@ async function requireInventoryAdmin(): Promise<string | null> {
 export async function addManualStockAction(
   productId: string,
   input: AddManualStockInput
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ created: number; id: string }>> {
   try {
     const denied = await requireInventoryAdmin();
     if (denied) return { ok: false, error: denied };

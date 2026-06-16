@@ -617,6 +617,9 @@ export interface DbInventoryProduct {
   image_path: string | null;
   // PART-FORM B1 (migration 0044): free-text part notes (form bottom).
   notes: string | null;
+  // SERIAL-1 (migration 0047): when true, each unit is tracked individually by
+  // serial number (one stock row per unit, quantity 1). Drives serialization.
+  is_serialized: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -649,6 +652,8 @@ export type DbInventoryProductInsert = {
   image_path?: string | null;
   // PART-FORM B1 (migration 0044): free-text part notes.
   notes?: string | null;
+  // SERIAL-1 (migration 0047): per-part serialized toggle.
+  is_serialized?: boolean;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;

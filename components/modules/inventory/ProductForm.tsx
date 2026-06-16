@@ -43,6 +43,7 @@ import type {
   InventoryTrackingMode,
 } from "@/lib/types/database";
 import type { Product } from "@/lib/types";
+import { isSerializedProduct } from "@/lib/inventory-serial";
 
 // Seed vocabularies for the free-text suggestion dropdowns. These mirror the
 // lib/types.ts UI unions but are runtime arrays (the unions are type-only) and
@@ -134,8 +135,11 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [replacementPartNumber, setReplacementPartNumber] = useState(
     existing?.replacement_part_number ?? ""
   );
-  const [trackingMode, setTrackingMode] = useState<InventoryTrackingMode>(
-    existing?.tracking_mode ?? "serialized"
+  // SERIAL-1: the serialized toggle is the authoritative control; it drives
+  // tracking_mode on save. Initialize on from either signal (legacy parts may
+  // carry tracking_mode='serialized' without is_serialized set). New parts off.
+  const [isSerialized, setIsSerialized] = useState<boolean>(
+    existing ? isSerializedProduct(existing) : false
   );
   const [unitOfMeasure, setUnitOfMeasure] = useState(
     existing?.unit_of_measure ?? "Each"
@@ -324,6 +328,15 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       return;
     }
 
+    // SERIAL-1: the toggle drives tracking_mode. On → 'serialized'. Off →
+    // preserve an existing non-serialized mode (e.g. 'bulk'), default
+    // 'non_serialized'. Keeps the tracking_mode-based intake pipeline working.
+    const nextTrackingMode: InventoryTrackingMode = isSerialized
+      ? "serialized"
+      : existing && existing.tracking_mode !== "serialized"
+        ? existing.tracking_mode
+        : "non_serialized";
+
     const payload: DbInventoryProductInsert = {
       sku: sku.trim(),
       name: name.trim(),
@@ -332,7 +345,8 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       subcategory: subcategory.trim() || null,
       manufacturer: manufacturer.trim() || null,
       vendor: vendor.trim() || null,
-      tracking_mode: trackingMode,
+      tracking_mode: nextTrackingMode,
+      is_serialized: isSerialized,
       unit_of_measure: unitOfMeasure.trim() || "each",
       default_unit_cost: numOrNull(defaultUnitCost),
       list_price: numOrNull(listPrice),
@@ -528,25 +542,21 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
           Tracking & Pricing
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Tracking mode">
-            <Select
-              value={trackingMode}
-              onValueChange={(v) => setTrackingMode(v as InventoryTrackingMode)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="serialized">Serialized</SelectItem>
-                <SelectItem value="non_serialized">Non-serialized</SelectItem>
-                <SelectItem value="bulk">Bulk</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-[11px] leading-snug">
-              Serialized = each unit has a serial. Non-serialized = countable
-              items, no serial. Bulk = a measured quantity (e.g. cable by the
-              foot).
-            </p>
+          <Field label="Serialized part">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={isSerialized}
+                onChange={(e) => setIsSerialized(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-sm">
+                Serialized
+                <span className="text-muted-foreground block text-[11px] leading-snug">
+                  Track each unit individually by serial number.
+                </span>
+              </span>
+            </label>
           </Field>
           <Field label="Unit of measure">
             <Select
