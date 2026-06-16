@@ -18,6 +18,8 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatInvoiceNumber, businessDateISO } from "@/lib/format";
 import { round2 } from "@/lib/quote-helpers";
+import { isSerializedProduct } from "@/lib/inventory-serial";
+import { composeIdentifier } from "@/lib/invoice-identifiers";
 import type { DbInvoice, DbInvoiceLine } from "@/lib/types/database";
 
 async function db() {
@@ -227,6 +229,217 @@ export async function listInvoicesForProject(
   });
 }
 
+/**
+ * MATERIALS-1 — invoices that bill a given part (have a line with product_id).
+ * Powers the part detail's Invoices section.
+ */
+export async function listInvoicesForProduct(
+  productId: string
+): Promise<InvoiceListRow[]> {
+  const supabase = await db();
+  const { data: lineRows, error: lErr } = await supabase
+    .from("invoice_lines")
+    .select("invoice_id")
+    .eq("product_id", productId);
+  if (lErr) throw new Error(`listInvoicesForProduct/lines: ${lErr.message}`);
+  const ids = [
+    ...new Set(((lineRows ?? []) as { invoice_id: string }[]).map((r) => r.invoice_id)),
+  ];
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*, client:clients(name), project:projects(project_number)")
+    .in("id", ids)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`listInvoicesForProduct: ${error.message}`);
+  return ((data ?? []) as InvoiceJoinRow[]).map((r) => {
+    const { client, project, ...inv } = r;
+    return {
+      ...(inv as DbInvoice),
+      client_name: client?.name ?? null,
+      project_number: project?.project_number ?? null,
+    };
+  });
+}
+
+// ─── Billable materials ──────────────────────────────────────────────────────
+
+/** A group of a project's billable stock (one part × one cost-center). */
+export interface BillableMaterialGroup {
+  product_id: string;
+  master_part_number: string | null;
+  part_number: string | null; // sku
+  name: string;
+  description: string | null;
+  is_serialized: boolean;
+  cost_center_id: string;
+  cost_center_label: string;
+  qty: number; // total currently on this cost-center
+  billed_qty: number; // already billed (material lines on this project's invoices)
+  remaining_qty: number; // qty - billed_qty (>= 0)
+  unit_cost: number; // AVERAGE of the group's stock rows' unit_cost
+  suggested_unit_price: number; // the part's Sell Price (list_price)
+  // The stock rows in this group, each with its serial (serialized only) — so a
+  // serialized unit bills as its own line with its serial + source_stock_id.
+  units: { stock_id: string; quantity: number; serial: string | null }[];
+}
+
+type StockMaterialRow = {
+  id: string;
+  product_id: string;
+  quantity: number;
+  unit_cost: number;
+  serial_number: string | null;
+  custody_status: string;
+  current_cost_center_id: string;
+};
+
+/**
+ * MATERIALS-1 — a project's billable parts, grouped by part × cost-center.
+ * A unit BELONGS to the project when its current_cost_center_id is one of the
+ * project's cost-centers (which holds through delivered / installed / consumed);
+ * a 'lost' unit is excluded (it's gone). billed_qty is the quantity already
+ * billed via material lines on ANY of this project's invoices, so fully-billed
+ * groups can be greyed out (no silent double-billing).
+ */
+export async function listBillableMaterialsForProject(
+  projectId: string
+): Promise<BillableMaterialGroup[]> {
+  const supabase = await db();
+
+  // Project cost-centers (label menu + scope).
+  const { data: ccData, error: ccErr } = await supabase
+    .from("project_cost_centers")
+    .select("id, cc_number, name")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  if (ccErr) throw new Error(`listBillableMaterials/cc: ${ccErr.message}`);
+  const ccs = (ccData ?? []) as { id: string; cc_number: string; name: string }[];
+  if (ccs.length === 0) return [];
+  const ccLabel = new Map(ccs.map((c) => [c.id, c.name]));
+  const ccIds = ccs.map((c) => c.id);
+
+  // Stock currently on those cost-centers (exclude lost).
+  const { data: stockData, error: sErr } = await supabase
+    .from("inventory_stock")
+    .select(
+      "id, product_id, quantity, unit_cost, serial_number, custody_status, current_cost_center_id"
+    )
+    .in("current_cost_center_id", ccIds)
+    .neq("custody_status", "lost");
+  if (sErr) throw new Error(`listBillableMaterials/stock: ${sErr.message}`);
+  const stock = (stockData ?? []) as StockMaterialRow[];
+  if (stock.length === 0) return [];
+
+  // Product identifiers for the groups present.
+  const productIds = [...new Set(stock.map((s) => s.product_id))];
+  const { data: prodData, error: pErr } = await supabase
+    .from("inventory_products")
+    .select(
+      "id, master_part_number, sku, name, description, list_price, is_serialized, tracking_mode"
+    )
+    .in("id", productIds);
+  if (pErr) throw new Error(`listBillableMaterials/products: ${pErr.message}`);
+  const productById = new Map(
+    ((prodData ?? []) as {
+      id: string;
+      master_part_number: string | null;
+      sku: string | null;
+      name: string | null;
+      description: string | null;
+      list_price: number | null;
+      is_serialized: boolean;
+      tracking_mode: string;
+    }[]).map((p) => [p.id, p])
+  );
+
+  // Already-billed quantity per (product_id, cost_center_id) across THIS
+  // project's invoices' material lines.
+  const { data: invRows } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("project_id", projectId);
+  const invoiceIds = ((invRows ?? []) as { id: string }[]).map((r) => r.id);
+  const billedByKey = new Map<string, number>();
+  if (invoiceIds.length > 0) {
+    const { data: matLines } = await supabase
+      .from("invoice_lines")
+      .select("product_id, source_id, quantity")
+      .eq("source_type", "material")
+      .in("invoice_id", invoiceIds);
+    for (const l of (matLines ?? []) as {
+      product_id: string | null;
+      source_id: string | null;
+      quantity: number;
+    }[]) {
+      if (!l.product_id || !l.source_id) continue;
+      const key = `${l.product_id}::${l.source_id}`;
+      billedByKey.set(key, (billedByKey.get(key) ?? 0) + Number(l.quantity));
+    }
+  }
+
+  // Group stock by (product, cost-center).
+  const groups = new Map<string, BillableMaterialGroup>();
+  for (const s of stock) {
+    const product = productById.get(s.product_id);
+    if (!product) continue;
+    const key = `${s.product_id}::${s.current_cost_center_id}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        product_id: s.product_id,
+        master_part_number: product.master_part_number,
+        part_number: product.sku,
+        name: product.name ?? product.sku ?? "Material",
+        description: product.description,
+        is_serialized: isSerializedProduct(product),
+        cost_center_id: s.current_cost_center_id,
+        cost_center_label: ccLabel.get(s.current_cost_center_id) ?? "Cost center",
+        qty: 0,
+        billed_qty: billedByKey.get(key) ?? 0,
+        remaining_qty: 0,
+        unit_cost: 0,
+        suggested_unit_price: Number(product.list_price ?? 0),
+        units: [],
+      };
+      groups.set(key, g);
+    }
+    g.qty += Number(s.quantity);
+    g.units.push({
+      stock_id: s.id,
+      quantity: Number(s.quantity),
+      serial: s.serial_number,
+    });
+  }
+
+  // Finalize: average unit cost + remaining.
+  const out: BillableMaterialGroup[] = [];
+  for (const g of groups.values()) {
+    const costs = g.units; // one entry per stock row
+    const avg =
+      costs.length > 0
+        ? round2(
+            stock
+              .filter(
+                (s) =>
+                  s.product_id === g.product_id &&
+                  s.current_cost_center_id === g.cost_center_id
+              )
+              .reduce((sum, s) => sum + Number(s.unit_cost), 0) / costs.length
+          )
+        : 0;
+    g.unit_cost = avg;
+    g.remaining_qty = Math.max(g.qty - g.billed_qty, 0);
+    out.push(g);
+  }
+  return out.sort(
+    (a, b) =>
+      a.cost_center_label.localeCompare(b.cost_center_label) ||
+      a.name.localeCompare(b.name)
+  );
+}
+
 // ─── Create ────────────────────────────────────────────────────────────────
 
 /**
@@ -405,6 +618,81 @@ export async function addCostCenterLine(
   return settle(invoiceId);
 }
 
+// MATERIALS-1 — bill a project part as a material line. The description is
+// composed from the invoice's line_identifier_fields (+ the unit's serial when
+// a single serialized unit is billed). source_id carries the cost-center so
+// billed quantities can be tracked per (part, cost-center).
+export interface MaterialLineInput {
+  product_id: string;
+  cost_center_id?: string | null;
+  qty: number;
+  unit_price: number;
+  source_stock_ids?: string[];
+}
+
+export async function addMaterialLine(
+  invoiceId: string,
+  input: MaterialLineInput
+): Promise<InvoiceMutationResult> {
+  const supabase = await db();
+
+  const { data: prod, error: pErr } = await supabase
+    .from("inventory_products")
+    .select("master_part_number, sku, name, description, is_serialized, tracking_mode")
+    .eq("id", input.product_id)
+    .maybeSingle();
+  if (pErr) throw new Error(`addMaterialLine/product: ${pErr.message}`);
+  if (!prod) throw new Error("Part not found.");
+  const product = prod as {
+    master_part_number: string | null;
+    sku: string | null;
+    name: string | null;
+    description: string | null;
+    is_serialized: boolean;
+    tracking_mode: string;
+  };
+
+  const { data: inv, error: iErr } = await supabase
+    .from("invoices")
+    .select("line_identifier_fields")
+    .eq("id", invoiceId)
+    .single();
+  if (iErr) throw new Error(`addMaterialLine/invoice: ${iErr.message}`);
+  const fields = ((inv as { line_identifier_fields: string[] }).line_identifier_fields) ?? ["name"];
+
+  // A single serialized unit bills with its serial + a source_stock_id link.
+  const stockIds = input.source_stock_ids ?? [];
+  const singleStockId = stockIds.length === 1 ? stockIds[0] : null;
+  let serial: string | null = null;
+  if (singleStockId && isSerializedProduct(product)) {
+    const { data: unit } = await supabase
+      .from("inventory_stock")
+      .select("serial_number")
+      .eq("id", singleStockId)
+      .maybeSingle();
+    serial = (unit as { serial_number: string | null } | null)?.serial_number ?? null;
+  }
+
+  const qty = input.qty;
+  const unitPrice = input.unit_price;
+  const description = composeIdentifier(product, fields, serial);
+  const sortOrder = await nextSortOrder(supabase, invoiceId);
+  const { error } = await supabase.from("invoice_lines").insert({
+    invoice_id: invoiceId,
+    description,
+    quantity: qty,
+    unit_price: unitPrice,
+    amount: round2(qty * unitPrice),
+    source_type: "material",
+    source_id: input.cost_center_id ?? null,
+    product_id: input.product_id,
+    source_stock_id: singleStockId,
+    sort_order: sortOrder,
+  });
+  if (error) throw new Error(`addMaterialLine: ${error.message}`);
+  return settle(invoiceId);
+}
+
 export interface LineUpdateInput {
   description?: string;
   quantity?: number;
@@ -535,6 +823,85 @@ export async function setNotes(
   notes: string
 ): Promise<InvoiceMutationResult> {
   await patchInvoice(invoiceId, { notes });
+  return settle(invoiceId);
+}
+
+/**
+ * MATERIALS-1 — set which part identifiers compose material line text, then
+ * RECOMPOSE every existing material line's description from the new fields (+ a
+ * serialized unit's serial). Non-material lines are untouched.
+ */
+export async function setLineIdentifierFields(
+  invoiceId: string,
+  fields: string[]
+): Promise<InvoiceMutationResult> {
+  const supabase = await db();
+  // Guard: never persist an empty set — fall back to {name}.
+  const safe = fields.length > 0 ? fields : ["name"];
+  await patchInvoice(invoiceId, { line_identifier_fields: safe });
+
+  const { data: matLines, error } = await supabase
+    .from("invoice_lines")
+    .select("id, product_id, source_stock_id")
+    .eq("invoice_id", invoiceId)
+    .eq("source_type", "material")
+    .not("product_id", "is", null);
+  if (error) throw new Error(`setLineIdentifierFields/lines: ${error.message}`);
+  const lines = (matLines ?? []) as {
+    id: string;
+    product_id: string;
+    source_stock_id: string | null;
+  }[];
+
+  if (lines.length > 0) {
+    const productIds = [...new Set(lines.map((l) => l.product_id))];
+    const { data: prods } = await supabase
+      .from("inventory_products")
+      .select("id, master_part_number, sku, name, description, is_serialized, tracking_mode")
+      .in("id", productIds);
+    const productById = new Map(
+      ((prods ?? []) as {
+        id: string;
+        master_part_number: string | null;
+        sku: string | null;
+        name: string | null;
+        description: string | null;
+        is_serialized: boolean;
+        tracking_mode: string;
+      }[]).map((p) => [p.id, p])
+    );
+
+    // Serials for the lines that reference a single serialized unit.
+    const stockIds = lines
+      .map((l) => l.source_stock_id)
+      .filter((v): v is string => !!v);
+    const serialById = new Map<string, string | null>();
+    if (stockIds.length > 0) {
+      const { data: units } = await supabase
+        .from("inventory_stock")
+        .select("id, serial_number")
+        .in("id", stockIds);
+      for (const u of (units ?? []) as { id: string; serial_number: string | null }[]) {
+        serialById.set(u.id, u.serial_number);
+      }
+    }
+
+    for (const l of lines) {
+      const product = productById.get(l.product_id);
+      if (!product) continue;
+      const serial =
+        l.source_stock_id && isSerializedProduct(product)
+          ? serialById.get(l.source_stock_id) ?? null
+          : null;
+      const description = composeIdentifier(product, safe, serial);
+      const { error: upErr } = await supabase
+        .from("invoice_lines")
+        .update({ description })
+        .eq("id", l.id);
+      if (upErr) throw new Error(`setLineIdentifierFields/update: ${upErr.message}`);
+    }
+  }
+
   return settle(invoiceId);
 }
 

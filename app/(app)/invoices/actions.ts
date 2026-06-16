@@ -10,9 +10,12 @@ import {
   listInvoices,
   getInvoiceById,
   listInvoicesForProject,
+  listInvoicesForProduct,
+  listBillableMaterialsForProject,
   createInvoiceForProject,
   addManualLine,
   addCostCenterLine,
+  addMaterialLine,
   updateLine,
   unlinkLine,
   deleteLine,
@@ -22,13 +25,16 @@ import {
   setHoldbackRate,
   setDueDate,
   setNotes,
+  setLineIdentifierFields,
   issueInvoice,
   setInvoiceStatus,
   type InvoiceListRow,
   type InvoiceDetail,
   type InvoiceMutationResult,
   type ManualLineInput,
+  type MaterialLineInput,
   type LineUpdateInput,
+  type BillableMaterialGroup,
 } from "@/lib/api/invoices";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -94,6 +100,22 @@ export async function listInvoicesForProjectAction(
   return listInvoicesForProject(projectId);
 }
 
+// MATERIALS-1 — invoices that bill a part (part detail's Invoices section).
+export async function listInvoicesForProductAction(
+  productId: string
+): Promise<InvoiceListRow[]> {
+  if (!productId) return [];
+  return listInvoicesForProduct(productId);
+}
+
+// MATERIALS-1 — a project's billable parts grouped by part × cost-center.
+export async function listBillableMaterialsForProjectAction(
+  projectId: string
+): Promise<BillableMaterialGroup[]> {
+  if (!projectId) return [];
+  return listBillableMaterialsForProject(projectId);
+}
+
 // ─── Create ────────────────────────────────────────────────────────────────
 
 export async function createInvoiceForProjectAction(
@@ -142,6 +164,36 @@ export async function addCostCenterLineAction(
     const denied = await requireFinancials();
     if (denied) return { ok: false, error: denied };
     const res = await addCostCenterLine(invoiceId, costCenterId, pct);
+    revalidateInvoice(invoiceId);
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function addMaterialLineAction(
+  invoiceId: string,
+  input: MaterialLineInput
+): Promise<ActionResult<InvoiceMutationResult>> {
+  try {
+    const denied = await requireFinancials();
+    if (denied) return { ok: false, error: denied };
+    const res = await addMaterialLine(invoiceId, input);
+    revalidateInvoice(invoiceId);
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setLineIdentifierFieldsAction(
+  invoiceId: string,
+  fields: string[]
+): Promise<ActionResult<InvoiceMutationResult>> {
+  try {
+    const denied = await requireFinancials();
+    if (denied) return { ok: false, error: denied };
+    const res = await setLineIdentifierFields(invoiceId, fields);
     revalidateInvoice(invoiceId);
     return { ok: true, data: res };
   } catch (e) {
