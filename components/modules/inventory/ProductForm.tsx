@@ -12,15 +12,12 @@
 import { useEffect, useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import {
-  listInventoryVocabAction,
-  listSubcategoriesAction,
-} from "@/app/(app)/settings/inventory-vocab-actions";
 import { listManufacturersAction } from "@/app/(app)/settings/manufacturers-actions";
 import { listVendorsAction } from "@/app/(app)/vendors/actions";
 import { listMarginTiersAction } from "@/app/(app)/settings/margin-tiers-actions";
-import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
+import { listCategoriesAction } from "@/app/(app)/settings/category-actions";
 import type { DbMarginTier } from "@/lib/api/margin-tiers";
+import type { DbInventoryCategory } from "@/lib/types/database";
 import { ProductImageField } from "./ProductImageField";
 import {
   PendingAttachments,
@@ -63,19 +60,6 @@ import { isSerializedProduct } from "@/lib/inventory-serial";
 // Seed vocabularies for the free-text suggestion dropdowns. These mirror the
 // lib/types.ts UI unions but are runtime arrays (the unions are type-only) and
 // are intentionally NON-constraining — operators can type any value.
-const CATEGORY_OPTIONS = [
-  "Access Control",
-  "CCTV",
-  "Video Surveillance",
-  "Intrusion",
-  "Intercom",
-  "Networking",
-  "Network",
-  "Power",
-  "Cabling",
-  "Racks",
-  "Accessories",
-];
 const MANUFACTURER_OPTIONS = [
   "Kantech",
   "Genetec",
@@ -137,9 +121,14 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [description, setDescription] = useState(existing?.description ?? "");
   // PART-FORM B1: free-text part notes (form bottom).
   const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [category, setCategory] = useState(existing?.category ?? "");
-  // CAT-3: sub-category (dependent on category). Stored as a name like category.
-  const [subcategory, setSubcategory] = useState(existing?.subcategory ?? "");
+  // PART-FIX-2: legacy free-text category/subcategory are PRESERVED (not edited
+  // here anymore) — kept in state so an edit re-saves them unchanged.
+  const [category] = useState(existing?.category ?? "");
+  const [subcategory] = useState(existing?.subcategory ?? "");
+  // The hierarchical category leaf (category_id). Empty for legacy parts.
+  const [categoryId, setCategoryId] = useState<string | null>(
+    existing?.category_id ?? null
+  );
   const [manufacturer, setManufacturer] = useState(existing?.manufacturer ?? "");
   const [vendor, setVendor] = useState(existing?.vendor ?? "");
   // CAT-1: part-number identifiers (migration 0032).
@@ -300,37 +289,29 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   // B-2: datalist suggestions sourced from the managed inventory_vocab lists.
   // Default to the hardcoded consts so the form works before the fetch resolves
   // (and as a fallback if the fetch fails or a list is empty / 0023 not applied).
-  const [categoryOptions, setCategoryOptions] = useState<string[]>(CATEGORY_OPTIONS);
   // PART-FORM B1: Manufacturer now sources from the managed manufacturers table;
   // Vendor from the vendors list. Both fall back to the hardcoded consts until
   // the fetch resolves (or if empty/unavailable). UoM uses the fixed UOM_OPTIONS.
   const [manufacturerOptions, setManufacturerOptions] =
     useState<string[]>(MANUFACTURER_OPTIONS);
   const [vendorOptions, setVendorOptions] = useState<string[]>(VENDOR_OPTIONS);
-  // CAT-3: category rows (with ids) + active subcategories, for the dependent
-  // sub-category select.
-  const [categoryRows, setCategoryRows] = useState<DbInventoryVocab[]>([]);
-  const [subcatRows, setSubcatRows] = useState<DbInventoryVocab[]>([]);
+  // PART-FIX-2: the full category tree for the cascading selector.
+  const [categories, setCategories] = useState<DbInventoryCategory[]>([]);
 
   useEffect(() => {
     let active = true;
     Promise.all([
-      listInventoryVocabAction("category"),
-      listSubcategoriesAction(),
       listManufacturersAction(),
       listVendorsAction(),
+      listCategoriesAction(),
     ])
-      .then(([cat, sub, man, ven]) => {
+      .then(([man, ven, cat]) => {
         if (!active) return;
-        if (cat.ok) {
-          setCategoryRows(cat.data);
-          if (cat.data.length) setCategoryOptions(cat.data.map((r) => r.name));
-        }
-        if (sub.ok) setSubcatRows(sub.data);
         if (man.ok && man.data.length)
           setManufacturerOptions(man.data.map((r) => r.name));
         if (ven.ok && ven.data.length)
           setVendorOptions(ven.data.map((v) => v.name));
+        if (cat.ok) setCategories(cat.data);
       })
       .catch(() => {
         // keep the hardcoded fallbacks
@@ -339,27 +320,6 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       active = false;
     };
   }, []);
-
-  // Sub-categories available for the currently-selected category (by name → id).
-  const selectedCategoryId = categoryRows.find((c) => c.name === category)?.id;
-  const availableSubcategories = subcatRows.filter(
-    (s) => s.parent_id === selectedCategoryId
-  );
-
-  // Reset the sub-category when the category changes and the current value no
-  // longer belongs to it (keeps an unrelated subcategory from sticking). Guarded
-  // until the vocab fetch resolves so an existing product's saved value isn't
-  // cleared before its parent category has loaded.
-  useEffect(() => {
-    if (categoryRows.length === 0) return; // not loaded yet
-    if (
-      subcategory !== "" &&
-      !availableSubcategories.some((s) => s.name === subcategory)
-    ) {
-      setSubcategory("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, subcatRows, categoryRows]);
 
   const [pending, startTransition] = useTransition();
 
@@ -411,8 +371,11 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       sku: sku.trim(),
       name: name.trim(),
       description: description.trim() || null,
+      // PART-FIX-2: legacy strings preserved verbatim (no longer edited here);
+      // the hierarchical leaf is stored in category_id.
       category: category.trim() || null,
       subcategory: subcategory.trim() || null,
+      category_id: categoryId,
       manufacturer: manufacturer.trim() || null,
       vendor: vendor.trim() || null,
       tracking_mode: nextTrackingMode,
@@ -593,42 +556,26 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
           Classification
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Field label="Category">
-            <Input
-              list="product-category-options"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Select or type…"
-            />
-            <datalist id="product-category-options">
-              {categoryOptions.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
-          </Field>
-          {/* CAT-3: dependent sub-category select (options scoped to the chosen
-              category; disabled until a category with sub-categories is picked). */}
-          <Field label="Sub-category">
-            <select
-              value={subcategory}
-              onChange={(e) => setSubcategory(e.target.value)}
-              disabled={!selectedCategoryId || availableSubcategories.length === 0}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">
-                {!selectedCategoryId
-                  ? "Choose a category first"
-                  : availableSubcategories.length === 0
-                    ? "No sub-categories"
-                    : "None"}
-              </option>
-              {availableSubcategories.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {/* PART-FIX-2: cascading category tree. Picking a root reveals its
+              children, and so on to arbitrary depth; the deepest pick is stored
+              in category_id. */}
+          <div className="md:col-span-3">
+            <Field label="Category">
+              <CategoryCascade
+                categories={categories}
+                value={categoryId}
+                onChange={setCategoryId}
+              />
+              {/* Legacy parts: show the old free-text values read-only. */}
+              {!categoryId && (category || subcategory) && (
+                <p className="text-muted-foreground text-[11px] leading-snug">
+                  Legacy: {category || "—"}
+                  {subcategory ? ` / ${subcategory}` : ""} — pick a tree category
+                  to re-classify (the legacy value is kept either way).
+                </p>
+              )}
+            </Field>
+          </div>
           <Field label="Manufacturer">
             <Select
               value={manufacturer.trim() === "" ? NONE : manufacturer}
@@ -1092,6 +1039,96 @@ function Field({
         {required && <span className="text-red-500"> *</span>}
       </Label>
       {children}
+    </div>
+  );
+}
+
+const CASCADE_SELECT_CLASS =
+  "border-input bg-background ring-offset-background focus-visible:ring-ring h-9 w-full max-w-xs rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50";
+
+// PART-FIX-2 — cascading category selector over the tree. Renders one select per
+// level: roots, then the picked node's children, and so on. The deepest picked
+// node id is the stored value; clearing a level moves the leaf up to its parent.
+function CategoryCascade({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: DbInventoryCategory[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const childrenOf = new Map<string, DbInventoryCategory[]>();
+  for (const c of categories) {
+    const key = c.parent_id ?? "root";
+    const arr = childrenOf.get(key) ?? [];
+    arr.push(c);
+    childrenOf.set(key, arr);
+  }
+
+  // Root→leaf id path for the current value.
+  const pathIds: string[] = [];
+  let node = value ? byId.get(value) : undefined;
+  const guard = new Set<string>();
+  while (node && !guard.has(node.id)) {
+    pathIds.unshift(node.id);
+    guard.add(node.id);
+    node = node.parent_id ? byId.get(node.parent_id) : undefined;
+  }
+
+  // Build the levels to render.
+  const levels: { options: DbInventoryCategory[]; selected: string }[] = [];
+  let parentKey = "root";
+  let i = 0;
+  // Render root level always; deeper levels only after a pick that has children.
+  while (true) {
+    const options = childrenOf.get(parentKey) ?? [];
+    if (options.length === 0) break;
+    const selected = pathIds[i] ?? "";
+    levels.push({ options, selected });
+    if (!selected) break;
+    parentKey = selected;
+    i++;
+  }
+
+  if (categories.length === 0) {
+    return (
+      <p className="text-muted-foreground text-[11px]">
+        No categories yet — add them in Settings → Categories.
+      </p>
+    );
+  }
+
+  const handle = (lvl: number, v: string) => {
+    if (v === "") {
+      // Clearing this level → the leaf becomes the parent (or none at root).
+      onChange(lvl === 0 ? null : (pathIds[lvl - 1] ?? null));
+    } else {
+      onChange(v);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {levels.map((lvl, idx) => (
+        <select
+          key={idx}
+          value={lvl.selected}
+          onChange={(e) => handle(idx, e.target.value)}
+          className={CASCADE_SELECT_CLASS}
+          aria-label={idx === 0 ? "Category" : `Sub-category level ${idx + 1}`}
+        >
+          <option value="">
+            {idx === 0 ? "Select a category…" : "Select…"}
+          </option>
+          {lvl.options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      ))}
     </div>
   );
 }

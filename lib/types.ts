@@ -61,8 +61,13 @@ export interface Product {
   sku: string;
   name: string;
   manufacturer: ProductManufacturer;
-  category: ProductCategory;
-  subcategory?: string; // CAT-3b: sub-category name for catalog filtering
+  category: ProductCategory; // legacy free-text category string (preserved)
+  subcategory?: string; // CAT-3b: legacy free-text sub-category name
+  // PART-FIX-2: the hierarchical category leaf + its root→leaf name path
+  // (e.g. ["Access Control","Cables","FT6"]). Present only when category_id is
+  // set. The tree-aware filter matches any ancestor name in this path.
+  categoryId?: string;
+  categoryPath?: string[];
   vendor: Vendor;
   cost: number;
   price: number; // = list_price (the part's "fixed price" quote default, if any)
