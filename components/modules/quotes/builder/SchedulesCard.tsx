@@ -339,7 +339,9 @@ export function SchedulesCard({
 
               {schedule.kind === "cover" && (
                 <div className="space-y-1 pt-1">
-                  <Label className="text-[11px]">Scope of Works</Label>
+                  {/* QUOTE-FIX (Batch A) #2 — Scope of Work is now its own
+                      schedule; this cover field is just an optional paragraph. */}
+                  <Label className="text-[11px]">Optional Text</Label>
                   <Textarea
                     value={(schedule as CoverScheduleInstance).scopeOfWorks}
                     onChange={(e) =>

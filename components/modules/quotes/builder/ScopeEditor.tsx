@@ -1,16 +1,18 @@
 "use client";
 
 // SCOPE-1 — inline editor for a "Scope of Work" schedule's sub-sections.
-// Mirrors AssuranceCardEditor: a reorderable list of { subtitle, body } rows.
-// The section title itself is edited via the standard per-schedule title input
-// in SchedulesCard (same as every other kind).
+// QUOTE-FIX (Batch A): each sub-section's SUBTITLE and BODY are full rich text,
+// edited with the SAME RichTextEditor custom sections use (font tiers, sizes,
+// headings, bullet-symbol picker) and rendered in the PDF via the same
+// renderRichTextBlock path. Legacy plain-string subtitle/body are parsed
+// forward by RichTextEditor (parseRichTextBody) — no data loss, no migration.
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { newId } from "@/lib/quote-helpers";
 import type { ScopeSubSection } from "@/lib/quote-schedules";
+import { RichTextEditor } from "./RichTextEditor";
 
 interface Props {
   sections: ScopeSubSection[];
@@ -45,7 +47,8 @@ export function ScopeEditor({ sections, onChange, disabled }: Props) {
     <div className="space-y-2">
       <p className="text-muted-foreground text-[11px]">
         Sub-sections render in order on the Scope of Work page — e.g. Inclusions,
-        Exclusions, Theory of Operations. Body line breaks are preserved.
+        Exclusions, Theory of Operations. Subtitle and body both support headings,
+        lists, bold/italic, and the bullet-symbol picker, like a custom section.
       </p>
 
       <div className="space-y-2">
@@ -57,8 +60,8 @@ export function ScopeEditor({ sections, onChange, disabled }: Props) {
               key={section.id}
               className="bg-background space-y-1.5 rounded-md border border-[var(--border)] p-2"
             >
-              <div className="flex items-start gap-1.5">
-                <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <div className="flex gap-0.5">
                   <Button
                     type="button"
                     size="sm"
@@ -82,21 +85,14 @@ export function ScopeEditor({ sections, onChange, disabled }: Props) {
                     <ArrowDown className="h-3 w-3" />
                   </Button>
                 </div>
-
-                <Input
-                  value={section.subtitle}
-                  onChange={(e) => patchAt(idx, { subtitle: e.target.value })}
-                  disabled={disabled}
-                  placeholder="Inclusions"
-                  className="h-7 flex-1 text-sm font-medium"
-                  aria-label="Sub-section subtitle"
-                />
-
+                <span className="text-muted-foreground text-[11px] font-medium">
+                  Sub-section {idx + 1}
+                </span>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                  className="text-destructive hover:text-destructive ml-auto h-7 w-7 p-0"
                   disabled={disabled}
                   onClick={() => remove(idx)}
                   aria-label="Delete sub-section"
@@ -105,15 +101,23 @@ export function ScopeEditor({ sections, onChange, disabled }: Props) {
                 </Button>
               </div>
 
-              <Textarea
-                value={section.body}
-                onChange={(e) => patchAt(idx, { body: e.target.value })}
-                disabled={disabled}
-                rows={4}
-                placeholder={"One item per line…\n• Supply & install …\n• Commissioning …"}
-                className="text-xs"
-                aria-label="Sub-section body"
-              />
+              <div className="space-y-1">
+                <Label className="text-[11px]">Subtitle</Label>
+                <RichTextEditor
+                  value={section.subtitle}
+                  onChange={(next) => patchAt(idx, { subtitle: next })}
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">Body</Label>
+                <RichTextEditor
+                  value={section.body}
+                  onChange={(next) => patchAt(idx, { body: next })}
+                  disabled={disabled}
+                />
+              </div>
             </div>
           );
         })}

@@ -30,7 +30,7 @@ import type {
   ScopeScheduleInstance,
   QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
-import { parseRichTextBody } from "@/lib/quote-rich-text";
+import { parseRichTextBody, isRichTextEmpty } from "@/lib/quote-rich-text";
 import type { JSONContent } from "@tiptap/core";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
 
@@ -174,6 +174,17 @@ function createStyles(theme: QuoteTheme) {
       fontFamily: "Cormorant Garamond",
       fontSize: 10,
       color: theme.accent,
+    },
+    // QUOTE-FIX (Batch A) #4 — absolutely-centered ornament. Header and footer
+    // both apply this so the ❦ centers on the page axis (W/2) independent of the
+    // side text widths, putting the top and bottom ornaments on the SAME
+    // vertical line (header box is symmetric in [64,W-64]; footer in [56,W-56] —
+    // both centered on W/2).
+    ornamentCenter: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      textAlign: "center",
     },
 
     // ----- Single accent rule with centered ornament -----
@@ -1096,7 +1107,7 @@ function PageHeader({
   return (
     <View style={styles.pageHeader} fixed>
       <Text style={styles.pageHeaderText}>{template.footerShort}</Text>
-      <Text style={styles.pageHeaderCenter}>{"❦"}</Text>
+      <Text style={[styles.pageHeaderCenter, styles.ornamentCenter]}>{"❦"}</Text>
       <Text style={[styles.pageHeaderText, styles.numText]}>
         {number} · {pageStamp(pageNumber, totalPages)}
       </Text>
@@ -1134,10 +1145,9 @@ function SharedFooter({
       ) : null}
       <View style={styles.sharedFooter} fixed>
         <Text style={styles.footerLeft}>{template.footerShort}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={styles.footerCenter}>{"❦"}</Text>
-          <LogoSlot variant="footer-mark" styles={styles} />
-        </View>
+        {/* QUOTE-FIX (Batch A) #4 — same absolutely-centered ornament as the
+            header, so top & bottom ❦ share the page's vertical centre axis. */}
+        <Text style={[styles.footerCenter, styles.ornamentCenter]}>{"❦"}</Text>
         <Text style={[styles.footerRight, styles.numText]}>{right}</Text>
       </View>
     </>
@@ -1298,7 +1308,9 @@ function CoverPage({
 
       {scope.length > 0 ? (
         <View>
-          <Text style={styles.coverScopeLabel}>The Scope of Works</Text>
+          {/* QUOTE-FIX (Batch A) #2 — this cover field is now generic optional
+              text (Scope of Work moved to its own schedule), so the stale
+              "The Scope of Works" heading is dropped; the drop-cap prose stays. */}
           <View style={styles.coverScopeRow}>
             <Text style={styles.coverScopeDropCap}>{dropCap}</Text>
             <Text style={styles.coverScopeBody}>{dropBody}</Text>
@@ -1746,7 +1758,7 @@ function AcceptancePage({
       <Text style={styles.agreementLine}>
         The undersigned acknowledges having read this Quote/Proposal and{" "}
         {template.legalName}&apos;s Terms and Conditions, which are hereby agreed
-        to and accepted this _____ day of ________________, 20__. The
+        to and accepted this __ day of ________________, 20__. The
         undersigned further confirms that they are signing voluntarily and of
         their own free will, with full understanding of its contents, are of
         sound mind and full legal capacity, and are not acting under any duress,
@@ -1920,9 +1932,11 @@ function AssurancePage({
   );
 }
 
-// SCOPE-1 — structured Scope of Work page. Renders the section title, then each
-// sub-section as a subtitle sub-heading followed by its body with newlines
-// preserved (split on \n into separate lines). Empty sub-sections are skipped.
+// SCOPE-1 / QUOTE-FIX (Batch A) — structured Scope of Work page. Renders the
+// section title, then each sub-section's SUBTITLE and BODY as rich text via the
+// same renderRichTextBlock path custom sections use (headings, lists, bullet
+// symbols, bold/italic). Legacy plain-string subtitle/body are parsed forward
+// by parseRichTextBody. Empty sub-sections (both docs empty) are skipped.
 interface ScopePageProps extends CommonPageProps {
   schedule: ScopeScheduleInstance;
 }
@@ -1938,9 +1952,17 @@ function ScopePage({
   number,
 }: ScopePageProps) {
   const subtitleSuffix = schedule.subtitle || "Scope of Work";
-  const visibleSections = schedule.sections.filter(
-    (s) => s.subtitle.trim() !== "" || s.body.trim() !== ""
-  );
+  // Parse each sub-section's subtitle/body forward; skip a sub-section only when
+  // BOTH its docs are empty (legacy plain strings parse to non-empty docs).
+  const visibleSections = schedule.sections
+    .map((s) => ({
+      id: s.id,
+      subtitleDoc: parseRichTextBody(s.subtitle),
+      bodyDoc: parseRichTextBody(s.body),
+    }))
+    .filter(
+      (s) => !isRichTextEmpty(s.subtitleDoc) || !isRichTextEmpty(s.bodyDoc)
+    );
   return (
     <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
@@ -1955,18 +1977,19 @@ function ScopePage({
         styles={styles}
       />
 
-      {visibleSections.map((section) => (
-        <View key={section.id} wrap={false}>
-          {section.subtitle.trim() !== "" ? (
-            <Text style={styles.customHeading2}>{section.subtitle}</Text>
-          ) : null}
-          {section.body.split("\n").map((line, i) => (
-            <Text style={styles.customParagraph} key={i}>
-              {line || " "}
-            </Text>
-          ))}
-        </View>
-      ))}
+      {visibleSections.map((section) => {
+        const subLen = section.subtitleDoc.content?.length ?? 0;
+        return (
+          <View key={section.id} wrap={false}>
+            {(section.subtitleDoc.content ?? []).map((node, i) =>
+              renderRichTextBlock(node, styles, i)
+            )}
+            {(section.bodyDoc.content ?? []).map((node, i) =>
+              renderRichTextBlock(node, styles, subLen + i)
+            )}
+          </View>
+        );
+      })}
 
       <SharedFooter
         styles={styles}
