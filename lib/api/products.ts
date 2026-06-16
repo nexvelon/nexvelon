@@ -480,33 +480,11 @@ export async function deleteStockUnit(id: string): Promise<void> {
 // the DB level rather than corrupting state.
 // ----------------------------------------------------------------------------
 
-/**
- * Allocate an in-stock unit/lot to a site: status -> 'allocated', site_id set.
- * Guarded WHERE status='in_stock' — a row that isn't in stock won't flip
- * (returns a "not available" error so the caller can surface it).
- */
-export async function allocateUnitToSite(
-  stockId: string,
-  siteId: string
-): Promise<void> {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("inventory_stock")
-    .update({
-      status: "allocated",
-      site_id: siteId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", stockId)
-    .eq("status", "in_stock")
-    .select("id");
-  if (error) throw new Error(`allocateUnitToSite: ${error.message}`);
-  if (!data || data.length === 0) {
-    throw new Error(
-      "This unit is no longer in stock and can't be allocated. Refresh and try again."
-    );
-  }
-}
+// ASSIGN-LOCK (item 16a): allocateUnitToSite is REMOVED — assigning a part
+// directly to a site is no longer permitted. The 'allocated' status + site_id
+// column are RETAINED for historical rows (read-only display) and are still
+// reversible via returnUnitToStock. Direct job / cost-center assignment lands
+// with the movement ledger (Batch D).
 
 /**
  * Return an allocated unit/lot to stock: status -> 'in_stock', site_id NULL.
