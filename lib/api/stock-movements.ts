@@ -12,6 +12,8 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { getDefaultWarehouse } from "@/lib/api/stock-locations";
+import { isSerializedProduct } from "@/lib/inventory-serial";
 import type {
   DbInventoryStock,
   DbStockMovement,
@@ -363,4 +365,212 @@ export async function listMovementsByProduct(
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listMovementsByProduct: ${error.message}`);
   return (data ?? []) as DbStockMovement[];
+}
+
+// ── CUSTODY-1 (Batch D3) ─────────────────────────────────────────────────────
+// Chain-of-custody for SERIALIZED units only. Each transition updates the unit
+// AND appends a custody event into the same stock_movements timeline
+// (to_type='custody', to_label=the new status, note=details, quantity 1).
+
+type UnitWithProduct = DbInventoryStock & {
+  product: { is_serialized: boolean; tracking_mode: string } | null;
+};
+
+async function loadSerializedUnit(
+  supabase: Awaited<ReturnType<typeof db>>,
+  stockId: string
+): Promise<UnitWithProduct> {
+  const { data, error } = await supabase
+    .from("inventory_stock")
+    .select("*, product:inventory_products(is_serialized, tracking_mode)")
+    .eq("id", stockId)
+    .maybeSingle();
+  if (error) throw new Error(`custody/load: ${error.message}`);
+  if (!data) throw new Error("Stock unit not found.");
+  const unit = data as UnitWithProduct;
+  if (!unit.product || !isSerializedProduct(unit.product)) {
+    throw new Error("Chain-of-custody applies to serialized parts only.");
+  }
+  return unit;
+}
+
+/** Append a custody event into the movement timeline, capturing the unit's
+ *  current position as the "from" snapshot. */
+async function appendCustodyEvent(
+  supabase: Awaited<ReturnType<typeof db>>,
+  unit: DbInventoryStock,
+  statusLabel: string,
+  note: string | null
+): Promise<void> {
+  const from = await resolveFrom(supabase, unit);
+  const mover = await currentMover();
+  await recordMovement({
+    product_id: unit.product_id,
+    stock_id: unit.id,
+    quantity: 1,
+    from_type: from.type,
+    from_id: from.id,
+    from_label: from.label,
+    to_type: "custody",
+    to_id: null,
+    to_label: statusLabel,
+    moved_by: mover.id,
+    moved_by_name: mover.name,
+    note,
+  });
+}
+
+export interface CustodyResult {
+  custody_status: string;
+}
+
+/** Mark a delivered-to-job unit as Delivered. Only valid when the unit is on a
+ *  job (current_cost_center_id set). Proof is OPTIONAL — never blocks delivery. */
+export async function markDelivered(
+  stockId: string,
+  opts: { proofAttachmentId?: string | null } = {}
+): Promise<CustodyResult> {
+  const supabase = await db();
+  const unit = await loadSerializedUnit(supabase, stockId);
+  if (!unit.current_cost_center_id) {
+    throw new Error(
+      "Assign the unit to a job (cost-center) before marking it delivered."
+    );
+  }
+  const proofId = opts.proofAttachmentId ?? null;
+  const patch: Record<string, unknown> = {
+    custody_status: "delivered",
+    delivered_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (proofId) patch.custody_proof_attachment_id = proofId;
+
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update(patch)
+    .eq("id", stockId);
+  if (error) throw new Error(`markDelivered: ${error.message}`);
+
+  await appendCustodyEvent(
+    supabase,
+    unit,
+    "Delivered",
+    proofId ? "signed proof attached" : "no proof attached"
+  );
+  return { custody_status: "delivered" };
+}
+
+export async function markInstalled(stockId: string): Promise<CustodyResult> {
+  const supabase = await db();
+  const unit = await loadSerializedUnit(supabase, stockId);
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update({
+      custody_status: "installed",
+      installed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId);
+  if (error) throw new Error(`markInstalled: ${error.message}`);
+  await appendCustodyEvent(supabase, unit, "Installed", null);
+  return { custody_status: "installed" };
+}
+
+/** Mark a unit Lost. Snapshots its CURRENT location/holder into
+ *  last_known_label so responsibility is preserved, and retires it from stock. */
+export async function markLost(stockId: string): Promise<CustodyResult> {
+  const supabase = await db();
+  const unit = await loadSerializedUnit(supabase, stockId);
+  const from = await resolveFrom(supabase, unit);
+  const lastKnown = from.label ?? unit.last_known_label ?? "unknown location";
+
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update({
+      custody_status: "lost",
+      lost_at: new Date().toISOString(),
+      last_known_label: lastKnown,
+      // Remove a lost unit from on-hand stock rollups.
+      status: "retired",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId);
+  if (error) throw new Error(`markLost: ${error.message}`);
+  await appendCustodyEvent(supabase, unit, "Lost", `last seen ${lastKnown}`);
+  return { custody_status: "lost" };
+}
+
+/** Return a unit to the Main Warehouse (reusing moveStock for the location move)
+ *  and reset custody to in_stock. */
+export async function markReturned(stockId: string): Promise<CustodyResult> {
+  const supabase = await db();
+  const unit = await loadSerializedUnit(supabase, stockId);
+  const warehouse = await getDefaultWarehouse();
+  if (!warehouse) throw new Error("No Main Warehouse configured.");
+
+  // moveStock logs the location move (→ Main Warehouse). Serialized rows are
+  // quantity 1, so this is always a whole-unit move (no split).
+  await moveStock({
+    stockId,
+    quantity: Number(unit.quantity),
+    destination: { kind: "location", locationId: warehouse.id },
+    note: "Marked returned",
+  });
+
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update({
+      custody_status: "in_stock",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId);
+  if (error) throw new Error(`markReturned: ${error.message}`);
+  await appendCustodyEvent(supabase, unit, "Returned", "returned to Main Warehouse");
+  return { custody_status: "in_stock" };
+}
+
+export async function markConsumed(stockId: string): Promise<CustodyResult> {
+  const supabase = await db();
+  const unit = await loadSerializedUnit(supabase, stockId);
+  const { error } = await supabase
+    .from("inventory_stock")
+    .update({
+      custody_status: "consumed",
+      // Mirror into the existing status so consumed units leave on-hand rollups.
+      status: "consumed",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", stockId);
+  if (error) throw new Error(`markConsumed: ${error.message}`);
+  await appendCustodyEvent(supabase, unit, "Consumed", null);
+  return { custody_status: "consumed" };
+}
+
+/** Resolve the project a unit currently sits on (via its cost-center), for the
+ *  delivery-proof upload target. Null when the unit isn't on a job. */
+export async function getStockProject(
+  stockId: string
+): Promise<{ project_id: string; project_number: string } | null> {
+  const supabase = await db();
+  const { data: unit, error } = await supabase
+    .from("inventory_stock")
+    .select("current_cost_center_id")
+    .eq("id", stockId)
+    .maybeSingle();
+  if (error) throw new Error(`getStockProject: ${error.message}`);
+  const ccId = (unit as { current_cost_center_id: string | null } | null)
+    ?.current_cost_center_id;
+  if (!ccId) return null;
+
+  const { data: cc, error: ccErr } = await supabase
+    .from("project_cost_centers")
+    .select("project:projects(id, project_number)")
+    .eq("id", ccId)
+    .maybeSingle();
+  if (ccErr) throw new Error(`getStockProject/cc: ${ccErr.message}`);
+  const proj = (cc as unknown as {
+    project: { id: string; project_number: string } | null;
+  } | null)?.project;
+  if (!proj) return null;
+  return { project_id: proj.id, project_number: proj.project_number };
 }

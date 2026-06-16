@@ -57,6 +57,8 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   // SITE-DETAIL: sites live in the clients domain → gate on the same resource.
   site: "clients",
   quote: "quotes",
+  // CUSTODY-1: delivery-proof attachments land on the project → gate on projects.
+  project: "projects",
 };
 
 function resourceFor(entityType: string): Resource {

@@ -42,6 +42,13 @@ import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
 import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
 import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialog";
+import { MarkDeliveredDialog } from "@/components/modules/inventory/MarkDeliveredDialog";
+import {
+  markInstalledAction,
+  markLostAction,
+  markReturnedAction,
+  markConsumedAction,
+} from "@/app/(app)/inventory/movement-actions";
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
@@ -97,6 +104,8 @@ export function ProductDetailClient({
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [addStockOpen, setAddStockOpen] = useState(false);
   const [moveTarget, setMoveTarget] = useState<DbInventoryStock | null>(null);
+  // CUSTODY-1: the unit whose Mark-Delivered dialog is open.
+  const [deliverTarget, setDeliverTarget] = useState<string | null>(null);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
@@ -203,6 +212,23 @@ export function ProductDetailClient({
         return;
       }
       toast.success("Returned to stock");
+      router.refresh();
+    });
+  };
+
+  // CUSTODY-1: run a custody transition (serialized units only) + refresh.
+  const runCustody = (
+    fn: (productId: string, stockId: string) => Promise<{ ok: boolean; error?: string }>,
+    unitId: string,
+    successMsg: string
+  ) => {
+    startUnitAction(async () => {
+      const result = await fn(product.id, unitId);
+      if (!result.ok) {
+        toast.error(result.error ?? "Action failed.");
+        return;
+      }
+      toast.success(successMsg);
       router.refresh();
     });
   };
@@ -485,12 +511,29 @@ export function ProductDetailClient({
                                       {s.po_number ?? "—"}
                                     </TableCell>
                                     <TableCell>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] capitalize"
-                                      >
-                                        {s.status.replace("_", " ")}
-                                      </Badge>
+                                      {isSerialized ? (
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-brand-charcoal text-xs">
+                                            {custodyDisplay(s, currentLabels[s.id])}
+                                          </span>
+                                          {s.custody_status === "delivered" &&
+                                            !s.custody_proof_attachment_id && (
+                                              <Badge
+                                                variant="outline"
+                                                className="w-fit border-amber-400 text-[10px] text-amber-700"
+                                              >
+                                                Missing proof
+                                              </Badge>
+                                            )}
+                                        </div>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] capitalize"
+                                        >
+                                          {s.status.replace("_", " ")}
+                                        </Badge>
+                                      )}
                                     </TableCell>
                                     <TableCell className="text-xs">
                                       {s.site_id
@@ -522,51 +565,139 @@ export function ProductDetailClient({
                                             Edit
                                           </DropdownMenuItem>
                                           <DropdownMenuSeparator />
-                                          {s.status === "in_stock" && (
+                                          {isSerialized ? (
+                                            // CUSTODY-1: serialized units use the
+                                            // chain-of-custody actions, contextual
+                                            // to the current custody state.
                                             <>
-                                              {/* MOVE-1: universal Move/Assign —
-                                                  warehouse, truck, or job
-                                                  cost-center. Replaces the
-                                                  removed direct part→site path. */}
-                                              {canMove && (
+                                              {canMove &&
+                                                s.custody_status !== "consumed" &&
+                                                s.custody_status !== "lost" && (
+                                                  <DropdownMenuItem
+                                                    onClick={() => setMoveTarget(s)}
+                                                  >
+                                                    Move / Assign…
+                                                  </DropdownMenuItem>
+                                                )}
+                                              {canMove &&
+                                                s.custody_status === "in_stock" &&
+                                                s.current_cost_center_id && (
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      setDeliverTarget(s.id)
+                                                    }
+                                                  >
+                                                    Mark Delivered…
+                                                  </DropdownMenuItem>
+                                                )}
+                                              {canMove &&
+                                                s.custody_status === "delivered" && (
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      runCustody(
+                                                        markInstalledAction,
+                                                        s.id,
+                                                        "Marked installed"
+                                                      )
+                                                    }
+                                                  >
+                                                    Mark Installed
+                                                  </DropdownMenuItem>
+                                                )}
+                                              {canMove &&
+                                                (s.custody_status === "delivered" ||
+                                                  s.custody_status === "installed" ||
+                                                  s.current_cost_center_id) && (
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      runCustody(
+                                                        markReturnedAction,
+                                                        s.id,
+                                                        "Returned to Main Warehouse"
+                                                      )
+                                                    }
+                                                  >
+                                                    Mark Returned
+                                                  </DropdownMenuItem>
+                                                )}
+                                              {canMove &&
+                                                s.custody_status !== "consumed" &&
+                                                s.custody_status !== "lost" && (
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      runCustody(
+                                                        markConsumedAction,
+                                                        s.id,
+                                                        "Marked consumed"
+                                                      )
+                                                    }
+                                                  >
+                                                    Mark Consumed
+                                                  </DropdownMenuItem>
+                                                )}
+                                              {canMove &&
+                                                s.custody_status !== "consumed" &&
+                                                s.custody_status !== "lost" && (
+                                                  <DropdownMenuItem
+                                                    className="text-red-600 focus:text-red-700"
+                                                    onClick={() =>
+                                                      runCustody(
+                                                        markLostAction,
+                                                        s.id,
+                                                        "Marked lost"
+                                                      )
+                                                    }
+                                                  >
+                                                    Mark Lost
+                                                  </DropdownMenuItem>
+                                                )}
+                                            </>
+                                          ) : (
+                                            <>
+                                              {s.status === "in_stock" && (
+                                                <>
+                                                  {/* MOVE-1: universal Move/Assign. */}
+                                                  {canMove && (
+                                                    <DropdownMenuItem
+                                                      onClick={() => setMoveTarget(s)}
+                                                    >
+                                                      Move / Assign…
+                                                    </DropdownMenuItem>
+                                                  )}
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      setUnitStatus(s.id, "consumed")
+                                                    }
+                                                  >
+                                                    Mark consumed
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onClick={() =>
+                                                      setUnitStatus(s.id, "retired")
+                                                    }
+                                                  >
+                                                    Mark retired
+                                                  </DropdownMenuItem>
+                                                </>
+                                              )}
+                                              {s.status === "allocated" && (
                                                 <DropdownMenuItem
-                                                  onClick={() => setMoveTarget(s)}
+                                                  onClick={() => returnUnit(s.id)}
                                                 >
-                                                  Move / Assign…
+                                                  Return to stock
                                                 </DropdownMenuItem>
                                               )}
-                                              <DropdownMenuItem
-                                                onClick={() =>
-                                                  setUnitStatus(s.id, "consumed")
-                                                }
-                                              >
-                                                Mark consumed
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem
-                                                onClick={() =>
-                                                  setUnitStatus(s.id, "retired")
-                                                }
-                                              >
-                                                Mark retired
-                                              </DropdownMenuItem>
+                                              {(s.status === "consumed" ||
+                                                s.status === "retired") && (
+                                                <DropdownMenuItem
+                                                  onClick={() =>
+                                                    setUnitStatus(s.id, "in_stock")
+                                                  }
+                                                >
+                                                  Restore to stock
+                                                </DropdownMenuItem>
+                                              )}
                                             </>
-                                          )}
-                                          {s.status === "allocated" && (
-                                            <DropdownMenuItem
-                                              onClick={() => returnUnit(s.id)}
-                                            >
-                                              Return to stock
-                                            </DropdownMenuItem>
-                                          )}
-                                          {(s.status === "consumed" ||
-                                            s.status === "retired") && (
-                                            <DropdownMenuItem
-                                              onClick={() =>
-                                                setUnitStatus(s.id, "in_stock")
-                                              }
-                                            >
-                                              Restore to stock
-                                            </DropdownMenuItem>
                                           )}
                                           <DropdownMenuSeparator />
                                           <DropdownMenuItem
@@ -703,7 +834,21 @@ export function ProductDetailClient({
                     </TableCell>
                     <TableCell className="text-xs">{m.from_label ?? "—"}</TableCell>
                     <TableCell className="text-brand-charcoal text-xs font-medium">
-                      {m.to_label ?? "—"}
+                      {/* CUSTODY-1: custody events read "Marked <status>"; moves
+                          show the destination label. */}
+                      {m.to_type === "custody" ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge
+                            variant="outline"
+                            className="border-brand-navy/30 text-brand-navy text-[9px] uppercase"
+                          >
+                            Custody
+                          </Badge>
+                          Marked {m.to_label}
+                        </span>
+                      ) : (
+                        (m.to_label ?? "—")
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {m.moved_by_name ?? "—"}
@@ -755,6 +900,19 @@ export function ProductDetailClient({
         }}
       />
 
+      <MarkDeliveredDialog
+        productId={product.id}
+        stockId={deliverTarget}
+        open={deliverTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeliverTarget(null);
+        }}
+        onDone={() => {
+          setDeliverTarget(null);
+          router.refresh();
+        }}
+      />
+
       {editingUnit && (
         <EditStockUnitForm
           key={editingUnit.id}
@@ -773,6 +931,27 @@ export function ProductDetailClient({
       )}
     </div>
   );
+}
+
+// CUSTODY-1: combined custody/location status label for a serialized unit.
+function custodyDisplay(
+  s: DbInventoryStock,
+  currentLabel: string | undefined
+): string {
+  switch (s.custody_status) {
+    case "lost":
+      return `Lost — last seen ${s.last_known_label ?? currentLabel ?? "unknown"}`;
+    case "consumed":
+      return "Consumed";
+    case "installed":
+      return "Installed";
+    case "delivered":
+      return currentLabel ? `Delivered (${currentLabel})` : "Delivered";
+    case "returned":
+      return "Returned";
+    default: // in_stock
+      return currentLabel ? `In ${currentLabel}` : "In stock";
+  }
 }
 
 function Detail({ label, value }: { label: string; value: string | null }) {
