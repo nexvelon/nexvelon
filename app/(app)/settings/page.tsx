@@ -18,6 +18,7 @@ import {
   Receipt,
   ShieldCheck,
   Tag,
+  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 import { BrandingThemes } from "@/components/modules/settings/BrandingThemes";
@@ -25,6 +26,7 @@ import { BackupsData } from "@/components/modules/settings/BackupsData";
 import { ClassificationsPane } from "@/components/modules/settings/ClassificationsPane";
 import { InventoryVocabPane } from "@/components/modules/settings/InventoryVocabPane";
 import { ManufacturersPane } from "@/components/modules/settings/ManufacturersPane";
+import { LocationsPane } from "@/components/modules/settings/LocationsPane";
 import {
   ApiWebhooks,
   AuditCompliance,
@@ -58,6 +60,7 @@ const SECTIONS: Section[] = [
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
   { key: "inventory-lists", label: "Inventory Lists", description: "Categories, manufacturers, units, storage locations.", icon: Boxes },
   { key: "manufacturers", label: "Manufacturers", description: "Manage the manufacturer options offered on the part form.", icon: Factory },
+  { key: "locations", label: "Locations", description: "Warehouses and trucks that stock can move between.", icon: Warehouse },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
   { key: "numbering", label: "Numbering Schemes", description: "Editable patterns for quotes, projects, invoices, POs.", icon: Hash },
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
@@ -148,6 +151,7 @@ export default function SettingsPage() {
             {active === "classifications" && <ClassificationsPane />}
             {active === "inventory-lists" && <InventoryVocabPane />}
             {active === "manufacturers" && <ManufacturersPane />}
+            {active === "locations" && <LocationsPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
             {active === "tax" && <TaxCurrency />}
