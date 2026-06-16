@@ -574,3 +574,84 @@ export async function getStockProject(
   if (!proj) return null;
   return { project_id: proj.id, project_number: proj.project_number };
 }
+
+// ── PART-FIX-1 — manual quantity adjustment ──────────────────────────────────
+// Correct a stock row's on-hand with a required reason, logged to the ledger as
+// an 'adjustment' (so it shows on the Movement History timeline). Serialized
+// rows are qty 1 — only setting qty 0 (to retire the unit) is permitted, never
+// an arbitrary increase.
+
+export interface AdjustResult {
+  quantity: number;
+  delta: number;
+}
+
+export async function adjustStockQuantity(
+  stockId: string,
+  newQty: number,
+  reason: string
+): Promise<AdjustResult> {
+  const supabase = await db();
+
+  if (!Number.isFinite(newQty) || newQty < 0) {
+    throw new Error("New quantity must be zero or greater.");
+  }
+  const trimmedReason = reason.trim();
+  if (trimmedReason === "") throw new Error("A reason is required to adjust.");
+
+  const { data: row, error } = await supabase
+    .from("inventory_stock")
+    .select(
+      "*, product:inventory_products(is_serialized, tracking_mode)"
+    )
+    .eq("id", stockId)
+    .maybeSingle();
+  if (error) throw new Error(`adjustStockQuantity/load: ${error.message}`);
+  if (!row) throw new Error("Stock row not found.");
+  const unit = row as DbInventoryStock & {
+    product: { is_serialized: boolean; tracking_mode: string } | null;
+  };
+
+  const oldQty = Number(unit.quantity);
+  const serialized = unit.product ? isSerializedProduct(unit.product) : false;
+  if (serialized && newQty !== 0 && newQty !== oldQty) {
+    throw new Error(
+      "A serialized unit is quantity 1 — you can only adjust it to 0 (retire it)."
+    );
+  }
+
+  const delta = newQty - oldQty;
+  if (delta === 0) throw new Error("New quantity matches the current quantity.");
+
+  const update: Record<string, unknown> = {
+    quantity: newQty,
+    updated_at: new Date().toISOString(),
+  };
+  // A serialized unit set to 0 is effectively gone — retire it.
+  if (serialized && newQty === 0) update.status = "retired";
+
+  const { error: upErr } = await supabase
+    .from("inventory_stock")
+    .update(update)
+    .eq("id", stockId);
+  if (upErr) throw new Error(`adjustStockQuantity: ${upErr.message}`);
+
+  const deltaStr = delta > 0 ? `+${delta}` : String(delta);
+  const mover = await currentMover();
+  await recordMovement({
+    product_id: unit.product_id,
+    stock_id: stockId,
+    quantity: Math.abs(delta),
+    from_type: "adjustment",
+    from_id: null,
+    from_label: `was ${oldQty}`,
+    to_type: "adjustment",
+    to_id: null,
+    to_label: deltaStr,
+    moved_by: mover.id,
+    moved_by_name: mover.name,
+    note: `${deltaStr} · ${trimmedReason}`,
+  });
+
+  return { quantity: newQty, delta };
+}

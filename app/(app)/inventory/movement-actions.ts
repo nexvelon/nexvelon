@@ -14,9 +14,11 @@ import {
   markReturned,
   markConsumed,
   getStockProject,
+  adjustStockQuantity,
   type MoveDestination,
   type MoveStockResult,
   type CustodyResult,
+  type AdjustResult,
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -174,6 +176,24 @@ export async function markConsumedAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markConsumed(stockId);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// PART-FIX-1 — manual quantity adjustment with a reason (logged as 'adjustment').
+export async function adjustStockQuantityAction(
+  productId: string,
+  stockId: string,
+  newQty: number,
+  reason: string
+): Promise<ActionResult<AdjustResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await adjustStockQuantity(stockId, newQty, reason);
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {

@@ -625,6 +625,9 @@ export interface DbInventoryProduct {
   // fixed; else none.
   msrp: number | null;
   margin_tier_id: string | null;
+  // PART-FIX-1 (migration 0051): pack-size + sub-allocate for non-"Each" UoM.
+  pack_size: number | null;
+  track_individual_units: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -662,6 +665,9 @@ export type DbInventoryProductInsert = {
   // PART-FORM-2 (migration 0050): MSRP + quote-default margin tier.
   msrp?: number | null;
   margin_tier_id?: string | null;
+  // PART-FIX-1 (migration 0051): pack-size + sub-allocate.
+  pack_size?: number | null;
+  track_individual_units?: boolean;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;

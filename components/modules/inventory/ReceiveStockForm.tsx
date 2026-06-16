@@ -32,17 +32,27 @@ function todayIso(): string {
 export function ReceiveStockForm({
   productId,
   trackingMode,
+  packSize = null,
+  trackIndividual = false,
+  unitOfMeasure = "Each",
   open,
   onOpenChange,
   onReceived,
 }: {
   productId: string;
   trackingMode: InventoryTrackingMode;
+  // PART-FIX-1: pack info — when the part tracks individual units, one received
+  // pack expands into pack_size rows.
+  packSize?: number | null;
+  trackIndividual?: boolean;
+  unitOfMeasure?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReceived: () => void;
 }) {
   const isSerialized = trackingMode === "serialized";
+  const packExpands =
+    trackIndividual && unitOfMeasure.toLowerCase() !== "each" && (packSize ?? 0) > 0;
 
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState("");
@@ -139,9 +149,11 @@ export function ReceiveStockForm({
         <DialogHeader>
           <DialogTitle>Receive stock</DialogTitle>
           <DialogDescription>
-            {isSerialized
-              ? "Creates one stock unit per quantity. Add serial numbers (one per line) to tag them."
-              : "Creates a single bulk lot for the quantity received."}
+            {packExpands
+              ? `This part tracks individual units — each ${unitOfMeasure.toLowerCase()} received expands into ${packSize} stock units (quantity here = number of ${unitOfMeasure.toLowerCase()}es).`
+              : isSerialized
+                ? "Creates one stock unit per quantity. Add serial numbers (one per line) to tag them."
+                : "Creates a single bulk lot for the quantity received."}
           </DialogDescription>
         </DialogHeader>
 
