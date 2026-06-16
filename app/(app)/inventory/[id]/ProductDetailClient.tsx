@@ -44,6 +44,10 @@ import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
 import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialog";
 import { MarkDeliveredDialog } from "@/components/modules/inventory/MarkDeliveredDialog";
 import {
+  ReorderDialog,
+  type ReorderPart,
+} from "@/components/modules/inventory/ReorderDialog";
+import {
   markInstalledAction,
   markLostAction,
   markReturnedAction,
@@ -99,6 +103,9 @@ export function ProductDetailClient({
   const canMove = hasPermission(role, "inventory", "edit");
   // SERIAL-1: serialized parts intake one row per unit, each with a serial.
   const isSerialized = isSerializedProduct(product);
+  // REORDER-1: offer Reorder when at/below the reorder point (PO-create gate).
+  const canReorder = hasPermission(role, "inventory", "create");
+  const [reorderOpen, setReorderOpen] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -397,6 +404,19 @@ export function ProductDetailClient({
             )}
           </h2>
           <div className="flex items-center gap-2">
+            {/* REORDER-1: surfaced when at/below the reorder point. */}
+            {canReorder &&
+              product.reorder_point != null &&
+              onHand <= product.reorder_point && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-400 text-amber-700 hover:text-amber-800"
+                  onClick={() => setReorderOpen(true)}
+                >
+                  Reorder
+                </Button>
+              )}
             {canDelete && (
               <Button
                 size="sm"
@@ -911,6 +931,25 @@ export function ProductDetailClient({
           setDeliverTarget(null);
           router.refresh();
         }}
+      />
+
+      <ReorderDialog
+        part={
+          {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            masterPartNumber: product.master_part_number,
+            onHand,
+            reorderPoint: product.reorder_point ?? 0,
+            suggestedQty:
+              product.reorder_qty ??
+              Math.max((product.reorder_point ?? 0) - onHand, 0),
+            defaultCost: Number(product.default_unit_cost ?? 0),
+          } satisfies ReorderPart
+        }
+        open={reorderOpen}
+        onOpenChange={setReorderOpen}
       />
 
       {editingUnit && (

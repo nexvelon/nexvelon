@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -16,6 +17,9 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { listProductsAction } from "@/app/(app)/inventory/actions";
+import { useRole } from "@/lib/role-context";
+import { hasPermission } from "@/lib/permissions";
+import { ReorderDialog, type ReorderPart } from "./ReorderDialog";
 import type { Product } from "@/lib/types";
 
 interface LowStockRow {
@@ -27,6 +31,10 @@ interface LowStockRow {
 
 export function LowStockReport({ showCost }: { showCost: boolean }) {
   const [products, setProducts] = useState<Product[] | null>(null);
+  const { role } = useRole();
+  // REORDER-1: the Reorder action uses the existing PO-create gate.
+  const canReorder = hasPermission(role, "inventory", "create");
+  const [reorderPart, setReorderPart] = useState<ReorderPart | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +101,7 @@ export function LowStockReport({ showCost }: { showCost: boolean }) {
                 {showCost && (
                   <TableHead className="text-right">Est. cost</TableHead>
                 )}
+                {canReorder && <TableHead className="w-24" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -124,12 +133,42 @@ export function LowStockReport({ showCost }: { showCost: boolean }) {
                       {formatCurrency(estCost)}
                     </TableCell>
                   )}
+                  {canReorder && (
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setReorderPart({
+                            id: p.id,
+                            sku: p.sku,
+                            name: p.name,
+                            masterPartNumber: p.masterPartNumber,
+                            onHand: p.stock,
+                            reorderPoint: p.reorderPoint,
+                            suggestedQty,
+                            defaultCost: p.cost,
+                          })
+                        }
+                      >
+                        Reorder
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </Card>
+
+      <ReorderDialog
+        part={reorderPart}
+        open={reorderPart !== null}
+        onOpenChange={(o) => {
+          if (!o) setReorderPart(null);
+        }}
+      />
     </div>
   );
 }

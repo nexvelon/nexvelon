@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import {
   createPurchaseOrder,
   deletePurchaseOrder,
+  getLastVendorIdForProduct,
   getPurchaseOrderById,
   getPurchaseOrders,
   receivePurchaseOrderLines,
@@ -114,6 +115,14 @@ export async function getPurchaseOrderAction(
   } catch (e) {
     return fail(e);
   }
+}
+
+// REORDER-1 — last PO vendor for a part (read; authenticated). Used to prefill
+// the Reorder dialog's vendor.
+export async function getLastVendorIdForProductAction(
+  productId: string
+): Promise<string | null> {
+  return getLastVendorIdForProduct(productId);
 }
 
 export async function createPurchaseOrderAction(

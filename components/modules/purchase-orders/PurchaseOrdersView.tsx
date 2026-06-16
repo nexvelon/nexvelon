@@ -5,7 +5,8 @@
 // refreshed via listPurchaseOrdersAction). Editing loads the full detail
 // (header + lines) on demand before opening the drawer.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Edit3,
   MoreHorizontal,
@@ -93,6 +94,20 @@ export function PurchaseOrdersView({
     if (r.ok) setDrawer({ open: true, mode: { kind: "edit", detail: r.data } });
     else toast.error(r.error);
   };
+
+  // REORDER-1: deep-link from the Reorder flow (?open=<id>) opens that PO's
+  // drawer once, then strips the param so a refresh doesn't reopen it.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const openedRef = useRef(false);
+  useEffect(() => {
+    const id = searchParams.get("open");
+    if (!id || openedRef.current) return;
+    openedRef.current = true;
+    void openEdit(id);
+    router.replace("/purchase-orders");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div className="space-y-6">
