@@ -105,27 +105,20 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
             </Link>
             <ImportProductsButton />
             <EmailLowStockButton />
-            <button
-              type="button"
+            {/* FIX-BATCH-N: "Receive PO" is a real flow — receiving happens
+                against a specific PO on the Purchase Orders page, so this links
+                there rather than being a dead list-level button.
+                "Stock count" (no such feature) and "Adjust" (adjustment is
+                per-stock-row inside a part, via the unit action menu on the part
+                detail) were dead placeholders with no handler and have been
+                removed. */}
+            <Link
+              href="/purchase-orders"
               className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
               style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
             >
               Receive PO
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
-              style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
-            >
-              Stock count
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
-              style={{ background: "var(--brand-primary)" }}
-            >
-              Adjust
-            </button>
+            </Link>
           </>
         }
       />

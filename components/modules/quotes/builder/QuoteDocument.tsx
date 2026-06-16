@@ -1223,7 +1223,7 @@ function CoverPage({
       <Text style={styles.coverSubtitle}>{schedule.subtitle}</Text>
       <Text style={styles.coverTitle}>{schedule.title}</Text>
       <Text style={[styles.coverDateLine, styles.numText]}>
-        numbered {number}, dated {safeFormat(createdAt, "MMMM d, yyyy")}
+        Quote# {number}, dated {safeFormat(createdAt, "MMMM d, yyyy")}
       </Text>
 
       <View style={styles.coverTwoCol}>
