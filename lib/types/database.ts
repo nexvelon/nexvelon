@@ -615,6 +615,8 @@ export interface DbInventoryProduct {
   subcategory: string | null;
   // IMG-1 (migration 0034): storage path in the public "product-images" bucket.
   image_path: string | null;
+  // PART-FORM B1 (migration 0044): free-text part notes (form bottom).
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -645,9 +647,25 @@ export type DbInventoryProductInsert = {
   subcategory?: string | null;
   // IMG-1 (migration 0034): product image storage path.
   image_path?: string | null;
+  // PART-FORM B1 (migration 0044): free-text part notes.
+  notes?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
+
+// PART-FORM B1 (migration 0044): managed manufacturers list (Settings →
+// Manufacturers) feeding the part form's Manufacturer dropdown. The
+// inventory_products.manufacturer column stays free text — this is options only.
+export interface DbManufacturer {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbManufacturerInsert = {
+  name: string;
+};
 
 export interface DbInventoryStock {
   id: string;

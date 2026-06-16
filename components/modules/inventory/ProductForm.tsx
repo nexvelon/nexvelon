@@ -16,6 +16,8 @@ import {
   listInventoryVocabAction,
   listSubcategoriesAction,
 } from "@/app/(app)/settings/inventory-vocab-actions";
+import { listManufacturersAction } from "@/app/(app)/settings/manufacturers-actions";
+import { listVendorsAction } from "@/app/(app)/vendors/actions";
 import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
 import { ProductImageField } from "./ProductImageField";
 import { Input } from "@/components/ui/input";
@@ -74,9 +76,29 @@ const MANUFACTURER_OPTIONS = [
   "Vivotek",
 ];
 export const VENDOR_OPTIONS = ["ADI", "Anixter", "Wesco", "CDW", "Provo"];
-// B-2: fallback unit list (the only kind without a prior hardcoded const) used
-// if the managed inventory_vocab fetch is empty/unavailable.
-const UNIT_FALLBACK = ["Each", "Box", "Pack", "Case", "Roll", "Feet", "Meter"];
+// PART-FORM B1: standard unit-of-measure option set (a fixed Select, not the
+// old type-to-clear combobox). "Each" is the default for new parts.
+const UOM_OPTIONS = [
+  "Each",
+  "Box",
+  "Case",
+  "Pack",
+  "Roll",
+  "Foot",
+  "Meter",
+  "Bag",
+  "Spool",
+  "Kit",
+];
+// PART-FORM B1: sentinel for the nullable vendor/manufacturer Selects (Radix
+// Select disallows an empty-string item value). Mirrors LineItemRow's pattern.
+const NONE = "__none__";
+// PART-FORM B1: ensure a part's current stored value is always an option, so
+// editing never silently drops a value that isn't in the managed list.
+function withCurrent(options: string[], current: string): string[] {
+  const c = current.trim();
+  return c !== "" && !options.includes(c) ? [c, ...options] : options;
+}
 
 export type Mode =
   | { kind: "create" }
@@ -97,6 +119,8 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [sku, setSku] = useState(existing?.sku ?? "");
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
+  // PART-FORM B1: free-text part notes (form bottom).
+  const [notes, setNotes] = useState(existing?.notes ?? "");
   const [category, setCategory] = useState(existing?.category ?? "");
   // CAT-3: sub-category (dependent on category). Stored as a name like category.
   const [subcategory, setSubcategory] = useState(existing?.subcategory ?? "");
@@ -114,7 +138,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
     existing?.tracking_mode ?? "serialized"
   );
   const [unitOfMeasure, setUnitOfMeasure] = useState(
-    existing?.unit_of_measure ?? "each"
+    existing?.unit_of_measure ?? "Each"
   );
   const [defaultUnitCost, setDefaultUnitCost] = useState(
     existing?.default_unit_cost != null ? String(existing.default_unit_cost) : ""
@@ -218,9 +242,12 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   // Default to the hardcoded consts so the form works before the fetch resolves
   // (and as a fallback if the fetch fails or a list is empty / 0023 not applied).
   const [categoryOptions, setCategoryOptions] = useState<string[]>(CATEGORY_OPTIONS);
+  // PART-FORM B1: Manufacturer now sources from the managed manufacturers table;
+  // Vendor from the vendors list. Both fall back to the hardcoded consts until
+  // the fetch resolves (or if empty/unavailable). UoM uses the fixed UOM_OPTIONS.
   const [manufacturerOptions, setManufacturerOptions] =
     useState<string[]>(MANUFACTURER_OPTIONS);
-  const [unitOptions, setUnitOptions] = useState<string[]>(UNIT_FALLBACK);
+  const [vendorOptions, setVendorOptions] = useState<string[]>(VENDOR_OPTIONS);
   // CAT-3: category rows (with ids) + active subcategories, for the dependent
   // sub-category select.
   const [categoryRows, setCategoryRows] = useState<DbInventoryVocab[]>([]);
@@ -230,20 +257,21 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
     let active = true;
     Promise.all([
       listInventoryVocabAction("category"),
-      listInventoryVocabAction("manufacturer"),
-      listInventoryVocabAction("unit_of_measure"),
       listSubcategoriesAction(),
+      listManufacturersAction(),
+      listVendorsAction(),
     ])
-      .then(([cat, man, uom, sub]) => {
+      .then(([cat, sub, man, ven]) => {
         if (!active) return;
         if (cat.ok) {
           setCategoryRows(cat.data);
           if (cat.data.length) setCategoryOptions(cat.data.map((r) => r.name));
         }
+        if (sub.ok) setSubcatRows(sub.data);
         if (man.ok && man.data.length)
           setManufacturerOptions(man.data.map((r) => r.name));
-        if (uom.ok && uom.data.length) setUnitOptions(uom.data.map((r) => r.name));
-        if (sub.ok) setSubcatRows(sub.data);
+        if (ven.ok && ven.data.length)
+          setVendorOptions(ven.data.map((v) => v.name));
       })
       .catch(() => {
         // keep the hardcoded fallbacks
@@ -315,6 +343,7 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       upc: upc.trim() || null,
       master_part_number: masterPartNumber.trim() || null,
       replacement_part_number: replacementPartNumber.trim() || null,
+      notes: notes.trim() || null,
     };
 
     startTransition(async () => {
@@ -455,30 +484,40 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             </select>
           </Field>
           <Field label="Manufacturer">
-            <Input
-              list="product-manufacturer-options"
-              value={manufacturer}
-              onChange={(e) => setManufacturer(e.target.value)}
-              placeholder="Select or type…"
-            />
-            <datalist id="product-manufacturer-options">
-              {manufacturerOptions.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
+            <Select
+              value={manufacturer.trim() === "" ? NONE : manufacturer}
+              onValueChange={(v) => setManufacturer(v === NONE ? "" : (v ?? ""))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>— None —</SelectItem>
+                {withCurrent(manufacturerOptions, manufacturer).map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Vendor">
-            <Input
-              list="product-vendor-options"
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-              placeholder="Select or type…"
-            />
-            <datalist id="product-vendor-options">
-              {VENDOR_OPTIONS.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
+            <Select
+              value={vendor.trim() === "" ? NONE : vendor}
+              onValueChange={(v) => setVendor(v === NONE ? "" : (v ?? ""))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>— None —</SelectItem>
+                {withCurrent(vendorOptions, vendor).map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
         </div>
       </section>
@@ -510,19 +549,23 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             </p>
           </Field>
           <Field label="Unit of measure">
-            <Input
-              list="product-unit-options"
-              value={unitOfMeasure}
-              onChange={(e) => setUnitOfMeasure(e.target.value)}
-              placeholder="each"
-            />
-            <datalist id="product-unit-options">
-              {unitOptions.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
+            <Select
+              value={unitOfMeasure.trim() === "" ? "Each" : unitOfMeasure}
+              onValueChange={(v) => setUnitOfMeasure(v ?? "Each")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {withCurrent(UOM_OPTIONS, unitOfMeasure).map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
-          <Field label="Default unit cost">
+          <Field label="Default Purchase Cost">
             <Input
               type="number"
               step="0.01"
@@ -531,8 +574,11 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               onChange={(e) => setDefaultUnitCost(e.target.value)}
               placeholder="0.00"
             />
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              Purchase Cost = what we pay the vendor.
+            </p>
           </Field>
-          <Field label="List price">
+          <Field label="Sell Price">
             <Input
               type="number"
               step="0.01"
@@ -541,6 +587,9 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               onChange={(e) => setListPrice(e.target.value)}
               placeholder="0.00"
             />
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              Sell Price = what we charge the client.
+            </p>
           </Field>
           <Field label="Low-stock at (qty)">
             <Input
@@ -734,6 +783,21 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             </ul>
           )}
         </div>
+      </section>
+
+      {/* Notes (PART-FORM B1) */}
+      <section className="space-y-4">
+        <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          Notes
+        </h2>
+        <Field label="Notes">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Internal notes about this part…"
+          />
+        </Field>
       </section>
 
       <div className="flex items-center justify-end gap-2 border-t pt-4">
