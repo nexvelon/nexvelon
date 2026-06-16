@@ -43,6 +43,7 @@ import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockFor
 import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
 import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialog";
 import { MarkDeliveredDialog } from "@/components/modules/inventory/MarkDeliveredDialog";
+import { AdjustStockDialog } from "@/components/modules/inventory/AdjustStockDialog";
 import {
   ReorderDialog,
   type ReorderPart,
@@ -117,6 +118,8 @@ export function ProductDetailClient({
   const [moveTarget, setMoveTarget] = useState<DbInventoryStock | null>(null);
   // CUSTODY-1: the unit whose Mark-Delivered dialog is open.
   const [deliverTarget, setDeliverTarget] = useState<string | null>(null);
+  // PART-FIX-1: the unit whose Adjust-qty dialog is open.
+  const [adjustTarget, setAdjustTarget] = useState<DbInventoryStock | null>(null);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
@@ -588,6 +591,13 @@ export function ProductDetailClient({
                                           >
                                             Edit
                                           </DropdownMenuItem>
+                                          {canMove && (
+                                            <DropdownMenuItem
+                                              onClick={() => setAdjustTarget(s)}
+                                            >
+                                              Adjust qty…
+                                            </DropdownMenuItem>
+                                          )}
                                           <DropdownMenuSeparator />
                                           {isSerialized ? (
                                             // CUSTODY-1: serialized units use the
@@ -858,7 +868,8 @@ export function ProductDetailClient({
                     </TableCell>
                     <TableCell className="text-xs">{m.from_label ?? "—"}</TableCell>
                     <TableCell className="text-brand-charcoal text-xs font-medium">
-                      {/* CUSTODY-1: custody events read "Marked <status>"; moves
+                      {/* CUSTODY-1: custody events read "Marked <status>";
+                          PART-FIX-1: adjustments read "Adjusted <delta>"; moves
                           show the destination label. */}
                       {m.to_type === "custody" ? (
                         <span className="inline-flex items-center gap-1.5">
@@ -869,6 +880,16 @@ export function ProductDetailClient({
                             Custody
                           </Badge>
                           Marked {m.to_label}
+                        </span>
+                      ) : m.to_type === "adjustment" ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge
+                            variant="outline"
+                            className="border-amber-400 text-[9px] uppercase text-amber-700"
+                          >
+                            Adjust
+                          </Badge>
+                          Adjusted {m.to_label}
                         </span>
                       ) : (
                         (m.to_label ?? "—")
@@ -950,6 +971,9 @@ export function ProductDetailClient({
       <ReceiveStockForm
         productId={product.id}
         trackingMode={product.tracking_mode}
+        packSize={product.pack_size}
+        trackIndividual={product.track_individual_units}
+        unitOfMeasure={product.unit_of_measure}
         open={receiveOpen}
         onOpenChange={setReceiveOpen}
         onReceived={() => {
@@ -961,6 +985,9 @@ export function ProductDetailClient({
       <AddStockForm
         productId={product.id}
         isSerialized={isSerialized}
+        packSize={product.pack_size}
+        trackIndividual={product.track_individual_units}
+        unitOfMeasure={product.unit_of_measure}
         open={addStockOpen}
         onOpenChange={setAddStockOpen}
         onAdded={() => {
@@ -992,6 +1019,20 @@ export function ProductDetailClient({
         }}
         onDone={() => {
           setDeliverTarget(null);
+          router.refresh();
+        }}
+      />
+
+      <AdjustStockDialog
+        productId={product.id}
+        unit={adjustTarget}
+        serialized={isSerialized}
+        open={adjustTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setAdjustTarget(null);
+        }}
+        onDone={() => {
+          setAdjustTarget(null);
           router.refresh();
         }}
       />

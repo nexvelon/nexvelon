@@ -25,6 +25,9 @@ import { addManualStockAction } from "@/app/(app)/inventory/actions";
 export function AddStockForm({
   productId,
   isSerialized = false,
+  packSize = null,
+  trackIndividual = false,
+  unitOfMeasure = "Each",
   open,
   onOpenChange,
   onAdded,
@@ -32,10 +35,17 @@ export function AddStockForm({
   productId: string;
   // SERIAL-1: serialized parts intake one row per unit, each requiring a serial.
   isSerialized?: boolean;
+  // PART-FIX-1: pack info — one pack expands into pack_size rows when tracking
+  // individual units.
+  packSize?: number | null;
+  trackIndividual?: boolean;
+  unitOfMeasure?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdded: () => void;
 }) {
+  const packExpands =
+    trackIndividual && unitOfMeasure.toLowerCase() !== "each" && (packSize ?? 0) > 0;
   const [quantity, setQuantity] = useState("1");
   const [unitCost, setUnitCost] = useState("");
   const [location, setLocation] = useState("");
@@ -83,16 +93,18 @@ export function AddStockForm({
       return;
     }
 
-    // SERIAL-1: serialized parts require exactly one serial per unit.
+    // SERIAL-1 / PART-FIX-1: serialized parts require one serial per individual
+    // unit. When a pack tracks individuals, that's qty × pack_size.
+    const requiredSerials = packExpands ? qty * (packSize ?? 1) : qty;
     const serialList = isSerialized
       ? serials
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-    if (isSerialized && serialList.length !== qty) {
+    if (isSerialized && serialList.length !== requiredSerials) {
       toast.error(
-        `Enter exactly ${qty} serial number${qty === 1 ? "" : "s"}, one per line.`
+        `Enter exactly ${requiredSerials} serial number${requiredSerials === 1 ? "" : "s"}, one per line.`
       );
       return;
     }
@@ -123,9 +135,11 @@ export function AddStockForm({
           <DialogDescription>
             Add stock directly, with no purchase order. The acquired date is
             optional — leave it blank if unknown.
-            {isSerialized
-              ? " This is a serialized part — add one serial per unit."
-              : ""}
+            {packExpands
+              ? ` This part tracks individual units — each ${unitOfMeasure.toLowerCase()} expands into ${packSize} stock units.`
+              : isSerialized
+                ? " This is a serialized part — add one serial per unit."
+                : ""}
           </DialogDescription>
         </DialogHeader>
 

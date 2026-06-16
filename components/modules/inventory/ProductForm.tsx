@@ -22,6 +22,19 @@ import { listMarginTiersAction } from "@/app/(app)/settings/margin-tiers-actions
 import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
 import type { DbMarginTier } from "@/lib/api/margin-tiers";
 import { ProductImageField } from "./ProductImageField";
+import {
+  PendingAttachments,
+  type PendingAttachment,
+} from "./PendingAttachments";
+import {
+  deleteProductImage,
+  uploadProductImage,
+} from "@/lib/api/product-images";
+import {
+  deleteAttachmentObject,
+  uploadAttachmentObject,
+} from "@/lib/api/attachments";
+import { createAttachment } from "@/app/(app)/attachments/actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -145,6 +158,13 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   );
   const [unitOfMeasure, setUnitOfMeasure] = useState(
     existing?.unit_of_measure ?? "Each"
+  );
+  // PART-FIX-1: pack-size + sub-allocate. Shown only when UoM isn't "Each".
+  const [packSize, setPackSize] = useState(
+    existing?.pack_size != null ? String(existing.pack_size) : ""
+  );
+  const [trackIndividual, setTrackIndividual] = useState<boolean>(
+    existing?.track_individual_units ?? false
   );
   const [defaultUnitCost, setDefaultUnitCost] = useState(
     existing?.default_unit_cost != null ? String(existing.default_unit_cost) : ""
@@ -343,6 +363,12 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
 
   const [pending, startTransition] = useTransition();
 
+  // PART-FIX-1: create-mode pending uploads (persisted after the part is made).
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+
   // Coerce a text field to a number-or-null payload value.
   const numOrNull = (s: string): number | null => {
     const t = s.trim();
@@ -360,6 +386,15 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
     }
     if (name.trim() === "") {
       toast.error("Name is required.");
+      return;
+    }
+
+    // PART-FIX-1: pack_size is required when UoM isn't "Each" (never silently
+    // default to 1).
+    const isPackUom =
+      unitOfMeasure.trim() !== "" && unitOfMeasure.toLowerCase() !== "each";
+    if (isPackUom && (numOrNull(packSize) == null || Number(packSize) <= 0)) {
+      toast.error(`Units per ${unitOfMeasure.toLowerCase()} is required.`);
       return;
     }
 
@@ -383,6 +418,9 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       tracking_mode: nextTrackingMode,
       is_serialized: isSerialized,
       unit_of_measure: unitOfMeasure.trim() || "each",
+      // PART-FIX-1: pack fields only apply to non-"Each" UoM.
+      pack_size: isPackUom ? numOrNull(packSize) : null,
+      track_individual_units: isPackUom ? trackIndividual : false,
       default_unit_cost: numOrNull(defaultUnitCost),
       // PART-FORM-2: quote-default chooser. Mode → which column drives it:
       //   tier  → margin_tier_id set, list_price cleared
@@ -408,13 +446,52 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
           ? await updateProductAction(existing.id, payload)
           : await createProductAction(payload);
 
+      // Part creation failed → nothing was uploaded; surface and stop.
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
+      const newId = result.data.id;
+
+      // PART-FIX-1: in create mode, persist the pending image + attachments now
+      // that we have a part id. An orphaned storage object (whose DB row failed)
+      // is rolled back; the part stays created so the user can retry on detail.
+      if (!isEdit) {
+        try {
+          if (pendingImage) {
+            const path = await uploadProductImage(newId, pendingImage);
+            const imgRes = await updateProductAction(newId, {
+              image_path: path,
+            });
+            if (!imgRes.ok) {
+              await deleteProductImage(path).catch(() => {});
+              throw new Error(imgRes.error);
+            }
+          }
+          for (const pa of pendingAttachments) {
+            const obj = await uploadAttachmentObject("product", newId, pa.file);
+            const attRes = await createAttachment("product", newId, pa.folder, {
+              path: obj.path,
+              filename: obj.filename,
+              contentType: obj.contentType,
+              size: obj.size,
+            });
+            if (!attRes.ok) {
+              await deleteAttachmentObject(obj.path).catch(() => {});
+              throw new Error(attRes.error);
+            }
+          }
+        } catch (e) {
+          toast.error(
+            `Part created, but a file failed to save: ${
+              e instanceof Error ? e.message : "upload error"
+            }. You can add it from the part page.`
+          );
+        }
+      }
 
       toast.success(isEdit ? `Updated ${payload.name}` : `Added ${payload.name}`);
-      onSubmitSuccess(result.data.id);
+      onSubmitSuccess(newId);
     });
   };
 
@@ -449,12 +526,25 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             placeholder="Optional description"
           />
         </Field>
-        {/* IMG-1: image upload (edit mode; create mode shows a save-first hint) */}
+        {/* IMG-1 / PART-FIX-1: image upload. Edit = live; create = pending,
+            persisted on Save. */}
         <ProductImageField
           productId={existing?.id ?? null}
           initialImagePath={existing?.image_path ?? null}
+          onPendingChange={setPendingImage}
         />
       </section>
+
+      {/* PART-FIX-1: in create mode, the four document folders are usable now;
+          files persist on Save. (Edit mode manages them live on the part page.) */}
+      {!isEdit && (
+        <section className="space-y-4">
+          <PendingAttachments
+            folders={["Shop Drawings", "Data Sheets", "Manual", "Misc"]}
+            onChange={setPendingAttachments}
+          />
+        </section>
+      )}
 
       {/* Part identifiers — CAT-1 (migration 0032) */}
       <section className="space-y-4">
@@ -617,6 +707,39 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               </SelectContent>
             </Select>
           </Field>
+          {/* PART-FIX-1: pack-size + sub-allocate — only for non-"Each" UoM. */}
+          {unitOfMeasure.toLowerCase() !== "each" &&
+            unitOfMeasure.trim() !== "" && (
+            <>
+              <Field label={`Units per ${unitOfMeasure.toLowerCase()}`} required>
+                <Input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={packSize}
+                  onChange={(e) => setPackSize(e.target.value)}
+                  placeholder="e.g. 50"
+                />
+                <p className="text-muted-foreground text-[11px] leading-snug">
+                  How many items are in one {unitOfMeasure.toLowerCase()}.
+                </p>
+              </Field>
+              <Field label="Track individual units">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={trackIndividual}
+                    onChange={(e) => setTrackIndividual(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-muted-foreground text-[11px] leading-snug">
+                    If on, each item inside the pack is counted and movable
+                    separately. If off, the whole pack is one unit.
+                  </span>
+                </label>
+              </Field>
+            </>
+          )}
           <Field label="Default Purchase Cost">
             <Input
               type="number"

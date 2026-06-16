@@ -376,6 +376,24 @@ export type ReceiveStockInput = {
   serials?: string[]; // serialized only; mapped 1:1 to the first N units
 };
 
+// PART-FIX-1 — when a non-"Each" part tracks individual units, one received
+// pack expands into pack_size individual rows. Returns the expanded total, or
+// null when pack-expansion doesn't apply (keep today's per-pack behaviour).
+function packExpansion(
+  product: DbInventoryProduct,
+  qty: number
+): number | null {
+  if (
+    product.track_individual_units &&
+    product.unit_of_measure.toLowerCase() !== "each" &&
+    product.pack_size != null &&
+    Number(product.pack_size) > 0
+  ) {
+    return qty * Number(product.pack_size);
+  }
+  return null;
+}
+
 /**
  * Receive stock against a product. The product's tracking_mode decides the
  * shape:
@@ -417,14 +435,22 @@ export async function receiveStock(
     current_location_id: warehouse?.id ?? null,
   };
 
+  const serialized = isSerializedProduct(product);
+  const expanded = packExpansion(product, input.quantity);
+  const serials = input.serials ?? [];
+
   let toInsert: DbInventoryStockInsert[];
-  if (
-    product.tracking_mode === "bulk" ||
-    product.tracking_mode === "non_serialized"
-  ) {
+  if (expanded != null) {
+    // PART-FIX-1: track-individual pack → one row per individual unit (qty 1).
+    // Serialized parts get one serial each (mapped 1:1 to the first N units).
+    toInsert = Array.from({ length: expanded }, (_, i) => ({
+      ...base,
+      serial_number: serialized ? serials[i]?.trim() || null : null,
+      quantity: 1,
+    }));
+  } else if (!serialized) {
     toInsert = [{ ...base, serial_number: null, quantity: input.quantity }];
   } else {
-    const serials = input.serials ?? [];
     toInsert = Array.from({ length: input.quantity }, (_, i) => ({
       ...base,
       serial_number: serials[i]?.trim() || null,
@@ -505,20 +531,32 @@ export async function addManualStock(
     current_location_id: warehouse?.id ?? null,
   };
 
+  // PART-FIX-1: pack-expanded count (individual units) or null (per-pack).
+  const expanded = packExpansion(product, input.quantity);
+  const unitCount = expanded ?? input.quantity;
+
   let toInsert: DbInventoryStockInsert[];
   if (serialized) {
-    // SERIAL-1: one row per unit, each with its serial (required).
+    // SERIAL-1: one row per unit, each with its serial (required). When
+    // pack-expanded, a serial is required for every individual unit.
     const serials = (input.serials ?? []).map((s) => s.trim());
-    if (serials.length !== input.quantity || serials.some((s) => s === "")) {
+    if (serials.length !== unitCount || serials.some((s) => s === "")) {
       throw new Error(
-        `A serial number is required for each of the ${input.quantity} unit${
-          input.quantity === 1 ? "" : "s"
+        `A serial number is required for each of the ${unitCount} unit${
+          unitCount === 1 ? "" : "s"
         }.`
       );
     }
     toInsert = serials.map((serial) => ({
       ...base,
       serial_number: serial,
+      quantity: 1,
+    }));
+  } else if (expanded != null) {
+    // Non-serialized, track-individual: one row per individual unit.
+    toInsert = Array.from({ length: expanded }, () => ({
+      ...base,
+      serial_number: null,
       quantity: 1,
     }));
   } else {

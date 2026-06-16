@@ -4,8 +4,8 @@
 // Upload compresses client-side then persists inventory_products.image_path via
 // updateProductAction; replace swaps + deletes the old object; delete clears it.
 
-import { useRef, useState } from "react";
-import { Download, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, ImageIcon, Loader2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,27 +17,30 @@ import { productImagePublicUrl } from "@/lib/product-image-url";
 import { updateProductAction } from "@/app/(app)/inventory/actions";
 
 interface Props {
-  /** Saved product id, or null in create mode (uploader hidden). */
+  /** Saved product id, or null in create mode (pending picker). */
   productId: string | null;
   initialImagePath: string | null;
+  /** PART-FIX-1: in create mode, report the picked file so the parent can
+   *  upload it after the part is created. */
+  onPendingChange?: (file: File | null) => void;
 }
 
-export function ProductImageField({ productId, initialImagePath }: Props) {
+export function ProductImageField({
+  productId,
+  initialImagePath,
+  onPendingChange,
+}: Props) {
   const [imagePath, setImagePath] = useState<string | null>(initialImagePath);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const url = productImagePublicUrl(imagePath);
 
-  // Create mode: no product id yet → can't namespace the upload path.
+  // Create mode: no product id yet → hold the picked file as pending and report
+  // it up; the parent uploads it after the part is created.
   if (!productId) {
     return (
-      <div className="space-y-1.5">
-        <Label className="text-xs">Image</Label>
-        <p className="text-muted-foreground rounded-md border border-dashed border-[var(--border)] px-3 py-4 text-center text-[11px]">
-          Save the part first, then reopen it to add an image.
-        </p>
-      </div>
+      <CreateModeImagePicker onPendingChange={onPendingChange} />
     );
   }
 
@@ -156,6 +159,96 @@ export function ProductImageField({ productId, initialImagePath }: Props) {
             <ImageIcon className="h-5 w-5" />
           )}
           {busy ? "Uploading…" : "Upload image (PNG or JPEG)"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// PART-FIX-1 — create-mode image picker. Holds the chosen file locally (preview
+// via an object URL) and reports it to the parent, which uploads it after the
+// part is created.
+function CreateModeImagePicker({
+  onPendingChange,
+}: {
+  onPendingChange?: (file: File | null) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const u = URL.createObjectURL(file);
+    setPreviewUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+
+  const pick = (f?: File) => {
+    const next = f ?? null;
+    if (next && !["image/png", "image/jpeg"].includes(next.type)) {
+      toast.error("Image must be PNG or JPEG.");
+      return;
+    }
+    setFile(next);
+    onPendingChange?.(next);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Image</Label>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          pick(f);
+        }}
+      />
+      {previewUrl ? (
+        <div className="flex items-start gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt="Selected"
+            className="h-24 w-24 rounded-md border border-[var(--border)] object-cover"
+          />
+          <div className="flex flex-col gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="mr-1 h-3.5 w-3.5" />
+              Replace
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-red-600 hover:text-red-700"
+              onClick={() => pick(undefined)}
+            >
+              <X className="mr-1 h-3.5 w-3.5" />
+              Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="text-muted-foreground hover:bg-muted/40 flex w-full flex-col items-center gap-1.5 rounded-md border border-dashed border-[var(--border)] px-3 py-5 text-[11px]"
+        >
+          <ImageIcon className="h-5 w-5" />
+          Choose image (PNG or JPEG) — saved when you create the part
         </button>
       )}
     </div>
