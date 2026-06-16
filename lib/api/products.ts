@@ -60,7 +60,12 @@ type StockSlice = Pick<
  * from the stock rows — never stored. supabase-js returns numeric columns as
  * strings, so every numeric is coerced via Number().
  */
-function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
+function toProduct(
+  p: DbInventoryProduct,
+  inStock: StockSlice[],
+  // PART-FORM-2: id → tier markup %, to resolve a part's quote-default margin.
+  tierMargins?: Map<string, number>
+): Product {
   const stock = inStock.reduce((n, r) => n + Number(r.quantity), 0);
   const totalCost = inStock.reduce(
     (n, r) => n + Number(r.unit_cost) * Number(r.quantity),
@@ -99,6 +104,11 @@ function toProduct(p: DbInventoryProduct, inStock: StockSlice[]): Product {
     vendor: (p.vendor ?? "") as Vendor,
     cost: p.default_unit_cost != null ? Number(p.default_unit_cost) : 0,
     price: p.list_price != null ? Number(p.list_price) : 0,
+    // PART-FORM-2: MSRP (reference) + resolved quote-default margin (tier mode).
+    msrp: p.msrp != null ? Number(p.msrp) : undefined,
+    marginTierId: p.margin_tier_id ?? undefined,
+    quoteDefaultMargin:
+      p.margin_tier_id != null ? tierMargins?.get(p.margin_tier_id) : undefined,
     stock,
     reorderPoint: p.reorder_point ?? 0,
     reorderQty: p.reorder_qty ?? undefined,
@@ -148,11 +158,27 @@ export async function listProducts(): Promise<Product[]> {
     .eq("status", "in_stock");
   if (stockErr) throw new Error(`listProducts/stock: ${stockErr.message}`);
 
+  // PART-FORM-2: tier markups (tier_1 per row) to resolve quote-default margins.
+  const tierMargins = await loadTierMargins(supabase);
+
   const byProduct = groupStockByProduct((stock ?? []) as StockSlice[]);
 
   return (catalog as DbInventoryProduct[]).map((p) =>
-    toProduct(p, byProduct.get(p.id) ?? [])
+    toProduct(p, byProduct.get(p.id) ?? [], tierMargins)
   );
+}
+
+// PART-FORM-2: map of margin_tier_id → its primary markup (tier_1). Used to
+// resolve a part's quote-default margin without an N+1 query.
+async function loadTierMargins(
+  supabase: Awaited<ReturnType<typeof db>>
+): Promise<Map<string, number>> {
+  const { data } = await supabase.from("margin_tiers").select("id, tier_1");
+  const map = new Map<string, number>();
+  for (const t of (data ?? []) as { id: string; tier_1: number }[]) {
+    map.set(t.id, Number(t.tier_1));
+  }
+  return map;
 }
 
 /**

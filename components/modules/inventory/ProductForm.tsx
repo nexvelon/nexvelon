@@ -18,7 +18,9 @@ import {
 } from "@/app/(app)/settings/inventory-vocab-actions";
 import { listManufacturersAction } from "@/app/(app)/settings/manufacturers-actions";
 import { listVendorsAction } from "@/app/(app)/vendors/actions";
+import { listMarginTiersAction } from "@/app/(app)/settings/margin-tiers-actions";
 import type { DbInventoryVocab } from "@/lib/api/inventory-vocab";
+import type { DbMarginTier } from "@/lib/api/margin-tiers";
 import { ProductImageField } from "./ProductImageField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -147,14 +149,47 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
   const [defaultUnitCost, setDefaultUnitCost] = useState(
     existing?.default_unit_cost != null ? String(existing.default_unit_cost) : ""
   );
+  // PART-FORM-2: the "Fixed price" input (still stored in list_price).
   const [listPrice, setListPrice] = useState(
     existing?.list_price != null ? String(existing.list_price) : ""
   );
   const [reorderPoint, setReorderPoint] = useState(
     existing?.reorder_point != null ? String(existing.reorder_point) : ""
   );
-  // C-5: reorder_qty field removed from the UI. The DB column stays (vestigial)
-  // per past-data preservation — we simply no longer send or show it.
+  // PART-FORM-2: reorder_qty re-added to the UI (was dropped in C-5).
+  const [reorderQty, setReorderQty] = useState(
+    existing?.reorder_qty != null ? String(existing.reorder_qty) : ""
+  );
+  // PART-FORM-2: MSRP (reference only).
+  const [msrp, setMsrp] = useState(
+    existing?.msrp != null ? String(existing.msrp) : ""
+  );
+  // PART-FORM-2: quote-default chooser. Mode is derived from existing data so
+  // parts with a list_price or tier load into the right mode (no data dropped).
+  const [quoteMode, setQuoteMode] = useState<"tier" | "fixed" | "none">(
+    existing?.margin_tier_id
+      ? "tier"
+      : existing?.list_price != null
+        ? "fixed"
+        : "none"
+  );
+  const [marginTierId, setMarginTierId] = useState(
+    existing?.margin_tier_id ?? ""
+  );
+  const [marginTiers, setMarginTiers] = useState<DbMarginTier[]>([]);
+  useEffect(() => {
+    let active = true;
+    listMarginTiersAction()
+      .then((res) => {
+        if (active && res.ok) setMarginTiers(res.data);
+      })
+      .catch(() => {
+        /* tier picker just stays empty */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // C-1: alternate search terms (stored as text[]). Add one at a time; chips
   // are removable. Trimmed, deduped (case-insensitive), empties ignored.
@@ -349,8 +384,15 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       is_serialized: isSerialized,
       unit_of_measure: unitOfMeasure.trim() || "each",
       default_unit_cost: numOrNull(defaultUnitCost),
-      list_price: numOrNull(listPrice),
+      // PART-FORM-2: quote-default chooser. Mode → which column drives it:
+      //   tier  → margin_tier_id set, list_price cleared
+      //   fixed → list_price set,     margin_tier_id cleared
+      //   none  → both cleared (the quote line starts blank)
+      list_price: quoteMode === "fixed" ? numOrNull(listPrice) : null,
+      margin_tier_id: quoteMode === "tier" ? marginTierId || null : null,
+      msrp: numOrNull(msrp),
       reorder_point: numOrNull(reorderPoint),
+      reorder_qty: numOrNull(reorderQty),
       search_aliases: searchAliases,
       notify_addons: notifyAddons,
       addons,
@@ -588,20 +630,96 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               Purchase Cost = what we pay the vendor.
             </p>
           </Field>
-          <Field label="Sell Price">
+          <Field label="MSRP">
             <Input
               type="number"
               step="0.01"
               min="0"
-              value={listPrice}
-              onChange={(e) => setListPrice(e.target.value)}
+              value={msrp}
+              onChange={(e) => setMsrp(e.target.value)}
               placeholder="0.00"
             />
             <p className="text-muted-foreground text-[11px] leading-snug">
-              Sell Price = what we charge the client.
+              Manufacturer&rsquo;s suggested retail price. Reference only — never
+              used as the quote default.
             </p>
           </Field>
-          <Field label="Low-stock at (qty)">
+        </div>
+
+        {/* PART-FORM-2: Quote default chooser (replaces the standalone Sell
+            Price). Mode picks how a part prices when added to a quote. */}
+        <div className="space-y-2">
+          <Field label="Quote default">
+            <Select
+              value={quoteMode}
+              onValueChange={(v) =>
+                setQuoteMode((v as "tier" | "fixed" | "none") ?? "none")
+              }
+            >
+              <SelectTrigger className="w-full md:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tier">Use margin tier</SelectItem>
+                <SelectItem value="fixed">Fixed price</SelectItem>
+                <SelectItem value="none">None — set on quote</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              How this part prices when added to a quote.
+            </p>
+          </Field>
+
+          {quoteMode === "tier" && (
+            <Field label="Margin tier">
+              <Select
+                value={marginTierId}
+                onValueChange={(v) => setMarginTierId(v ?? "")}
+              >
+                <SelectTrigger className="w-full md:w-72">
+                  <SelectValue placeholder="Select a margin tier…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {marginTiers.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.category} · {Number(t.tier_1)}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-[11px] leading-snug">
+                The quote computes sell = cost × the tier markup (uses the tier&rsquo;s
+                primary level).
+              </p>
+            </Field>
+          )}
+
+          {quoteMode === "fixed" && (
+            <Field label="Fixed price">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={listPrice}
+                onChange={(e) => setListPrice(e.target.value)}
+                placeholder="0.00"
+                className="md:w-72"
+              />
+              <p className="text-muted-foreground text-[11px] leading-snug">
+                The quote uses this exact price as the default.
+              </p>
+            </Field>
+          )}
+        </div>
+      </section>
+
+      {/* PART-FORM-2: Reorder behavior */}
+      <section className="space-y-4">
+        <h2 className="text-brand-navy text-sm font-semibold tracking-wide uppercase">
+          Reorder behavior
+        </h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Reorder point">
             <Input
               type="number"
               step="1"
@@ -611,8 +729,21 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               placeholder="0"
             />
             <p className="text-muted-foreground text-[11px] leading-snug">
-              Flag this part as low stock when on-hand falls to or below this
-              quantity. Leave blank/0 for no alert.
+              Trigger a low-stock alert when on-hand drops to or below this.
+            </p>
+          </Field>
+          <Field label="Reorder qty">
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              value={reorderQty}
+              onChange={(e) => setReorderQty(e.target.value)}
+              placeholder=""
+            />
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              Default qty to reorder. If blank, the system suggests just enough to
+              refill to the reorder point.
             </p>
           </Field>
         </div>

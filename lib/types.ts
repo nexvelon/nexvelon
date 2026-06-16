@@ -65,7 +65,13 @@ export interface Product {
   subcategory?: string; // CAT-3b: sub-category name for catalog filtering
   vendor: Vendor;
   cost: number;
-  price: number;
+  price: number; // = list_price (the part's "fixed price" quote default, if any)
+  // PART-FORM-2: MSRP (reference only) + the resolved quote-default margin. When
+  // the part uses a margin tier, quoteDefaultMargin is that tier's markup %;
+  // otherwise undefined (the quote builder then falls back to price → blank).
+  msrp?: number;
+  marginTierId?: string;
+  quoteDefaultMargin?: number;
   stock: number;
   reorderPoint: number;
   reorderQty?: number;

@@ -620,6 +620,11 @@ export interface DbInventoryProduct {
   // SERIAL-1 (migration 0047): when true, each unit is tracked individually by
   // serial number (one stock row per unit, quantity 1). Drives serialization.
   is_serialized: boolean;
+  // PART-FORM-2 (migration 0050): MSRP (reference only) + the quote-default
+  // margin tier. Mode is derived: margin_tier_id → tier; else list_price →
+  // fixed; else none.
+  msrp: number | null;
+  margin_tier_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -654,6 +659,9 @@ export type DbInventoryProductInsert = {
   notes?: string | null;
   // SERIAL-1 (migration 0047): per-part serialized toggle.
   is_serialized?: boolean;
+  // PART-FORM-2 (migration 0050): MSRP + quote-default margin tier.
+  msrp?: number | null;
+  margin_tier_id?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
