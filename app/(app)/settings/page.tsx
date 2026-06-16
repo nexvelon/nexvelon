@@ -8,6 +8,7 @@ import {
   Code,
   CreditCard,
   Database,
+  Factory,
   FileText,
   FolderKanban,
   Hash,
@@ -23,6 +24,7 @@ import { BrandingThemes } from "@/components/modules/settings/BrandingThemes";
 import { BackupsData } from "@/components/modules/settings/BackupsData";
 import { ClassificationsPane } from "@/components/modules/settings/ClassificationsPane";
 import { InventoryVocabPane } from "@/components/modules/settings/InventoryVocabPane";
+import { ManufacturersPane } from "@/components/modules/settings/ManufacturersPane";
 import {
   ApiWebhooks,
   AuditCompliance,
@@ -55,6 +57,7 @@ const SECTIONS: Section[] = [
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
   { key: "inventory-lists", label: "Inventory Lists", description: "Categories, manufacturers, units, storage locations.", icon: Boxes },
+  { key: "manufacturers", label: "Manufacturers", description: "Manage the manufacturer options offered on the part form.", icon: Factory },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
   { key: "numbering", label: "Numbering Schemes", description: "Editable patterns for quotes, projects, invoices, POs.", icon: Hash },
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
@@ -144,6 +147,7 @@ export default function SettingsPage() {
             {active === "quote" && <QuoteDefaults />}
             {active === "classifications" && <ClassificationsPane />}
             {active === "inventory-lists" && <InventoryVocabPane />}
+            {active === "manufacturers" && <ManufacturersPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
             {active === "tax" && <TaxCurrency />}
