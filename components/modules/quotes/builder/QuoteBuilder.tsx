@@ -55,6 +55,7 @@ import {
 } from "@/lib/quote-themes";
 import {
   DEFAULT_QUOTE_TEMPLATE_SLUG,
+  getQuoteTemplate,
   type QuoteTemplateSlug,
 } from "@/lib/company-profile";
 import {
@@ -306,6 +307,7 @@ export function QuoteBuilder({
   // current terms are an unedited default (or empty). If the user has
   // customized the terms, they are preserved across the switch.
   const handleTemplateChange = (next: QuoteTemplateSlug) => {
+    const prev = templateSlug;
     setTemplateSlug(next);
     // G2: swap the terms when they are still an unedited default (or empty).
     const knownDefaults = new Set([
@@ -338,6 +340,24 @@ export function QuoteBuilder({
           ...createGuardianDefaultSchedules(),
           ...schedules.slice(insertAt),
         ]);
+      }
+    } else if (next !== prev) {
+      // FIX-BATCH-N (CHANGE 3): switching to a NON-Guardian template — drop any
+      // Guardian-only schedule kinds (monitoring/dispatch/keyholders/pad) that
+      // were added, so the builder data matches the new entity. Kind-based only
+      // (no content scanning); a same-template re-select is a no-op (next!==prev).
+      const removed = schedules.filter((s) =>
+        GUARDIAN_ONLY_KINDS.includes(s.kind)
+      );
+      if (removed.length > 0) {
+        setSchedules(
+          schedules.filter((s) => !GUARDIAN_ONLY_KINDS.includes(s.kind))
+        );
+        toast.info(
+          `Removed ${removed.length} Guardian-only schedule${
+            removed.length === 1 ? "" : "s"
+          } not available in the ${getQuoteTemplate(next).displayName} template`
+        );
       }
     }
   };
