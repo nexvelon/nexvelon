@@ -8,8 +8,15 @@ import { revalidatePath } from "next/cache";
 import {
   moveStock,
   listMovementsByProduct,
+  markDelivered,
+  markInstalled,
+  markLost,
+  markReturned,
+  markConsumed,
+  getStockProject,
   type MoveDestination,
   type MoveStockResult,
+  type CustodyResult,
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -78,6 +85,96 @@ export async function moveStockAction(input: {
     });
     revalidatePath(`/inventory/${input.productId}`);
     revalidatePath("/inventory");
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── CUSTODY-1 (Batch D3) — serialized-unit custody actions (gate inventory:edit)
+
+function revalidateProduct(productId: string) {
+  revalidatePath(`/inventory/${productId}`);
+  revalidatePath("/inventory");
+}
+
+/** Resolve the project a unit sits on, for the delivery-proof upload target. */
+export async function getStockProjectAction(
+  stockId: string
+): Promise<{ project_id: string; project_number: string } | null> {
+  return getStockProject(stockId);
+}
+
+export async function markDeliveredAction(
+  productId: string,
+  stockId: string,
+  opts: { proofAttachmentId?: string | null } = {}
+): Promise<ActionResult<CustodyResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await markDelivered(stockId, opts);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function markInstalledAction(
+  productId: string,
+  stockId: string
+): Promise<ActionResult<CustodyResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await markInstalled(stockId);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function markLostAction(
+  productId: string,
+  stockId: string
+): Promise<ActionResult<CustodyResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await markLost(stockId);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function markReturnedAction(
+  productId: string,
+  stockId: string
+): Promise<ActionResult<CustodyResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await markReturned(stockId);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function markConsumedAction(
+  productId: string,
+  stockId: string
+): Promise<ActionResult<CustodyResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await markConsumed(stockId);
+    revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
     return fail(e);

@@ -691,6 +691,14 @@ export interface DbInventoryStock {
   // location (warehouse/truck) OR a job (cost-center), never both.
   current_location_id: string | null;
   current_cost_center_id: string | null;
+  // CUSTODY-1 (migration 0048): chain-of-custody for serialized units.
+  //   custody_status: in_stock | delivered | installed | returned | lost | consumed
+  custody_status: string;
+  delivered_at: string | null;
+  installed_at: string | null;
+  lost_at: string | null;
+  custody_proof_attachment_id: string | null;
+  last_known_label: string | null;
   created_at: string;
   updated_at: string;
 }
