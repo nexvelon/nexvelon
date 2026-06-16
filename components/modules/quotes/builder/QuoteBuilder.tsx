@@ -46,7 +46,7 @@ import {
   newId,
   quoteTotals,
   readLastUsedThemeSlug,
-  recalcLineItem,
+  round2,
   writeLastUsedThemeSlug,
 } from "@/lib/quote-helpers";
 import {
@@ -542,6 +542,21 @@ export function QuoteBuilder({
   };
 
   const addProductFromPalette = (sectionId: string, p: Product) => {
+    // PART-FORM-2: resolve the part's quote default — margin tier → fixed price
+    // (list_price) → blank. Tier mode uses the line's margin model; fixed mode
+    // sets the exact price (and back-derives the displayed margin); none starts
+    // at $0 so the user prices it on the quote.
+    let margin = 0;
+    let unitPrice = 0;
+    if (p.quoteDefaultMargin != null) {
+      margin = p.quoteDefaultMargin;
+      unitPrice =
+        margin >= 100 ? p.cost : round2(p.cost / (1 - margin / 100));
+    } else if (p.price > 0) {
+      unitPrice = p.price;
+      margin = p.cost > 0 ? round2((1 - p.cost / p.price) * 100) : 0;
+    }
+
     setSections((prev) =>
       prev.map((s) =>
         s.id === sectionId
@@ -549,9 +564,9 @@ export function QuoteBuilder({
               ...s,
               items: [
                 ...s.items,
-                recalcLineItem({
+                {
                   id: newId("li"),
-                  type: "product",
+                  type: "product" as const,
                   productId: p.id,
                   vendor: p.vendor,
                   sku: p.sku,
@@ -563,9 +578,9 @@ export function QuoteBuilder({
                   classification: "Materials",
                   qty: 1,
                   unitCost: p.cost,
-                  margin: 40,
-                  unitPrice: 0,
-                }),
+                  margin,
+                  unitPrice,
+                },
               ],
             }
           : s
