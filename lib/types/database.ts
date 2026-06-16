@@ -682,6 +682,10 @@ export interface DbInventoryStock {
   po_number: string | null;
   acquired_at: string | null;
   notes: string | null;
+  // MOVE-1 (migration 0046): where this row currently sits — EITHER a stock
+  // location (warehouse/truck) OR a job (cost-center), never both.
+  current_location_id: string | null;
+  current_cost_center_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -700,9 +704,79 @@ export type DbInventoryStockInsert = {
   po_number?: string | null;
   acquired_at?: string | null;
   notes?: string | null;
+  current_location_id?: string | null;
+  current_cost_center_id?: string | null;
 };
 
 export type DbInventoryStockUpdate = Partial<DbInventoryStockInsert>;
+
+// ----------------------------------------------------------------------------
+// MOVE-1 (migration 0046) — stock locations + append-only movement ledger.
+//   stock_locations  : warehouses + trucks (holder_name = the tech/sub a truck
+//                      is assigned to). Managed in Settings → Locations.
+//   stock_movements  : APPEND-ONLY ledger. from_/to_ carry a label snapshot so
+//                      history survives later renames/deletes. movement `type`
+//                      is one of 'warehouse'|'truck'|'job'|'vendor'|'manual'.
+// ----------------------------------------------------------------------------
+export type StockLocationType = "warehouse" | "truck";
+
+export interface DbStockLocation {
+  id: string;
+  name: string;
+  location_type: string; // 'warehouse' | 'truck'
+  holder_name: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbStockLocationInsert = {
+  name: string;
+  location_type?: string;
+  holder_name?: string | null;
+  is_active?: boolean;
+};
+
+export type DbStockLocationUpdate = Partial<DbStockLocationInsert>;
+
+export type StockMovementEndpointType =
+  | "warehouse"
+  | "truck"
+  | "job"
+  | "vendor"
+  | "manual";
+
+export interface DbStockMovement {
+  id: string;
+  product_id: string;
+  stock_id: string | null;
+  quantity: number;
+  from_type: string | null;
+  from_id: string | null;
+  from_label: string | null;
+  to_type: string | null;
+  to_id: string | null;
+  to_label: string | null;
+  moved_by: string | null;
+  moved_by_name: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export type DbStockMovementInsert = {
+  product_id: string;
+  stock_id?: string | null;
+  quantity?: number;
+  from_type?: string | null;
+  from_id?: string | null;
+  from_label?: string | null;
+  to_type?: string | null;
+  to_id?: string | null;
+  to_label?: string | null;
+  moved_by?: string | null;
+  moved_by_name?: string | null;
+  note?: string | null;
+};
 
 // ----------------------------------------------------------------------------
 // Vendors (PO-1, migration 0030) — supplier master records. Mirrors the

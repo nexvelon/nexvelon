@@ -41,6 +41,7 @@ import {
 import { ProductForm } from "@/components/modules/inventory/ProductForm";
 import { ReceiveStockForm } from "@/components/modules/inventory/ReceiveStockForm";
 import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
+import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialog";
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
@@ -59,6 +60,8 @@ import type {
   DbInventoryProduct,
   DbInventoryStock,
   DbSiteWithClient,
+  DbStockLocation,
+  DbStockMovement,
   InventoryStockStatus,
 } from "@/lib/types/database";
 
@@ -67,21 +70,30 @@ export function ProductDetailClient({
   stock,
   sites,
   poHistory,
+  locations,
+  movements,
+  currentLabels,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
   sites: DbSiteWithClient[];
   poHistory: ProductPurchaseHistoryRow[];
+  locations: DbStockLocation[];
+  movements: DbStockMovement[];
+  currentLabels: Record<string, string>;
 }) {
   const router = useRouter();
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
   // PARTS-1: deleting a part is gated; the server action enforces the same.
   const canDelete = hasPermission(role, "inventory", "delete");
+  // MOVE-1: moving/assigning stock is an operational op (Admin + PM).
+  const canMove = hasPermission(role, "inventory", "edit");
 
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [addStockOpen, setAddStockOpen] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<DbInventoryStock | null>(null);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
@@ -435,7 +447,7 @@ export function ProductDetailClient({
                                 <TableRow>
                                   <TableHead className="text-[10px] uppercase">Serial</TableHead>
                                   <TableHead className="text-right text-[10px] uppercase">Qty</TableHead>
-                                  <TableHead className="text-[10px] uppercase">Location</TableHead>
+                                  <TableHead className="text-[10px] uppercase">Current location</TableHead>
                                   <TableHead className="text-[10px] uppercase">PO #</TableHead>
                                   <TableHead className="text-[10px] uppercase">Status</TableHead>
                                   <TableHead className="text-[10px] uppercase">Site</TableHead>
@@ -453,7 +465,10 @@ export function ProductDetailClient({
                                       {s.quantity}
                                     </TableCell>
                                     <TableCell className="text-xs">
-                                      {s.location ?? "—"}
+                                      {/* MOVE-1: resolved warehouse/truck/job
+                                          label, falling back to the legacy
+                                          free-text location string. */}
+                                      {currentLabels[s.id] ?? s.location ?? "—"}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-xs">
                                       {s.po_number ?? "—"}
@@ -498,18 +513,17 @@ export function ProductDetailClient({
                                           <DropdownMenuSeparator />
                                           {s.status === "in_stock" && (
                                             <>
-                                              {/* ASSIGN-LOCK (item 16a): no
-                                                  direct part→site assignment.
-                                                  Job / cost-center assignment
-                                                  arrives with the movement
-                                                  ledger (Batch D). */}
-                                              <DropdownMenuItem
-                                                disabled
-                                                className="text-muted-foreground"
-                                              >
-                                                Assign to job — from Projects
-                                                (coming soon)
-                                              </DropdownMenuItem>
+                                              {/* MOVE-1: universal Move/Assign —
+                                                  warehouse, truck, or job
+                                                  cost-center. Replaces the
+                                                  removed direct part→site path. */}
+                                              {canMove && (
+                                                <DropdownMenuItem
+                                                  onClick={() => setMoveTarget(s)}
+                                                >
+                                                  Move / Assign…
+                                                </DropdownMenuItem>
+                                              )}
                                               <DropdownMenuItem
                                                 onClick={() =>
                                                   setUnitStatus(s.id, "consumed")
@@ -642,6 +656,58 @@ export function ProductDetailClient({
         </Card>
       </div>
 
+      {/* MOVE-1: append-only movement history (ledger snapshot labels). */}
+      <div>
+        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
+          Movement History{" "}
+          <span className="text-muted-foreground font-normal normal-case">
+            ({movements.length})
+          </span>
+        </h2>
+        <Card className="bg-card overflow-hidden p-0 shadow-sm">
+          {movements.length === 0 ? (
+            <p className="text-muted-foreground p-5 text-xs">
+              No movements recorded yet.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[11px] uppercase">When</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
+                  <TableHead className="text-[11px] uppercase">From</TableHead>
+                  <TableHead className="text-[11px] uppercase">To</TableHead>
+                  <TableHead className="text-[11px] uppercase">By</TableHead>
+                  <TableHead className="text-[11px] uppercase">Note</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movements.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
+                      {format(parseISO(m.created_at), "MMM d, yyyy · h:mm a")}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {formatNumber(Number(m.quantity))}
+                    </TableCell>
+                    <TableCell className="text-xs">{m.from_label ?? "—"}</TableCell>
+                    <TableCell className="text-brand-charcoal text-xs font-medium">
+                      {m.to_label ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {m.moved_by_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[200px] truncate text-xs">
+                      {m.note ?? "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
       <ReceiveStockForm
         productId={product.id}
         trackingMode={product.tracking_mode}
@@ -659,6 +725,20 @@ export function ProductDetailClient({
         onOpenChange={setAddStockOpen}
         onAdded={() => {
           setAddStockOpen(false);
+          router.refresh();
+        }}
+      />
+
+      <MoveAssignDialog
+        productId={product.id}
+        unit={moveTarget}
+        locations={locations}
+        open={moveTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setMoveTarget(null);
+        }}
+        onMoved={() => {
+          setMoveTarget(null);
           router.refresh();
         }}
       />

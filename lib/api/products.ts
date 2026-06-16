@@ -40,6 +40,8 @@ import type {
 } from "@/lib/types";
 
 import { productImagePublicUrl } from "@/lib/product-image-url";
+import { getDefaultWarehouse } from "@/lib/api/stock-locations";
+import { recordOriginMovement } from "@/lib/api/stock-movements";
 
 async function db() {
   return createSupabaseServerClient();
@@ -373,14 +375,19 @@ export async function receiveStock(
 
   const supabase = await db();
   const acquired = input.acquired_at ?? new Date().toISOString().slice(0, 10);
+  // MOVE-1 (CHANGE 5): received stock lands in the default Main Warehouse so the
+  // part's movement history starts from origin.
+  const warehouse = await getDefaultWarehouse();
+  const poNum = input.poNumber?.trim() || null;
   const base = {
     product_id: productId,
     unit_cost: input.unit_cost,
     location: input.location ?? null,
     supplier: input.supplier ?? null,
-    po_number: input.poNumber?.trim() || null,
+    po_number: poNum,
     status: "in_stock" as const,
     acquired_at: acquired,
+    current_location_id: warehouse?.id ?? null,
   };
 
   let toInsert: DbInventoryStockInsert[];
@@ -401,9 +408,31 @@ export async function receiveStock(
   const { data, error } = await supabase
     .from("inventory_stock")
     .insert(toInsert)
-    .select("id");
+    .select("id, quantity");
   if (error) throw new Error(`receiveStock: ${error.message}`);
-  return { created: data?.length ?? 0 };
+  const created = (data ?? []) as { id: string; quantity: number }[];
+
+  // Append an origin movement (vendor/PO → warehouse) per created row.
+  if (warehouse) {
+    const fromLabel = poNum
+      ? `Received · PO ${poNum}`
+      : input.supplier?.trim()
+        ? `Received · ${input.supplier.trim()}`
+        : "Received";
+    for (const row of created) {
+      await recordOriginMovement({
+        productId,
+        stockId: row.id,
+        quantity: Number(row.quantity),
+        fromType: "vendor",
+        fromLabel,
+        toLocationId: warehouse.id,
+        toLabel: warehouse.name,
+      });
+    }
+  }
+
+  return { created: created.length };
 }
 
 // PART-DETAIL B2 — manual stock-add (no PO). Creates ONE inventory_stock row
@@ -431,6 +460,8 @@ export async function addManualStock(
   if (!product) throw new Error("addManualStock: product not found.");
 
   const supabase = await db();
+  // MOVE-1 (CHANGE 5): manual stock lands in the default Main Warehouse.
+  const warehouse = await getDefaultWarehouse();
   const { data, error } = await supabase
     .from("inventory_stock")
     .insert({
@@ -443,11 +474,27 @@ export async function addManualStock(
       serial_number: null,
       // OPTIONAL — not defaulted to today; blank stays null.
       acquired_at: input.acquired_at ?? null,
+      current_location_id: warehouse?.id ?? null,
     })
     .select("id")
     .single();
   if (error) throw new Error(`addManualStock: ${error.message}`);
-  return { id: (data as { id: string }).id };
+  const id = (data as { id: string }).id;
+
+  // Append an origin movement (manual → warehouse).
+  if (warehouse) {
+    await recordOriginMovement({
+      productId,
+      stockId: id,
+      quantity: input.quantity,
+      fromType: "manual",
+      fromLabel: "Manual add",
+      toLocationId: warehouse.id,
+      toLabel: warehouse.name,
+    });
+  }
+
+  return { id };
 }
 
 /** Patch a stock unit (status flips, etc.). Stamps updated_at. */
