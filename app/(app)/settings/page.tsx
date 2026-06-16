@@ -27,6 +27,7 @@ import { ClassificationsPane } from "@/components/modules/settings/Classificatio
 import { InventoryVocabPane } from "@/components/modules/settings/InventoryVocabPane";
 import { ManufacturersPane } from "@/components/modules/settings/ManufacturersPane";
 import { LocationsPane } from "@/components/modules/settings/LocationsPane";
+import { CategoriesPane } from "@/components/modules/settings/CategoriesPane";
 import {
   ApiWebhooks,
   AuditCompliance,
@@ -59,6 +60,7 @@ const SECTIONS: Section[] = [
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
   { key: "inventory-lists", label: "Inventory Lists", description: "Categories, manufacturers, units, storage locations.", icon: Boxes },
+  { key: "categories", label: "Categories", description: "Hierarchical part-category tree (arbitrary depth).", icon: Tag },
   { key: "manufacturers", label: "Manufacturers", description: "Manage the manufacturer options offered on the part form.", icon: Factory },
   { key: "locations", label: "Locations", description: "Warehouses and trucks that stock can move between.", icon: Warehouse },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
@@ -150,6 +152,7 @@ export default function SettingsPage() {
             {active === "quote" && <QuoteDefaults />}
             {active === "classifications" && <ClassificationsPane />}
             {active === "inventory-lists" && <InventoryVocabPane />}
+            {active === "categories" && <CategoriesPane />}
             {active === "manufacturers" && <ManufacturersPane />}
             {active === "locations" && <LocationsPane />}
             {active === "project" && <ProjectDefaults />}

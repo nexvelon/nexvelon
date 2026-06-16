@@ -42,6 +42,7 @@ import type {
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { getDefaultWarehouse } from "@/lib/api/stock-locations";
 import { recordOriginMovement } from "@/lib/api/stock-movements";
+import { resolveCategoryPaths } from "@/lib/api/categories";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 
 async function db() {
@@ -64,7 +65,9 @@ function toProduct(
   p: DbInventoryProduct,
   inStock: StockSlice[],
   // PART-FORM-2: id → tier markup %, to resolve a part's quote-default margin.
-  tierMargins?: Map<string, number>
+  tierMargins?: Map<string, number>,
+  // PART-FIX-2: category_id → root→leaf name path, for the tree-aware filter.
+  categoryPaths?: Map<string, string[]>
 ): Product {
   const stock = inStock.reduce((n, r) => n + Number(r.quantity), 0);
   const totalCost = inStock.reduce(
@@ -109,6 +112,11 @@ function toProduct(
     marginTierId: p.margin_tier_id ?? undefined,
     quoteDefaultMargin:
       p.margin_tier_id != null ? tierMargins?.get(p.margin_tier_id) : undefined,
+    // PART-FIX-2: hierarchical category leaf + resolved path (legacy strings
+    // above are untouched).
+    categoryId: p.category_id ?? undefined,
+    categoryPath:
+      p.category_id != null ? categoryPaths?.get(p.category_id) : undefined,
     stock,
     reorderPoint: p.reorder_point ?? 0,
     reorderQty: p.reorder_qty ?? undefined,
@@ -161,10 +169,16 @@ export async function listProducts(): Promise<Product[]> {
   // PART-FORM-2: tier markups (tier_1 per row) to resolve quote-default margins.
   const tierMargins = await loadTierMargins(supabase);
 
+  // PART-FIX-2: resolve category paths for the parts that have a category_id.
+  const catIds = (catalog as DbInventoryProduct[])
+    .map((p) => p.category_id)
+    .filter((v): v is string => !!v);
+  const categoryPaths = await resolveCategoryPaths(catIds);
+
   const byProduct = groupStockByProduct((stock ?? []) as StockSlice[]);
 
   return (catalog as DbInventoryProduct[]).map((p) =>
-    toProduct(p, byProduct.get(p.id) ?? [], tierMargins)
+    toProduct(p, byProduct.get(p.id) ?? [], tierMargins, categoryPaths)
   );
 }
 
@@ -203,7 +217,16 @@ export async function getProductById(id: string): Promise<Product | null> {
     .eq("status", "in_stock");
   if (stockErr) throw new Error(`getProductById/stock: ${stockErr.message}`);
 
-  return toProduct(product as DbInventoryProduct, (stock ?? []) as StockSlice[]);
+  const row = product as DbInventoryProduct;
+  const categoryPaths = row.category_id
+    ? await resolveCategoryPaths([row.category_id])
+    : undefined;
+  return toProduct(
+    row,
+    (stock ?? []) as StockSlice[],
+    undefined,
+    categoryPaths
+  );
 }
 
 /**

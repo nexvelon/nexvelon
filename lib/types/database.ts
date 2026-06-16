@@ -628,6 +628,9 @@ export interface DbInventoryProduct {
   // PART-FIX-1 (migration 0051): pack-size + sub-allocate for non-"Each" UoM.
   pack_size: number | null;
   track_individual_units: boolean;
+  // PART-FIX-2 (migration 0052): the leaf node in the hierarchical category
+  // tree. The legacy free-text category / subcategory columns above are KEPT.
+  category_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -668,9 +671,31 @@ export type DbInventoryProductInsert = {
   // PART-FIX-1 (migration 0051): pack-size + sub-allocate.
   pack_size?: number | null;
   track_individual_units?: boolean;
+  // PART-FIX-2 (migration 0052): hierarchical category leaf.
+  category_id?: string | null;
 };
 
 export type DbInventoryProductUpdate = Partial<DbInventoryProductInsert>;
+
+// PART-FIX-2 (migration 0052) — arbitrary-depth category tree. A node's parent
+// is parent_id (null = root). UNIQUE(parent_id, name) keeps names unique within
+// a branch, so sub-categories are local to each parent.
+export interface DbInventoryCategory {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbInventoryCategoryInsert = {
+  parent_id?: string | null;
+  name: string;
+  sort_order?: number;
+};
+
+export type DbInventoryCategoryUpdate = Partial<DbInventoryCategoryInsert>;
 
 // PART-FORM B1 (migration 0044): managed manufacturers list (Settings →
 // Manufacturers) feeding the part form's Manufacturer dropdown. The
