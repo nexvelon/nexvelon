@@ -711,6 +711,37 @@ export type DbManufacturerInsert = {
   name: string;
 };
 
+// JC-1 (migration 0054) — admin-managed worker list. `default_cost_rate` is an
+// optional hourly cost that prefills new labour entries; it is editable +
+// snapshotted at entry time, so changing it here never rewrites history.
+export interface DbTech {
+  id: string;
+  name: string;
+  default_cost_rate: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// JC-1 (migration 0054) — hours logged against a project cost center.
+// tech_name + cost_rate are SNAPSHOTS frozen at entry time; amount
+// (= hours * cost_rate) is persisted for fast per-cost-center rollups.
+export interface DbLabourEntry {
+  id: string;
+  cost_center_id: string;
+  tech_id: string | null;
+  tech_name: string;
+  worked_on: string; // date (YYYY-MM-DD)
+  hours: number;
+  cost_rate: number;
+  amount: number;
+  note: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DbInventoryStock {
   id: string;
   product_id: string;
