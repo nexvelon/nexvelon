@@ -30,6 +30,7 @@ type AuditChanges = {
   status?: { from: string | null; to: string };
   rejectionReason?: string | null;
   rejectionSource?: string | null;
+  closingReason?: string | null;
   items?: QuoteDiffChange[];
 };
 
@@ -61,10 +62,14 @@ function describe(ev: DbQuoteAuditLog): string {
   if (ev.event_type === "status_changed") {
     const to = c.status?.to;
     const from = c.status?.from ?? "—";
-    if (to === "Rejected") {
+    if (to === "Revision") {
       const src = c.rejectionSource ? ` (${c.rejectionSource})` : "";
       const reason = c.rejectionReason ? `: ${c.rejectionReason}` : "";
-      return `Rejected${src}${reason}`;
+      return `Sent for revision${src}${reason}`;
+    }
+    if (to === "Closed") {
+      const reason = c.closingReason ? `: ${c.closingReason}` : "";
+      return `Closed${reason}`;
     }
     return `Status: ${from} → ${to ?? "—"}`;
   }

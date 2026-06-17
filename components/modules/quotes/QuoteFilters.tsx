@@ -17,7 +17,8 @@ const STATUS_OPTIONS: ("All" | QuoteStatus)[] = [
   "Draft",
   "Sent",
   "Approved",
-  "Rejected",
+  "Revision",
+  "Closed",
   "Expired",
   "Converted",
 ];

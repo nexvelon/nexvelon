@@ -103,7 +103,7 @@ function renderOtpHtml(args: {
             </tr>
             <tr>
               <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                &copy; 2026 Nexvelon Global Inc.
+                &copy; 2026 Nexvelon Global
               </td>
             </tr>
           </table>
@@ -129,7 +129,7 @@ function renderOtpText(args: {
     ``,
     `If you didn't try to sign in, you can ignore this email.`,
     ``,
-    `— Nexvelon Global Inc.`,
+    `— Nexvelon Global`,
   ].join("\n");
 }
 
@@ -230,7 +230,7 @@ function renderLowStockHtml(items: LowStockItem[]): string {
             </tr>
             <tr>
               <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                &copy; 2026 Nexvelon Global Inc.
+                &copy; 2026 Nexvelon Global
               </td>
             </tr>
           </table>
@@ -253,6 +253,6 @@ function renderLowStockText(items: LowStockItem[]): string {
     ``,
     ...lines,
     ``,
-    `— Nexvelon Global Inc.`,
+    `— Nexvelon Global`,
   ].join("\n");
 }

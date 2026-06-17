@@ -104,30 +104,31 @@ export function businessDatePlusDaysISO(days: number, date: Date = new Date()): 
   return businessDateISO(anchor);
 }
 
-const businessStampFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BUSINESS_TIMEZONE,
-  year: "2-digit",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23", // 00–23 (NOT hour12:false, which can emit "24")
-});
-
 /**
- * Timestamp-style quote number: "Q-" + YYMMDDHHMM in America/Toronto.
+ * Timestamp-style quote number: "Q-" + YYMMDDHHMMSS + "-NN" in America/Toronto.
  * Self-contained — no sequence lookup. Built via formatToParts (never
- * toISOString) so it reflects the Toronto wall-clock. e.g. 2026-06-08 23:45
- * Toronto → "Q-2606082345". NUM-1: the "Q-" prefix marks the value as a quote
- * number; the timestamp logic/precision is unchanged. Only newly generated
- * numbers carry the prefix — existing quotes keep their stored numbers.
+ * toISOString) so it reflects the Toronto wall-clock. e.g. 2026-06-08 23:45:07
+ * Toronto → "Q-260608234507-42". POLISH-2: seconds precision + a 2-digit random
+ * suffix (00–99) make same-minute collisions between two users effectively
+ * impossible — matching businessPONumber's seconds precision plus the suffix.
+ * Only newly generated numbers carry this format — existing quotes keep their
+ * stored numbers.
  */
 export function businessQuoteNumber(date: Date = new Date()): string {
-  const parts = businessStampFmt.formatToParts(date);
+  const parts = businessStampSecFmt.formatToParts(date);
   const get = (t: Intl.DateTimeFormatPartTypes) =>
     parts.find((p) => p.type === t)?.value ?? "";
+  const suffix = String(Math.floor(Math.random() * 100)).padStart(2, "0");
   return (
-    "Q-" + get("year") + get("month") + get("day") + get("hour") + get("minute")
+    "Q-" +
+    get("year") +
+    get("month") +
+    get("day") +
+    get("hour") +
+    get("minute") +
+    get("second") +
+    "-" +
+    suffix
   );
 }
 

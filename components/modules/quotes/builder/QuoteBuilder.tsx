@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -216,8 +216,9 @@ export function QuoteBuilder({
   const { user: authUser } = useAuth();
   const [number] = useState(initial.number);
   const [status, setStatus] = useState<QuoteStatus>(initial.status);
-  // REJECT — committed rejection metadata (jsonb-persisted; banner-displayed
-  // when status === "Rejected") + the dialog's draft fields.
+  // REJECT — committed revision metadata (jsonb-persisted; banner-displayed
+  // when status === "Revision") + the dialog's draft fields. Storage field
+  // names stay rejection*/rejected* (stable storage); display says "Revision".
   const [rejection, setRejection] = useState<{
     reason: string;
     source?: QuoteRejectionSource;
@@ -233,6 +234,21 @@ export function QuoteBuilder({
   const [rejectReasonDraft, setRejectReasonDraft] = useState("");
   const [rejectSourceDraft, setRejectSourceDraft] =
     useState<QuoteRejectionSource>("Client");
+  // POLISH-2 — Closed-status metadata (optional closing reason) + dialog draft.
+  const [closing, setClosing] = useState<{
+    reason: string;
+    closedAt?: string;
+    closedByUser?: string;
+  }>({
+    reason: initial.closingReason ?? "",
+    closedAt: initial.closedAt,
+    closedByUser: initial.closedByUser,
+  });
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReasonDraft, setCloseReasonDraft] = useState("");
+  // POLISH-2 — last-saved indicator + autosave dedupe signature.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const lastSavedSigRef = useRef<string>("");
   // PROJ-2: convert dialog — New project vs. Add to existing (change order).
   const [convertOpen, setConvertOpen] = useState(false);
   const [convertMode, setConvertMode] = useState<"new" | "existing">("new");
@@ -384,12 +400,15 @@ export function QuoteBuilder({
   const ro = useReadOnly(status);
   const { role } = useRole();
   const isAdmin = role === "Admin";
-  // APPROVAL-REOPEN: admin-only revert back to unapproved (Draft) from any
-  // post-Draft awaiting/decided state — Sent, Approved, OR Rejected — so a
-  // rejected quote can also re-enter the edit + re-request-approval loop.
+  // APPROVAL-REOPEN + POLISH-2: admin-only reopen. From Sent / Approved /
+  // Revision it reverts to Draft (re-enters the edit + re-approval loop); from
+  // Closed it reopens to Sent so a closed deal is never terminal-locked.
   const canReopen =
     isAdmin &&
-    (status === "Sent" || status === "Approved" || status === "Rejected");
+    (status === "Sent" ||
+      status === "Approved" ||
+      status === "Revision" ||
+      status === "Closed");
 
   // QB-FIX-1 #5: do NOT auto-select a site. When the client changes, only
   // CLEAR a now-stale site (one that doesn't belong to the new client) so the
@@ -723,15 +742,63 @@ export function QuoteBuilder({
       rejectionSource: rejection.source,
       rejectedAt: rejection.rejectedAt,
       rejectedByUser: rejection.rejectedByUser,
+      // POLISH-2 — preserve closing metadata across normal saves.
+      closingReason: closing.reason || undefined,
+      closedAt: closing.closedAt,
+      closedByUser: closing.closedByUser,
     };
     return out;
   };
+
+  // POLISH-2 — debounced autosave for Drafts so in-progress work is never lost.
+  // Fires ~2s after edits stop, once a Draft has a real client and at least one
+  // line item (or a name). Dedupes on a content signature so an idle quote is
+  // not re-written; skipped when read-only or past Draft (explicit actions own
+  // those transitions). quote-store persists to the DB, so the autosaved Draft
+  // shows up in /quotes on next load even if the tab was closed.
+  const draftForAutosave =
+    status === "Draft" &&
+    !ro.readOnly &&
+    !!clientId &&
+    (sections.some((s) => s.items.length > 0) || !!name.trim())
+      ? persist("Draft")
+      : null;
+  const autosaveSig = draftForAutosave ? JSON.stringify(draftForAutosave) : "";
+  // On mount, seed the baseline for an EXISTING draft so simply opening it
+  // (with no edits) doesn't trigger a redundant save/audit event. A NEW quote
+  // keeps the empty baseline so its first real content autosaves.
+  useEffect(() => {
+    if (!isNew) lastSavedSigRef.current = JSON.stringify(persist(initial.status));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!draftForAutosave || !autosaveSig) return;
+    if (autosaveSig === lastSavedSigRef.current) return;
+    const t = setTimeout(() => {
+      lastSavedSigRef.current = autosaveSig;
+      upsertQuote(draftForAutosave);
+      setLastSavedAt(Date.now());
+    }, 2000);
+    return () => clearTimeout(t);
+    // draftForAutosave is the snapshot matching autosaveSig for this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosaveSig]);
+
+  const savedLabel = lastSavedAt
+    ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`
+    : null;
 
   const handleSaveDraft = () => {
     if (ro.readOnly) return;
     setSaving(true);
     const next = persist();
     upsertQuote(next);
+    // Keep the autosave from immediately re-writing the identical snapshot.
+    lastSavedSigRef.current = JSON.stringify(next);
+    setLastSavedAt(Date.now());
     setTimeout(() => {
       setSaving(false);
       toast.success(`${number} saved`, {
@@ -761,8 +828,9 @@ export function QuoteBuilder({
     });
   };
 
-  // REJECT — open the reason+source dialog. Available from Sent/Approved to any
-  // editor (gated in the header). Resets the draft fields each open.
+  // POLISH-2 (was REJECT) — open the "Move to Revision" reason+source dialog.
+  // Available from Sent/Approved to any editor (gated in the header). Resets the
+  // draft fields each open.
   const openReject = () => {
     if (status !== "Sent" && status !== "Approved") return;
     setRejectReasonDraft("");
@@ -770,8 +838,10 @@ export function QuoteBuilder({
     setRejectOpen(true);
   };
 
-  // REJECT — confirm: reason is REQUIRED. Stamps who/when, sets status =
-  // Rejected, and persists the rejection metadata in the quote jsonb.
+  // POLISH-2 — confirm "Move to Revision": reason is REQUIRED. Stamps who/when,
+  // sets status = Revision, and persists the metadata in the quote jsonb. The
+  // storage fields (rejection*) are unchanged — only the display reads
+  // "Revision".
   const confirmReject = () => {
     const reason = rejectReasonDraft.trim();
     if (!reason) return;
@@ -783,7 +853,7 @@ export function QuoteBuilder({
       rejectedAt,
       rejectedByUser,
     };
-    const base = persist("Rejected");
+    const base = persist("Revision");
     const next: Quote = {
       ...base,
       rejectionReason: reason,
@@ -792,30 +862,58 @@ export function QuoteBuilder({
       rejectedByUser,
     };
     upsertQuote(next);
-    setStatus("Rejected");
+    setStatus("Revision");
     setRejection(nextRejection);
     setRejectOpen(false);
-    toast.success(`${number} marked as Rejected`, {
+    toast.success(`${number} sent for revision`, {
       description: `Source: ${rejectSourceDraft}.`,
     });
   };
 
-  // Chunk 3a / APPROVAL-REOPEN: Admin-only reopen Sent/Approved/Rejected →
-  // Draft so it's editable by all roles again (must be re-approved before it's
-  // ready). Forward-only re: stock — committed units are NOT returned.
+  // POLISH-2 — "Close quote": admin-only, from Sent/Approved/Revision. The
+  // closing reason is OPTIONAL. Stamps who/when and persists to the jsonb.
+  const openClose = () => {
+    if (status !== "Sent" && status !== "Approved" && status !== "Revision")
+      return;
+    setCloseReasonDraft("");
+    setCloseOpen(true);
+  };
+
+  const confirmClose = () => {
+    const reason = closeReasonDraft.trim();
+    const closedAt = new Date().toISOString();
+    const closedByUser = authUser?.name;
+    const nextClosing = { reason, closedAt, closedByUser };
+    const base = persist("Closed");
+    const next: Quote = {
+      ...base,
+      closingReason: reason || undefined,
+      closedAt,
+      closedByUser,
+    };
+    upsertQuote(next);
+    setStatus("Closed");
+    setClosing(nextClosing);
+    setCloseOpen(false);
+    toast.success(`${number} closed`);
+  };
+
+  // Chunk 3a / APPROVAL-REOPEN + POLISH-2: Admin-only reopen. From Sent /
+  // Approved / Revision → Draft (editable by all roles again; must be
+  // re-approved). From Closed → Sent (a closed deal is never terminal-locked).
+  // Forward-only re: stock — committed units are NOT returned.
   const handleReopen = () => {
     if (!canReopen) return;
-    if (
-      !window.confirm(
-        "Move this quote back to Draft? It will be editable by all roles and must be re-approved before it's ready to send. This does not return any committed stock."
-      )
-    ) {
-      return;
-    }
-    const next = persist("Draft");
+    const toClosedReopen = status === "Closed";
+    const confirmMsg = toClosedReopen
+      ? "Reopen this closed quote back to Sent?"
+      : "Move this quote back to Draft? It will be editable by all roles and must be re-approved before it's ready to send. This does not return any committed stock.";
+    if (!window.confirm(confirmMsg)) return;
+    const nextStatus: QuoteStatus = toClosedReopen ? "Sent" : "Draft";
+    const next = persist(nextStatus);
     upsertQuote(next);
-    setStatus("Draft");
-    toast.success(`${number} reopened — back to Draft`);
+    setStatus(nextStatus);
+    toast.success(`${number} reopened — back to ${nextStatus}`);
   };
 
   const handlePreview = () => {
@@ -957,6 +1055,7 @@ export function QuoteBuilder({
         status={status}
         saving={saving}
         disabled={ro.readOnly}
+        savedLabel={savedLabel}
         onSaveDraft={handleSaveDraft}
         onSend={handleSend}
         onApprove={handleApprove}
@@ -965,7 +1064,8 @@ export function QuoteBuilder({
         onCommitStock={() => setCommitOpen(true)}
         onReopen={handleReopen}
         canReopen={canReopen}
-        onReject={openReject}
+        onRevise={openReject}
+        onClose={openClose}
       />
 
       <CommandPalette
@@ -978,49 +1078,73 @@ export function QuoteBuilder({
 
       <ReadOnlyBanner state={ro} quote={{ ...initial, status, projectId: initial.projectId }} />
 
-      {/* REJECT — rejection banner (reason + source + by/at) when Rejected. */}
-      {status === "Rejected" && (
-        <div className="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm">
+      {/* POLISH-2 — revision banner (reason + source + by/at) when in Revision. */}
+      {status === "Revision" && (
+        <div className="rounded-md border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-900 shadow-sm">
           <p className="font-medium">
-            Rejected
+            Sent for revision
             {rejection.source ? ` · ${rejection.source}` : ""}
           </p>
           {rejection.reason ? (
             <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">
-              {rejection.reason}
+              Revision reason: {rejection.reason}
             </p>
           ) : null}
-          <p className="mt-1 text-[11px] text-red-700">
-            {rejection.rejectedByUser ? `by ${rejection.rejectedByUser}` : ""}
+          <p className="mt-1 text-[11px] text-orange-700">
+            {rejection.rejectedByUser
+              ? `Sent for revision by ${rejection.rejectedByUser}`
+              : ""}
             {rejection.rejectedByUser && rejection.rejectedAt ? " · " : ""}
             {rejection.rejectedAt
               ? new Date(rejection.rejectedAt).toLocaleString()
               : ""}
           </p>
-          <p className="mt-1 text-[11px] text-red-700">
+          <p className="mt-1 text-[11px] text-orange-700">
             An Admin can reopen this quote for editing and re-approval.
           </p>
         </div>
       )}
 
-      {/* REJECT — required reason + source dialog. */}
+      {/* POLISH-2 — closed banner (optional reason + by/at) when Closed. */}
+      {status === "Closed" && (
+        <div className="rounded-md border border-zinc-300 bg-zinc-100 px-4 py-3 text-sm text-zinc-800 shadow-sm">
+          <p className="font-medium">Closed</p>
+          {closing.reason ? (
+            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">
+              Closing reason: {closing.reason}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {closing.closedByUser ? `Closed by ${closing.closedByUser}` : ""}
+            {closing.closedByUser && closing.closedAt ? " · " : ""}
+            {closing.closedAt
+              ? new Date(closing.closedAt).toLocaleString()
+              : ""}
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            An Admin can reopen this quote back to Sent.
+          </p>
+        </div>
+      )}
+
+      {/* POLISH-2 — "Move to Revision": required reason + source dialog. */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-serif">Mark as Rejected</DialogTitle>
+            <DialogTitle className="font-serif">Move to Revision</DialogTitle>
             <DialogDescription>
-              Record why this quote was declined. The reason is required and is
-              stored on the quote.
+              Record what the client wants changed. The revision reason is
+              required and is stored on the quote.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Reason *</Label>
+              <Label className="text-xs">Revision reason *</Label>
               <Textarea
                 rows={3}
                 value={rejectReasonDraft}
                 onChange={(e) => setRejectReasonDraft(e.target.value)}
-                placeholder="e.g. Client chose another vendor on price."
+                placeholder="e.g. Client wants the camera count reduced and a revised price."
                 className="text-xs"
               />
             </div>
@@ -1057,9 +1181,50 @@ export function QuoteBuilder({
               size="sm"
               disabled={!rejectReasonDraft.trim()}
               onClick={confirmReject}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-orange-600 text-white hover:bg-orange-700"
             >
-              Mark as Rejected
+              Move to Revision
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-2 — "Close quote": OPTIONAL closing-reason dialog. */}
+      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Close quote</DialogTitle>
+            <DialogDescription>
+              Mark this quote as closed (the deal didn&apos;t proceed). A reason
+              is optional. An Admin can reopen it back to Sent later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Closing reason (optional)</Label>
+            <Textarea
+              rows={3}
+              value={closeReasonDraft}
+              onChange={(e) => setCloseReasonDraft(e.target.value)}
+              placeholder="e.g. Client postponed the project to next fiscal year."
+              className="text-xs"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCloseOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={confirmClose}
+              className="bg-zinc-700 text-white hover:bg-zinc-800"
+            >
+              Close quote
             </Button>
           </DialogFooter>
         </DialogContent>
