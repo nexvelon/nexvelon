@@ -456,6 +456,8 @@ export async function receiveStock(
     status: "in_stock" as const,
     acquired_at: acquired,
     current_location_id: warehouse?.id ?? null,
+    // FIX-BATCH-O: one batch id shared by every row of this receipt.
+    receive_batch_id: crypto.randomUUID(),
   };
 
   const serialized = isSerializedProduct(product);
@@ -552,6 +554,8 @@ export async function addManualStock(
     // OPTIONAL — not defaulted to today; blank stays null.
     acquired_at: input.acquired_at ?? null,
     current_location_id: warehouse?.id ?? null,
+    // FIX-BATCH-O: one batch id shared by every row of this manual add.
+    receive_batch_id: crypto.randomUUID(),
   };
 
   // PART-FIX-1: pack-expanded count (individual units) or null (per-pack).

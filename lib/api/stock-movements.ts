@@ -655,3 +655,229 @@ export async function adjustStockQuantity(
 
   return { quantity: newQty, delta };
 }
+
+// ── FIX-BATCH-O — received-batch edit / delete ───────────────────────────────
+// Destroy specific rows of a received batch (serialized checklist, non-serialized
+// multi-row reduce, or whole-batch delete) OR set a single bulk row's quantity.
+// In both cases the matching PO line's received_qty drops by the destroyed
+// quantity (units are DESTROYED, never returned to the PO as outstanding) and a
+// single summarizing 'adjustment' entry is logged. Rows already
+// allocated/consumed/retired/in-custody block the whole action.
+
+export interface BatchEditResult {
+  delta: number;
+  destroyedRows: number;
+}
+
+type BatchUnitRow = {
+  id: string;
+  product_id: string;
+  status: string;
+  custody_status: string;
+  quantity: number;
+  serial_number: string | null;
+  po_number: string | null;
+};
+
+function describeInUse(
+  rows: { serial_number: string | null; status: string; custody_status: string }[]
+): string {
+  const named = rows
+    .map((r) => r.serial_number?.trim())
+    .filter((s): s is string => !!s);
+  if (named.length > 0) {
+    return `${rows.length} unit(s) in use (serials: ${named.slice(0, 8).join(", ")}${named.length > 8 ? "…" : ""})`;
+  }
+  return `${rows.length} unit(s) already allocated/consumed/retired`;
+}
+
+function isUnitInUse(r: { status: string; custody_status: string }): boolean {
+  return r.status !== "in_stock" || (r.custody_status ?? "in_stock") !== "in_stock";
+}
+
+// Reduce the PO line(s) for a product by `delta`, then recompute PO status.
+async function decrementPoLine(
+  supabase: Awaited<ReturnType<typeof db>>,
+  poNumber: string | null,
+  productId: string,
+  delta: number
+): Promise<void> {
+  if (!poNumber || delta <= 0) return;
+  const { data: po } = await supabase
+    .from("purchase_orders")
+    .select("id")
+    .eq("po_number", poNumber)
+    .maybeSingle();
+  if (!po) return;
+  const poId = (po as { id: string }).id;
+
+  const { data: lineRows } = await supabase
+    .from("purchase_order_lines")
+    .select("id, quantity, received_qty, product_id")
+    .eq("purchase_order_id", poId);
+  const lines = (lineRows ?? []) as {
+    id: string;
+    quantity: number;
+    received_qty: number;
+    product_id: string | null;
+  }[];
+
+  let remaining = delta;
+  for (const l of lines.filter((l) => l.product_id === productId)) {
+    if (remaining <= 0) break;
+    const cur = Number(l.received_qty);
+    const dec = Math.min(cur, remaining);
+    if (dec > 0) {
+      const { error } = await supabase
+        .from("purchase_order_lines")
+        .update({ received_qty: cur - dec })
+        .eq("id", l.id);
+      if (error) throw new Error(`decrementPoLine: ${error.message}`);
+      remaining -= dec;
+    }
+  }
+
+  // Recompute PO status from the (now-updated) lines.
+  const { data: fresh } = await supabase
+    .from("purchase_order_lines")
+    .select("quantity, received_qty")
+    .eq("purchase_order_id", poId);
+  const all = (fresh ?? []) as { quantity: number; received_qty: number }[];
+  const allReceived =
+    all.length > 0 &&
+    all.every((l) => Number(l.received_qty) >= Number(l.quantity));
+  const anyReceived = all.some((l) => Number(l.received_qty) > 0);
+  const status = allReceived
+    ? "received"
+    : anyReceived
+      ? "partially_received"
+      : "issued";
+  await supabase.from("purchase_orders").update({ status }).eq("id", poId);
+}
+
+/** Destroy the given batch rows (must all belong to productId). Guards in-use
+ *  rows, decrements the PO line, deletes, and logs one summarizing entry. */
+export async function deleteReceivedBatchRows(
+  productId: string,
+  stockIds: string[]
+): Promise<BatchEditResult> {
+  const supabase = await db();
+  if (stockIds.length === 0) throw new Error("No units selected to remove.");
+
+  const { data: rowData, error } = await supabase
+    .from("inventory_stock")
+    .select("id, product_id, status, custody_status, quantity, serial_number, po_number")
+    .in("id", stockIds);
+  if (error) throw new Error(`deleteReceivedBatchRows/load: ${error.message}`);
+  const rows = (rowData ?? []) as BatchUnitRow[];
+  if (rows.length === 0) throw new Error("Those units no longer exist.");
+  if (rows.some((r) => r.product_id !== productId)) {
+    throw new Error("Units don't all belong to this part.");
+  }
+
+  const inUse = rows.filter(isUnitInUse);
+  if (inUse.length > 0) {
+    throw new Error(
+      `Can't remove this batch: ${describeInUse(inUse)}. Return or restore them to stock first.`
+    );
+  }
+
+  const delta = rows.reduce((n, r) => n + Number(r.quantity), 0);
+  const poNumber = rows.find((r) => r.po_number)?.po_number ?? null;
+  await decrementPoLine(supabase, poNumber, productId, delta);
+
+  const { error: delErr } = await supabase
+    .from("inventory_stock")
+    .delete()
+    .in(
+      "id",
+      rows.map((r) => r.id)
+    );
+  if (delErr) throw new Error(`deleteReceivedBatchRows/delete: ${delErr.message}`);
+
+  const mover = await currentMover();
+  await recordMovement({
+    product_id: productId,
+    stock_id: null,
+    quantity: delta,
+    from_type: "adjustment",
+    from_id: null,
+    from_label: poNumber ? `PO ${poNumber}` : "Received batch",
+    to_type: "adjustment",
+    to_id: null,
+    to_label: `−${delta} (batch)`,
+    moved_by: mover.id,
+    moved_by_name: mover.name,
+    note: `Received batch reduced — ${rows.length} unit(s) destroyed`,
+  });
+
+  return { delta, destroyedRows: rows.length };
+}
+
+/** Set a single bulk batch row's quantity (reduce only). 0 destroys the row. */
+export async function setBatchRowQuantity(
+  productId: string,
+  stockId: string,
+  newQty: number
+): Promise<BatchEditResult> {
+  const supabase = await db();
+  if (!Number.isFinite(newQty) || newQty < 0) {
+    throw new Error("New quantity must be zero or greater.");
+  }
+
+  const { data: rowData, error } = await supabase
+    .from("inventory_stock")
+    .select("id, product_id, status, custody_status, quantity, serial_number, po_number")
+    .eq("id", stockId)
+    .maybeSingle();
+  if (error) throw new Error(`setBatchRowQuantity/load: ${error.message}`);
+  if (!rowData) throw new Error("Stock row not found.");
+  const row = rowData as BatchUnitRow;
+  if (row.product_id !== productId) {
+    throw new Error("Unit doesn't belong to this part.");
+  }
+  if (isUnitInUse(row)) {
+    throw new Error(
+      `Can't reduce this batch: ${describeInUse([row])}. Return or restore it to stock first.`
+    );
+  }
+
+  const cur = Number(row.quantity);
+  if (newQty >= cur) {
+    throw new Error(`New quantity must be less than the current ${cur}.`);
+  }
+  const delta = cur - newQty;
+  await decrementPoLine(supabase, row.po_number ?? null, productId, delta);
+
+  if (newQty === 0) {
+    const { error: delErr } = await supabase
+      .from("inventory_stock")
+      .delete()
+      .eq("id", stockId);
+    if (delErr) throw new Error(`setBatchRowQuantity/delete: ${delErr.message}`);
+  } else {
+    const { error: upErr } = await supabase
+      .from("inventory_stock")
+      .update({ quantity: newQty, updated_at: new Date().toISOString() })
+      .eq("id", stockId);
+    if (upErr) throw new Error(`setBatchRowQuantity: ${upErr.message}`);
+  }
+
+  const mover = await currentMover();
+  await recordMovement({
+    product_id: productId,
+    stock_id: newQty === 0 ? null : stockId,
+    quantity: delta,
+    from_type: "adjustment",
+    from_id: null,
+    from_label: row.po_number ? `PO ${row.po_number}` : "Received batch",
+    to_type: "adjustment",
+    to_id: null,
+    to_label: `−${delta} (batch)`,
+    moved_by: mover.id,
+    moved_by_name: mover.name,
+    note: `Received batch qty reduced ${cur}→${newQty}`,
+  });
+
+  return { delta, destroyedRows: newQty === 0 ? 1 : 0 };
+}
