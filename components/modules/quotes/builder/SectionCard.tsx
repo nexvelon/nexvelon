@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LineItemRow } from "./LineItemRow";
+import { LabourOptionsRow } from "./LabourOptionsRow";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -45,6 +46,7 @@ interface Props {
   sections: QuoteSection[];
   classifications?: LineItemClassification[];
   showCost: boolean;
+  defaultLabourSellRate?: number;
   disabled?: boolean;
   onUpdateSection: (next: QuoteSection) => void;
   onMoveItemToSection: (itemId: string, targetSectionId: string) => void;
@@ -59,6 +61,7 @@ export function SectionCard({
   sections,
   classifications,
   showCost,
+  defaultLabourSellRate,
   disabled,
   onUpdateSection,
   onMoveItemToSection,
@@ -101,7 +104,10 @@ export function SectionCard({
     onUpdateSection({ ...section, items: [...section.items, emptyLineItem()] });
 
   const addLabor = () =>
-    onUpdateSection({ ...section, items: [...section.items, laborLineItem()] });
+    onUpdateSection({
+      ...section,
+      items: [...section.items, laborLineItem(defaultLabourSellRate)],
+    });
 
   const addService = () =>
     onUpdateSection({
@@ -256,29 +262,38 @@ export function SectionCard({
                   </tr>
                 )}
                 {section.items.map((item) => (
-                  <LineItemRow
-                    key={item.id}
-                    item={item}
-                    sectionId={section.id}
-                    sections={sections}
-                    classifications={classifications}
-                    showCost={showCost}
-                    disabled={disabled}
-                    onChange={updateItem}
-                    onDuplicate={() => duplicateItem(item.id)}
-                    onDelete={() => removeItem(item.id)}
-                    onMoveTo={(targetId) =>
-                      onMoveItemToSection(item.id, targetId)
-                    }
-                    onAddNote={() =>
-                      updateItem({
-                        ...item,
-                        notes:
-                          item.notes ??
-                          "Internal note — visible on the builder, hidden on the PDF.",
-                      })
-                    }
-                  />
+                  <Fragment key={item.id}>
+                    <LineItemRow
+                      item={item}
+                      sectionId={section.id}
+                      sections={sections}
+                      classifications={classifications}
+                      showCost={showCost}
+                      disabled={disabled}
+                      onChange={updateItem}
+                      onDuplicate={() => duplicateItem(item.id)}
+                      onDelete={() => removeItem(item.id)}
+                      onMoveTo={(targetId) =>
+                        onMoveItemToSection(item.id, targetId)
+                      }
+                      onAddNote={() =>
+                        updateItem({
+                          ...item,
+                          notes:
+                            item.notes ??
+                            "Internal note — visible on the builder, hidden on the PDF.",
+                        })
+                      }
+                    />
+                    {item.labour && (
+                      <LabourOptionsRow
+                        item={item}
+                        colSpan={showCost ? 12 : 10}
+                        disabled={disabled}
+                        onChange={updateItem}
+                      />
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </SortableContext>
@@ -309,7 +324,7 @@ export function SectionCard({
           disabled={disabled}
         >
           <HardHat className="mr-1 h-3.5 w-3.5" />
-          Labor line
+          Labour line
         </Button>
         <Button
           type="button"

@@ -100,6 +100,8 @@ import {
   listProductsAction,
   commitStockUnitAction,
 } from "@/app/(app)/inventory/actions";
+import { getNumericSettingAction } from "@/app/(app)/settings/app-settings-actions";
+import { DEFAULT_LABOUR_SELL_RATE_KEY } from "@/lib/app-settings-keys";
 import { CatalogProductsContext } from "./catalog-context";
 import { OfferAddonsContext } from "./addons-context";
 import { AddonPrompt, type AddonPromptData } from "./AddonPrompt";
@@ -175,6 +177,23 @@ export function QuoteBuilder({
       })
       .catch(() => {
         // leave catalog empty; SKU autocomplete falls back to free-text entry
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // QUOTE-LABOUR: the Settings default labour sell rate, prefilling new labour
+  // lines. Falls back to 125 (the seeded default) if the fetch fails.
+  const [defaultLabourSellRate, setDefaultLabourSellRate] = useState(125);
+  useEffect(() => {
+    let active = true;
+    getNumericSettingAction(DEFAULT_LABOUR_SELL_RATE_KEY)
+      .then((res) => {
+        if (active && res.ok && res.data != null) setDefaultLabourSellRate(res.data);
+      })
+      .catch(() => {
+        // keep the 125 fallback
       });
     return () => {
       active = false;
@@ -1302,6 +1321,7 @@ export function QuoteBuilder({
                 sections={sections}
                 classifications={classifications}
                 showCost
+                defaultLabourSellRate={defaultLabourSellRate}
                 disabled={ro.readOnly}
                 onUpdateSection={updateSection}
                 onMoveItemToSection={moveItemToSection}

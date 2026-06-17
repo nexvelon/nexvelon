@@ -131,6 +131,21 @@ export function LineItemRow({
     ? item.classification
     : undefined;
   const isLabor = item.type === "labor";
+  // QUOTE-LABOUR: a managed labour line (carries labour metadata). Its qty IS
+  // the hours and its unitPrice IS the sell rate; we keep labour.hours /
+  // labour.sellRate in sync on every edit, and never let cost/margin overwrite
+  // the directly-entered sell rate. Legacy "labor" lines (no metadata) keep
+  // their original part-style behavior untouched.
+  const labour = item.labour;
+  const isLabourLine = !!labour;
+  const changeLabourHours = (n: number) =>
+    onChange({ ...item, qty: n, labour: { ...labour!, hours: n } });
+  const changeLabourRate = (v: number) =>
+    onChange({ ...item, unitPrice: v, labour: { ...labour!, sellRate: v } });
+  // Cost/margin edits recompute unitPrice via recalcLineItem; mirror that back
+  // into labour.sellRate so the snapshot stays consistent with the price.
+  const changeLabourCostMargin = (next: BuilderLineItem) =>
+    onChange({ ...next, labour: { ...labour!, sellRate: next.unitPrice } });
 
   // Parts and labour share one unified cell layout (QB-3).
   return (
@@ -209,13 +224,17 @@ export function LineItemRow({
       </td>
 
       <td className="min-w-[10rem] px-1.5">
-        <Input
-          value={item.name}
-          onChange={(e) => onChange({ ...item, name: e.target.value })}
-          disabled={disabled}
-          className="text-xs"
-          placeholder={isLabor ? "Service name" : "Part name"}
-        />
+        {isLabourLine ? (
+          <Input value="" disabled className="text-xs" placeholder="—" />
+        ) : (
+          <Input
+            value={item.name}
+            onChange={(e) => onChange({ ...item, name: e.target.value })}
+            disabled={disabled}
+            className="text-xs"
+            placeholder={isLabor ? "Service name" : "Part name"}
+          />
+        )}
       </td>
 
       <td className="min-w-[10rem] px-1.5">
@@ -224,7 +243,9 @@ export function LineItemRow({
           onChange={(e) => onChange({ ...item, description: e.target.value })}
           disabled={disabled}
           className="text-xs"
-          placeholder={isLabor ? "Notes" : "Description"}
+          placeholder={
+            isLabourLine ? "Labour" : isLabor ? "Notes" : "Description"
+          }
         />
       </td>
 
@@ -234,7 +255,9 @@ export function LineItemRow({
           value={item.qty.toString()}
           onChange={(e) => {
             const n = parseFloat(e.target.value);
-            onChange(recalcLineItem({ ...item, qty: isNaN(n) ? 0 : n }));
+            const val = isNaN(n) ? 0 : n;
+            if (isLabourLine) changeLabourHours(val);
+            else onChange(recalcLineItem({ ...item, qty: val }));
           }}
           disabled={disabled}
           className="text-right text-xs tabular-nums"
@@ -245,9 +268,11 @@ export function LineItemRow({
         <td className="w-24 px-1.5 text-right">
           <CurrencyInput
             value={item.unitCost}
-            onChange={(v) =>
-              onChange(recalcLineItem({ ...item, unitCost: v }))
-            }
+            onChange={(v) => {
+              const next = recalcLineItem({ ...item, unitCost: v });
+              if (isLabourLine) changeLabourCostMargin(next);
+              else onChange(next);
+            }}
             disabled={disabled}
             className="text-xs"
           />
@@ -294,7 +319,9 @@ export function LineItemRow({
             value={item.margin.toString()}
             onChange={(e) => {
               const m = parseFloat(e.target.value);
-              onChange(recalcLineItem({ ...item, margin: isNaN(m) ? 0 : m }));
+              const next = recalcLineItem({ ...item, margin: isNaN(m) ? 0 : m });
+              if (isLabourLine) changeLabourCostMargin(next);
+              else onChange(next);
             }}
             disabled={disabled}
             className="text-right text-xs tabular-nums"
@@ -305,7 +332,10 @@ export function LineItemRow({
       <td className="w-24 px-1.5 text-right">
         <CurrencyInput
           value={item.unitPrice}
-          onChange={(v) => onChange({ ...item, unitPrice: v })}
+          onChange={(v) => {
+            if (isLabourLine) changeLabourRate(v);
+            else onChange({ ...item, unitPrice: v });
+          }}
           disabled={disabled}
           className="text-xs"
         />

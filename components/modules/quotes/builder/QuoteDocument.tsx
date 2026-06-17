@@ -1412,6 +1412,54 @@ function ParticularsPage({
               </Text>
             </View>
             {s.items.map((it, itemIdx) => {
+              // QUOTE-LABOUR: a managed labour line renders from its per-line
+              // show flags. The line total ALWAYS shows; description / hours /
+              // rate each appear only when their flag is on (hidden → "—"), and
+              // the internal description is never shown unless show.description
+              // is on (otherwise a generic "Labour" label). The unit-price
+              // column only exists when the quote-level showUnitPrice is on, so
+              // a rate with no column simply doesn't appear. Legacy "labor"
+              // lines (no metadata) fall through to the part renderer below,
+              // unchanged.
+              if (it.labour) {
+                const lref = `${prefix}.${String(itemIdx + 1).padStart(2, "0")}`;
+                const lamount = it.qty * it.unitPrice;
+                const lshow = it.labour.show ?? {};
+                const label = lshow.description
+                  ? it.description?.trim() || "Labour"
+                  : "Labour";
+                const hoursText = lshow.hours ? it.qty.toString() : "—";
+                const rateText = lshow.rate ? usd(it.unitPrice) : "—";
+                return (
+                  <View style={styles.partRow} key={it.id}>
+                    <View style={styles.partCellRef}>
+                      <Text style={styles.partRefText}>{lref}</Text>
+                    </View>
+                    <View style={styles.partCellDesc}>
+                      <Text style={styles.partDescText}>{label}</Text>
+                    </View>
+                    <Text style={[styles.partNumText, styles.partCellQty, styles.numText]}>
+                      {hoursText}
+                    </Text>
+                    {showUnitPrice ? (
+                      <Text style={[styles.partNumText, styles.partCellUnitPrice, styles.numText]}>
+                        {rateText}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.partNumText,
+                        showUnitPrice
+                          ? styles.partCellAmountWithUnit
+                          : styles.partCellAmount,
+                        styles.numText,
+                      ]}
+                    >
+                      {usd(lamount)}
+                    </Text>
+                  </View>
+                );
+              }
               // Parts and labour render identically (QB-3).
               const amount = it.qty * it.unitPrice;
               const unit = it.unitPrice;
