@@ -44,6 +44,11 @@ import { AddStockForm } from "@/components/modules/inventory/AddStockForm";
 import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialog";
 import { MarkDeliveredDialog } from "@/components/modules/inventory/MarkDeliveredDialog";
 import { AdjustStockDialog } from "@/components/modules/inventory/AdjustStockDialog";
+import { MovementHistory } from "@/components/modules/inventory/MovementHistory";
+import {
+  EditReceivedBatchDialog,
+  type ReceivedBatch,
+} from "@/components/modules/inventory/EditReceivedBatchDialog";
 import {
   ReorderDialog,
   type ReorderPart,
@@ -53,6 +58,7 @@ import {
   markLostAction,
   markReturnedAction,
   markConsumedAction,
+  deleteReceivedBatchRowsAction,
 } from "@/app/(app)/inventory/movement-actions";
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
@@ -165,6 +171,71 @@ export function ProductDetailClient({
   const [editingUnit, setEditingUnit] = useState<DbInventoryStock | null>(null);
   const toggleCost = (key: string) =>
     setExpandedCosts((s) => ({ ...s, [key]: !s[key] }));
+
+  // FIX-BATCH-O: group rows by their receive batch (one intake = one batch).
+  const batches = useMemo(() => {
+    const map = new Map<string, DbInventoryStock[]>();
+    for (const s of stock) {
+      if (!s.receive_batch_id) continue;
+      const arr = map.get(s.receive_batch_id) ?? [];
+      arr.push(s);
+      map.set(s.receive_batch_id, arr);
+    }
+    return [...map.entries()]
+      .map(([batchId, rows]) => {
+        const units = rows.map((r) => {
+          const inUse =
+            r.status !== "in_stock" ||
+            (r.custody_status ?? "in_stock") !== "in_stock";
+          return {
+            id: r.id,
+            serial: r.serial_number,
+            quantity: Number(r.quantity),
+            inUse,
+            statusLabel:
+              r.status !== "in_stock"
+                ? r.status.replace("_", " ")
+                : (r.custody_status ?? "in_stock").replace("_", " "),
+          };
+        });
+        const totalQty = units.reduce((n, u) => n + u.quantity, 0);
+        return {
+          batchId,
+          serialized: isSerialized,
+          poNumber: rows.find((r) => r.po_number)?.po_number ?? null,
+          createdAt: rows[0].created_at,
+          unitCost: Number(rows[0].unit_cost),
+          totalQty,
+          units,
+          stockIds: rows.map((r) => r.id),
+          anyInUse: units.some((u) => u.inUse),
+          isSingleBulk:
+            !isSerialized && rows.length === 1 && Number(rows[0].quantity) > 1,
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [stock, isSerialized]);
+  const [editBatch, setEditBatch] = useState<ReceivedBatch | null>(null);
+
+  const handleDeleteBatch = (b: (typeof batches)[number]) => {
+    if (
+      !window.confirm(
+        `Delete the entire received batch (${b.totalQty} unit${
+          b.totalQty === 1 ? "" : "s"
+        })? They are destroyed and the PO's received qty drops accordingly.`
+      )
+    )
+      return;
+    startUnitAction(async () => {
+      const res = await deleteReceivedBatchRowsAction(product.id, b.stockIds);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Deleted batch — ${res.data.destroyedRows} unit(s)`);
+      router.refresh();
+    });
+  };
 
   const setUnitStatus = (unitId: string, status: InventoryStockStatus) => {
     startUnitAction(async () => {
@@ -770,6 +841,91 @@ export function ProductDetailClient({
         </Card>
       </div>
 
+      {/* FIX-BATCH-O: received batches — edit qty / delete whole batch. */}
+      {batches.length > 0 && (
+        <div>
+          <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
+            Received Batches{" "}
+            <span className="text-muted-foreground font-normal normal-case">
+              ({batches.length})
+            </span>
+          </h2>
+          <Card className="bg-card overflow-hidden p-0 shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[11px] uppercase">Received</TableHead>
+                  <TableHead className="text-[11px] uppercase">PO #</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
+                  {showCost && (
+                    <TableHead className="text-right text-[11px] uppercase">
+                      Unit cost
+                    </TableHead>
+                  )}
+                  <TableHead className="text-[11px] uppercase">Status</TableHead>
+                  {canMove && <TableHead className="w-40 text-right" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {batches.map((b) => (
+                  <TableRow key={b.batchId}>
+                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
+                      {format(parseISO(b.createdAt), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {b.poNumber ?? "Manual"}
+                    </TableCell>
+                    <TableCell className="text-brand-navy text-right text-xs font-semibold tabular-nums">
+                      {formatNumber(b.totalQty)}
+                      {isSerialized ? " · serialized" : ""}
+                    </TableCell>
+                    {showCost && (
+                      <TableCell className="text-right text-xs tabular-nums">
+                        {formatCurrency(b.unitCost)}
+                      </TableCell>
+                    )}
+                    <TableCell className="text-xs">
+                      {b.anyInUse ? (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-400 text-[10px] text-amber-700"
+                        >
+                          Some in use
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">In stock</span>
+                      )}
+                    </TableCell>
+                    {canMove && (
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditBatch(b)}
+                          >
+                            Edit qty
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleDeleteBatch(b)}
+                            disabled={unitPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
+      )}
+
       {/* PARTS-2: per-part Purchase Order history (read-only). */}
       <div>
         <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
@@ -832,82 +988,8 @@ export function ProductDetailClient({
         </Card>
       </div>
 
-      {/* MOVE-1: append-only movement history (ledger snapshot labels). */}
-      <div>
-        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
-          Movement History{" "}
-          <span className="text-muted-foreground font-normal normal-case">
-            ({movements.length})
-          </span>
-        </h2>
-        <Card className="bg-card overflow-hidden p-0 shadow-sm">
-          {movements.length === 0 ? (
-            <p className="text-muted-foreground p-5 text-xs">
-              No movements recorded yet.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-[11px] uppercase">When</TableHead>
-                  <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
-                  <TableHead className="text-[11px] uppercase">From</TableHead>
-                  <TableHead className="text-[11px] uppercase">To</TableHead>
-                  <TableHead className="text-[11px] uppercase">By</TableHead>
-                  <TableHead className="text-[11px] uppercase">Note</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movements.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-                      {format(parseISO(m.created_at), "MMM d, yyyy · h:mm a")}
-                    </TableCell>
-                    <TableCell className="text-right text-xs tabular-nums">
-                      {formatNumber(Number(m.quantity))}
-                    </TableCell>
-                    <TableCell className="text-xs">{m.from_label ?? "—"}</TableCell>
-                    <TableCell className="text-brand-charcoal text-xs font-medium">
-                      {/* CUSTODY-1: custody events read "Marked <status>";
-                          PART-FIX-1: adjustments read "Adjusted <delta>"; moves
-                          show the destination label. */}
-                      {m.to_type === "custody" ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className="border-brand-navy/30 text-brand-navy text-[9px] uppercase"
-                          >
-                            Custody
-                          </Badge>
-                          Marked {m.to_label}
-                        </span>
-                      ) : m.to_type === "adjustment" ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className="border-amber-400 text-[9px] uppercase text-amber-700"
-                          >
-                            Adjust
-                          </Badge>
-                          Adjusted {m.to_label}
-                        </span>
-                      ) : (
-                        (m.to_label ?? "—")
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {m.moved_by_name ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[200px] truncate text-xs">
-                      {m.note ?? "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-      </div>
+      {/* MOVE-1 / FIX-BATCH-O: full-range, paginated, Toronto-time history. */}
+      <MovementHistory movements={movements} />
 
       {/* MATERIALS-1: invoices that bill this part. */}
       <div>
@@ -1033,6 +1115,19 @@ export function ProductDetailClient({
         }}
         onDone={() => {
           setAdjustTarget(null);
+          router.refresh();
+        }}
+      />
+
+      <EditReceivedBatchDialog
+        productId={product.id}
+        batch={editBatch}
+        open={editBatch !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditBatch(null);
+        }}
+        onDone={() => {
+          setEditBatch(null);
           router.refresh();
         }}
       />

@@ -15,10 +15,13 @@ import {
   markConsumed,
   getStockProject,
   adjustStockQuantity,
+  deleteReceivedBatchRows,
+  setBatchRowQuantity,
   type MoveDestination,
   type MoveStockResult,
   type CustodyResult,
   type AdjustResult,
+  type BatchEditResult,
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -194,6 +197,40 @@ export async function adjustStockQuantityAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await adjustStockQuantity(stockId, newQty, reason);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// FIX-BATCH-O — received-batch edit/delete (gate inventory:edit). One action
+// destroys a set of rows (serial checklist / non-serialized reduce / whole-batch
+// delete); the other reduces a single bulk row's quantity.
+export async function deleteReceivedBatchRowsAction(
+  productId: string,
+  stockIds: string[]
+): Promise<ActionResult<BatchEditResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await deleteReceivedBatchRows(productId, stockIds);
+    revalidateProduct(productId);
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setBatchRowQuantityAction(
+  productId: string,
+  stockId: string,
+  newQty: number
+): Promise<ActionResult<BatchEditResult>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const result = await setBatchRowQuantity(productId, stockId, newQty);
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {

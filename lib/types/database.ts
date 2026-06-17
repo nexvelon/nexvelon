@@ -730,6 +730,9 @@ export interface DbInventoryStock {
   // location (warehouse/truck) OR a job (cost-center), never both.
   current_location_id: string | null;
   current_cost_center_id: string | null;
+  // FIX-BATCH-O (migration 0053): the receive/intake batch a row was created in
+  // (shared across one receiveStock / addManualStock call; null otherwise).
+  receive_batch_id: string | null;
   // CUSTODY-1 (migration 0048): chain-of-custody for serialized units.
   //   custody_status: in_stock | delivered | installed | returned | lost | consumed
   custody_status: string;
@@ -758,6 +761,8 @@ export type DbInventoryStockInsert = {
   notes?: string | null;
   current_location_id?: string | null;
   current_cost_center_id?: string | null;
+  // FIX-BATCH-O (migration 0053): receive/intake batch id.
+  receive_batch_id?: string | null;
 };
 
 export type DbInventoryStockUpdate = Partial<DbInventoryStockInsert>;

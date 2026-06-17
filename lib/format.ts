@@ -33,6 +33,28 @@ const businessDateFmt = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
+// FIX-BATCH-O — date + time in America/Toronto, e.g. "Jun 16, 2026, 3:42 PM".
+// UTC timestamptz values render in the business TZ (never the browser's local
+// zone) so the Movement History / audit timeline read consistently.
+const businessDateTimeFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+/** Format an ISO/timestamptz string as "Jun 16, 2026, 3:42 PM" in Toronto. */
+export function businessDateTime(iso: string): string {
+  try {
+    return businessDateTimeFmt.format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 /**
  * The calendar date (YYYY-MM-DD) of `date` in America/Toronto. Use this instead
  * of `new Date().toISOString().slice(0,10)` for any stored/displayed calendar
