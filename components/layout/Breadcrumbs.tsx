@@ -11,7 +11,7 @@ const TOP_LABELS: Record<string, string> = {
   dashboard: "Executive Dashboard",
   quotes: "Quotes",
   projects: "Projects",
-  clients: "Clients & Sites",
+  clients: "Clients",
   inventory: "Inventory",
   scheduling: "Scheduling",
   financials: "Financial Operations",

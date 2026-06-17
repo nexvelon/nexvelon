@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { Mail, Search, Shield } from "lucide-react";
+import { Search, Shield } from "lucide-react";
 import { NotificationsBell } from "./NotificationsBell";
 import { AvatarMenu } from "./AvatarMenu";
 import { GoldBreadcrumbs } from "./Breadcrumbs";
@@ -43,14 +43,15 @@ export function TopBar() {
 
   return (
     <header
-      className="sticky top-0 z-20 flex h-20 items-center gap-6 border-b px-8 backdrop-blur"
+      className="sticky top-0 z-20 flex h-20 items-center gap-3 border-b px-4 backdrop-blur sm:gap-6 sm:px-8"
       style={{
         background: "color-mix(in oklab, var(--brand-bg) 85%, transparent)",
         borderColor: "var(--brand-border)",
       }}
     >
-      {/* Left — gold uppercase breadcrumbs */}
-      <div className="min-w-0 flex-shrink-0">
+      {/* Left — gold uppercase breadcrumbs. Desktop chrome; hidden below md so
+          the fixed-height bar doesn't overflow (and cover the bell) on phones. */}
+      <div className="hidden min-w-0 md:block">
         <Suspense
           fallback={
             <span className="text-muted-foreground text-[10px] tracking-[0.2em] uppercase">
@@ -73,7 +74,9 @@ export function TopBar() {
           <span className="flex-1 truncate text-left">
             Search clients, quotes, navigation…
           </span>
-          <kbd className="bg-background text-muted-foreground hidden items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+          {/* Desktop-only shortcut hint — hidden below md (mobile/landscape
+              phones have no keyboard and it crowded the bell). */}
+          <kbd className="bg-background text-muted-foreground hidden items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium md:inline-flex">
             ⌘K
           </kbd>
         </button>
@@ -83,13 +86,6 @@ export function TopBar() {
       {/* Right — actions + role + user */}
       <div className="flex shrink-0 items-center gap-3">
         <NotificationsBell />
-        <button
-          type="button"
-          className="hover:bg-muted flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors"
-          aria-label="Messages"
-        >
-          <Mail className="h-4 w-4" />
-        </button>
 
         {/* Real role indicator (read-only) — replaced the demo-era role-switcher
             in Phase 6. Roles are now driven by profiles.role for the signed-in

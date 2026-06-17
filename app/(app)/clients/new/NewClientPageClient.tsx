@@ -20,11 +20,7 @@ export function NewClientPageClient() {
       >
         ← Back to Clients
       </Link>
-      <PageHeader
-        eyebrow="New client"
-        title="Add a client"
-        description="Create a new master client record. Add the primary contact below or anytime later from the client detail page."
-      />
+      <PageHeader eyebrow="New client" title="Add a client" />
       <div className="max-w-4xl">
         <ClientForm
           mode={{ kind: "create" }}
