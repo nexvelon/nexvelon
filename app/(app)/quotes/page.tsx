@@ -170,7 +170,6 @@ export default function QuotesListPage() {
       <PageHeader
         eyebrow={`${allQuotes.length} quotes · ${counts.Approved} approved · ${counts.Sent} in flight`}
         title="Quotes"
-        description="Manage proposals from draft to project conversion."
         actions={
           <>
             <Link

@@ -87,11 +87,7 @@ export function ClientsView({ clients }: Props) {
   if (rows.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          eyebrow="0 active clients"
-          title="Clients & Sites"
-          description="Master directory · contracts · service history"
-        />
+        <PageHeader eyebrow="0 active clients" title="Clients" />
         <Card className="border-dashed py-16 text-center" style={{ background: "var(--brand-card)" }}>
           <div
             className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full"
@@ -137,8 +133,7 @@ export function ClientsView({ clients }: Props) {
     <div className="space-y-6">
       <PageHeader
         eyebrow={`${activeCount} active client${activeCount === 1 ? "" : "s"}`}
-        title="Clients & Sites"
-        description="Master directory · contracts · service history"
+        title="Clients"
         actions={
           <>
             <button
