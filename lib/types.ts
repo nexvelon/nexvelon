@@ -180,6 +180,25 @@ export interface BuilderLineItem {
   // presence marks the line committed — guards against double-decrement. Lives
   // in the quote jsonb blob; forward-only (no auto-return).
   committedStockId?: string;
+  // QUOTE-LABOUR: optional labour metadata. PRESENCE of this object marks a line
+  // as a managed labour line (the line still carries type "labor"); its absence
+  // means a plain part/service/misc line that renders exactly as before. All
+  // fields jsonb-stored — no migration. hours/sellRate are kept in sync with
+  // qty/unitPrice so the existing totals engine (qty × unitPrice) treats a
+  // labour line identically to a part. The `show` flags are PER-LINE PDF
+  // visibility — they affect ONLY the client-facing document, never the
+  // builder, which always shows full internal detail. The line total is always
+  // shown to the client; everything else defaults to hidden.
+  labour?: {
+    hours: number; // internal, always stored (mirrors qty)
+    sellRate: number; // internal, always stored (mirrors unitPrice)
+    techName?: string; // optional internal note — never rendered on the PDF
+    show?: {
+      description?: boolean; // show the description text on the client PDF
+      hours?: boolean; // show the hours value in the qty column
+      rate?: boolean; // show the sell rate in the unit-price column
+    };
+  };
 }
 
 export interface QuoteSection {

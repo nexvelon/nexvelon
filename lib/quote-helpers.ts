@@ -354,17 +354,31 @@ export function serviceLineItem(): BuilderLineItem {
   };
 }
 
-export function laborLineItem(): BuilderLineItem {
+// QUOTE-LABOUR: a managed labour line. `sellRate` prefills from the Settings
+// default (app_settings.default_labour_sell_rate) and is editable per line. The
+// labour metadata is what flags this as a labour line; hours mirror qty and
+// sellRate mirrors unitPrice so the totals engine treats it like a part. All
+// three PDF-visibility flags default OFF → the client sees only "Labour — $X".
+const DEFAULT_LABOUR_HOURS = 8;
+const DEFAULT_LABOUR_MARGIN = 40;
+
+export function laborLineItem(sellRate = 145): BuilderLineItem {
+  const rate = Number.isFinite(sellRate) && sellRate > 0 ? round2(sellRate) : 145;
   return {
     id: newId("li"),
     type: "labor",
     name: "",
-    description: "",
+    description: "Labour",
     classification: "Technician Labour",
-    qty: 8, // hours
-    unitCost: 87, // 145 × (1 − 0.40) cost rate per hour
-    margin: 40,
-    unitPrice: 145, // billing rate per hour
+    qty: DEFAULT_LABOUR_HOURS, // hours
+    unitCost: round2(rate * (1 - DEFAULT_LABOUR_MARGIN / 100)), // cost rate per hour
+    margin: DEFAULT_LABOUR_MARGIN,
+    unitPrice: rate, // billing (sell) rate per hour
+    labour: {
+      hours: DEFAULT_LABOUR_HOURS,
+      sellRate: rate,
+      show: { description: false, hours: false, rate: false },
+    },
   };
 }
 
