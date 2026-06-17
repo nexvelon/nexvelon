@@ -55,6 +55,30 @@ export function businessDateTime(iso: string): string {
   }
 }
 
+// JC-1 — date-only display, e.g. "Jun 16, 2026". For a `date` column value
+// (YYYY-MM-DD) there is no time-of-day, so we anchor at UTC noon before
+// rendering in Toronto: that keeps the calendar day stable instead of rolling
+// back a day the way midnight-UTC would in a UTC-minus timezone.
+const businessDateDisplayFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+
+/** Format a date-only (YYYY-MM-DD) or ISO string as "Jun 16, 2026" in Toronto. */
+export function businessDate(iso: string): string {
+  try {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    const d = m
+      ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12))
+      : new Date(iso);
+    return businessDateDisplayFmt.format(d);
+  } catch {
+    return iso;
+  }
+}
+
 /**
  * The calendar date (YYYY-MM-DD) of `date` in America/Toronto. Use this instead
  * of `new Date().toISOString().slice(0,10)` for any stored/displayed calendar

@@ -25,10 +25,18 @@ import {
   createInvoiceForProjectAction,
   listInvoicesForProjectAction,
 } from "@/app/(app)/invoices/actions";
+import {
+  listLabourForProjectAction,
+  listActiveTechsAction,
+  type ProjectLabour,
+} from "@/app/(app)/projects/labour-actions";
+import { CostCenterLabour } from "@/components/modules/projects/CostCenterLabour";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
-import type { DbProjectCostCenter } from "@/lib/types/database";
+import type { DbProjectCostCenter, DbTech } from "@/lib/types/database";
+
+const EMPTY_LABOUR: ProjectLabour = { entries: {}, totals: {} };
 
 const OPCO_LABEL: Record<string, string> = {
   integrated_solutions: "Integrated",
@@ -55,6 +63,41 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
     listInvoicesForProjectAction(project.id)
       .then((rows) => {
         if (active) setInvoices(rows);
+      })
+      .catch(() => {
+        /* leave empty */
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
+
+  // JC-1 — labour (entries grouped by cost center + per-cost-center totals) and
+  // the active-tech list for the Add Labour Select. Fetched client-side like
+  // invoices; refreshLabour re-pulls after any add/edit/delete.
+  const [labour, setLabour] = useState<ProjectLabour>(EMPTY_LABOUR);
+  const [techs, setTechs] = useState<DbTech[]>([]);
+  const refreshLabour = () => {
+    listLabourForProjectAction(project.id)
+      .then((res) => {
+        if (res.ok) setLabour(res.data);
+      })
+      .catch(() => {
+        /* leave as-is */
+      });
+  };
+  useEffect(() => {
+    let active = true;
+    listLabourForProjectAction(project.id)
+      .then((res) => {
+        if (active && res.ok) setLabour(res.data);
+      })
+      .catch(() => {
+        /* leave empty */
+      });
+    listActiveTechsAction()
+      .then((res) => {
+        if (active && res.ok) setTechs(res.data);
       })
       .catch(() => {
         /* leave empty */
@@ -188,10 +231,8 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
           ) : (
             <ul className="divide-y divide-[var(--border)]">
               {costCenters.map((cc) => (
-                <li
-                  key={cc.id}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm"
-                >
+                <li key={cc.id} className="px-4 py-2.5 text-sm">
+                  <div className="flex items-center gap-3">
                   <span className="text-brand-navy w-44 shrink-0 font-mono text-xs">
                     {cc.cc_number}
                   </span>
@@ -257,6 +298,20 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
                       )}
                     </>
                   )}
+                  </div>
+                  <CostCenterLabour
+                    projectId={project.id}
+                    costCenter={{
+                      id: cc.id,
+                      cc_number: cc.cc_number,
+                      name: cc.name,
+                    }}
+                    entries={labour.entries[cc.id] ?? []}
+                    total={labour.totals[cc.id] ?? 0}
+                    techs={techs}
+                    canEdit={canInvoice}
+                    onChanged={refreshLabour}
+                  />
                 </li>
               ))}
             </ul>
