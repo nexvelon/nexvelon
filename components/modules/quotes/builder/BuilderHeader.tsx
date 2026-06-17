@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  Ban,
   CheckCircle2,
   Eye,
   Loader2,
@@ -11,7 +12,7 @@ import {
   Save,
   Send,
   ThumbsUp,
-  XCircle,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuoteStatusBadge } from "../QuoteStatusBadge";
@@ -24,6 +25,8 @@ interface Props {
   status: QuoteStatus;
   saving: boolean;
   disabled: boolean;
+  /** POLISH-2 — last-saved indicator label (e.g. "Saved 3:42 PM"). */
+  savedLabel?: string | null;
   onSaveDraft: () => void;
   onSend: () => void;
   onApprove: () => void;
@@ -32,7 +35,8 @@ interface Props {
   onCommitStock: () => void;
   onReopen: () => void;
   canReopen: boolean;
-  onReject: () => void;
+  onRevise: () => void;
+  onClose: () => void;
 }
 
 export function BuilderHeader({
@@ -40,6 +44,7 @@ export function BuilderHeader({
   status,
   saving,
   disabled,
+  savedLabel,
   onSaveDraft,
   onSend,
   onApprove,
@@ -48,9 +53,11 @@ export function BuilderHeader({
   onCommitStock,
   onReopen,
   canReopen,
-  onReject,
+  onRevise,
+  onClose,
 }: Props) {
   const { role } = useRole();
+  const isAdmin = role === "Admin";
   const canApprove = hasPermission(role, "quotes", "approve");
   const approveEnabled = canApprove && status === "Sent";
   const canConvert = hasPermission(role, "quotes", "convert");
@@ -58,12 +65,19 @@ export function BuilderHeader({
   const canCommitStock = hasPermission(role, "inventory", "edit");
   const commitVisible =
     canCommitStock && (status === "Approved" || status === "Converted");
-  // REJECT — any quote editor (sales/PM/admin) can mark a presented quote
-  // (Sent/Approved) as rejected; NOT approve-gated, and not blocked by the
-  // Approved content-lock (it's a decision-capture, not a content edit).
-  const rejectVisible =
+  // POLISH-2 — "Move to Revision": any quote editor (sales/PM/admin) can send a
+  // presented quote (Sent/Approved) back for client-requested changes. Captures
+  // a required reason + source (decision-capture, not a content edit, so not
+  // blocked by the Approved content-lock).
+  const reviseVisible =
     hasPermission(role, "quotes", "edit") &&
     (status === "Sent" || status === "Approved");
+  // POLISH-2 — "Close quote": admin-only, from Sent/Approved/Revision. A closed
+  // deal can be reopened to Sent (handled by canReopen), so it's never terminal.
+  const closeVisible =
+    isAdmin &&
+    (status === "Sent" || status === "Approved" || status === "Revision");
+  const reopenLabel = status === "Closed" ? "Reopen quote" : "Reopen for Editing";
 
   return (
     <div className="bg-background/85 sticky top-16 z-20 -mx-8 border-b border-[var(--border)] px-8 py-3 backdrop-blur">
@@ -83,6 +97,12 @@ export function BuilderHeader({
           </span>
           <QuoteStatusBadge status={status} size="md" />
         </div>
+
+        {savedLabel && (
+          <span className="text-muted-foreground hidden text-[11px] sm:inline">
+            {savedLabel}
+          </span>
+        )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button
@@ -132,17 +152,30 @@ export function BuilderHeader({
               Approve
             </Button>
           )}
-          {rejectVisible && (
+          {reviseVisible && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={saving}
-              onClick={onReject}
-              className="border-red-300 text-red-700 hover:bg-red-50"
+              onClick={onRevise}
+              className="border-orange-300 text-orange-700 hover:bg-orange-50"
             >
-              <XCircle className="mr-1.5 h-3.5 w-3.5" />
-              Mark as Rejected
+              <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+              Move to Revision
+            </Button>
+          )}
+          {closeVisible && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onClose}
+              className="border-zinc-300 text-zinc-600 hover:bg-zinc-100"
+            >
+              <Ban className="mr-1.5 h-3.5 w-3.5" />
+              Close quote
             </Button>
           )}
           {canReopen && (
@@ -155,7 +188,7 @@ export function BuilderHeader({
               className="border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5"
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-              Reopen for Editing
+              {reopenLabel}
             </Button>
           )}
           {commitVisible && (

@@ -493,16 +493,21 @@ export const QUOTE_STATUS_ORDER: QuoteStatus[] = [
   "Draft",
   "Sent",
   "Approved",
-  "Rejected",
+  "Revision",
+  "Closed",
   "Expired",
   "Converted",
 ];
 
+// Weighted-pipeline probabilities. Revision / Closed / Expired are 0 — a
+// revision is paused, a closed deal is dead, an expired quote is gone — so none
+// contribute to the weighted pipeline sum.
 export const STATUS_PROBABILITY: Record<QuoteStatus, number> = {
   Draft: 0.25,
   Sent: 0.6,
   Approved: 1,
-  Rejected: 0,
+  Revision: 0,
+  Closed: 0,
   Expired: 0,
   Converted: 1,
 };

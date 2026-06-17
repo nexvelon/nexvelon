@@ -135,7 +135,13 @@ export type QuoteStatus =
   | "Draft"
   | "Sent"
   | "Approved"
-  | "Rejected"
+  // POLISH-2: "Revision" (was "Rejected") — the client wants the quote
+  // updated, not a lost deal. Same dialog + storage as before (the JSONB
+  // rejection* fields are kept as stable storage names). "Closed" — a deal
+  // that didn't proceed; admin-only, reopenable to Sent, excluded from the
+  // weighted pipeline.
+  | "Revision"
+  | "Closed"
   | "Expired"
   | "Converted";
 
@@ -247,12 +253,20 @@ export interface Quote {
   showDescription?: boolean; // QB-4
   showUpc?: boolean; // CAT-2: show line UPC
   showMasterPart?: boolean; // CAT-2: show master part # as the line part number
-  // REJECT — captured by "Mark as Rejected". All optional + jsonb-stored (no
-  // migration); surfaced in a banner when status === "Rejected".
+  // Captured by "Move to Revision". All optional + jsonb-stored (no migration);
+  // surfaced in a banner when status === "Revision".
+  // POLISH-2 note: these JSONB fields back the "Revision" status (renamed from
+  // the former "Rejected"). Storage names are intentionally unchanged — only
+  // display copy says "Revision".
   rejectionReason?: string;
   rejectionSource?: QuoteRejectionSource;
   rejectedAt?: string; // ISO timestamp
   rejectedByUser?: string; // display name of who marked it rejected
+  // POLISH-2 — "Closed" status metadata (optional jsonb extension; closing
+  // reason is OPTIONAL, unlike a revision reason).
+  closingReason?: string;
+  closedAt?: string; // ISO timestamp
+  closedByUser?: string; // display name of who closed it
 }
 
 export type QuoteRejectionSource = "Client" | "Approver" | "Other";

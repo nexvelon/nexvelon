@@ -84,9 +84,12 @@ export async function upsertQuoteAction(
           const changes: Record<string, unknown> = {
             status: { from: prior.status, to: saved.status },
           };
-          if (saved.status === "Rejected") {
+          if (saved.status === "Revision") {
             changes.rejectionReason = saved.rejectionReason ?? null;
             changes.rejectionSource = saved.rejectionSource ?? null;
+          }
+          if (saved.status === "Closed") {
+            changes.closingReason = saved.closingReason ?? null;
           }
           await logQuoteAuditEvent({
             quoteId: quote.id,

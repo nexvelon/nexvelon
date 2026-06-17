@@ -54,7 +54,8 @@ export default function QuotesListPage() {
       Draft: 0,
       Sent: 0,
       Approved: 0,
-      Rejected: 0,
+      Revision: 0,
+      Closed: 0,
       Expired: 0,
       Converted: 0,
     };
@@ -247,7 +248,8 @@ export default function QuotesListPage() {
 
       <p className="text-muted-foreground pt-1 text-center text-[11px]">
         Status order: {QUOTE_STATUS_ORDER.join(" → ")} · weighted = sum(total ×
-        probability) where Approved=100%, Sent=60%, Draft=25%.
+        probability) where Approved=100%, Sent=60%, Draft=25%; Closed quotes are
+        excluded from the pipeline.
       </p>
     </div>
   );
