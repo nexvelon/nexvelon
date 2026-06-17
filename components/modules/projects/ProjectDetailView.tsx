@@ -30,10 +30,16 @@ import {
   listActiveTechsAction,
   type ProjectLabour,
 } from "@/app/(app)/projects/labour-actions";
+import { getProjectCostRollupAction } from "@/app/(app)/projects/rollup-actions";
 import { CostCenterLabour } from "@/components/modules/projects/CostCenterLabour";
+import {
+  ProjectRollupCard,
+  CostCenterRollupChips,
+} from "@/components/modules/projects/ProjectRollup";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
+import type { ProjectCostRollup } from "@/lib/api/project-cost-rollup";
 import type { DbProjectCostCenter, DbTech } from "@/lib/types/database";
 
 const EMPTY_LABOUR: ProjectLabour = { entries: {}, totals: {} };
@@ -106,6 +112,48 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
       active = false;
     };
   }, [project.id]);
+
+  // JC-2 — cost rollup (contract / invoiced / materials / labour / spent /
+  // margin / billed %). Client-fetched like labour; labour / spent / margin
+  // arrive null when the caller lacks financials:edit. refreshRollup re-pulls
+  // after any change that moves the numbers (labour edits, invoice creation).
+  const [rollup, setRollup] = useState<ProjectCostRollup | null>(null);
+  const [canSeeFinancials, setCanSeeFinancials] = useState(false);
+  const refreshRollup = () => {
+    getProjectCostRollupAction(project.id)
+      .then((res) => {
+        if (res.ok) {
+          setRollup(res.data.rollup);
+          setCanSeeFinancials(res.data.canSeeFinancials);
+        }
+      })
+      .catch(() => {
+        /* leave as-is */
+      });
+  };
+  useEffect(() => {
+    let active = true;
+    getProjectCostRollupAction(project.id)
+      .then((res) => {
+        if (active && res.ok) {
+          setRollup(res.data.rollup);
+          setCanSeeFinancials(res.data.canSeeFinancials);
+        }
+      })
+      .catch(() => {
+        /* leave empty */
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
+
+  // Labour and stock-cost both feed the rollup, so a labour change must refresh
+  // both the labour lists and the rollup.
+  const onLabourChanged = () => {
+    refreshLabour();
+    refreshRollup();
+  };
 
   const handleCreateInvoice = () => {
     startTransition(async () => {
@@ -215,6 +263,14 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
         </div>
       </Card>
 
+      {/* JC-2 — project cost rollup */}
+      {rollup && (
+        <ProjectRollupCard
+          rollup={rollup.perProject}
+          canSeeFinancials={canSeeFinancials}
+        />
+      )}
+
       {/* Cost Centers */}
       <div>
         <p className="nx-eyebrow-soft mb-2">
@@ -299,6 +355,12 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
                     </>
                   )}
                   </div>
+                  {rollup?.perCostCenter[cc.id] && (
+                    <CostCenterRollupChips
+                      cc={rollup.perCostCenter[cc.id]}
+                      canSeeFinancials={canSeeFinancials}
+                    />
+                  )}
                   <CostCenterLabour
                     projectId={project.id}
                     costCenter={{
@@ -310,7 +372,7 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
                     total={labour.totals[cc.id] ?? 0}
                     techs={techs}
                     canEdit={canInvoice}
-                    onChanged={refreshLabour}
+                    onChanged={onLabourChanged}
                   />
                 </li>
               ))}
