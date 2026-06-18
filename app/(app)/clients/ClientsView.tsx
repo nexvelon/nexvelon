@@ -1,20 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
+  Check,
   Download,
   Edit3,
   MoreHorizontal,
   Plus,
   Search,
   Trash2,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRole } from "@/lib/role-context";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +39,12 @@ import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
 import { TIER_BADGE, initials } from "./_components/shared";
 import { deleteClientAction, listClientsAction } from "./actions";
+import {
+  sendClientInviteAction,
+  listPendingClientsAction,
+  approvePendingClientAction,
+  rejectPendingClientAction,
+} from "./invite-actions";
 import type { DbClient, DbClientWithCounts } from "@/lib/types/database";
 
 // FIX-1: dropped imports — getCurrentUserIsAdminAction (was used only by
@@ -69,6 +80,201 @@ export function ClientsView({ clients }: Props) {
     { open: false } | { open: true; client: DbClient }
   >({ open: false });
 
+  // POLISH-3 — invite + pending-review (admin-gated). Pending clients are
+  // fetched lazily when the tab is opened.
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
+  const [view, setView] = useState<"active" | "pending">("active");
+  const [pendingRows, setPendingRows] = useState<DbClientWithCounts[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [acting, setActing] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+
+  const loadPending = async () => {
+    setPendingLoading(true);
+    const r = await listPendingClientsAction();
+    if (r.ok) setPendingRows(r.data);
+    else toast.error(r.error);
+    setPendingLoading(false);
+  };
+  useEffect(() => {
+    // Load the pending list/count once admin status is known (tab badge).
+    if (isAdmin) loadPending();
+  }, [isAdmin]);
+
+  const sendInvite = () => {
+    setInviteSending(true);
+    sendClientInviteAction(inviteEmail).then((r) => {
+      setInviteSending(false);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(`Invite sent to ${inviteEmail.trim()}`);
+      setInviteEmail("");
+      setInviteOpen(false);
+    });
+  };
+
+  const approve = (id: string) => {
+    setActing(id);
+    approvePendingClientAction(id).then((r) => {
+      setActing(null);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Client approved");
+      void loadPending();
+      void reload();
+    });
+  };
+  const reject = (id: string) => {
+    if (!window.confirm("Reject and delete this pending client + its site?")) return;
+    setActing(id);
+    rejectPendingClientAction(id).then((r) => {
+      setActing(null);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Pending client rejected");
+      void loadPending();
+    });
+  };
+
+  const InviteButton = isAdmin ? (
+    <button
+      type="button"
+      onClick={() => setInviteOpen(true)}
+      className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+      style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+    >
+      <UserPlus className="h-3.5 w-3.5" />
+      Invite new client
+    </button>
+  ) : null;
+
+  const Tabs = isAdmin ? (
+    <div className="flex items-center gap-1">
+      {(["active", "pending"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => setView(v)}
+          className={cn(
+            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            view === v
+              ? "bg-brand-navy text-white"
+              : "text-brand-charcoal hover:bg-muted"
+          )}
+        >
+          {v === "active" ? "Active" : `Pending Review (${pendingRows.length})`}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  const inviteDialog = (
+    <Dialog open={inviteOpen} onOpenChange={(o) => !inviteSending && setInviteOpen(o)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-serif">Invite a new client</DialogTitle>
+          <DialogDescription>
+            We&apos;ll email a secure onboarding link (client form, site form, and
+            two T&amp;Cs to sign). They can complete it across multiple sessions.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Client email</label>
+          <Input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="contact@client.com"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && inviteEmail.trim()) sendInvite();
+            }}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSending}>
+            Cancel
+          </Button>
+          <Button onClick={sendInvite} disabled={inviteSending || !inviteEmail.trim()}>
+            {inviteSending ? "Sending…" : "Send invite"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const pendingBody = (
+    <div className="space-y-4">
+      <p className="nx-eyebrow-soft">
+        Awaiting review · {pendingRows.length}
+      </p>
+      {pendingLoading ? (
+        <Card className="bg-card p-6 text-center text-xs text-muted-foreground">
+          Loading…
+        </Card>
+      ) : pendingRows.length === 0 ? (
+        <Card className="bg-card p-6 text-center text-xs text-muted-foreground">
+          No clients awaiting review. Invited clients appear here after they
+          submit their onboarding.
+        </Card>
+      ) : (
+        <ul className="space-y-2">
+          {pendingRows.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center gap-3 rounded-md border bg-card px-4 py-3"
+              style={{ borderColor: "var(--brand-border)" }}
+            >
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/clients/${c.id}`)}
+                  className="text-brand-navy truncate text-sm font-semibold hover:underline"
+                >
+                  {c.name}
+                </button>
+                <p className="text-muted-foreground truncate text-[11px]">
+                  {c.portal_contact_email ?? c.legal_name ?? "—"}
+                  {c.invited_at
+                    ? ` · submitted ${new Date(c.invited_at).toLocaleDateString()}`
+                    : ""}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => approve(c.id)}
+                disabled={acting === c.id}
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                <Check className="mr-1 h-3.5 w-3.5" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reject(c.id)}
+                disabled={acting === c.id}
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Reject
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   const filtered = useMemo(() => {
     if (!search.trim()) return rows;
     const q = search.toLowerCase();
@@ -87,7 +293,15 @@ export function ClientsView({ clients }: Props) {
   if (rows.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="0 active clients" title="Clients" />
+        <PageHeader
+          eyebrow="0 active clients"
+          title="Clients"
+          actions={InviteButton}
+        />
+        {Tabs}
+        {view === "pending" ? (
+          pendingBody
+        ) : (
         <Card className="border-dashed py-16 text-center" style={{ background: "var(--brand-card)" }}>
           <div
             className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full"
@@ -122,7 +336,9 @@ export function ClientsView({ clients }: Props) {
             Add your first client
           </button>
         </Card>
+        )}
 
+        {inviteDialog}
         {/* CL-9: empty-state has no rows → no edit drawer to render here. */}
       </div>
     );
@@ -148,6 +364,7 @@ export function ClientsView({ clients }: Props) {
               <Download className="h-3.5 w-3.5" />
               Export
             </button>
+            {InviteButton}
             <button
               type="button"
               onClick={() => router.push("/clients/new")}
@@ -161,6 +378,11 @@ export function ClientsView({ clients }: Props) {
         }
       />
 
+      {Tabs}
+
+      {view === "pending" ? (
+        pendingBody
+      ) : (
       <div className="space-y-4">
         <div className="relative">
           <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -193,6 +415,9 @@ export function ClientsView({ clients }: Props) {
           ))}
         </ul>
       </div>
+      )}
+
+      {inviteDialog}
 
       {editDrawer.open && (
         <ClientFormDrawer

@@ -103,11 +103,39 @@ export interface DbClient {
   preferred_currency: DbClientCurrency | null;
   portal_access_enabled: boolean | null;
   portal_contact_email: string | null;
+  // POLISH-3 (migration 0056) — invite-created clients land here for admin
+  // review before joining the main directory.
+  pending_review: boolean;
+  invited_at: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+}
+
+// POLISH-3 (migration 0056) — a public client onboarding invitation. The token
+// is the unguessable state holder; the client fills the four pieces (client
+// form, site form, two T&C signatures) across sessions, then submits. On submit
+// a pending_review client + site are created and the row is locked
+// (submitted_at set; anon RLS blocks further updates).
+export interface DbClientInvitation {
+  id: string;
+  token: string;
+  email: string;
+  client_id: string | null;
+  created_by: string | null;
+  client_form_completed: boolean;
+  site_form_completed: boolean;
+  tc1_signed_at: string | null;
+  tc1_signed_name: string | null;
+  tc2_signed_at: string | null;
+  tc2_signed_name: string | null;
+  submitted_at: string | null;
+  client_form_data: Record<string, unknown> | null;
+  site_form_data: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Payload for creating a client. id / timestamps / soft-delete are server-managed. */
@@ -157,6 +185,9 @@ export type DbClientInsert = {
   portal_access_enabled?: boolean | null;
   portal_contact_email?: string | null;
   created_by?: string | null;
+  // POLISH-3 (migration 0056) — invite-created clients awaiting admin review.
+  pending_review?: boolean;
+  invited_at?: string | null;
 };
 
 /** Payload for partial-update — every column optional. */
@@ -366,6 +397,9 @@ export interface ClientListFilters {
   tier?: DbClientTier;
   status?: DbClientStatus;
   type?: DbClientType;
+  // POLISH-3 — when true, return ONLY invite-created clients awaiting review;
+  // when false/omitted, the normal list EXCLUDES them.
+  pending_review?: boolean;
 }
 
 // ============================================================================

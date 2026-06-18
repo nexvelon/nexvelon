@@ -17,6 +17,8 @@ import {
   adjustStockQuantity,
   deleteReceivedBatchRows,
   setBatchRowQuantity,
+  deleteMovementById,
+  deleteAllMovementsForProduct,
   type MoveDestination,
   type MoveStockResult,
   type CustodyResult,
@@ -64,6 +66,19 @@ async function requireInventoryEdit(): Promise<string | null> {
     return "You don't have permission to move stock.";
   }
   return null;
+}
+
+// Canonical admin gate (mirrors techs-actions.ts) for the destructive
+// hard-delete history actions below.
+async function requireAdmin(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "You're not signed in." };
+  if (me.status !== "Active")
+    return { ok: false, error: "Your account is not active." };
+  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
+  return { ok: true };
 }
 
 export async function listMovementsByProductAction(
@@ -233,6 +248,38 @@ export async function setBatchRowQuantityAction(
     const result = await setBatchRowQuantity(productId, stockId, newQty);
     revalidateProduct(productId);
     return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Admin hard-delete of movement history (HARD delete, no audit) ─────────────
+// Admin-gated. `productId` is the page to revalidate; for the per-row delete it
+// must be passed so the part page re-syncs.
+export async function deleteMovementByIdAction(
+  id: string,
+  productId?: string
+): Promise<ActionResult<{ deleted: boolean }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const deleted = await deleteMovementById(id);
+    if (productId) revalidateProduct(productId);
+    return { ok: true, data: { deleted } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteAllMovementsForProductAction(
+  productId: string
+): Promise<ActionResult<{ deleted: number }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const deleted = await deleteAllMovementsForProduct(productId);
+    revalidateProduct(productId);
+    return { ok: true, data: { deleted } };
   } catch (e) {
     return fail(e);
   }

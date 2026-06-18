@@ -62,7 +62,14 @@ export async function middleware(request: NextRequest) {
 
   // ---- 1. Anonymous --------------------------------------------------------
   if (!user) {
-    if (pathname === "/" || ANON_ALLOWED.has(pathname)) {
+    // POLISH-3 — the /invite/<token>/* onboarding flow is PUBLIC (token-gated
+    // at the API layer), so anonymous clients reach it without an app login.
+    if (
+      pathname === "/" ||
+      ANON_ALLOWED.has(pathname) ||
+      pathname === "/invite" ||
+      pathname.startsWith("/invite/")
+    ) {
       return supabaseResponse;
     }
     const url = request.nextUrl.clone();

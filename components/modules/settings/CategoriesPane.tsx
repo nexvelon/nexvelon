@@ -36,6 +36,22 @@ import {
 } from "@/app/(app)/settings/category-actions";
 import type { DbInventoryCategory } from "@/lib/types/database";
 
+// PART-FIX-2 — an elegant per-depth marker glyph (in addition to the
+// expand/collapse chevron) so the tree reads as house style rather than a
+// generic browser bullet list. depth is 0-based (0 = top-level / "Depth 1").
+function depthMarker(depth: number): { glyph: string; color: string } {
+  switch (depth) {
+    case 0:
+      return { glyph: "◆", color: "#a07a2c" }; // antique gold filled diamond
+    case 1:
+      return { glyph: "▸", color: "#b8a86b" }; // muted gold open chevron
+    case 2:
+      return { glyph: "◦", color: "#1a1814" }; // deep navy hollow bullet
+    default:
+      return { glyph: "·", color: "#1a1814" }; // navy middot for depth 4+
+  }
+}
+
 export function CategoriesPane() {
   const [rows, setRows] = useState<DbInventoryCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,6 +344,13 @@ function CategoryNode({
           </>
         ) : (
           <>
+            <span
+              aria-hidden
+              className="inline-block w-3 text-center text-[11px] leading-none select-none"
+              style={{ color: depthMarker(depth).color }}
+            >
+              {depthMarker(depth).glyph}
+            </span>
             <span className="text-brand-charcoal flex-1 text-sm">
               {node.name}
             </span>
