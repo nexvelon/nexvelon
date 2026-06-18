@@ -989,7 +989,11 @@ export function ProductDetailClient({
       </div>
 
       {/* MOVE-1 / FIX-BATCH-O: full-range, paginated, Toronto-time history. */}
-      <MovementHistory movements={movements} />
+      <MovementHistory
+        movements={movements}
+        productId={product.id}
+        partLabel={product.master_part_number ?? product.sku}
+      />
 
       {/* MATERIALS-1: invoices that bill this part. */}
       <div>

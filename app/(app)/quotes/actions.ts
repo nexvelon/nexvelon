@@ -15,6 +15,8 @@ import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import {
   getQuoteAuditEvents,
   logQuoteAuditEvent,
+  deleteQuoteAuditById,
+  deleteAllQuoteAuditForQuote,
 } from "@/lib/api/quote-audit";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
@@ -173,6 +175,46 @@ export async function deleteQuoteAction(
     await deleteAttachmentsForEntity("quote", id).catch(() => {});
     revalidatePath("/quotes");
     return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── AUDIT-1: admin hard-delete of quote history (HARD delete, no audit) ───────
+// The History panel is already admin-only client-side; these gate the writes on
+// the server too (canonical admin gate, mirrors techs-actions.ts).
+async function requireAdmin(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "You're not signed in." };
+  if (me.status !== "Active")
+    return { ok: false, error: "Your account is not active." };
+  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
+  return { ok: true };
+}
+
+export async function deleteQuoteAuditByIdAction(
+  id: string
+): Promise<ActionResult<{ deleted: boolean }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const deleted = await deleteQuoteAuditById(id);
+    return { ok: true, data: { deleted } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteAllQuoteAuditForQuoteAction(
+  quoteId: string
+): Promise<ActionResult<{ deleted: number }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const deleted = await deleteAllQuoteAuditForQuote(quoteId);
+    return { ok: true, data: { deleted } };
   } catch (e) {
     return fail(e);
   }

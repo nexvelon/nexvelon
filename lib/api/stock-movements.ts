@@ -11,6 +11,7 @@ import "server-only";
 // is created at the destination. The whole-row case just repoints the row.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { getDefaultWarehouse } from "@/lib/api/stock-locations";
 import { isSerializedProduct } from "@/lib/inventory-serial";
@@ -365,6 +366,39 @@ export async function listMovementsByProduct(
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listMovementsByProduct: ${error.message}`);
   return (data ?? []) as DbStockMovement[];
+}
+
+// ── Admin hard-delete ─────────────────────────────────────────────────────────
+// The ledger is normally APPEND-ONLY (RLS allows SELECT + INSERT only), so these
+// go through the SERVICE-ROLE admin client to bypass RLS. They are intentional
+// HARD deletes — rows are erased, not soft-flagged, and NO audit entry is
+// recorded for the deletion itself. Caller must enforce the Admin gate.
+
+/** Permanently delete a single movement row. Returns true if a row was removed. */
+export async function deleteMovementById(id: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("stock_movements")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(`deleteMovementById: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/** Permanently delete the whole movement history for a part. Returns the count
+ *  of rows removed. */
+export async function deleteAllMovementsForProduct(
+  productId: string
+): Promise<number> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("stock_movements")
+    .delete()
+    .eq("product_id", productId)
+    .select("id");
+  if (error) throw new Error(`deleteAllMovementsForProduct: ${error.message}`);
+  return (data ?? []).length;
 }
 
 // ── CUSTODY-1 (Batch D3) ─────────────────────────────────────────────────────

@@ -1,19 +1,40 @@
 "use client";
 
-// AUDIT-1 — admin-only, read-only History panel for the quote builder. Lists
+// AUDIT-1 — admin-only History panel for the quote builder. Lists
 // quote_audit_log events chronologically (oldest first) with a second-precision
-// Toronto timestamp, the actor, and a human description. No edit/delete
-// affordances — the underlying table is immutable.
+// Toronto timestamp, the actor, and a human description.
+//
+// POLISH-3 — Admins can HARD-delete a single audit row or the whole trail for a
+// quote (type-to-confirm with the quote id). Deletes are irreversible and are
+// not themselves audited. Paginated via the shared Paginator.
 
-import { useCallback, useEffect, useState } from "react";
-import { History, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { History, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Paginator,
+  usePersistedPageSize,
+} from "@/components/modules/shared/Paginator";
 import { useRole } from "@/lib/role-context";
 import { BUSINESS_TIMEZONE } from "@/lib/format";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 import type { QuoteDiffChange } from "@/lib/quote-audit-diff";
-import { getQuoteAuditEventsAction } from "@/app/(app)/quotes/actions";
+import {
+  getQuoteAuditEventsAction,
+  deleteQuoteAuditByIdAction,
+  deleteAllQuoteAuditForQuoteAction,
+} from "@/app/(app)/quotes/actions";
 
 const TS_FMT = new Intl.DateTimeFormat("en-CA", {
   timeZone: BUSINESS_TIMEZONE,
@@ -95,6 +116,17 @@ export function QuoteHistoryPanel({
   const [events, setEvents] = useState<DbQuoteAuditLog[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [pageSize, setPageSize] = usePersistedPageSize(
+    "nexvelon:quote-history:pageSize",
+    10
+  );
+  const [page, setPage] = useState(0);
+
+  const [pending, startTransition] = useTransition();
+  const [confirmRow, setConfirmRow] = useState<DbQuoteAuditLog | null>(null);
+  const [wipeOpen, setWipeOpen] = useState(false);
+  const [wipeInput, setWipeInput] = useState("");
+
   const load = useCallback(async () => {
     setLoading(true);
     const res = await getQuoteAuditEventsAction(quoteId);
@@ -110,7 +142,42 @@ export function QuoteHistoryPanel({
     return () => clearTimeout(t);
   }, [open, status, load]);
 
+  function deleteRow(ev: DbQuoteAuditLog) {
+    startTransition(async () => {
+      const res = await deleteQuoteAuditByIdAction(ev.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConfirmRow(null);
+      toast.success("History event deleted");
+      load();
+    });
+  }
+
+  function wipeAll() {
+    startTransition(async () => {
+      const res = await deleteAllQuoteAuditForQuoteAction(quoteId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setWipeOpen(false);
+      setWipeInput("");
+      setPage(0);
+      toast.success(`Deleted ${res.data.deleted} history event(s)`);
+      load();
+    });
+  }
+
   if (role !== "Admin") return null;
+
+  const pageCount = Math.max(1, Math.ceil(events.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageEvents = events.slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize
+  );
 
   return (
     <Card>
@@ -128,21 +195,39 @@ export function QuoteHistoryPanel({
             </span>
           </button>
           {open && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={load}
-              disabled={loading}
-              className="h-7 gap-1 px-2 text-xs"
-            >
-              {loading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={load}
+                disabled={loading}
+                className="h-7 gap-1 px-2 text-xs"
+              >
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Refresh
+              </Button>
+              {events.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setWipeInput("");
+                    setWipeOpen(true);
+                  }}
+                  disabled={pending}
+                  className="h-7 gap-1 px-2 text-xs text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete all
+                </Button>
               )}
-              Refresh
-            </Button>
+            </div>
           )}
         </CardTitle>
       </CardHeader>
@@ -156,25 +241,138 @@ export function QuoteHistoryPanel({
               change.
             </p>
           ) : (
-            <ol className="space-y-2">
-              {events.map((ev) => (
-                <li
-                  key={ev.id}
-                  className="flex flex-col gap-0.5 border-l-2 border-[var(--border)] pl-3 text-xs"
-                >
-                  <span className="text-brand-charcoal font-medium">
-                    {describe(ev)}
-                  </span>
-                  <span className="text-muted-foreground text-[11px]">
-                    {TS_FMT.format(new Date(ev.created_at))}
-                    {ev.actor_name ? ` · ${ev.actor_name}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ol>
+            <>
+              <ol className="space-y-2">
+                {pageEvents.map((ev) => (
+                  <li
+                    key={ev.id}
+                    className="group flex items-start justify-between gap-2 border-l-2 border-[var(--border)] pl-3 text-xs"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-brand-charcoal font-medium">
+                        {describe(ev)}
+                      </span>
+                      <span className="text-muted-foreground text-[11px]">
+                        {TS_FMT.format(new Date(ev.created_at))}
+                        {ev.actor_name ? ` · ${ev.actor_name}` : ""}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1 text-red-600 hover:text-red-700"
+                      onClick={() => setConfirmRow(ev)}
+                      disabled={pending}
+                      aria-label="Delete history event"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ol>
+              {events.length > pageSize && (
+                <div className="mt-3 -mx-4 -mb-4">
+                  <Paginator
+                    totalItems={events.length}
+                    page={safePage}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(0);
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       )}
+
+      {/* Per-row delete confirm */}
+      <Dialog
+        open={confirmRow !== null}
+        onOpenChange={(o) => !o && setConfirmRow(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this history event?</DialogTitle>
+            <DialogDescription>
+              This permanently removes one event from the quote&rsquo;s history.
+              It cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmRow(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => confirmRow && deleteRow(confirmRow)}
+              disabled={pending}
+            >
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Wipe-all type-to-confirm (type the quote id) */}
+      <Dialog
+        open={wipeOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setWipeOpen(false);
+            setWipeInput("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete all history for this quote?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes every history event for this quote. It
+              cannot be undone. Type the quote id{" "}
+              <span className="text-brand-charcoal font-mono font-semibold break-all">
+                {quoteId}
+              </span>{" "}
+              to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={wipeInput}
+            onChange={(e) => setWipeInput(e.target.value)}
+            placeholder={quoteId}
+            disabled={pending}
+            className="font-mono"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setWipeOpen(false);
+                setWipeInput("");
+              }}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={wipeAll}
+              disabled={pending || wipeInput !== quoteId}
+            >
+              {pending ? "Deleting…" : "Delete all"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

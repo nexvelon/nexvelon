@@ -63,9 +63,18 @@ export async function getClients(
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.type) query = query.eq("type", filters.type);
 
-  const { data: clients, error } = await query;
+  const { data: clientsRaw, error } = await query;
   if (error) throw new Error(`getClients: ${error.message}`);
-  if (!clients || clients.length === 0) return [];
+  if (!clientsRaw || clientsRaw.length === 0) return [];
+
+  // POLISH-3 — split out invite-created clients awaiting review. Filtered in JS
+  // (not a DB `.eq`) so the list still works if migration 0056 hasn't been
+  // applied yet (a missing column reads as undefined → treated as not-pending).
+  const clients = clientsRaw.filter((c) => {
+    const pending = (c as { pending_review?: boolean }).pending_review === true;
+    return filters.pending_review ? pending : !pending;
+  });
+  if (clients.length === 0) return [];
 
   // Roll up site / contact counts in a single round-trip each (so we don't
   // N+1 against postgres).

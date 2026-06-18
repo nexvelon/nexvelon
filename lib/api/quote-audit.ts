@@ -63,3 +63,36 @@ export async function getQuoteAuditEvents(
   }
   return (data ?? []) as DbQuoteAuditLog[];
 }
+
+// ── Admin hard-delete ─────────────────────────────────────────────────────────
+// quote_audit_log is normally immutable (no DELETE policy), so these go through
+// the SERVICE-ROLE client to bypass RLS. They are intentional HARD deletes — the
+// rows are erased outright and nothing is logged about the deletion. The caller
+// is responsible for enforcing the Admin gate.
+
+/** Permanently delete a single audit row. Returns true if a row was removed. */
+export async function deleteQuoteAuditById(id: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("quote_audit_log")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(`deleteQuoteAuditById: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/** Permanently delete the whole audit trail for a quote. Returns the count of
+ *  rows removed. */
+export async function deleteAllQuoteAuditForQuote(
+  quoteId: string
+): Promise<number> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("quote_audit_log")
+    .delete()
+    .eq("quote_id", quoteId)
+    .select("id");
+  if (error) throw new Error(`deleteAllQuoteAuditForQuote: ${error.message}`);
+  return (data ?? []).length;
+}

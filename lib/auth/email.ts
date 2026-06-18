@@ -256,3 +256,201 @@ function renderLowStockText(items: LowStockItem[]): string {
     `— Nexvelon Global`,
   ].join("\n");
 }
+
+// ----------------------------------------------------------------------------
+// POLISH-3 · Client onboarding invitations.
+// Invites are sent FROM inquiries@ and the bundled submission notification is
+// sent TO inquiries@. Falls back to the same Resend-verified domain.
+// ----------------------------------------------------------------------------
+
+const INQUIRIES_FROM =
+  process.env.RESEND_INQUIRIES_EMAIL ?? "Nexvelon <inquiries@nexvelonglobal.com>";
+const INQUIRIES_TO =
+  process.env.RESEND_INQUIRIES_TO ?? "inquiries@nexvelonglobal.com";
+
+// Shared house shell (navy + gold) so every transactional email reads the same.
+function emailShell(args: {
+  eyebrow: string;
+  heading: string;
+  subtitle: string;
+  bodyHtml: string;
+}): string {
+  return `<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;padding:48px 16px;">
+      <tr>
+        <td align="center">
+          <table width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #E5DFD0;">
+            <tr>
+              <td style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
+                <div style="font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;">${escapeHtml(
+                  args.eyebrow
+                )}</div>
+                <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">${escapeHtml(
+                  args.heading
+                )}</div>
+                <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${escapeHtml(
+                  args.subtitle
+                )}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 48px;font-size:15px;line-height:1.7;color:#2A2418;">
+                ${args.bodyHtml}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
+                &copy; 2026 Nexvelon Global
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function linkRow(href: string, label: string, desc: string): string {
+  return `<tr>
+    <td style="padding:10px 0;border-bottom:1px solid #E5DFD0;">
+      <a href="${escapeHtml(href)}" style="color:#0A1226;font-size:16px;font-weight:bold;text-decoration:none;">${escapeHtml(
+        label
+      )} &rsaquo;</a>
+      <div style="color:#5C5240;font-size:13px;margin-top:2px;">${escapeHtml(desc)}</div>
+    </td>
+  </tr>`;
+}
+
+/** Send the four-link onboarding invitation to a prospective client. */
+export async function sendClientInviteEmail(opts: {
+  to: string;
+  token: string;
+  baseUrl: string;
+}): Promise<void> {
+  const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
+  const links =
+    `<table width="100%" cellpadding="0" cellspacing="0" border="0">` +
+    linkRow(`${base}/client`, "Client Information Form", "Your company's legal name, billing address, and primary contact.") +
+    linkRow(`${base}/site`, "Site Information Form", "The address and access details for the site we'll be servicing.") +
+    linkRow(`${base}/tc1`, "Integrated Solutions — Terms & Conditions", "Read and sign with your typed name.") +
+    linkRow(`${base}/tc2`, "Payment Terms & Conditions", "Read and sign with your typed name.") +
+    `</table>`;
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">You've been invited to onboard with Nexvelon. Please complete the four steps below — you can do them in any order and across multiple sittings; your progress is saved automatically.</p>
+    ${links}
+    <p style="margin:18px 0 0;font-size:13px;color:#5C5240;">When all four are complete, return to your <a href="${escapeHtml(
+      base
+    )}" style="color:#B8924B;">status page</a> and press Submit. Questions? Reply to this email.</p>`;
+  const html = emailShell({
+    eyebrow: "Nexvelon · Client onboarding",
+    heading: "Welcome — let's get you set up.",
+    subtitle: "Four short steps to open your account.",
+    bodyHtml,
+  });
+  const text = [
+    "Nexvelon · Client onboarding",
+    "",
+    "Complete these four steps (saved automatically, any order):",
+    `  Client Information Form: ${base}/client`,
+    `  Site Information Form:   ${base}/site`,
+    `  Integrated Solutions T&C: ${base}/tc1`,
+    `  Payment Terms T&C:        ${base}/tc2`,
+    "",
+    `Status / Submit: ${base}`,
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: opts.to,
+    subject: "Your Nexvelon onboarding — four quick steps",
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-invite-${Date.now()}` },
+  });
+  if (result.error) throw new Error(`sendClientInviteEmail: ${result.error.message}`);
+}
+
+/** Notify inquiries@ that a client completed + submitted their onboarding. */
+export async function sendClientSubmissionEmail(opts: {
+  email: string;
+  clientForm: Record<string, unknown>;
+  siteForm: Record<string, unknown>;
+  tc1: { name: string | null; at: string | null };
+  tc2: { name: string | null; at: string | null };
+}): Promise<void> {
+  const kv = (label: string, value: unknown) => {
+    const v = String(value ?? "").trim();
+    if (!v) return "";
+    return `<tr><td style="padding:4px 12px 4px 0;color:#5C5240;font-size:13px;white-space:nowrap;">${escapeHtml(
+      label
+    )}</td><td style="padding:4px 0;color:#0A1226;font-size:13px;">${escapeHtml(v)}</td></tr>`;
+  };
+  const section = (title: string, rows: string) =>
+    `<div style="margin-top:20px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(
+      title
+    )}</div><table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">${rows}</table>`;
+
+  const cf = opts.clientForm;
+  const sf = opts.siteForm;
+  const clientRows =
+    kv("Legal name", cf.legalName) +
+    kv("Industry", cf.industry) +
+    kv("HST/GST #", cf.hstNumber) +
+    kv("Billing", [cf.billingStreet, cf.billingCity, cf.billingProvince, cf.billingPostal].filter(Boolean).join(", ")) +
+    kv("Contact", cf.contactName) +
+    kv("Contact email", cf.contactEmail) +
+    kv("Contact phone", cf.contactPhone);
+  const siteRows =
+    kv("Site name", sf.siteName) +
+    kv("Address", [sf.addressLine1, sf.city, sf.province, sf.postal].filter(Boolean).join(", ")) +
+    kv("Access notes", sf.accessNotes) +
+    kv("Site contact", sf.siteContactName) +
+    kv("Site phone", sf.siteContactPhone);
+  const tcRows =
+    kv("Integrated Solutions T&C", `${opts.tc1.name ?? "—"} · ${opts.tc1.at ? new Date(opts.tc1.at).toLocaleString() : "—"}`) +
+    kv("Payment Terms T&C", `${opts.tc2.name ?? "—"} · ${opts.tc2.at ? new Date(opts.tc2.at).toLocaleString() : "—"}`);
+
+  const bodyHtml = `
+    <p style="margin:0;">A prospective client (${escapeHtml(
+      opts.email
+    )}) completed onboarding. It's waiting in <strong>Clients → Pending Review</strong>.</p>
+    ${section("Client information", clientRows || kv("—", "No data"))}
+    ${section("Site information", siteRows || kv("—", "No data"))}
+    ${section("Signed agreements", tcRows)}`;
+  const html = emailShell({
+    eyebrow: "Nexvelon · Onboarding submitted",
+    heading: "New client pending review.",
+    subtitle: opts.email,
+    bodyHtml,
+  });
+  const text = [
+    "Nexvelon · Onboarding submitted",
+    `Client: ${opts.email}`,
+    "",
+    `Legal name: ${cf.legalName ?? "—"}`,
+    `Contact: ${cf.contactName ?? "—"} ${cf.contactEmail ?? ""} ${cf.contactPhone ?? ""}`,
+    `Site: ${sf.siteName ?? "—"} — ${[sf.addressLine1, sf.city, sf.province].filter(Boolean).join(", ")}`,
+    `T&C 1: ${opts.tc1.name ?? "—"} @ ${opts.tc1.at ?? "—"}`,
+    `T&C 2: ${opts.tc2.name ?? "—"} @ ${opts.tc2.at ?? "—"}`,
+    "",
+    "Review in Clients → Pending Review.",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: INQUIRIES_TO,
+    subject: `New client onboarding submitted — ${cf.legalName ?? opts.email}`,
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-onboarding-${Date.now()}` },
+  });
+  if (result.error) throw new Error(`sendClientSubmissionEmail: ${result.error.message}`);
+}
