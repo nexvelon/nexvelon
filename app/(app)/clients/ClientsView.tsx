@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
-  Check,
   Download,
   Edit3,
   MoreHorizontal,
@@ -12,7 +11,6 @@ import {
   Search,
   Trash2,
   UserPlus,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -42,8 +40,6 @@ import { deleteClientAction, listClientsAction } from "./actions";
 import {
   sendClientInviteAction,
   listPendingClientsAction,
-  approvePendingClientAction,
-  rejectPendingClientAction,
 } from "./invite-actions";
 import type { DbClient, DbClientWithCounts } from "@/lib/types/database";
 
@@ -87,7 +83,6 @@ export function ClientsView({ clients }: Props) {
   const [view, setView] = useState<"active" | "pending">("active");
   const [pendingRows, setPendingRows] = useState<DbClientWithCounts[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
-  const [acting, setActing] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSending, setInviteSending] = useState(false);
@@ -115,33 +110,6 @@ export function ClientsView({ clients }: Props) {
       toast.success(`Invite sent to ${inviteEmail.trim()}`);
       setInviteEmail("");
       setInviteOpen(false);
-    });
-  };
-
-  const approve = (id: string) => {
-    setActing(id);
-    approvePendingClientAction(id).then((r) => {
-      setActing(null);
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
-      }
-      toast.success("Client approved");
-      void loadPending();
-      void reload();
-    });
-  };
-  const reject = (id: string) => {
-    if (!window.confirm("Reject and delete this pending client + its site?")) return;
-    setActing(id);
-    rejectPendingClientAction(id).then((r) => {
-      setActing(null);
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
-      }
-      toast.success("Pending client rejected");
-      void loadPending();
     });
   };
 
@@ -228,46 +196,29 @@ export function ClientsView({ clients }: Props) {
       ) : (
         <ul className="space-y-2">
           {pendingRows.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center gap-3 rounded-md border bg-card px-4 py-3"
-              style={{ borderColor: "var(--brand-border)" }}
-            >
-              <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/clients/${c.id}`)}
-                  className="text-brand-navy truncate text-sm font-semibold hover:underline"
-                >
-                  {c.name}
-                </button>
-                <p className="text-muted-foreground truncate text-[11px]">
-                  {c.portal_contact_email ?? c.legal_name ?? "—"}
-                  {c.invited_at
-                    ? ` · submitted ${new Date(c.invited_at).toLocaleDateString()}`
-                    : ""}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => approve(c.id)}
-                disabled={acting === c.id}
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            <li key={c.id}>
+              {/* Whole row opens the full Submission Detail review page. */}
+              <button
+                type="button"
+                onClick={() => router.push(`/clients/pending/${c.id}`)}
+                className="flex w-full items-center gap-3 rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                style={{ borderColor: "var(--brand-border)" }}
               >
-                <Check className="mr-1 h-3.5 w-3.5" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => reject(c.id)}
-                disabled={acting === c.id}
-                className="border-red-300 text-red-700 hover:bg-red-50"
-              >
-                <X className="mr-1 h-3.5 w-3.5" />
-                Reject
-              </Button>
+                <div className="min-w-0 flex-1">
+                  <span className="text-brand-navy block truncate text-sm font-semibold">
+                    {c.name}
+                  </span>
+                  <span className="text-muted-foreground block truncate text-[11px]">
+                    {c.portal_contact_email ?? c.legal_name ?? "—"}
+                    {c.invited_at
+                      ? ` · submitted ${new Date(c.invited_at).toLocaleDateString()}`
+                      : ""}
+                  </span>
+                </div>
+                <span className="text-brand-gold shrink-0 text-xs font-medium">
+                  Review →
+                </span>
+              </button>
             </li>
           ))}
         </ul>

@@ -57,6 +57,45 @@ export async function createInvitation(input: {
   return data as DbClientInvitation;
 }
 
+/** The most recent invitation that produced a given client (for admin review). */
+export async function getInvitationByClientId(
+  clientId: string
+): Promise<DbClientInvitation | null> {
+  const supabase = admin();
+  const { data, error } = await supabase
+    .from("client_invitations")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getInvitationByClientId: ${error.message}`);
+  return (data as DbClientInvitation | null) ?? null;
+}
+
+/**
+ * Record the admin's review decision on the invitation(s) for a client. Kept on
+ * the invitation so it survives a hard-delete of a declined pending client.
+ */
+export async function recordInvitationDecision(input: {
+  clientId: string;
+  decision: "approved" | "declined";
+  decidedBy?: string | null;
+  declineReason?: string | null;
+}): Promise<void> {
+  const supabase = admin();
+  const { error } = await supabase
+    .from("client_invitations")
+    .update({
+      decision: input.decision,
+      decided_at: new Date().toISOString(),
+      decided_by: input.decidedBy ?? null,
+      decline_reason: input.declineReason ?? null,
+    })
+    .eq("client_id", input.clientId);
+  if (error) throw new Error(`recordInvitationDecision: ${error.message}`);
+}
+
 export async function getInvitationByToken(
   token: string
 ): Promise<DbClientInvitation | null> {

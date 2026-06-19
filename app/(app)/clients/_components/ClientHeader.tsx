@@ -49,6 +49,15 @@ export function ClientHeader({
                   {tier}
                 </span>
               )}
+              {tier && client.tier_set_at && (
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--brand-accent-soft)" }}
+                  title="Tier last updated"
+                >
+                  Tier updated {format(parseISO(client.tier_set_at), "MMM d, yyyy")}
+                </span>
+              )}
               {client.client_code && (
                 <span
                   className="text-[10px] font-mono uppercase tracking-widest"

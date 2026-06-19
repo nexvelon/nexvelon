@@ -3,12 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Trash2 } from "lucide-react";
+import { Gem, MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRole } from "@/lib/role-context";
-import { sendSiteInviteAction } from "../invite-actions";
+import { sendSiteInviteAction, setClientTierAction } from "../invite-actions";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   DbActivityLogWithActor,
   DbClientWithCounts,
+  DbClientTier,
   DbContact,
   DbSite,
 } from "@/lib/types/database";
@@ -80,6 +88,32 @@ export function ClientDetailView({
       }
       toast.success(`Site invite sent to ${siteInviteEmail.trim()}`);
       setSiteInviteOpen(false);
+    });
+  };
+
+  // POLISH-5 (CHANGE 6) — admin tier edit, with optional notify-by-email.
+  const TIER_OPTIONS: DbClientTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
+  const TIER_NONE = "__none__";
+  const [tierOpen, setTierOpen] = useState(false);
+  const [tierValue, setTierValue] = useState<string>(client.tier ?? TIER_NONE);
+  const [tierNotify, setTierNotify] = useState(true);
+  const [tierSaving, setTierSaving] = useState(false);
+  const saveTier = () => {
+    const next = tierValue === TIER_NONE ? null : (tierValue as DbClientTier);
+    setTierSaving(true);
+    setClientTierAction(client.id, next, tierNotify).then((r) => {
+      setTierSaving(false);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(
+        r.data.changed
+          ? `Tier set to ${next ?? "None"}${tierNotify && next ? " — client notified" : ""}`
+          : "No tier change"
+      );
+      setTierOpen(false);
+      router.refresh();
     });
   };
 
@@ -148,6 +182,21 @@ export function ClientDetailView({
           {isAdmin && (
             <button
               type="button"
+              onClick={() => {
+                setTierValue(client.tier ?? TIER_NONE);
+                setTierNotify(true);
+                setTierOpen(true);
+              }}
+              className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-brand-navy"
+              style={{ borderColor: "var(--brand-border)" }}
+            >
+              <Gem className="h-3 w-3" />
+              Edit Tier
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
               onClick={() => setSiteInviteOpen(true)}
               className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-brand-navy"
               style={{ borderColor: "var(--brand-border)" }}
@@ -209,6 +258,62 @@ export function ClientDetailView({
               disabled={siteInviteSending || !siteInviteEmail.trim()}
             >
               {siteInviteSending ? "Sending…" : "Send site invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-5 — Edit Tier dialog (admin) */}
+      <Dialog open={tierOpen} onOpenChange={(o) => !tierSaving && setTierOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Edit Prestige Tier</DialogTitle>
+            <DialogDescription>
+              Set {client.name}&apos;s tier. With notify on, the client is emailed
+              the tier description (from Settings) when the tier actually changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Tier</label>
+              <Select
+                value={tierValue}
+                onValueChange={(v) => setTierValue(v ?? TIER_NONE)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TIER_NONE}>None</SelectItem>
+                  {TIER_OPTIONS.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={tierNotify}
+                onChange={(e) => setTierNotify(e.target.checked)}
+                className="h-4 w-4"
+                style={{ accentColor: "var(--brand-accent)" }}
+              />
+              Notify client by email
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setTierOpen(false)}
+              disabled={tierSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveTier} disabled={tierSaving}>
+              {tierSaving ? "Saving…" : "Save tier"}
             </Button>
           </DialogFooter>
         </DialogContent>

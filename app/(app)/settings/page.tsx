@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Award,
   Bell,
   Boxes,
   Building2,
@@ -26,6 +27,7 @@ import {
 import { BrandingThemes } from "@/components/modules/settings/BrandingThemes";
 import { BackupsData } from "@/components/modules/settings/BackupsData";
 import { ClassificationsPane } from "@/components/modules/settings/ClassificationsPane";
+import { ClientTiersPane } from "@/components/modules/settings/ClientTiersPane";
 import { InventoryVocabPane } from "@/components/modules/settings/InventoryVocabPane";
 import { ManufacturersPane } from "@/components/modules/settings/ManufacturersPane";
 import { LocationsPane } from "@/components/modules/settings/LocationsPane";
@@ -62,6 +64,7 @@ const SECTIONS: Section[] = [
   { key: "company", label: "Company Profile", description: "Legal name, GST/HST #, ESA, ULC, WSIB, defaults.", icon: Building2 },
   { key: "branding", label: "Branding & Themes", description: "Logo, login background, four theme presets, email signature.", icon: Palette },
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
+  { key: "client-tiers", label: "Client Tiers", description: "Prestige tier descriptions (Bronze/Silver/Gold/Platinum) shown in invite + outcome emails.", icon: Award },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
   { key: "inventory-lists", label: "Inventory Lists", description: "Categories, manufacturers, units, storage locations.", icon: Boxes },
   { key: "categories", label: "Categories", description: "Hierarchical part-category tree (arbitrary depth).", icon: Tag },
@@ -156,6 +159,7 @@ export default function SettingsPage() {
             {active === "company" && <CompanyProfile />}
             {active === "branding" && <BrandingThemes />}
             {active === "quote" && <QuoteDefaults />}
+            {active === "client-tiers" && <ClientTiersPane />}
             {active === "classifications" && <ClassificationsPane />}
             {active === "inventory-lists" && <InventoryVocabPane />}
             {active === "categories" && <CategoriesPane />}

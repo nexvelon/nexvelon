@@ -107,6 +107,11 @@ export interface DbClient {
   // review before joining the main directory.
   pending_review: boolean;
   invited_at: string | null;
+  // POLISH-5 (migration 0058) — Prestige Tier reuses the existing `tier` column
+  // (DbClientTier: Platinum/Gold/Silver/Bronze). These track when it was last
+  // set and the reason a declined applicant was turned down.
+  tier_set_at: string | null;
+  decline_reason: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -137,6 +142,12 @@ export interface DbClientInvitation {
   submitted_at: string | null;
   client_form_data: Record<string, unknown> | null;
   site_form_data: Record<string, unknown> | null;
+  // POLISH-5 (migration 0059) — admin review decision, kept here so it survives
+  // a hard-delete of a declined pending client.
+  decision: "approved" | "declined" | null;
+  decided_at: string | null;
+  decided_by: string | null;
+  decline_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -191,6 +202,9 @@ export type DbClientInsert = {
   // POLISH-3 (migration 0056) — invite-created clients awaiting admin review.
   pending_review?: boolean;
   invited_at?: string | null;
+  // POLISH-5 (migration 0058) — tier audit + decline reason.
+  tier_set_at?: string | null;
+  decline_reason?: string | null;
 };
 
 /** Payload for partial-update — every column optional. */
