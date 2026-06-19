@@ -4,11 +4,39 @@
 // list pending-review clients, and approve / reject them. Admin-gated.
 
 import { revalidatePath } from "next/cache";
-import { createInvitation } from "@/lib/api/client-invitations";
-import { sendClientInviteEmail } from "@/lib/auth/email";
-import { getClients, updateClient, deleteClient } from "@/lib/api/clients";
+import {
+  createInvitation,
+  getInvitationByClientId,
+  recordInvitationDecision,
+} from "@/lib/api/client-invitations";
+import {
+  sendClientInviteEmail,
+  sendApplicationApprovedEmail,
+  sendApplicationDeclinedEmail,
+  sendTierChangedEmail,
+} from "@/lib/auth/email";
+import {
+  getClients,
+  getClientById,
+  updateClient,
+  deleteClient,
+} from "@/lib/api/clients";
+import { getTierTexts, tierKey } from "@/lib/api/company-settings";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import type { DbClientWithCounts } from "@/lib/types/database";
+import type {
+  DbClientWithCounts,
+  DbClient,
+  DbSite,
+  DbClientTier,
+  DbClientInvitation,
+} from "@/lib/types/database";
+
+// Map a PascalCase tier (DbClientTier) to its Settings description text.
+async function tierDescription(tier: DbClientTier): Promise<string> {
+  const texts = await getTierTexts();
+  const key = tierKey(tier);
+  return key ? texts[key] : "";
+}
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -60,6 +88,7 @@ export async function sendClientInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "full",
+      tierTexts: await getTierTexts(),
     });
     revalidatePath("/clients");
     return { ok: true, data: { token: inv.token } };
@@ -93,6 +122,7 @@ export async function sendSiteInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "site_only",
+      tierTexts: await getTierTexts(),
     });
     revalidatePath(`/clients/${clientId}`);
     return { ok: true, data: { token: inv.token } };
@@ -113,13 +143,68 @@ export async function listPendingClientsAction(): Promise<
   }
 }
 
+// The full submission for the review detail page: the pending client, its
+// sites, and the originating invitation (with the submitted form jsonb + the
+// signed-T&C names/timestamps).
+export interface SubmissionDetail {
+  client: DbClient;
+  sites: DbSite[];
+  invitation: DbClientInvitation | null;
+}
+
+export async function getSubmissionDetailAction(
+  clientId: string
+): Promise<ActionResult<SubmissionDetail>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const detail = await getClientById(clientId);
+    if (!detail) return { ok: false, error: "Client not found." };
+    const invitation = await getInvitationByClientId(clientId);
+    return {
+      ok: true,
+      data: { client: detail.client, sites: detail.sites, invitation },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// Approve a pending client: clear pending_review, set the (optional) tier +
+// tier_set_at, record the invitation decision, and email the applicant.
 export async function approvePendingClientAction(
-  id: string
+  id: string,
+  tier: DbClientTier | null
 ): Promise<ActionResult<{ approved: true }>> {
   try {
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
-    await updateClient(id, { pending_review: false });
+    await updateClient(id, {
+      pending_review: false,
+      tier: tier ?? null,
+      tier_set_at: tier ? new Date().toISOString() : null,
+    });
+    await recordInvitationDecision({
+      clientId: id,
+      decision: "approved",
+      decidedBy: gate.id,
+    });
+    // Notify the applicant — recipient is the invitation email (the address we
+    // invited), falling back to the client's portal contact email.
+    const inv = await getInvitationByClientId(id);
+    const detail = await getClientById(id);
+    const to = inv?.email ?? detail?.client.portal_contact_email ?? null;
+    if (to) {
+      try {
+        await sendApplicationApprovedEmail({
+          to,
+          tierName: tier ?? null,
+          tierText: tier ? await tierDescription(tier) : null,
+        });
+      } catch (e) {
+        console.error("[invite] approval email failed:", e);
+      }
+    }
     revalidatePath("/clients");
     return { ok: true, data: { approved: true } };
   } catch (e) {
@@ -127,18 +212,87 @@ export async function approvePendingClientAction(
   }
 }
 
-export async function rejectPendingClientAction(
-  id: string
-): Promise<ActionResult<{ rejected: boolean }>> {
+// Decline a pending client: record the decision + reason on the invitation
+// (survives the hard-delete), email the applicant, then hard-delete the client
+// (sites cascade).
+export async function declinePendingClientAction(
+  id: string,
+  reason: string | null
+): Promise<ActionResult<{ declined: boolean }>> {
   try {
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
-    // Hard-delete the client; its sites cascade and the invitation's client_id
-    // is auto-nulled (FK ON DELETE SET NULL) — leaving the invitation submitted
-    // but unconverted for traceability.
+    const trimmedReason = reason?.trim() || null;
+    const inv = await getInvitationByClientId(id);
+    const detail = await getClientById(id);
+    const to = inv?.email ?? detail?.client.portal_contact_email ?? null;
+
+    // Persist the decline reason on the client too (activity-log audit) before
+    // deletion, then stamp the decision on the durable invitation row.
+    if (trimmedReason) {
+      try {
+        await updateClient(id, { decline_reason: trimmedReason });
+      } catch {
+        /* non-fatal — the invitation keeps the reason */
+      }
+    }
+    await recordInvitationDecision({
+      clientId: id,
+      decision: "declined",
+      decidedBy: gate.id,
+      declineReason: trimmedReason,
+    });
+    if (to) {
+      try {
+        await sendApplicationDeclinedEmail({ to, reason: trimmedReason });
+      } catch (e) {
+        console.error("[invite] decline email failed:", e);
+      }
+    }
     const deleted = await deleteClient(id);
     revalidatePath("/clients");
-    return { ok: true, data: { rejected: deleted } };
+    return { ok: true, data: { declined: deleted } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// POLISH-5 (CHANGE 6) — change an existing client's tier from the detail page.
+// Optionally email the client when the tier actually changes.
+export async function setClientTierAction(
+  id: string,
+  tier: DbClientTier | null,
+  notify: boolean
+): Promise<ActionResult<{ changed: boolean }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const detail = await getClientById(id);
+    if (!detail) return { ok: false, error: "Client not found." };
+    const oldTier = detail.client.tier;
+    const changed = (oldTier ?? null) !== (tier ?? null);
+    await updateClient(id, {
+      tier: tier ?? null,
+      tier_set_at: tier ? new Date().toISOString() : null,
+    });
+    if (notify && changed && tier) {
+      const to = detail.client.portal_contact_email;
+      if (to) {
+        try {
+          await sendTierChangedEmail({
+            to,
+            oldTierLabel: oldTier ?? "No Tier",
+            newTierName: tier,
+            tierText: await tierDescription(tier),
+          });
+        } catch (e) {
+          console.error("[tier] change email failed:", e);
+        }
+      }
+    }
+    revalidatePath("/clients");
+    revalidatePath(`/clients/${id}`);
+    return { ok: true, data: { changed } };
   } catch (e) {
     return fail(e);
   }

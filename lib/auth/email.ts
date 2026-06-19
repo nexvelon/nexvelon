@@ -333,11 +333,36 @@ function primaryButton(href: string, label: string): string {
  * (full) = new client onboarding; Type B (site_only) = add a site to an
  * existing client.
  */
+type TierTexts = {
+  bronze: string;
+  silver: string;
+  gold: string;
+  platinum: string;
+};
+
+// "Prestige Tier Levels" section for the invite email — reflects whatever the
+// admin has typed in Settings → Client Tiers (passed in at send time).
+function tierLevelsHtml(texts: TierTexts): string {
+  const row = (name: string, body: string) =>
+    `<tr><td style="padding:10px 0;border-bottom:1px solid #E5DFD0;">
+      <div style="font-size:14px;font-weight:bold;color:#0A1226;">${escapeHtml(name)}</div>
+      <div style="margin-top:3px;font-size:13px;color:#5C5240;line-height:1.6;">${escapeHtml(body)}</div>
+    </td></tr>`;
+  return `<div style="margin-top:22px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Prestige Tier Levels</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">
+      ${row("Bronze", texts.bronze)}
+      ${row("Silver", texts.silver)}
+      ${row("Gold", texts.gold)}
+      ${row("Platinum", texts.platinum)}
+    </table>`;
+}
+
 export async function sendClientInviteEmail(opts: {
   to: string;
   token: string;
   baseUrl: string;
   inviteType?: "full" | "site_only";
+  tierTexts?: TierTexts;
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
@@ -349,7 +374,8 @@ export async function sendClientInviteEmail(opts: {
   const bodyHtml = `
     ${lead}
     ${primaryButton(base, "Open onboarding portal")}
-    <p style="margin:18px 0 0;font-size:13px;color:#5C5240;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
+    <p style="margin:18px 0 0;font-size:13px;color:#5C5240;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>
+    ${opts.tierTexts ? tierLevelsHtml(opts.tierTexts) : ""}`;
 
   const html = emailShell({
     eyebrow: siteOnly
@@ -471,4 +497,147 @@ export async function sendClientSubmissionEmail(opts: {
     headers: { "X-Entity-Ref-ID": `nexvelon-onboarding-${Date.now()}` },
   });
   if (result.error) throw new Error(`sendClientSubmissionEmail: ${result.error.message}`);
+}
+
+// ----------------------------------------------------------------------------
+// POLISH-5 · Application-outcome + tier-change emails. Tier description text is
+// passed in by the caller (read live from Settings → Client Tiers at send time)
+// so edits there flow into subsequent emails. All use the same house shell.
+// ----------------------------------------------------------------------------
+
+function paragraphs(parts: string[]): string {
+  return parts
+    .filter((p) => p.trim() !== "")
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#2A2418;">${p}</p>`
+    )
+    .join("");
+}
+
+/** Approved — with an assigned tier name + its description, or neither. */
+export async function sendApplicationApprovedEmail(opts: {
+  to: string;
+  tierName?: string | null; // display label e.g. "Silver"
+  tierText?: string | null; // description from Settings
+}): Promise<void> {
+  const hasTier = !!(opts.tierName && opts.tierText);
+  const bodyHtml = paragraphs([
+    "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
+    hasTier
+      ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
+      : "",
+    hasTier ? escapeHtml(opts.tierText as string) : "",
+    "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+  ]);
+  const html = emailShell({
+    eyebrow: "Nexvelon Global · Application Approved",
+    heading: "Your application is approved.",
+    subtitle: "",
+    bodyHtml,
+  });
+  const text = [
+    "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
+    hasTier ? `\nYour Prestige Tier: ${opts.tierName}\n\n${opts.tierText}\n` : "",
+    "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: opts.to,
+    subject: "Welcome to Nexvelon Global — your application is approved",
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-approved-${Date.now()}` },
+  });
+  if (result.error)
+    throw new Error(`sendApplicationApprovedEmail: ${result.error.message}`);
+}
+
+/** Declined — with an optional reason. */
+export async function sendApplicationDeclinedEmail(opts: {
+  to: string;
+  reason?: string | null;
+}): Promise<void> {
+  const hasReason = !!opts.reason && opts.reason.trim() !== "";
+  const bodyHtml = paragraphs([
+    hasReason
+      ? "Thank you for your interest in Nexvelon Global. After review, we will not be able to move forward with your application at this time."
+      : "Thank you for your interest in Nexvelon Global. After careful review, we will not be able to move forward with your application at this time.",
+    hasReason ? `<strong>Reason:</strong> ${escapeHtml(opts.reason as string)}` : "",
+    "We appreciate the time you took to apply and wish you the best.",
+  ]);
+  const html = emailShell({
+    eyebrow: "Nexvelon Global · Application Update",
+    heading: "An update on your application.",
+    subtitle: "",
+    bodyHtml,
+  });
+  const text = [
+    hasReason
+      ? "Thank you for your interest in Nexvelon Global. After review, we will not be able to move forward with your application at this time."
+      : "Thank you for your interest in Nexvelon Global. After careful review, we will not be able to move forward with your application at this time.",
+    hasReason ? `\nReason: ${opts.reason}\n` : "",
+    "We appreciate the time you took to apply and wish you the best.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: opts.to,
+    subject: "Update on your Nexvelon Global application",
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-declined-${Date.now()}` },
+  });
+  if (result.error)
+    throw new Error(`sendApplicationDeclinedEmail: ${result.error.message}`);
+}
+
+/** Tier changed on an existing client. */
+export async function sendTierChangedEmail(opts: {
+  to: string;
+  oldTierLabel: string; // e.g. "Silver" or "No Tier"
+  newTierName: string; // e.g. "Gold"
+  tierText: string; // description from Settings
+}): Promise<void> {
+  const bodyHtml = paragraphs([
+    `Your Prestige Tier with Nexvelon Global has been updated from <strong>${escapeHtml(
+      opts.oldTierLabel
+    )}</strong> to <strong>${escapeHtml(opts.newTierName)}</strong>.`,
+    escapeHtml(opts.tierText),
+    "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+  ]);
+  const html = emailShell({
+    eyebrow: "Nexvelon Global · Prestige Tier",
+    heading: "Your Prestige Tier has been updated.",
+    subtitle: "",
+    bodyHtml,
+  });
+  const text = [
+    `Your Prestige Tier with Nexvelon Global has been updated from ${opts.oldTierLabel} to ${opts.newTierName}.`,
+    "",
+    opts.tierText,
+    "",
+    "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: opts.to,
+    subject: "Your Nexvelon Global Prestige Tier has been updated",
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-tier-${Date.now()}` },
+  });
+  if (result.error)
+    throw new Error(`sendTierChangedEmail: ${result.error.message}`);
 }

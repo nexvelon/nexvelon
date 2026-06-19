@@ -15,8 +15,57 @@ export const DEFAULT_TERMS_GUARDIAN_KEY = "default_quote_terms_guardian";
 // invite tc2 page blocks signing until an admin pastes content here.
 export const ONBOARDING_GUARDIAN_TERMS_KEY = "onboarding_guardian_terms";
 
+// POLISH-5 — Prestige Tier description blocks. SINGLE SOURCE for the invite
+// email's tier list AND the approval / tier-change outcome emails. Keyed by the
+// lowercase tier name (the clients.tier column is PascalCase — see tierKey()).
+export type TierLevel = "bronze" | "silver" | "gold" | "platinum";
+
+export const TIER_TEXT_KEYS: Record<TierLevel, string> = {
+  bronze: "tier_bronze_text",
+  silver: "tier_silver_text",
+  gold: "tier_gold_text",
+  platinum: "tier_platinum_text",
+};
+
+export const TIER_TEXT_DEFAULTS: Record<TierLevel, string> = {
+  bronze:
+    "Bronze — for clients who bring business with us occasionally. Standard pricing and service levels apply.",
+  silver:
+    "Silver — for clients bringing at least $500,000 of business annually with us. Enjoy priority scheduling and modest loyalty discounts on parts and labour.",
+  gold:
+    "Gold — for clients who consolidate all of their security, access control, CCTV, and ULC fire alarm monitoring work with us exclusively, with at least $500,000 of annual business. Benefits include preferred response times, exclusive promotional pricing, and dedicated account support.",
+  platinum:
+    "Platinum — for clients who bring $1,000,000 or more of annual business with us and remain exclusively partnered with Nexvelon Global for all security needs. Top-tier benefits: white-glove account management, the deepest exclusive discounts and promotions, and first-access to new services.",
+};
+
+/** Map a PascalCase clients.tier value (e.g. "Gold") to its lowercase key. */
+export function tierKey(tier: string): TierLevel | null {
+  const k = tier.toLowerCase();
+  return k === "bronze" || k === "silver" || k === "gold" || k === "platinum"
+    ? (k as TierLevel)
+    : null;
+}
+
 async function db() {
   return createSupabaseServerClient();
+}
+
+/** The four tier description texts (Settings override, else the in-code default). */
+export async function getTierTexts(): Promise<Record<TierLevel, string>> {
+  const levels: TierLevel[] = ["bronze", "silver", "gold", "platinum"];
+  const out = {} as Record<TierLevel, string>;
+  await Promise.all(
+    levels.map(async (t) => {
+      let v: string | null = null;
+      try {
+        v = await getSetting(TIER_TEXT_KEYS[t]);
+      } catch {
+        v = null;
+      }
+      out[t] = v && v.trim() !== "" ? v : TIER_TEXT_DEFAULTS[t];
+    })
+  );
+  return out;
 }
 
 /** Read a setting's value, or null when the key isn't set. */
