@@ -10,6 +10,10 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 
 export const DEFAULT_TERMS_KEY = "default_quote_terms";
 export const DEFAULT_TERMS_GUARDIAN_KEY = "default_quote_terms_guardian";
+// POLISH-4 — the client-onboarding Guardian T&C, a SEPARATE block from the
+// quote-PDF Guardian terms above. BLANK by default (no in-code fallback): the
+// invite tc2 page blocks signing until an admin pastes content here.
+export const ONBOARDING_GUARDIAN_TERMS_KEY = "onboarding_guardian_terms";
 
 async function db() {
   return createSupabaseServerClient();

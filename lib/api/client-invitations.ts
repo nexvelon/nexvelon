@@ -10,15 +10,17 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSetting } from "@/lib/api/company-settings";
-import {
-  DEFAULT_TERMS,
-  DEFAULT_TERMS_GUARDIAN,
-} from "@/lib/quote-helpers";
+import { DEFAULT_TERMS } from "@/lib/quote-helpers";
 import {
   DEFAULT_TERMS_KEY,
-  DEFAULT_TERMS_GUARDIAN_KEY,
+  ONBOARDING_GUARDIAN_TERMS_KEY,
 } from "@/lib/api/company-settings";
-import type { DbClientInvitation } from "@/lib/types/database";
+import type {
+  DbClientInvitation,
+  DbClientPaymentTerms,
+  DbClientPaymentMethod,
+  DbClientCurrency,
+} from "@/lib/types/database";
 
 function admin() {
   return createAdminClient();
@@ -32,11 +34,23 @@ function newToken(): string {
 export async function createInvitation(input: {
   email: string;
   createdBy?: string | null;
+  inviteType?: "full" | "site_only";
+  clientId?: string | null;
 }): Promise<DbClientInvitation> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("client_invitations")
-    .insert({ token: newToken(), email: input.email.trim(), created_by: input.createdBy ?? null })
+    .insert({
+      token: newToken(),
+      email: input.email.trim(),
+      created_by: input.createdBy ?? null,
+      invite_type: input.inviteType ?? "full",
+      // A site-only invite carries the existing client up-front; on submit a new
+      // site is attached to it (the client_form steps are skipped).
+      client_id: input.clientId ?? null,
+      // Site-only invites have no client form, so mark it pre-completed.
+      client_form_completed: (input.inviteType ?? "full") === "site_only",
+    })
     .select("*")
     .single();
   if (error) throw new Error(`createInvitation: ${error.message}`);
@@ -70,7 +84,7 @@ export async function saveClientForm(
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
   await requireOpen(token);
-  const completed = !!String(data.legalName ?? data.companyName ?? "").trim();
+  const completed = !!String(data.legalName ?? "").trim();
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
@@ -88,7 +102,7 @@ export async function saveSiteForm(
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
   await requireOpen(token);
-  const completed = !!String(data.siteName ?? data.addressLine1 ?? "").trim();
+  const completed = !!String(data.siteName ?? data.siteStreet ?? "").trim();
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
@@ -109,6 +123,10 @@ export async function signTc(
   await requireOpen(token);
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Type your full name to sign.");
+  // tc2 = Guardian onboarding T&C — can't be signed until an admin publishes it.
+  if (which === "tc2" && !(await guardianTermsPublished())) {
+    throw new Error("Guardian terms are not yet published.");
+  }
   const now = new Date().toISOString();
   const patch =
     which === "tc1"
@@ -125,19 +143,158 @@ export async function signTc(
   return row as DbClientInvitation;
 }
 
-/** All four pieces complete? */
-export function isReadyToSubmit(inv: DbClientInvitation): boolean {
+/**
+ * Ready to submit? client_form_completed is pre-set true for site-only invites,
+ * so this is uniform across types: client (or n/a) + site + both signatures +
+ * the Guardian onboarding T&C must be published (so tc2 was signable).
+ */
+export function isReadyToSubmit(
+  inv: DbClientInvitation,
+  guardianPublished: boolean
+): boolean {
   return (
     inv.client_form_completed &&
     inv.site_form_completed &&
     !!inv.tc1_signed_at &&
-    !!inv.tc2_signed_at
+    !!inv.tc2_signed_at &&
+    guardianPublished
   );
+}
+
+/** Has an admin published the Guardian onboarding T&C (tc2)? */
+export async function guardianTermsPublished(): Promise<boolean> {
+  try {
+    const v = await getSetting(ONBOARDING_GUARDIAN_TERMS_KEY);
+    return !!v && v.trim() !== "";
+  } catch {
+    return false;
+  }
 }
 
 function s(v: unknown): string | null {
   const t = String(v ?? "").trim();
   return t === "" ? null : t;
+}
+
+// Coerce a saved string into an enum value, or null when blank/invalid. The
+// invite Selects only ever store valid values, so this is a safety net.
+function e<T extends string>(v: unknown, allowed: readonly T[]): T | null {
+  const t = String(v ?? "").trim();
+  return (allowed as readonly string[]).includes(t) ? (t as T) : null;
+}
+const PAYMENT_TERMS_VALUES: readonly DbClientPaymentTerms[] = [
+  "due_on_receipt",
+  "net_7",
+  "net_15",
+  "net_30",
+];
+const PAYMENT_METHOD_VALUES: readonly DbClientPaymentMethod[] = [
+  "eft",
+  "e_transfer",
+  "wire",
+  "credit_card",
+  "cash",
+];
+const CURRENCY_VALUES: readonly DbClientCurrency[] = [
+  "CAD",
+  "USD",
+  "AED",
+  "INR",
+  "EUR",
+];
+
+// Readable contacts summary for the client/site `notes` field (the full data is
+// preserved in the jsonb for admin review). Reads the 4 fixed-row keys c0..c3.
+function contactsNotes(d: Record<string, unknown>): string {
+  const labels = [
+    "Primary (work)",
+    "Primary (personal)",
+    "AP (work/ext)",
+    "AP (direct)",
+  ];
+  const lines: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const name = [s(d[`c${i}First`]), s(d[`c${i}Last`])].filter(Boolean).join(" ");
+    const parts = [
+      name,
+      s(d[`c${i}Role`]),
+      s(d[`c${i}Email`]),
+      s(d[`c${i}Phone`]),
+    ].filter(Boolean);
+    if (parts.length > 0) lines.push(`${labels[i]}: ${parts.join(" · ")}`);
+  }
+  return lines.join("\n");
+}
+
+// Map the saved client jsonb to a DbClient insert payload (pending review).
+function clientInsertFrom(
+  cf: Record<string, unknown>,
+  email: string,
+  now: string
+) {
+  const notes = contactsNotes(cf);
+  return {
+    name: s(cf.legalName) ?? s(cf.tradeName) ?? email,
+    legal_name: s(cf.legalName),
+    billing_street: s(cf.billingStreet),
+    billing_unit: s(cf.billingUnit),
+    billing_city: s(cf.billingCity),
+    billing_province: s(cf.billingProvince),
+    billing_postal: s(cf.billingPostal),
+    billing_country: s(cf.billingCountry),
+    mailing_street: s(cf.mailingStreet),
+    mailing_unit: s(cf.mailingUnit),
+    mailing_city: s(cf.mailingCity),
+    mailing_province: s(cf.mailingProvince),
+    mailing_postal: s(cf.mailingPostal),
+    mailing_country: s(cf.mailingCountry),
+    client_hst_gst_number: s(cf.hstNumber),
+    tax_exempt: s(cf.taxExempt) === "Yes",
+    tax_exempt_certificate_number: s(cf.taxExemptCert),
+    payment_terms: e(cf.paymentTerms, PAYMENT_TERMS_VALUES),
+    preferred_payment_method: e(cf.paymentMethod, PAYMENT_METHOD_VALUES),
+    preferred_currency: e(cf.currency, CURRENCY_VALUES),
+    portal_contact_email: s(cf.c0Email) ?? email,
+    notes: notes || null,
+    default_opco: "integrated_solutions" as const,
+    pending_review: true,
+    invited_at: now,
+  };
+}
+
+// Map the saved site jsonb to a DbSite insert payload under a client.
+function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
+  const notes = contactsNotes(sf);
+  return {
+    client_id: clientId,
+    name: s(sf.siteName) ?? "Primary site",
+    address_line1: s(sf.siteStreet),
+    address_line2: s(sf.siteUnit),
+    city: s(sf.siteCity),
+    province: s(sf.siteProvince),
+    postal_code: s(sf.sitePostal),
+    country: s(sf.siteCountry) ?? "Canada",
+    billing_street: s(sf.billingStreet),
+    billing_unit: s(sf.billingUnit),
+    billing_city: s(sf.billingCity),
+    billing_province: s(sf.billingProvince),
+    billing_postal: s(sf.billingPostal),
+    billing_country: s(sf.billingCountry),
+    mailing_street: s(sf.mailingStreet),
+    mailing_unit: s(sf.mailingUnit),
+    mailing_city: s(sf.mailingCity),
+    mailing_province: s(sf.mailingProvince),
+    mailing_postal: s(sf.mailingPostal),
+    mailing_country: s(sf.mailingCountry),
+    site_hst_gst_number: s(sf.hstNumber),
+    tax_exempt: s(sf.taxExempt) === "Yes",
+    tax_exempt_certificate_number: s(sf.taxExemptCert),
+    payment_terms: e(sf.paymentTerms, PAYMENT_TERMS_VALUES) ?? undefined,
+    preferred_payment_method:
+      e(sf.paymentMethod, PAYMENT_METHOD_VALUES) ?? undefined,
+    preferred_currency: e(sf.currency, CURRENCY_VALUES) ?? undefined,
+    notes: notes || null,
+  };
 }
 
 /**
@@ -152,67 +309,32 @@ export async function submitInvitation(token: string): Promise<{
   siteId: string;
 }> {
   const inv = await requireOpen(token);
-  if (!isReadyToSubmit(inv)) {
-    throw new Error("Complete all four steps before submitting.");
+  if (!isReadyToSubmit(inv, await guardianTermsPublished())) {
+    throw new Error("Complete all steps before submitting.");
   }
   const supabase = admin();
   const cf = (inv.client_form_data ?? {}) as Record<string, unknown>;
   const sf = (inv.site_form_data ?? {}) as Record<string, unknown>;
   const now = new Date().toISOString();
 
-  const contactLine = [
-    s(cf.contactName) ? `Contact: ${s(cf.contactName)}` : null,
-    s(cf.contactEmail),
-    s(cf.contactPhone),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const clientNotes = [contactLine, s(cf.notes)].filter(Boolean).join("\n");
-
-  const { data: client, error: cErr } = await supabase
-    .from("clients")
-    .insert({
-      name: s(cf.legalName) ?? s(cf.companyName) ?? inv.email,
-      legal_name: s(cf.legalName),
-      industry: s(cf.industry),
-      billing_street: s(cf.billingStreet),
-      billing_city: s(cf.billingCity),
-      billing_province: s(cf.billingProvince),
-      billing_postal: s(cf.billingPostal),
-      billing_country: s(cf.billingCountry) ?? "Canada",
-      client_hst_gst_number: s(cf.hstNumber),
-      portal_contact_email: s(cf.contactEmail) ?? inv.email,
-      notes: clientNotes || null,
-      default_opco: "integrated_solutions",
-      pending_review: true,
-      invited_at: now,
-    })
-    .select("id")
-    .single();
-  if (cErr) throw new Error(`submitInvitation/client: ${cErr.message}`);
-  const clientId = (client as { id: string }).id;
-
-  const siteNotes = [
-    s(sf.accessNotes) ? `Access: ${s(sf.accessNotes)}` : null,
-    s(sf.siteContactName) ? `Site contact: ${s(sf.siteContactName)}` : null,
-    s(sf.siteContactPhone),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  // Type B (site-only): no new client — attach a site to the existing one.
+  let clientId: string;
+  if (inv.invite_type === "site_only") {
+    if (!inv.client_id) throw new Error("Site invite has no client attached.");
+    clientId = inv.client_id;
+  } else {
+    const { data: client, error: cErr } = await supabase
+      .from("clients")
+      .insert(clientInsertFrom(cf, inv.email, now))
+      .select("id")
+      .single();
+    if (cErr) throw new Error(`submitInvitation/client: ${cErr.message}`);
+    clientId = (client as { id: string }).id;
+  }
 
   const { data: site, error: siErr } = await supabase
     .from("sites")
-    .insert({
-      client_id: clientId,
-      name: s(sf.siteName) ?? "Primary site",
-      address_line1: s(sf.addressLine1),
-      address_line2: s(sf.addressLine2),
-      city: s(sf.city),
-      province: s(sf.province),
-      postal_code: s(sf.postal),
-      country: s(sf.country) ?? "Canada",
-      notes: siteNotes || null,
-    })
+    .insert(siteInsertFrom(sf, clientId))
     .select("id")
     .single();
   if (siErr) throw new Error(`submitInvitation/site: ${siErr.message}`);
@@ -230,17 +352,20 @@ export async function submitInvitation(token: string): Promise<{
 }
 
 /**
- * The two T&C texts the invite pages render — the SINGLE existing source (the
- * Settings override if set, else the in-code default), never a duplicate. tc1 =
- * Integrated Solutions terms; tc2 = the Payment-Terms / Guardian terms block.
+ * The two T&C texts the invite pages render, from the SINGLE existing source.
+ *   tc1 = Nexvelon Integrated Solutions Inc. T&C (default_quote_terms, in-code
+ *         fallback DEFAULT_TERMS — always has content).
+ *   tc2 = Nexvelon Guardian Inc. T&C (onboarding_guardian_terms) — BLANK by
+ *         default (no fallback) until an admin publishes it; an empty string
+ *         tells the tc2 page to show the "not yet published" notice.
  */
 export async function getInviteTermsText(which: "tc1" | "tc2"): Promise<string> {
   try {
     if (which === "tc1") {
       return (await getSetting(DEFAULT_TERMS_KEY)) ?? DEFAULT_TERMS;
     }
-    return (await getSetting(DEFAULT_TERMS_GUARDIAN_KEY)) ?? DEFAULT_TERMS_GUARDIAN;
+    return (await getSetting(ONBOARDING_GUARDIAN_TERMS_KEY)) ?? "";
   } catch {
-    return which === "tc1" ? DEFAULT_TERMS : DEFAULT_TERMS_GUARDIAN;
+    return which === "tc1" ? DEFAULT_TERMS : "";
   }
 }

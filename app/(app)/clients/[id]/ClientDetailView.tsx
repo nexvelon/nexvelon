@@ -3,8 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useRole } from "@/lib/role-context";
+import { sendSiteInviteAction } from "../invite-actions";
 import {
   Dialog,
   DialogContent,
@@ -54,8 +58,30 @@ export function ClientDetailView({
   activityLog,
 }: ClientDetailViewProps) {
   const router = useRouter();
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
   const [tab, setTab] = useState<TabKey>("Sites");
   const [isPending, startTransition] = useTransition();
+
+  // POLISH-4 — Type B "Invite to add a site": emails an onboarding link
+  // (site + both T&Cs) for this existing client. Email prefilled but editable.
+  const [siteInviteOpen, setSiteInviteOpen] = useState(false);
+  const [siteInviteEmail, setSiteInviteEmail] = useState(
+    client.portal_contact_email ?? ""
+  );
+  const [siteInviteSending, setSiteInviteSending] = useState(false);
+  const sendSiteInvite = () => {
+    setSiteInviteSending(true);
+    sendSiteInviteAction(client.id, siteInviteEmail).then((r) => {
+      setSiteInviteSending(false);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(`Site invite sent to ${siteInviteEmail.trim()}`);
+      setSiteInviteOpen(false);
+    });
+  };
 
   // Drawer state — the detail page owns every per-client operation.
   const [clientEditDrawer, setClientEditDrawer] = useState(false);
@@ -118,16 +144,75 @@ export function ClientDetailView({
         >
           ← Back to Clients
         </Link>
-        <button
-          type="button"
-          onClick={() => setConfirmDeleteClient(true)}
-          className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-red-600"
-          style={{ borderColor: "var(--brand-border)" }}
-        >
-          <Trash2 className="h-3 w-3" />
-          Delete client
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setSiteInviteOpen(true)}
+              className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-brand-navy"
+              style={{ borderColor: "var(--brand-border)" }}
+            >
+              <MapPin className="h-3 w-3" />
+              Invite to add a site
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setConfirmDeleteClient(true)}
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-red-600"
+            style={{ borderColor: "var(--brand-border)" }}
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete client
+          </button>
+        </div>
       </div>
+
+      {/* POLISH-4 — Type B site-only invite dialog */}
+      <Dialog
+        open={siteInviteOpen}
+        onOpenChange={(o) => !siteInviteSending && setSiteInviteOpen(o)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              Invite {client.name} to add a site
+            </DialogTitle>
+            <DialogDescription>
+              We&apos;ll email an onboarding link (site form + both T&amp;Cs to
+              sign). On submit, a new site is attached to this client for review
+              — no new client is created.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">Send to email</label>
+            <Input
+              type="email"
+              value={siteInviteEmail}
+              onChange={(e) => setSiteInviteEmail(e.target.value)}
+              placeholder="contact@client.com"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && siteInviteEmail.trim()) sendSiteInvite();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSiteInviteOpen(false)}
+              disabled={siteInviteSending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={sendSiteInvite}
+              disabled={siteInviteSending || !siteInviteEmail.trim()}
+            >
+              {siteInviteSending ? "Sending…" : "Send site invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ClientHeader
         client={client}

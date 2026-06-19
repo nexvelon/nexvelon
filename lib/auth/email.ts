@@ -290,9 +290,13 @@ function emailShell(args: {
                 <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">${escapeHtml(
                   args.heading
                 )}</div>
-                <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${escapeHtml(
+                ${
                   args.subtitle
-                )}</div>
+                    ? `<div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${escapeHtml(
+                        args.subtitle
+                      )}</div>`
+                    : ""
+                }
               </td>
             </tr>
             <tr>
@@ -313,53 +317,63 @@ function emailShell(args: {
 </html>`;
 }
 
-function linkRow(href: string, label: string, desc: string): string {
-  return `<tr>
-    <td style="padding:10px 0;border-bottom:1px solid #E5DFD0;">
-      <a href="${escapeHtml(href)}" style="color:#0A1226;font-size:16px;font-weight:bold;text-decoration:none;">${escapeHtml(
+function primaryButton(href: string, label: string): string {
+  return `<table cellpadding="0" cellspacing="0" border="0" style="margin:8px 0;"><tr>
+    <td style="background:#0A1226;border-radius:4px;">
+      <a href="${escapeHtml(href)}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;font-family:Arial,Helvetica,sans-serif;letter-spacing:0.04em;">${escapeHtml(
         label
-      )} &rsaquo;</a>
-      <div style="color:#5C5240;font-size:13px;margin-top:2px;">${escapeHtml(desc)}</div>
+      )}</a>
     </td>
-  </tr>`;
+  </tr></table>`;
 }
 
-/** Send the four-link onboarding invitation to a prospective client. */
+/**
+ * POLISH-4 — send the ONE-LINK onboarding invitation. The email carries a single
+ * primary link to the hub/status page (not four separate links). Type A
+ * (full) = new client onboarding; Type B (site_only) = add a site to an
+ * existing client.
+ */
 export async function sendClientInviteEmail(opts: {
   to: string;
   token: string;
   baseUrl: string;
+  inviteType?: "full" | "site_only";
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
-  const links =
-    `<table width="100%" cellpadding="0" cellspacing="0" border="0">` +
-    linkRow(`${base}/client`, "Client Information Form", "Your company's legal name, billing address, and primary contact.") +
-    linkRow(`${base}/site`, "Site Information Form", "The address and access details for the site we'll be servicing.") +
-    linkRow(`${base}/tc1`, "Integrated Solutions — Terms & Conditions", "Read and sign with your typed name.") +
-    linkRow(`${base}/tc2`, "Payment Terms & Conditions", "Read and sign with your typed name.") +
-    `</table>`;
+  const siteOnly = opts.inviteType === "site_only";
+
+  const lead = siteOnly
+    ? `<p style="margin:0 0 18px;">You've been invited to add a new site to your Nexvelon Global account. Kindly complete, sign and submit the site setup forms in the link below for review and approval.</p>`
+    : `<p style="margin:0 0 18px;">Kindly complete, sign and submit the forms in the link below for review and approval. If your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum.</p>`;
+
   const bodyHtml = `
-    <p style="margin:0 0 16px;">You've been invited to onboard with Nexvelon. Please complete the four steps below — you can do them in any order and across multiple sittings; your progress is saved automatically.</p>
-    ${links}
-    <p style="margin:18px 0 0;font-size:13px;color:#5C5240;">When all four are complete, return to your <a href="${escapeHtml(
-      base
-    )}" style="color:#B8924B;">status page</a> and press Submit. Questions? Reply to this email.</p>`;
+    ${lead}
+    ${primaryButton(base, "Open onboarding portal")}
+    <p style="margin:18px 0 0;font-size:13px;color:#5C5240;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
+
   const html = emailShell({
-    eyebrow: "Nexvelon · Client onboarding",
-    heading: "Welcome — let's get you set up.",
-    subtitle: "Four short steps to open your account.",
+    eyebrow: siteOnly
+      ? "Nexvelon Global · Site Onboarding"
+      : "Nexvelon Global · Client Onboarding",
+    heading: siteOnly
+      ? "Welcome to Nexvelon Global Site Onboarding."
+      : "Welcome to Nexvelon Global Onboarding.",
+    subtitle: "",
     bodyHtml,
   });
+
   const text = [
-    "Nexvelon · Client onboarding",
+    siteOnly
+      ? "Nexvelon Global · Site Onboarding"
+      : "Nexvelon Global · Client Onboarding",
     "",
-    "Complete these four steps (saved automatically, any order):",
-    `  Client Information Form: ${base}/client`,
-    `  Site Information Form:   ${base}/site`,
-    `  Integrated Solutions T&C: ${base}/tc1`,
-    `  Payment Terms T&C:        ${base}/tc2`,
+    siteOnly
+      ? "You've been invited to add a new site to your Nexvelon Global account. Kindly complete, sign and submit the site setup forms at the link below for review and approval."
+      : "Kindly complete, sign and submit the forms at the link below for review and approval. If your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum.",
     "",
-    `Status / Submit: ${base}`,
+    `Onboarding portal: ${base}`,
+    "",
+    "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
     "",
     "— Nexvelon Global",
   ].join("\n");
@@ -368,7 +382,9 @@ export async function sendClientInviteEmail(opts: {
   const result = await resend.emails.send({
     from: INQUIRIES_FROM,
     to: opts.to,
-    subject: "Your Nexvelon onboarding — four quick steps",
+    subject: siteOnly
+      ? "Your Nexvelon Global site onboarding"
+      : "Your Nexvelon Global onboarding",
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-invite-${Date.now()}` },
@@ -398,23 +414,25 @@ export async function sendClientSubmissionEmail(opts: {
 
   const cf = opts.clientForm;
   const sf = opts.siteForm;
+  const contact = (d: Record<string, unknown>) =>
+    [d.c0First, d.c0Last].filter(Boolean).join(" ");
   const clientRows =
     kv("Legal name", cf.legalName) +
-    kv("Industry", cf.industry) +
+    kv("Trade name", cf.tradeName) +
     kv("HST/GST #", cf.hstNumber) +
-    kv("Billing", [cf.billingStreet, cf.billingCity, cf.billingProvince, cf.billingPostal].filter(Boolean).join(", ")) +
-    kv("Contact", cf.contactName) +
-    kv("Contact email", cf.contactEmail) +
-    kv("Contact phone", cf.contactPhone);
+    kv("Billing", [cf.billingStreet, cf.billingCity, cf.billingProvince, cf.billingPostal, cf.billingCountry].filter(Boolean).join(", ")) +
+    kv("Payment", [cf.paymentTerms, cf.paymentMethod, cf.currency].filter(Boolean).join(" · ")) +
+    kv("Primary contact", contact(cf)) +
+    kv("Contact email", cf.c0Email) +
+    kv("Contact phone", cf.c0Phone);
   const siteRows =
     kv("Site name", sf.siteName) +
-    kv("Address", [sf.addressLine1, sf.city, sf.province, sf.postal].filter(Boolean).join(", ")) +
-    kv("Access notes", sf.accessNotes) +
-    kv("Site contact", sf.siteContactName) +
-    kv("Site phone", sf.siteContactPhone);
+    kv("Address", [sf.siteStreet, sf.siteUnit, sf.siteCity, sf.siteProvince, sf.sitePostal, sf.siteCountry].filter(Boolean).join(", ")) +
+    kv("Site contact", contact(sf)) +
+    kv("Site phone", sf.c0Phone);
   const tcRows =
-    kv("Integrated Solutions T&C", `${opts.tc1.name ?? "—"} · ${opts.tc1.at ? new Date(opts.tc1.at).toLocaleString() : "—"}`) +
-    kv("Payment Terms T&C", `${opts.tc2.name ?? "—"} · ${opts.tc2.at ? new Date(opts.tc2.at).toLocaleString() : "—"}`);
+    kv("Integrated Solutions Inc. T&C", `${opts.tc1.name ?? "—"} · ${opts.tc1.at ? new Date(opts.tc1.at).toLocaleString() : "—"}`) +
+    kv("Guardian Inc. T&C", `${opts.tc2.name ?? "—"} · ${opts.tc2.at ? new Date(opts.tc2.at).toLocaleString() : "—"}`);
 
   const bodyHtml = `
     <p style="margin:0;">A prospective client (${escapeHtml(

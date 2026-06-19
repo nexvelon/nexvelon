@@ -12,6 +12,7 @@ import {
   signTc,
   submitInvitation,
   isReadyToSubmit,
+  guardianTermsPublished,
   getInviteTermsText,
 } from "@/lib/api/client-invitations";
 import { sendClientSubmissionEmail } from "@/lib/auth/email";
@@ -35,6 +36,7 @@ function fail(err: unknown): { ok: false; error: string } {
 export interface InvitationView {
   token: string;
   email: string;
+  invite_type: "full" | "site_only";
   client_form_completed: boolean;
   site_form_completed: boolean;
   tc1_signed_at: string | null;
@@ -44,13 +46,16 @@ export interface InvitationView {
   submitted_at: string | null;
   client_form_data: Record<string, unknown> | null;
   site_form_data: Record<string, unknown> | null;
+  /** Whether the Guardian onboarding T&C (tc2) has been published in Settings. */
+  guardian_published: boolean;
   ready: boolean;
 }
 
-function toView(inv: DbClientInvitation): InvitationView {
+function toView(inv: DbClientInvitation, guardianPublished: boolean): InvitationView {
   return {
     token: inv.token,
     email: inv.email,
+    invite_type: inv.invite_type,
     client_form_completed: inv.client_form_completed,
     site_form_completed: inv.site_form_completed,
     tc1_signed_at: inv.tc1_signed_at,
@@ -60,7 +65,8 @@ function toView(inv: DbClientInvitation): InvitationView {
     submitted_at: inv.submitted_at,
     client_form_data: inv.client_form_data,
     site_form_data: inv.site_form_data,
-    ready: isReadyToSubmit(inv),
+    guardian_published: guardianPublished,
+    ready: isReadyToSubmit(inv, guardianPublished),
   };
 }
 
@@ -70,7 +76,8 @@ export async function getInvitationAction(
   try {
     const inv = await getInvitationByToken(token);
     if (!inv) return { ok: false, error: "This invitation link is invalid." };
-    return { ok: true, data: toView(inv) };
+    const guardian = await guardianTermsPublished();
+    return { ok: true, data: toView(inv, guardian) };
   } catch (e) {
     return fail(e);
   }
@@ -91,7 +98,8 @@ export async function saveClientFormAction(
   data: Record<string, unknown>
 ): Promise<ActionResult<InvitationView>> {
   try {
-    return { ok: true, data: toView(await saveClientForm(token, data)) };
+    const updated = await saveClientForm(token, data);
+    return { ok: true, data: toView(updated, await guardianTermsPublished()) };
   } catch (e) {
     return fail(e);
   }
@@ -102,7 +110,8 @@ export async function saveSiteFormAction(
   data: Record<string, unknown>
 ): Promise<ActionResult<InvitationView>> {
   try {
-    return { ok: true, data: toView(await saveSiteForm(token, data)) };
+    const updated = await saveSiteForm(token, data);
+    return { ok: true, data: toView(updated, await guardianTermsPublished()) };
   } catch (e) {
     return fail(e);
   }
@@ -114,7 +123,8 @@ export async function signTcAction(
   name: string
 ): Promise<ActionResult<InvitationView>> {
   try {
-    return { ok: true, data: toView(await signTc(token, which, name)) };
+    const updated = await signTc(token, which, name);
+    return { ok: true, data: toView(updated, await guardianTermsPublished()) };
   } catch (e) {
     return fail(e);
   }
