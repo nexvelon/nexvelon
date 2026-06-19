@@ -125,6 +125,9 @@ export interface DbClientInvitation {
   email: string;
   client_id: string | null;
   created_by: string | null;
+  // POLISH-4 (migration 0057) — 'full' (client + site + both T&Cs, new client)
+  // or 'site_only' (site + both T&Cs added to an existing client_id).
+  invite_type: "full" | "site_only";
   client_form_completed: boolean;
   site_form_completed: boolean;
   tc1_signed_at: string | null;

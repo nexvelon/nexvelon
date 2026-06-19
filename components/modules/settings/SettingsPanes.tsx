@@ -22,6 +22,8 @@ import {
   setDefaultTermsAction,
   getDefaultTermsGuardianAction,
   setDefaultTermsGuardianAction,
+  getOnboardingGuardianTermsAction,
+  setOnboardingGuardianTermsAction,
 } from "@/app/(app)/settings/company-settings-actions";
 import {
   Select,
@@ -172,6 +174,15 @@ export function QuoteDefaults() {
         fallback={DEFAULT_TERMS_GUARDIAN}
         load={getDefaultTermsGuardianAction}
         save={setDefaultTermsGuardianAction}
+      />
+
+      {/* POLISH-4 — Guardian T&C for the CLIENT ONBOARDING invite (tc2). Blank
+          by default; the invite tc2 page blocks signing until this is filled. */}
+      <DefaultTermsEditor
+        title="Nexvelon Guardian Inc. Terms and Conditions (Client Onboarding)"
+        fallback=""
+        load={getOnboardingGuardianTermsAction}
+        save={setOnboardingGuardianTermsAction}
       />
 
       <SaveBar />

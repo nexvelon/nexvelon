@@ -50,9 +50,51 @@ export async function sendClientInviteAction(
     const trimmed = email.trim();
     if (!EMAIL_RE.test(trimmed))
       return { ok: false, error: "Enter a valid email address." };
-    const inv = await createInvitation({ email: trimmed, createdBy: gate.id });
-    await sendClientInviteEmail({ to: trimmed, token: inv.token, baseUrl: baseUrl() });
+    const inv = await createInvitation({
+      email: trimmed,
+      createdBy: gate.id,
+      inviteType: "full",
+    });
+    await sendClientInviteEmail({
+      to: trimmed,
+      token: inv.token,
+      baseUrl: baseUrl(),
+      inviteType: "full",
+    });
     revalidatePath("/clients");
+    return { ok: true, data: { token: inv.token } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// POLISH-4 — Type B: invite an existing client to add a SITE. No new client is
+// created on submit; a site is attached to clientId. Email defaults to the
+// admin-provided address (often a contact at the same client).
+export async function sendSiteInviteAction(
+  clientId: string,
+  email: string
+): Promise<ActionResult<{ token: string }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const trimmed = email.trim();
+    if (!EMAIL_RE.test(trimmed))
+      return { ok: false, error: "Enter a valid email address." };
+    if (!clientId) return { ok: false, error: "Missing client." };
+    const inv = await createInvitation({
+      email: trimmed,
+      createdBy: gate.id,
+      inviteType: "site_only",
+      clientId,
+    });
+    await sendClientInviteEmail({
+      to: trimmed,
+      token: inv.token,
+      baseUrl: baseUrl(),
+      inviteType: "site_only",
+    });
+    revalidatePath(`/clients/${clientId}`);
     return { ok: true, data: { token: inv.token } };
   } catch (e) {
     return fail(e);
