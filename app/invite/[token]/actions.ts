@@ -19,7 +19,11 @@ import {
   sendClientSubmissionEmail,
   sendClientConfirmationEmail,
 } from "@/lib/auth/email";
-import { getTierTexts } from "@/lib/api/company-settings";
+import {
+  getTierTexts,
+  getTierDiscretionDisclaimer,
+  TIER_DISCLAIMER,
+} from "@/lib/api/company-settings";
 import type { DbClientInvitation } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -90,13 +94,30 @@ export async function getInvitationAction(
   }
 }
 
-// CHANGE 6 — the four Prestige Tier descriptions for the client form's opt-in
-// cards (same single source as the invite/outcome emails).
+// CHANGE 6 — the Prestige Tier descriptions for the client form's opt-in cards
+// (same single source as the invite/outcome emails).
 export async function getTierDescriptionsAction(): Promise<
-  ActionResult<Record<"bronze" | "silver" | "gold" | "platinum", string>>
+  ActionResult<Record<"diamond" | "platinum" | "gold" | "silver" | "bronze", string>>
 > {
   try {
     return { ok: true, data: await getTierTexts() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// POLISH-7 — the two fine-print disclaimers shown beneath the tier opt-in.
+export async function getTierDisclaimersAction(): Promise<
+  ActionResult<{ requirements: string; discretion: string }>
+> {
+  try {
+    return {
+      ok: true,
+      data: {
+        requirements: TIER_DISCLAIMER,
+        discretion: await getTierDiscretionDisclaimer(),
+      },
+    };
   } catch (e) {
     return fail(e);
   }

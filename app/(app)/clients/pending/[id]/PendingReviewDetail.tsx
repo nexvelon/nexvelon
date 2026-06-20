@@ -158,10 +158,11 @@ function ContactRows({ map }: { map: Record<string, unknown> | null | undefined 
 
 const TIER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "none", label: "None" },
-  { value: "Bronze", label: "Bronze" },
-  { value: "Silver", label: "Silver" },
-  { value: "Gold", label: "Gold" },
+  { value: "Diamond", label: "Diamond" },
   { value: "Platinum", label: "Platinum" },
+  { value: "Gold", label: "Gold" },
+  { value: "Silver", label: "Silver" },
+  { value: "Bronze", label: "Bronze" },
 ];
 
 // ── component ─────────────────────────────────────────────────

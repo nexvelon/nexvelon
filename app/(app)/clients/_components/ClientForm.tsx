@@ -66,7 +66,7 @@ const TYPES: DbClientType[] = [
   "Government",
   "Heritage",
 ];
-const TIERS: DbClientTier[] = ["Platinum", "Gold", "Silver", "Bronze"];
+const TIERS: DbClientTier[] = ["Diamond", "Platinum", "Gold", "Silver", "Bronze"];
 const STATUSES: DbClientStatus[] = ["Active", "Inactive", "Prospect", "Lost"];
 
 const PAYMENT_TERMS: { value: DbClientPaymentTerms; label: string }[] = [

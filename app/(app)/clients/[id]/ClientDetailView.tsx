@@ -92,7 +92,7 @@ export function ClientDetailView({
   };
 
   // POLISH-5 (CHANGE 6) — admin tier edit, with optional notify-by-email.
-  const TIER_OPTIONS: DbClientTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
+  const TIER_OPTIONS: DbClientTier[] = ["Diamond", "Platinum", "Gold", "Silver", "Bronze"];
   const TIER_NONE = "__none__";
   const [tierOpen, setTierOpen] = useState(false);
   const [tierValue, setTierValue] = useState<string>(client.tier ?? TIER_NONE);

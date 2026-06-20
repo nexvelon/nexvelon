@@ -36,6 +36,7 @@ import {
   getInvitationAction,
   getInviteTermsAction,
   getTierDescriptionsAction,
+  getTierDisclaimersAction,
   saveClientFormAction,
   saveSiteFormAction,
   signTcAction,
@@ -59,7 +60,8 @@ const SERIF = "Georgia, serif";
 
 // Prestige tiers the client may opt into (CHANGE 6). The value is the
 // PascalCase tier name written to client_form_data.tierRequested; "" = None.
-const TIERS = ["Bronze", "Silver", "Gold", "Platinum"] as const;
+// Highest first: Diamond → Platinum → Gold → Silver → Bronze.
+const TIERS = ["Diamond", "Platinum", "Gold", "Silver", "Bronze"] as const;
 
 // ── Dropdown option lists ────────────────────────────────────────────────────
 const PAYMENT_TERMS = [
@@ -506,9 +508,16 @@ function ContactsSection({ get, set }: { get: Getter; set: Setter }) {
 function TierSection({ get, set }: { get: Getter; set: Setter }) {
   const selected = get("tierRequested"); // "" = None
   const [desc, setDesc] = useState<Record<string, string>>({});
+  const [disclaimers, setDisclaimers] = useState<{
+    requirements: string;
+    discretion: string;
+  } | null>(null);
   useEffect(() => {
     getTierDescriptionsAction().then((r) => {
       if (r.ok) setDesc(r.data as Record<string, string>);
+    });
+    getTierDisclaimersAction().then((r) => {
+      if (r.ok) setDisclaimers(r.data);
     });
   }, []);
   const options: { value: string; title: string; body?: string }[] = [
@@ -573,13 +582,24 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
           );
         })}
       </div>
-      <p
-        className="text-[11px]"
-        style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
-      >
-        Tier requirements and benefits are updated from time to time; clients are
-        required to maintain qualifying conditions to retain their tier benefits.
-      </p>
+      {/* CHANGE 5 — both fine-print disclaimers, requirements then discretion. */}
+      <div className="space-y-1.5">
+        <p
+          className="text-[11px]"
+          style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
+        >
+          {disclaimers?.requirements ??
+            "Tier requirements and benefits are updated from time to time; clients are required to maintain qualifying conditions to retain their tier benefits."}
+        </p>
+        {disclaimers?.discretion ? (
+          <p
+            className="text-[11px]"
+            style={{ color: MUTED, fontStyle: "italic", fontFamily: SERIF }}
+          >
+            {disclaimers.discretion}
+          </p>
+        ) : null}
+      </div>
     </Section>
   );
 }
