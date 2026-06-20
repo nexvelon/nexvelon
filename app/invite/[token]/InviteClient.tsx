@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressSection } from "@/app/(app)/clients/_components/AddressSection";
+import { parseTierText } from "@/lib/tier-text-parser";
 import {
   getInvitationAction,
   getInviteTermsAction,
@@ -520,10 +521,8 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
       if (r.ok) setDisclaimers(r.data);
     });
   }, []);
-  const options: { value: string; title: string; body?: string }[] = [
-    ...TIERS.map((t) => ({ value: t, title: t, body: desc[t.toLowerCase()] })),
-    { value: "", title: "None" },
-  ];
+  // CHANGE 3/5 — Bronze → Diamond, compact bullet cards (2-col on sm+).
+  const ascending = [...TIERS].reverse();
   return (
     <Section title="Apply for a Prestige Tier (optional)">
       <p className="text-xs" style={{ color: MUTED }}>
@@ -531,19 +530,22 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
         determined by Nexvelon Global based on annual business volume and
         exclusivity.
       </p>
-      <div className="grid grid-cols-1 gap-3">
-        {options.map((o) => {
-          const active = selected === o.value;
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {ascending.map((tier) => {
+          const active = selected === tier;
+          const parsed = parseTierText(desc[tier.toLowerCase()] ?? "");
           return (
             <button
-              key={o.value || "none"}
+              key={tier}
               type="button"
               role="radio"
               aria-checked={active}
-              onClick={() => set("tierRequested", o.value)}
-              className="flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
+              onClick={() => set("tierRequested", tier)}
+              className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors"
               style={{
+                borderLeft: `3px solid ${GOLD}`,
                 borderColor: active ? GOLD : BORDER,
+                borderLeftColor: GOLD,
                 background: active
                   ? "linear-gradient(180deg, #FFFFFF 0%, #FBF4E2 100%)"
                   : "#FFFFFF",
@@ -556,32 +558,66 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
                 style={{ borderColor: active ? GOLD : "#C9C2B0" }}
               >
                 {active ? (
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: GOLD }}
-                  />
+                  <span className="h-2 w-2 rounded-full" style={{ background: GOLD }} />
                 ) : null}
               </span>
               <span className="min-w-0">
                 <span
-                  className="block text-sm font-semibold"
-                  style={{ color: NAVY, fontFamily: SERIF }}
+                  className="block text-sm font-semibold italic"
+                  style={{ color: GOLD_DEEP, fontFamily: SERIF }}
                 >
-                  {o.title}
+                  {tier}
                 </span>
-                {o.body ? (
-                  <span
-                    className="mt-0.5 block text-xs leading-relaxed"
-                    style={{ color: MUTED }}
-                  >
-                    {o.body}
+                {parsed.headline ? (
+                  <span className="mt-0.5 block text-[11px] italic leading-snug" style={{ color: MUTED }}>
+                    {parsed.headline}
                   </span>
                 ) : null}
+                {parsed.bullets.length > 0 ? (
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {parsed.bullets.map((b, i) => (
+                      <li key={i} className="text-[11px] leading-snug" style={{ color: "#2A2418" }}>
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {parsed.bodyParas.map((par, i) => (
+                  <span key={i} className="mt-1 block text-[11px] leading-snug" style={{ color: MUTED }}>
+                    {par}
+                  </span>
+                ))}
               </span>
             </button>
           );
         })}
       </div>
+      {/* None option (full width) */}
+      <button
+        type="button"
+        role="radio"
+        aria-checked={selected === ""}
+        onClick={() => set("tierRequested", "")}
+        className="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors"
+        style={{
+          borderColor: selected === "" ? GOLD : BORDER,
+          background: selected === "" ? "linear-gradient(180deg, #FFFFFF 0%, #FBF4E2 100%)" : "#FFFFFF",
+          boxShadow: selected === "" ? `0 0 0 1px ${GOLD}` : "none",
+        }}
+      >
+        <span
+          aria-hidden
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+          style={{ borderColor: selected === "" ? GOLD : "#C9C2B0" }}
+        >
+          {selected === "" ? (
+            <span className="h-2 w-2 rounded-full" style={{ background: GOLD }} />
+          ) : null}
+        </span>
+        <span className="text-sm font-semibold" style={{ color: NAVY, fontFamily: SERIF }}>
+          None — I&apos;d prefer not to apply for a tier
+        </span>
+      </button>
       {/* CHANGE 5 — both fine-print disclaimers, requirements then discretion. */}
       <div className="space-y-1.5">
         <p

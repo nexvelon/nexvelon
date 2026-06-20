@@ -18,6 +18,7 @@ import {
 } from "../../invite-actions";
 import { getInviteTermsAction } from "@/app/invite/[token]/actions";
 import { businessDateTime } from "@/lib/format";
+import { parseTierText } from "@/lib/tier-text-parser";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -456,6 +457,39 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
                 {invitation?.tier_requested ?? "None"}
               </span>
             </p>
+            {(() => {
+              // CHANGE 6 — show the requested tier's parsed description (headline
+              // + bullets) from the snapshot, so admin sees what the client saw.
+              const req = invitation?.tier_requested;
+              const descs = detail?.invitation?.submission_snapshot
+                ?.tier_descriptions as Record<string, unknown> | undefined;
+              const raw = req && descs ? descs[req.toLowerCase()] : null;
+              if (typeof raw !== "string" || !raw.trim()) return null;
+              const parsed = parseTierText(raw);
+              return (
+                <div className="mb-3 rounded-md border border-[var(--border)] bg-muted/30 p-2.5">
+                  {parsed.headline && (
+                    <p className="text-brand-charcoal text-[11px] italic">
+                      {parsed.headline}
+                    </p>
+                  )}
+                  {parsed.bullets.length > 0 && (
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {parsed.bullets.map((b, i) => (
+                        <li key={i} className="text-muted-foreground text-[11px]">
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {parsed.bodyParas.map((par, i) => (
+                    <p key={i} className="text-muted-foreground mt-1 text-[11px]">
+                      {par}
+                    </p>
+                  ))}
+                </div>
+              );
+            })()}
             <Label className="text-muted-foreground text-[11px]">Assign tier</Label>
             <Select
               value={tier}
