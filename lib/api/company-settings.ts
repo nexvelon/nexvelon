@@ -45,41 +45,45 @@ export const TIER_TEXT_KEYS: Record<TierLevel, string> = {
   bronze: "tier_bronze_text",
 };
 
-// POLISH-8 — defaults use the headline + "- " bullet contract (see
-// lib/tier-text-parser.ts). First line = headline; "- " lines = bullets.
+// POLISH-9 — polished marketing copy (headline + "- " bullets per the parser,
+// lib/tier-text-parser.ts). Defaults only; admin-edited Settings rows are never
+// overwritten. "entrusting" removed from Diamond per spec.
 export const TIER_TEXT_DEFAULTS: Record<TierLevel, string> = {
   diamond: [
-    "Diamond — for 3-5 year exclusive contract partners.",
-    "- White-glove account management",
-    "- Deepest discounts and best promotions",
-    "- Extended warranty on installations",
-    "- 1-week complimentary international vacation annually",
-    "- 1 year free ULC fire alarm monitoring",
-    "- Priority service and first access to new offerings",
+    "Diamond — For 3 to 5 year exclusive contract partners. The pinnacle of our partnership program.",
+    "- White-glove account management with dedicated executive contact",
+    "- Deepest exclusive discounts and the strongest promotional pricing",
+    "- Extended warranties on installations and equipment",
+    "- First access to new services and emerging technologies",
+    "- Priority service across all engagements without exception",
+    "- Complimentary 1-week international all-inclusive vacation annually courtesy of Nexvelon Global",
+    "- 1 year of complimentary ULC fire alarm monitoring services",
+    "- Additional curated benefits reserved exclusively for Diamond clients",
   ].join("\n"),
   platinum: [
-    "Platinum — for $1M+ annual exclusive partners.",
+    "Platinum — For $1M+ annual exclusive partners. Enhanced benefits across the board.",
     "- Enhanced discounts and exclusive promotions",
-    "- 1-week complimentary international vacation annually",
-    "- 1 year free ULC fire alarm monitoring",
-    "- Premium benefits package",
+    "- Complimentary 1-week international all-inclusive vacation annually courtesy of Nexvelon Global",
+    "- 1 year of complimentary ULC fire alarm monitoring services",
+    "- Premium account support with priority service across all engagements",
   ].join("\n"),
   gold: [
-    "Gold — for clients exclusively partnered with us for all security work, with $500K+ annual business.",
-    "- All security, access control, CCTV, and ULC fire alarm with Nexvelon only",
-    "- Preferred response times",
-    "- Exclusive promotional pricing",
-    "- Dedicated account support",
+    "Gold — Exclusive partnership for clients who consolidate all security work with us, $500K+ annually.",
+    "- Sole-source for all security, access control, CCTV, and ULC fire alarm monitoring",
+    "- Preferred response times across all engagements",
+    "- Exclusive promotional pricing and seasonal offers",
+    "- Dedicated account support and project coordination",
   ].join("\n"),
   silver: [
-    "Silver — for clients bringing at least $500,000 of business annually.",
-    "- Priority scheduling",
+    "Silver — Built on $500,000+ in annual partnership with Nexvelon Global.",
+    "- Priority scheduling on all service requests",
     "- Loyalty discounts on parts and labour",
+    "- Recognized as a valued partner",
   ].join("\n"),
   bronze: [
-    "Bronze — for clients who bring occasional business.",
-    "- Standard pricing applies",
-    "- Standard service levels",
+    "Bronze — Welcome aboard. Standard partnership pricing and service.",
+    "- Standard service levels and response times",
+    "- Standard pricing across all services",
   ].join("\n"),
 };
 

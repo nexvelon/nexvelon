@@ -303,8 +303,8 @@ function emailShell(args: {
     ? "margin-top:12px;font-size:22px;line-height:1.2;color:#1a2332;font-weight:normal;font-style:italic;font-family:Georgia,'Times New Roman',serif;"
     : "margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;";
   const eyebrowStyle = royal
-    ? "font-size:15px;letter-spacing:4px;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;"
-    : "font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;";
+    ? "font-size:15px;letter-spacing:4px;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:700;"
+    : "font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:700;";
   const footer = royal
     ? `<tr>
               <td style="padding:20px 36px;background:#1a2332;text-align:center;">
@@ -405,19 +405,19 @@ function tierCard(name: string, raw: string): string {
     ? `<ul style="margin:5px 0 0;padding-left:16px;">${p.bullets
         .map(
           (b) =>
-            `<li style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#2A2418;line-height:1.5;margin:0 0 2px;">${escapeHtml(b)}</li>`
+            `<li style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:400;color:#2A2418;line-height:1.55;margin:0 0 3px;">${escapeHtml(b)}</li>`
         )
         .join("")}</ul>`
     : "";
   const body = p.bodyParas
     .map(
       (par) =>
-        `<div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#5C5240;line-height:1.5;margin-top:4px;">${escapeHtml(par)}</div>`
+        `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:400;color:#5C5240;line-height:1.55;margin-top:5px;">${escapeHtml(par)}</div>`
     )
     .join("");
   return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FBF9F4;border-left:3px solid #b8902c;"><tr><td style="padding:12px 14px;">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:16px;color:#b8902c;line-height:1.2;">${escapeHtml(name)}</div>
-      ${p.headline ? `<div style="font-family:Arial,Helvetica,sans-serif;font-style:italic;font-size:11px;color:#5C5240;line-height:1.4;margin-top:3px;">${escapeHtml(p.headline)}</div>` : ""}
+      <div style="font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:17px;color:#b8902c;line-height:1.2;">${escapeHtml(name)}</div>
+      ${p.headline ? `<div style="font-family:Arial,Helvetica,sans-serif;font-style:italic;font-size:12px;color:#5C5240;line-height:1.45;margin-top:4px;">${escapeHtml(p.headline)}</div>` : ""}
       ${bullets}${body}
     </td></tr></table>`;
 }
@@ -427,12 +427,12 @@ function tierLevelsHtml(texts: TierTexts, disclaimers?: TierDisclaimers): string
     `<td class="tier-col" width="50%" valign="top" style="padding:5px;">${tierCard(name, raw)}</td>`;
   const fineprint = disclaimers
     ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-top:1px solid #E5DFD0;"><tr><td style="padding-top:10px;">
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-style:italic;color:#8A8068;line-height:1.5;">${escapeHtml(disclaimers.requirements)}</div>
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-style:italic;color:#8A8068;line-height:1.5;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-style:italic;color:#7A7058;line-height:1.55;">${escapeHtml(disclaimers.requirements)}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-style:italic;color:#7A7058;line-height:1.55;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
       </td></tr></table>`
     : "";
   // Bronze → Silver → Gold → Platinum, then Diamond full-width (CHANGE 3).
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;color:#B8924B;border-bottom:1px solid #b8902c;padding-bottom:4px;display:inline-block;">Prestige Tier Levels</div>
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#B8924B;border-bottom:2px solid #b8902c;padding-bottom:5px;display:inline-block;">Prestige Tier Levels</div>
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
       <tr>${col("Bronze", texts.bronze)}${col("Silver", texts.silver)}</tr>
       <tr>${col("Gold", texts.gold)}${col("Platinum", texts.platinum)}</tr>
@@ -550,7 +550,7 @@ export async function sendClientSubmissionEmail(opts: {
     )}</td><td style="padding:4px 0;color:#0A1226;font-size:13px;">${escapeHtml(v)}</td></tr>`;
   };
   const section = (title: string, rows: string) =>
-    `<div style="margin-top:20px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(
+    `<div style="margin-top:20px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(
       title
     )}</div><table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;">${rows}</table>`;
 
@@ -658,7 +658,7 @@ export async function sendClientConfirmationEmail(opts: {
   const bodyHtml = `
     <p style="margin:0;">Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.</p>
     ${goldDivider()}
-    <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Your Submission</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Your Submission</div>
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${summaryRows}</table>
     ${goldDivider()}
     <p style="margin:0;font-size:14px;color:#5C5240;line-height:1.7;">Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms &amp; Conditions — are attached to this email for your records. If you have any questions, please reply to this email.</p>`;

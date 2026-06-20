@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/company-settings";
 import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import { businessDateTime } from "@/lib/format";
+import { paymentPolicyText } from "@/lib/payment-policy-text";
 import {
   uploadSignaturePng,
   uploadSignedPdf,
@@ -39,6 +40,11 @@ export const TC1_LABEL = "Nexvelon Integrated Solutions Inc. — Default Terms a
 export const TC2_LABEL = "Nexvelon Guardian Inc. — Default Terms and Conditions";
 
 const VALID_TIERS: DbClientTier[] = ["Diamond", "Platinum", "Gold", "Silver", "Bronze"];
+
+// The form autosave stores booleans as strings; treat "true"/true as acknowledged.
+function isAck(v: unknown): boolean {
+  return v === true || v === "true";
+}
 
 function admin() {
   return createAdminClient();
@@ -140,15 +146,26 @@ export async function saveClientForm(
   token: string,
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
-  await requireOpen(token);
-  const completed = !!String(data.legalName ?? "").trim();
+  const inv = await requireOpen(token);
+  // POLISH-9 — the Payment Policies acknowledgment is now part of the gate.
+  const ack = isAck(data.payment_policies_acknowledged);
+  const completed = !!String(data.legalName ?? "").trim() && ack;
   // CHANGE 6 — the optional Prestige Tier opt-in is its own column.
   const reqRaw = String(data.tierRequested ?? "").trim();
   const tier_requested = (VALID_TIERS as string[]).includes(reqRaw) ? reqRaw : null;
+  const patch: Record<string, unknown> = {
+    client_form_data: data,
+    client_form_completed: completed,
+    tier_requested,
+  };
+  // Stamp the first-acknowledged time (preserve it once set).
+  if (ack && !inv.client_form_payment_policies_acknowledged_at) {
+    patch.client_form_payment_policies_acknowledged_at = new Date().toISOString();
+  }
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
-    .update({ client_form_data: data, client_form_completed: completed, tier_requested })
+    .update(patch)
     .eq("token", token)
     .select("*")
     .single();
@@ -161,12 +178,21 @@ export async function saveSiteForm(
   token: string,
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
-  await requireOpen(token);
-  const completed = !!String(data.siteName ?? data.siteStreet ?? "").trim();
+  const inv = await requireOpen(token);
+  const ack = isAck(data.payment_policies_acknowledged);
+  const completed =
+    !!String(data.siteName ?? data.siteStreet ?? "").trim() && ack;
+  const patch: Record<string, unknown> = {
+    site_form_data: data,
+    site_form_completed: completed,
+  };
+  if (ack && !inv.site_form_payment_policies_acknowledged_at) {
+    patch.site_form_payment_policies_acknowledged_at = new Date().toISOString();
+  }
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
-    .update({ site_form_data: data, site_form_completed: completed })
+    .update(patch)
     .eq("token", token)
     .select("*")
     .single();
@@ -376,6 +402,10 @@ export interface SubmissionSnapshot {
   // POLISH-7 — the Nexvelon-discretion disclaimer shown alongside disclaimer_note.
   discretion_disclaimer: string;
   tier_requested: string | null;
+  // POLISH-9 — the exact Payment Policies text the client saw + acknowledged on
+  // each form (rates depend on the form's billing country at submit time).
+  client_form_payment_policies_text: string;
+  site_form_payment_policies_text: string;
   submitted_at: string;
 }
 
@@ -390,6 +420,8 @@ async function buildSnapshot(
       getTierTexts(),
       getTierDiscretionDisclaimer(),
     ]);
+  const cf = (inv.client_form_data ?? {}) as Record<string, unknown>;
+  const sf = (inv.site_form_data ?? {}) as Record<string, unknown>;
   return {
     tc1_text,
     tc2_text,
@@ -397,6 +429,12 @@ async function buildSnapshot(
     disclaimer_note: TIER_DISCLAIMER,
     discretion_disclaimer,
     tier_requested: inv.tier_requested ?? null,
+    client_form_payment_policies_text: paymentPolicyText(
+      typeof cf.billingCountry === "string" ? cf.billingCountry : null
+    ),
+    site_form_payment_policies_text: paymentPolicyText(
+      typeof sf.billingCountry === "string" ? sf.billingCountry : null
+    ),
     submitted_at: submittedAt,
   };
 }

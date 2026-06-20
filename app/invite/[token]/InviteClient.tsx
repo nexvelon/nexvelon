@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { AddressSection } from "@/app/(app)/clients/_components/AddressSection";
 import { parseTierText } from "@/lib/tier-text-parser";
+import { paymentPolicyText } from "@/lib/payment-policy-text";
 import {
   getInvitationAction,
   getInviteTermsAction,
@@ -124,7 +125,10 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+      <Label
+        className="text-[12px] font-medium normal-case"
+        style={{ color: "#1a2332", letterSpacing: "normal" }}
+      >
         {label}
         {required ? <span style={{ color: GOLD }}> *</span> : null}
       </Label>
@@ -132,6 +136,15 @@ function Field({
     </div>
   );
 }
+
+// CHANGE 6 — shared input/select styling: substantial 14px text, generous
+// padding, a 1.5px navy/30 border. Applied to the <Input> in TextField and the
+// <SelectTrigger> in SelectField without touching the shared ui components.
+const CONTROL_CLASS = "text-[14px] py-2.5";
+const CONTROL_STYLE = {
+  borderWidth: 1.5,
+  borderColor: "rgba(26,35,50,0.3)",
+} as const;
 
 function TextField({
   label,
@@ -158,6 +171,8 @@ function TextField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        className={CONTROL_CLASS}
+        style={CONTROL_STYLE}
       />
     </Field>
   );
@@ -181,7 +196,7 @@ function SelectField({
   return (
     <Field label={label} required={required}>
       <Select value={value || undefined} onValueChange={(v) => onChange(v ?? "")}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger className={`w-full ${CONTROL_CLASS}`} style={CONTROL_STYLE}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -198,26 +213,30 @@ function SelectField({
 
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h2
-      className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
-      style={{ color: GOLD }}
-    >
-      <span aria-hidden style={{ color: GOLD, fontSize: 9 }}>
-        ◆
-      </span>
-      {children}
-    </h2>
+    <div>
+      <h2
+        className="text-[18px] font-bold"
+        style={{ color: "#1a2332", fontFamily: SERIF }}
+      >
+        {children}
+      </h2>
+      <div
+        aria-hidden
+        className="mt-1.5 h-0.5 w-10 rounded-full"
+        style={{ background: GOLD_DEEP }}
+      />
+    </div>
   );
 }
 
-// CHANGE 13 — the "Leave blank if same as billing" mailing note, rendered
-// prominently: italic Garamond-feel serif, deeper gold, a touch larger than
-// the plain helper text.
+// CHANGE 6 — the "Leave blank if same as billing" mailing note, rendered
+// prominently: deep navy, Inter SemiBold, 13px, NOT italic (overrides the prior
+// gold-italic treatment) so it reads as a clear, authoritative instruction.
 function MailingNote() {
   return (
     <p
-      className="mt-1 text-[13px]"
-      style={{ color: GOLD_DEEP, fontFamily: SERIF, fontStyle: "italic" }}
+      className="mt-1 text-[13px] font-semibold"
+      style={{ color: "#1a2332" }}
     >
       Leave blank if same as billing.
     </p>
@@ -244,7 +263,7 @@ function Section({
         {noteNode ? (
           noteNode
         ) : note ? (
-          <p className="mt-1 text-xs" style={{ color: MUTED }}>
+          <p className="mt-1.5 text-[11px]" style={{ color: "#3a3a3a" }}>
             {note}
           </p>
         ) : null}
@@ -668,6 +687,56 @@ function GcSection({ get, set }: { get: Getter; set: Setter }) {
   );
 }
 
+// CHANGE 1 — Payment Policies. Renders the canonical 3-line policy text
+// (keyed off the form's billing country, Canada fallback) in a formal bordered
+// panel, plus a single acknowledgment checkbox bound to the shared autosave map
+// under `payment_policies_acknowledged` ("true" when checked, "" when not). The
+// server gates form-complete on this key; both forms reuse the same key name in
+// their separate autosave maps.
+function PaymentPoliciesSection({ get, set }: { get: Getter; set: Setter }) {
+  const text = paymentPolicyText(get("billingCountry"));
+  const acknowledged = get("payment_policies_acknowledged") === "true";
+  return (
+    <Section
+      title="Payment Policies"
+      note="The rates below reflect your selected billing country."
+    >
+      <div
+        className="rounded-md p-4"
+        style={{
+          background: PANEL,
+          borderLeft: `3px solid ${GOLD}`,
+          border: `1px solid ${BORDER}`,
+          borderLeftWidth: 3,
+          borderLeftColor: GOLD,
+        }}
+      >
+        <p
+          className="text-[13px] leading-relaxed"
+          style={{ color: "#2A2418", whiteSpace: "pre-line" }}
+        >
+          {text}
+        </p>
+      </div>
+      <label
+        className="flex items-start gap-2.5 text-[13px]"
+        style={{ color: NAVY }}
+      >
+        <input
+          type="checkbox"
+          checked={acknowledged}
+          onChange={(e) =>
+            set("payment_policies_acknowledged", e.target.checked ? "true" : "")
+          }
+          className="mt-0.5 h-4 w-4 shrink-0"
+          style={{ accentColor: GOLD }}
+        />
+        I acknowledge and accept the payment policies as set out above.
+      </label>
+    </Section>
+  );
+}
+
 function FormShell({
   token,
   title,
@@ -794,6 +863,7 @@ function ClientInfoFormInner({
       <TaxSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <ContactsSection get={get} set={set} />
+      <PaymentPoliciesSection get={get} set={set} />
       <TierSection get={get} set={set} />
     </FormShell>
   );
@@ -857,6 +927,7 @@ function SiteInfoFormInner({
       <TaxSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <ContactsSection get={get} set={set} />
+      <PaymentPoliciesSection get={get} set={set} />
       <GcSection get={get} set={set} />
     </FormShell>
   );
@@ -974,8 +1045,8 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label
-                className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-                style={{ color: MUTED }}
+                className="text-[12px] font-medium normal-case"
+                style={{ color: "#1a2332", letterSpacing: "normal" }}
               >
                 Draw your signature below
               </Label>
@@ -1227,8 +1298,11 @@ export function InviteStatus({ token }: { token: string }) {
         <Button
           onClick={onSubmit}
           disabled={!inv.ready || submitting}
-          className="w-full text-white"
-          style={{ background: inv.ready ? NAVY : "#C9C2B0" }}
+          className="w-full border py-6 font-semibold text-white"
+          style={{
+            background: inv.ready ? NAVY : "#C9C2B0",
+            borderColor: GOLD_DEEP,
+          }}
         >
           {submitting ? "Submitting…" : "Submit"}
         </Button>
