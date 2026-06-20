@@ -148,6 +148,15 @@ export interface DbClientInvitation {
   decided_at: string | null;
   decided_by: string | null;
   decline_reason: string | null;
+  // POLISH-6 (migration 0060) — snapshot of the exact text/tiers/disclaimer at
+  // submit, drawn-signature image paths, generated signed-PDF paths, and the
+  // optional tier the client opted in for.
+  submission_snapshot: Record<string, unknown> | null;
+  tc1_signature_image_path: string | null;
+  tc2_signature_image_path: string | null;
+  tc1_signed_pdf_path: string | null;
+  tc2_signed_pdf_path: string | null;
+  tier_requested: DbClientTier | null;
   created_at: string;
   updated_at: string;
 }
@@ -271,6 +280,10 @@ export interface DbSite {
   // inheritance — UI flag: when true the site reads payment/tax/portal from
   // its parent client; when false the site's own values above are used.
   inherit_payment_terms_from_client: boolean;
+  // POLISH-6 (migration 0060) — GC / Site Supervisor.
+  gc_name: string | null;
+  gc_phone: string | null;
+  gc_email: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -329,6 +342,10 @@ export type DbSiteInsert = {
   portal_access_enabled?: boolean;
   portal_contact_email?: string | null;
   inherit_payment_terms_from_client?: boolean;
+  // POLISH-6 (migration 0060) — GC / Site Supervisor.
+  gc_name?: string | null;
+  gc_phone?: string | null;
+  gc_email?: string | null;
 };
 
 export type DbSiteUpdate = Partial<DbSiteInsert>;

@@ -9,18 +9,34 @@ import "server-only";
 // work regardless of whether migration 0056's RLS has been applied yet.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSetting } from "@/lib/api/company-settings";
-import { DEFAULT_TERMS } from "@/lib/quote-helpers";
 import {
+  getSetting,
+  getTierTexts,
+  TIER_DISCLAIMER,
   DEFAULT_TERMS_KEY,
-  ONBOARDING_GUARDIAN_TERMS_KEY,
+  DEFAULT_TERMS_GUARDIAN_KEY,
 } from "@/lib/api/company-settings";
+import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
+import { businessDateTime } from "@/lib/format";
+import {
+  uploadSignaturePng,
+  uploadSignedPdf,
+  signatureDataUrl,
+} from "@/lib/api/invitation-storage";
+import { renderSignedTcPdf } from "@/lib/pdf/signed-tc-pdf";
 import type {
   DbClientInvitation,
   DbClientPaymentTerms,
   DbClientPaymentMethod,
   DbClientCurrency,
+  DbClientTier,
 } from "@/lib/types/database";
+
+// CHANGE 2 — the invite T&C labels (single source: same docs as quote PDFs).
+export const TC1_LABEL = "Nexvelon Integrated Solutions Inc. — Default Terms and Conditions";
+export const TC2_LABEL = "Nexvelon Guardian Inc. — Default Terms and Conditions";
+
+const VALID_TIERS: DbClientTier[] = ["Platinum", "Gold", "Silver", "Bronze"];
 
 function admin() {
   return createAdminClient();
@@ -124,10 +140,13 @@ export async function saveClientForm(
 ): Promise<DbClientInvitation> {
   await requireOpen(token);
   const completed = !!String(data.legalName ?? "").trim();
+  // CHANGE 6 — the optional Prestige Tier opt-in is its own column.
+  const reqRaw = String(data.tierRequested ?? "").trim();
+  const tier_requested = (VALID_TIERS as string[]).includes(reqRaw) ? reqRaw : null;
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
-    .update({ client_form_data: data, client_form_completed: completed })
+    .update({ client_form_data: data, client_form_completed: completed, tier_requested })
     .eq("token", token)
     .select("*")
     .single();
@@ -153,24 +172,30 @@ export async function saveSiteForm(
   return row as DbClientInvitation;
 }
 
-/** Record a T&C signature (typed name + auto timestamp) for tc1 or tc2. */
+/**
+ * Record a T&C signature: typed name + drawn-signature PNG are BOTH required
+ * (CHANGE 3). The drawn signature (a data URL) is uploaded to the private
+ * invitation-signatures bucket; its path + the typed name + an auto timestamp
+ * are stored on the invitation.
+ */
 export async function signTc(
   token: string,
   which: "tc1" | "tc2",
-  name: string
+  name: string,
+  signatureDataUrlIn: string
 ): Promise<DbClientInvitation> {
   await requireOpen(token);
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Type your full name to sign.");
-  // tc2 = Guardian onboarding T&C — can't be signed until an admin publishes it.
-  if (which === "tc2" && !(await guardianTermsPublished())) {
-    throw new Error("Guardian terms are not yet published.");
+  if (!signatureDataUrlIn || !signatureDataUrlIn.startsWith("data:image")) {
+    throw new Error("Draw your signature before signing.");
   }
+  const imagePath = await uploadSignaturePng(token, which, signatureDataUrlIn);
   const now = new Date().toISOString();
   const patch =
     which === "tc1"
-      ? { tc1_signed_at: now, tc1_signed_name: trimmed }
-      : { tc2_signed_at: now, tc2_signed_name: trimmed };
+      ? { tc1_signed_at: now, tc1_signed_name: trimmed, tc1_signature_image_path: imagePath }
+      : { tc2_signed_at: now, tc2_signed_name: trimmed, tc2_signature_image_path: imagePath };
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
@@ -200,14 +225,13 @@ export function isReadyToSubmit(
   );
 }
 
-/** Has an admin published the Guardian onboarding T&C (tc2)? */
+/**
+ * POLISH-6 — tc2 now reads the real "Guardian — Default Terms" block (with an
+ * in-code fallback), so it always has content; the old "not yet published" gate
+ * is retired. Kept (returning true) for InvitationView.guardian_published compat.
+ */
 export async function guardianTermsPublished(): Promise<boolean> {
-  try {
-    const v = await getSetting(ONBOARDING_GUARDIAN_TERMS_KEY);
-    return !!v && v.trim() !== "";
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 function s(v: unknown): string | null {
@@ -332,7 +356,41 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
     preferred_payment_method:
       e(sf.paymentMethod, PAYMENT_METHOD_VALUES) ?? undefined,
     preferred_currency: e(sf.currency, CURRENCY_VALUES) ?? undefined,
+    // CHANGE 7 — GC / Site Supervisor.
+    gc_name: s(sf.gcName),
+    gc_phone: s(sf.gcPhone),
+    gc_email: s(sf.gcEmail),
     notes: notes || null,
+  };
+}
+
+// CHANGE 5 — the exact text/tiers/disclaimer the client saw, captured at submit
+// for legal defensibility. Read by the Submission Detail page + signed PDFs.
+export interface SubmissionSnapshot {
+  tc1_text: string;
+  tc2_text: string;
+  tier_descriptions: Record<"bronze" | "silver" | "gold" | "platinum", string>;
+  disclaimer_note: string;
+  tier_requested: string | null;
+  submitted_at: string;
+}
+
+async function buildSnapshot(
+  inv: DbClientInvitation,
+  submittedAt: string
+): Promise<SubmissionSnapshot> {
+  const [tc1_text, tc2_text, tier_descriptions] = await Promise.all([
+    getInviteTermsText("tc1"),
+    getInviteTermsText("tc2"),
+    getTierTexts(),
+  ]);
+  return {
+    tc1_text,
+    tc2_text,
+    tier_descriptions,
+    disclaimer_note: TIER_DISCLAIMER,
+    tier_requested: inv.tier_requested ?? null,
+    submitted_at: submittedAt,
   };
 }
 
@@ -346,6 +404,7 @@ export async function submitInvitation(token: string): Promise<{
   invitation: DbClientInvitation;
   clientId: string;
   siteId: string;
+  pdfs: { tc1: Buffer; tc2: Buffer };
 }> {
   const inv = await requireOpen(token);
   if (!isReadyToSubmit(inv, await guardianTermsPublished())) {
@@ -379,32 +438,73 @@ export async function submitInvitation(token: string): Promise<{
   if (siErr) throw new Error(`submitInvitation/site: ${siErr.message}`);
   const siteId = (site as { id: string }).id;
 
+  // CHANGE 5 — snapshot the exact text/tiers/disclaimer shown.
+  const snapshot = await buildSnapshot(inv, now);
+
+  // CHANGE 4 — generate the two signed-T&C PDFs from the SNAPSHOT text + the
+  // drawn signatures, upload them privately, and record their paths.
+  const [sig1, sig2] = await Promise.all([
+    inv.tc1_signature_image_path ? signatureDataUrl(inv.tc1_signature_image_path) : null,
+    inv.tc2_signature_image_path ? signatureDataUrl(inv.tc2_signature_image_path) : null,
+  ]);
+  const [pdf1, pdf2] = await Promise.all([
+    renderSignedTcPdf({
+      title: TC1_LABEL,
+      termsText: snapshot.tc1_text,
+      signerName: inv.tc1_signed_name ?? "—",
+      signatureDataUrl: sig1,
+      signedAt: inv.tc1_signed_at ? businessDateTime(inv.tc1_signed_at) : "—",
+      token,
+    }),
+    renderSignedTcPdf({
+      title: TC2_LABEL,
+      termsText: snapshot.tc2_text,
+      signerName: inv.tc2_signed_name ?? "—",
+      signatureDataUrl: sig2,
+      signedAt: inv.tc2_signed_at ? businessDateTime(inv.tc2_signed_at) : "—",
+      token,
+    }),
+  ]);
+  const [pdf1Path, pdf2Path] = await Promise.all([
+    uploadSignedPdf(token, "tc1", pdf1),
+    uploadSignedPdf(token, "tc2", pdf2),
+  ]);
+
   const { data: updated, error: uErr } = await supabase
     .from("client_invitations")
-    .update({ submitted_at: now, client_id: clientId })
+    .update({
+      submitted_at: now,
+      client_id: clientId,
+      submission_snapshot: snapshot,
+      tc1_signed_pdf_path: pdf1Path,
+      tc2_signed_pdf_path: pdf2Path,
+    })
     .eq("token", token)
     .select("*")
     .single();
   if (uErr) throw new Error(`submitInvitation/lock: ${uErr.message}`);
 
-  return { invitation: updated as DbClientInvitation, clientId, siteId };
+  return {
+    invitation: updated as DbClientInvitation,
+    clientId,
+    siteId,
+    pdfs: { tc1: pdf1, tc2: pdf2 },
+  };
 }
 
 /**
- * The two T&C texts the invite pages render, from the SINGLE existing source.
- *   tc1 = Nexvelon Integrated Solutions Inc. T&C (default_quote_terms, in-code
- *         fallback DEFAULT_TERMS — always has content).
- *   tc2 = Nexvelon Guardian Inc. T&C (onboarding_guardian_terms) — BLANK by
- *         default (no fallback) until an admin publishes it; an empty string
- *         tells the tc2 page to show the "not yet published" notice.
+ * The two T&C texts the invite pages render, from the SINGLE existing source —
+ * the same blocks the quote PDFs use:
+ *   tc1 = Integrated Solutions terms (default_quote_terms, fallback DEFAULT_TERMS).
+ *   tc2 = Guardian terms (default_quote_terms_guardian, fallback DEFAULT_TERMS_GUARDIAN).
  */
 export async function getInviteTermsText(which: "tc1" | "tc2"): Promise<string> {
   try {
     if (which === "tc1") {
       return (await getSetting(DEFAULT_TERMS_KEY)) ?? DEFAULT_TERMS;
     }
-    return (await getSetting(ONBOARDING_GUARDIAN_TERMS_KEY)) ?? "";
+    return (await getSetting(DEFAULT_TERMS_GUARDIAN_KEY)) ?? DEFAULT_TERMS_GUARDIAN;
   } catch {
-    return which === "tc1" ? DEFAULT_TERMS : "";
+    return which === "tc1" ? DEFAULT_TERMS : DEFAULT_TERMS_GUARDIAN;
   }
 }

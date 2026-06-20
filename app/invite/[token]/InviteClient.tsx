@@ -19,6 +19,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import SignatureCanvas from "react-signature-canvas";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ import { AddressSection } from "@/app/(app)/clients/_components/AddressSection";
 import {
   getInvitationAction,
   getInviteTermsAction,
+  getTierDescriptionsAction,
   saveClientFormAction,
   saveSiteFormAction,
   signTcAction,
@@ -45,9 +47,19 @@ import {
 // (page background cream #F5F1E8 is applied by the route layout)
 const NAVY = "#0A1226";
 const GOLD = "#B8924B";
+const GOLD_DEEP = "#b8902c"; // deeper gold for emphasis text (CHANGE 13)
 const MUTED = "#5C5240";
 const BORDER = "#E5DFD0";
 const PANEL = "#FBF9F4";
+
+// Garamond-feel serif for royal/futuristic headings (CHANGE 11). The app's
+// serif is wired via a CSS var, but a plain Georgia stack reads identically
+// here and keeps this public file free of app-only font dependencies.
+const SERIF = "Georgia, serif";
+
+// Prestige tiers the client may opt into (CHANGE 6). The value is the
+// PascalCase tier name written to client_form_data.tierRequested; "" = None.
+const TIERS = ["Bronze", "Silver", "Gold", "Platinum"] as const;
 
 // ── Dropdown option lists ────────────────────────────────────────────────────
 const PAYMENT_TERMS = [
@@ -184,28 +196,51 @@ function SelectField({
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
     <h2
-      className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+      className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
       style={{ color: GOLD }}
     >
+      <span aria-hidden style={{ color: GOLD, fontSize: 9 }}>
+        ◆
+      </span>
       {children}
     </h2>
+  );
+}
+
+// CHANGE 13 — the "Leave blank if same as billing" mailing note, rendered
+// prominently: italic Garamond-feel serif, deeper gold, a touch larger than
+// the plain helper text.
+function MailingNote() {
+  return (
+    <p
+      className="mt-1 text-[13px]"
+      style={{ color: GOLD_DEEP, fontFamily: SERIF, fontStyle: "italic" }}
+    >
+      Leave blank if same as billing.
+    </p>
   );
 }
 
 function Section({
   title,
   note,
+  noteNode,
   children,
 }: {
   title: string;
   note?: string;
+  /** Custom note element (e.g. the highlighted mailing note). Takes
+   *  precedence over the plain `note` string. */
+  noteNode?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-3 border-t pt-5 first:border-t-0 first:pt-0" style={{ borderColor: BORDER }}>
       <div>
         <SectionHeading>{title}</SectionHeading>
-        {note ? (
+        {noteNode ? (
+          noteNode
+        ) : note ? (
           <p className="mt-1 text-xs" style={{ color: MUTED }}>
             {note}
           </p>
@@ -343,6 +378,7 @@ function AddressBlock({
     <Grid>
       <AddressSection
         sectionPrefix={sectionPrefix}
+        streetPlaceholder="123 Xyz St"
         country={get(k("country"))}
         province={get(k("province"))}
         street={get(k("street"))}
@@ -464,6 +500,118 @@ function ContactsSection({ get, set }: { get: Getter; set: Setter }) {
   );
 }
 
+// CHANGE 6 — optional Prestige Tier opt-in on the CLIENT form. Single-select
+// card radio (incl. a default "None"); writes the PascalCase tier name (or "")
+// to the shared autosave map under `tierRequested`.
+function TierSection({ get, set }: { get: Getter; set: Setter }) {
+  const selected = get("tierRequested"); // "" = None
+  const [desc, setDesc] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getTierDescriptionsAction().then((r) => {
+      if (r.ok) setDesc(r.data as Record<string, string>);
+    });
+  }, []);
+  const options: { value: string; title: string; body?: string }[] = [
+    ...TIERS.map((t) => ({ value: t, title: t, body: desc[t.toLowerCase()] })),
+    { value: "", title: "None" },
+  ];
+  return (
+    <Section title="Apply for a Prestige Tier (optional)">
+      <p className="text-xs" style={{ color: MUTED }}>
+        Select the tier you&apos;d like to apply for. Final tier assignment is
+        determined by Nexvelon Global based on annual business volume and
+        exclusivity.
+      </p>
+      <div className="grid grid-cols-1 gap-3">
+        {options.map((o) => {
+          const active = selected === o.value;
+          return (
+            <button
+              key={o.value || "none"}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => set("tierRequested", o.value)}
+              className="flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors"
+              style={{
+                borderColor: active ? GOLD : BORDER,
+                background: active
+                  ? "linear-gradient(180deg, #FFFFFF 0%, #FBF4E2 100%)"
+                  : "#FFFFFF",
+                boxShadow: active ? `0 0 0 1px ${GOLD}` : "none",
+              }}
+            >
+              <span
+                aria-hidden
+                className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+                style={{ borderColor: active ? GOLD : "#C9C2B0" }}
+              >
+                {active ? (
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: GOLD }}
+                  />
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span
+                  className="block text-sm font-semibold"
+                  style={{ color: NAVY, fontFamily: SERIF }}
+                >
+                  {o.title}
+                </span>
+                {o.body ? (
+                  <span
+                    className="mt-0.5 block text-xs leading-relaxed"
+                    style={{ color: MUTED }}
+                  >
+                    {o.body}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p
+        className="text-[11px]"
+        style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
+      >
+        Tier requirements and benefits are updated from time to time; clients are
+        required to maintain qualifying conditions to retain their tier benefits.
+      </p>
+    </Section>
+  );
+}
+
+// CHANGE 7 — GC / Site Supervisor block on the SITE form. Keys: gcName,
+// gcPhone, gcEmail (all part of the site-form autosave map).
+function GcSection({ get, set }: { get: Getter; set: Setter }) {
+  return (
+    <Section title="GC / Site Supervisor">
+      <Grid>
+        <TextField
+          label="Name"
+          value={get("gcName")}
+          onChange={(v) => set("gcName", v)}
+        />
+        <TextField
+          label="Phone"
+          type="tel"
+          value={get("gcPhone")}
+          onChange={(v) => set("gcPhone", v)}
+        />
+        <TextField
+          label="Email"
+          type="email"
+          value={get("gcEmail")}
+          onChange={(v) => set("gcEmail", v)}
+        />
+      </Grid>
+    </Section>
+  );
+}
+
 function FormShell({
   token,
   title,
@@ -478,19 +626,32 @@ function FormShell({
   children: ReactNode;
 }) {
   return (
-    <Card className="space-y-6 bg-white p-6">
-      <div className="flex items-start justify-between gap-4">
+    <Card
+      className="space-y-7 p-6 sm:p-8"
+      style={{
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FDFBF4 100%)",
+        borderColor: BORDER,
+      }}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="font-serif text-xl" style={{ color: NAVY }}>
+          <h1
+            className="text-2xl"
+            style={{ color: NAVY, fontFamily: SERIF }}
+          >
             {title}
           </h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>
+          <div
+            className="mt-2 h-px w-16"
+            style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }}
+          />
+          <p className="mt-2 text-sm" style={{ color: MUTED }}>
             {description}
           </p>
         </div>
         <SaveStatus savedAt={savedAt} />
       </div>
-      <div className="space-y-6">{children}</div>
+      <div className="space-y-7">{children}</div>
       <div className="border-t pt-4" style={{ borderColor: BORDER }}>
         <BackLink token={token} />
       </div>
@@ -507,20 +668,38 @@ export function ClientInfoForm({ token }: { token: string }) {
   if (inv.submitted_at) return <LockedNotice />;
 
   return (
-    <ClientInfoFormInner token={token} initial={inv.client_form_data} />
+    <ClientInfoFormInner
+      token={token}
+      initial={inv.client_form_data}
+      tierRequested={inv.tier_requested}
+    />
   );
 }
 
 function ClientInfoFormInner({
   token,
   initial,
+  tierRequested,
 }: {
   token: string;
   initial: Record<string, unknown> | null;
+  tierRequested: string | null;
 }) {
+  // Seed the tierRequested key from the invitation if the saved form map
+  // doesn't already carry it (e.g. an earlier draft saved before this field
+  // existed). The autosave map remains the single source of truth.
+  const seeded = useMemo(() => {
+    if (!tierRequested) return initial;
+    const base = (initial ?? {}) as Record<string, unknown>;
+    if (base.tierRequested != null && String(base.tierRequested) !== "") {
+      return initial;
+    }
+    return { ...base, tierRequested };
+  }, [initial, tierRequested]);
+
   const { get, set, savedAt } = useAutosave(
     token,
-    initial,
+    seeded,
     (t, d) => saveClientFormAction(t, d)
   );
 
@@ -538,7 +717,7 @@ function ClientInfoFormInner({
             required
             value={get("legalName")}
             onChange={(v) => set("legalName", v)}
-            placeholder="Acme Corporation Ltd."
+            placeholder="ABC Corporation Ltd."
           />
           <TextField
             label="Trade / business name"
@@ -552,13 +731,14 @@ function ClientInfoFormInner({
         <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
       </Section>
 
-      <Section title="Mailing address" note="Leave blank if same as billing.">
+      <Section title="Mailing address" noteNode={<MailingNote />}>
         <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
       </Section>
 
       <TaxSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <ContactsSection get={get} set={set} />
+      <TierSection get={get} set={set} />
     </FormShell>
   );
 }
@@ -614,13 +794,14 @@ function SiteInfoFormInner({
         <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
       </Section>
 
-      <Section title="Mailing address" note="Leave blank if same as billing.">
+      <Section title="Mailing address" noteNode={<MailingNote />}>
         <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
       </Section>
 
       <TaxSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <ContactsSection get={get} set={set} />
+      <GcSection get={get} set={set} />
     </FormShell>
   );
 }
@@ -632,6 +813,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
   const [termsLoaded, setTermsLoaded] = useState(false);
   const [name, setName] = useState("");
   const [signing, setSigning] = useState(false);
+  const sigRef = useRef<SignatureCanvas>(null);
 
   useEffect(() => {
     let alive = true;
@@ -645,22 +827,38 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
     };
   }, [which]);
 
+  // CHANGE 3 — exact page titles; tc2 always renders terms now.
   const title =
     which === "tc1"
-      ? "Nexvelon Integrated Solutions Inc. Terms and Conditions"
-      : "Nexvelon Guardian Inc. Terms and Conditions";
+      ? "Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
+      : "Nexvelon Guardian Inc. — Default Terms and Conditions";
 
   const signedAt = inv ? (which === "tc1" ? inv.tc1_signed_at : inv.tc2_signed_at) : null;
   const signedName = inv ? (which === "tc1" ? inv.tc1_signed_name : inv.tc2_signed_name) : null;
 
+  // Signing requires BOTH a typed name AND a drawn signature. Triggered by the
+  // agree checkbox: on check, validate → capture PNG data URL → signTcAction.
   async function onAgree(checked: boolean) {
     if (!checked) return;
     if (!name.trim()) {
       toast.error("Type your full name first.");
       return;
     }
+    const pad = sigRef.current;
+    if (!pad || pad.isEmpty()) {
+      toast.error("Please draw your signature first.");
+      return;
+    }
+    let dataUrl: string;
+    try {
+      // Prefer a trimmed canvas (tight crop of the strokes); fall back to the
+      // full canvas if the trim helper is unavailable in this build.
+      dataUrl = pad.getTrimmedCanvas().toDataURL("image/png");
+    } catch {
+      dataUrl = pad.getCanvas().toDataURL("image/png");
+    }
     setSigning(true);
-    const res = await signTcAction(token, which, name.trim());
+    const res = await signTcAction(token, which, name.trim(), dataUrl);
     setSigning(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -674,32 +872,23 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
   if (error || !inv) return <ErrorCard message={error ?? "This invitation link is invalid."} />;
   if (inv.submitted_at) return <LockedNotice />;
 
-  // Guardian (tc2) gate: terms not published yet → no sign UI.
-  const guardianGate =
-    which === "tc2" && (terms.trim() === "" || inv.guardian_published === false);
-
-  if (guardianGate) {
-    return (
-      <Card className="space-y-4 bg-white p-6">
-        <h1 className="font-serif text-xl" style={{ color: NAVY }}>
+  return (
+    <Card
+      className="space-y-5 p-6 sm:p-8"
+      style={{
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FDFBF4 100%)",
+        borderColor: BORDER,
+      }}
+    >
+      <div>
+        <h1 className="text-2xl" style={{ color: NAVY, fontFamily: SERIF }}>
           {title}
         </h1>
         <div
-          className="rounded-md border px-4 py-3 text-sm"
-          style={{ borderColor: BORDER, background: PANEL, color: MUTED }}
-        >
-          Guardian terms not yet published — contact us.
-        </div>
-        <BackLink token={token} />
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="space-y-4 bg-white p-6">
-      <h1 className="font-serif text-xl" style={{ color: NAVY }}>
-        {title}
-      </h1>
+          className="mt-2 h-px w-16"
+          style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }}
+        />
+      </div>
 
       <div
         className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md border p-4 text-xs leading-relaxed"
@@ -717,7 +906,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
           {new Date(signedAt).toLocaleString()}.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <Field label="Type your full name to sign">
             <Input
               value={name}
@@ -725,6 +914,39 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
               placeholder="Jane Smith"
             />
           </Field>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label
+                className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                style={{ color: MUTED }}
+              >
+                Draw your signature below
+              </Label>
+              <button
+                type="button"
+                onClick={() => sigRef.current?.clear()}
+                className="text-[11px] font-medium"
+                style={{ color: GOLD }}
+              >
+                Clear
+              </button>
+            </div>
+            <div
+              className="w-full overflow-hidden rounded-md border"
+              style={{ borderColor: BORDER, background: "#FFFFFF", width: "100%" }}
+            >
+              <SignatureCanvas
+                ref={sigRef}
+                penColor={NAVY}
+                canvasProps={{
+                  className: "w-full",
+                  style: { width: "100%", height: 200, touchAction: "none" },
+                }}
+              />
+            </div>
+          </div>
+
           <label className="flex items-center gap-2 text-sm" style={{ color: NAVY }}>
             <input
               type="checkbox"
@@ -747,41 +969,65 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
 }
 
 // ── Status / Submit hub ───────────────────────────────────────────────────────
+type StepStatus = "complete" | "in_progress" | "not_started";
+
+function StatusBadge({ status }: { status: StepStatus }) {
+  const map: Record<StepStatus, { label: string; bg: string; color: string; border: string }> = {
+    complete: { label: "Complete", bg: GOLD, color: "#FFFFFF", border: GOLD },
+    in_progress: { label: "In Progress", bg: PANEL, color: MUTED, border: BORDER },
+    not_started: { label: "Not Started", bg: "#F2F0EA", color: "#9A937F", border: BORDER },
+  };
+  const s = map[status];
+  return (
+    <span
+      className="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+      style={{ background: s.bg, color: s.color, borderColor: s.border }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 function StepRow({
   href,
   label,
-  done,
+  status,
   subnote,
 }: {
   href: string;
   label: string;
-  done: boolean;
+  status: StepStatus;
   subnote?: string | null;
 }) {
+  const complete = status === "complete";
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-md border px-4 py-3 transition-colors hover:bg-[#FBF9F4]"
-      style={{ borderColor: BORDER }}
+      className="flex items-center gap-3 rounded-lg border border-l-4 px-4 py-3.5 transition-colors hover:bg-[#FBF6EA]"
+      style={{
+        borderColor: BORDER,
+        borderLeftColor: complete ? GOLD : "#D8D0BC",
+        background: complete
+          ? "linear-gradient(180deg, #FFFFFF 0%, #FCF7EC 100%)"
+          : "#FFFFFF",
+      }}
     >
-      <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-        style={{ background: done ? "#2e7d32" : "#C9C2B0" }}
-      >
-        {done ? "✓" : ""}
-      </span>
-      <span className="flex-1">
-        <span className="text-sm font-medium" style={{ color: NAVY }}>
+      <span className="min-w-0 flex-1">
+        <span
+          className="block text-sm italic"
+          style={{ color: NAVY, fontFamily: SERIF }}
+        >
           {label}
         </span>
         {subnote ? (
-          <span className="block text-[11px]" style={{ color: MUTED }}>
+          <span className="mt-0.5 block text-[11px]" style={{ color: MUTED }}>
             {subnote}
           </span>
         ) : null}
       </span>
-      <span className="text-sm" style={{ color: GOLD }}>
-        {done ? "Edit" : "Start"} ›
+      <StatusBadge status={status} />
+      <span className="shrink-0 text-sm" style={{ color: GOLD }}>
+        ›
       </span>
     </Link>
   );
@@ -796,7 +1042,25 @@ export function InviteStatus({ token }: { token: string }) {
     return <ErrorCard message={error ?? "This invitation link is invalid."} />;
 
   if (inv.submitted_at) {
-    return <CenterCard>Submitted — thank you.</CenterCard>;
+    return (
+      <Card
+        className="space-y-3 p-8 text-center"
+        style={{
+          background: "linear-gradient(180deg, #FFFFFF 0%, #FCF7EC 100%)",
+          borderColor: GOLD,
+        }}
+      >
+        <div aria-hidden style={{ color: GOLD, fontSize: 18 }}>
+          ◆
+        </div>
+        <h1 className="text-2xl" style={{ color: NAVY, fontFamily: SERIF }}>
+          Submitted — thank you.
+        </h1>
+        <p className="text-sm" style={{ color: MUTED }}>
+          Your onboarding is complete and now locked. Our team will be in touch.
+        </p>
+      </Card>
+    );
   }
 
   async function onSubmit() {
@@ -811,54 +1075,99 @@ export function InviteStatus({ token }: { token: string }) {
     refresh();
   }
 
+  const isFull = inv.invite_type === "full";
+  const totalSteps = isFull ? 4 : 3;
+
+  // Per-step status. "in_progress" = started (some saved data) but not yet
+  // marked complete by the server; tc steps are binary (signed or not).
+  const clientHasData = !!inv.client_form_data && Object.keys(inv.client_form_data).length > 0;
+  const siteHasData = !!inv.site_form_data && Object.keys(inv.site_form_data).length > 0;
+
+  const clientStatus: StepStatus = inv.client_form_completed
+    ? "complete"
+    : clientHasData
+      ? "in_progress"
+      : "not_started";
+  const siteStatus: StepStatus = inv.site_form_completed
+    ? "complete"
+    : siteHasData
+      ? "in_progress"
+      : "not_started";
+  const tc1Status: StepStatus = inv.tc1_signed_at ? "complete" : "not_started";
+  const tc2Status: StepStatus = inv.tc2_signed_at ? "complete" : "not_started";
+
+  const completedCount =
+    (isFull && clientStatus === "complete" ? 1 : 0) +
+    (siteStatus === "complete" ? 1 : 0) +
+    (tc1Status === "complete" ? 1 : 0) +
+    (tc2Status === "complete" ? 1 : 0);
+
   const tc1Note = inv.tc1_signed_at
     ? `Signed ${new Date(inv.tc1_signed_at).toLocaleDateString()}`
     : null;
   const tc2Note = inv.tc2_signed_at
     ? `Signed ${new Date(inv.tc2_signed_at).toLocaleDateString()}`
-    : !inv.guardian_published
-      ? "Awaiting Guardian terms — you'll be able to sign once published."
-      : null;
+    : null;
 
   return (
-    <Card className="space-y-5 bg-white p-6">
-      <div>
-        <h1 className="font-serif text-xl" style={{ color: NAVY }}>
-          Your onboarding
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: MUTED }}>
-          {inv.email}
-        </p>
+    <Card
+      className="space-y-6 p-6 sm:p-8"
+      style={{
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FDFBF4 100%)",
+        borderColor: BORDER,
+      }}
+    >
+      <div className="space-y-3">
+        <div>
+          <h1 className="text-2xl" style={{ color: NAVY, fontFamily: SERIF }}>
+            Your onboarding
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>
+            {inv.email}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className="text-[12px] uppercase tracking-[0.18em]"
+            style={{ color: GOLD, fontFamily: SERIF, fontStyle: "italic" }}
+          >
+            Step {completedCount} of {totalSteps}
+          </span>
+          <span
+            className="h-px flex-1"
+            style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }}
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        {inv.invite_type === "full" ? (
+      <div className="space-y-2.5">
+        {isFull ? (
           <StepRow
             href={`/invite/${token}/client`}
             label="Client Information"
-            done={inv.client_form_completed}
+            status={clientStatus}
           />
         ) : null}
         <StepRow
           href={`/invite/${token}/site`}
           label="Site Information"
-          done={inv.site_form_completed}
+          status={siteStatus}
         />
         <StepRow
           href={`/invite/${token}/tc1`}
-          label="Nexvelon Integrated Solutions Inc. Terms and Conditions"
-          done={!!inv.tc1_signed_at}
+          label="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
+          status={tc1Status}
           subnote={tc1Note}
         />
         <StepRow
           href={`/invite/${token}/tc2`}
-          label="Nexvelon Guardian Inc. Terms and Conditions"
-          done={!!inv.tc2_signed_at}
+          label="Nexvelon Guardian Inc. — Default Terms and Conditions"
+          status={tc2Status}
           subnote={tc2Note}
         />
       </div>
 
-      <div className="border-t pt-4" style={{ borderColor: BORDER }}>
+      <div className="border-t pt-5" style={{ borderColor: BORDER }}>
         <Button
           onClick={onSubmit}
           disabled={!inv.ready || submitting}
@@ -868,11 +1177,13 @@ export function InviteStatus({ token }: { token: string }) {
           {submitting ? "Submitting…" : "Submit"}
         </Button>
         {!inv.ready ? (
-          <p className="mt-2 text-center text-[11px]" style={{ color: MUTED }}>
-            Complete all steps to submit.
-            {!inv.guardian_published
-              ? " The Guardian terms are not yet available to sign."
-              : ""}
+          <p
+            className="mt-3 text-center text-[13px] italic"
+            style={{ color: MUTED, fontFamily: SERIF }}
+          >
+            {isFull
+              ? "Complete all four to submit."
+              : "Complete all three to submit."}
           </p>
         ) : null}
       </div>
