@@ -45,18 +45,52 @@ export const TIER_TEXT_KEYS: Record<TierLevel, string> = {
   bronze: "tier_bronze_text",
 };
 
+// POLISH-8 — defaults use the headline + "- " bullet contract (see
+// lib/tier-text-parser.ts). First line = headline; "- " lines = bullets.
 export const TIER_TEXT_DEFAULTS: Record<TierLevel, string> = {
-  diamond:
-    "Diamond — for clients who lock in a 3 to 5 year exclusive contract entrusting Nexvelon Global with 100% of their security and related work across all of their sites, while remaining exclusively partnered with us for all security needs. Top-tier benefits: white-glove account management, the deepest exclusive discounts and promotions, and first-access to new services with priority service across all engagements. Best-in-class discounts along with extended warranties on many items. Includes one complimentary 1-week international all-inclusive vacation package annually courtesy of Nexvelon Global, one year of complimentary ULC fire alarm monitoring services, and a host of other premium benefits reserved exclusively for Diamond clients.",
-  platinum:
-    "Platinum — for clients who bring $1,000,000 or more of annual business with us and remain exclusively partnered with Nexvelon Global for all security needs. High-tier benefits with enhanced discounts and exclusive promotions. Includes one complimentary 1-week international all-inclusive vacation package annually courtesy of Nexvelon Global, one year of complimentary ULC fire alarm monitoring services, and additional premium benefits.",
-  gold:
-    "Gold — for clients who consolidate all of their security, access control, CCTV, and ULC fire alarm monitoring work with us exclusively, with at least $500,000 of annual business. Benefits include preferred response times, exclusive promotional pricing, and dedicated account support.",
-  silver:
-    "Silver — For clients bringing at least $500,000 in business annually. Enjoy priority scheduling and modest loyalty discounts on parts and labour.",
-  bronze:
-    "Bronze — for clients who bring business with us occasionally. Standard pricing and service levels apply.",
+  diamond: [
+    "Diamond — for 3-5 year exclusive contract partners.",
+    "- White-glove account management",
+    "- Deepest discounts and best promotions",
+    "- Extended warranty on installations",
+    "- 1-week complimentary international vacation annually",
+    "- 1 year free ULC fire alarm monitoring",
+    "- Priority service and first access to new offerings",
+  ].join("\n"),
+  platinum: [
+    "Platinum — for $1M+ annual exclusive partners.",
+    "- Enhanced discounts and exclusive promotions",
+    "- 1-week complimentary international vacation annually",
+    "- 1 year free ULC fire alarm monitoring",
+    "- Premium benefits package",
+  ].join("\n"),
+  gold: [
+    "Gold — for clients exclusively partnered with us for all security work, with $500K+ annual business.",
+    "- All security, access control, CCTV, and ULC fire alarm with Nexvelon only",
+    "- Preferred response times",
+    "- Exclusive promotional pricing",
+    "- Dedicated account support",
+  ].join("\n"),
+  silver: [
+    "Silver — for clients bringing at least $500,000 of business annually.",
+    "- Priority scheduling",
+    "- Loyalty discounts on parts and labour",
+  ].join("\n"),
+  bronze: [
+    "Bronze — for clients who bring occasional business.",
+    "- Standard pricing applies",
+    "- Standard service levels",
+  ].join("\n"),
 };
+
+// Low → high display order for the invite email + form tier cards (CHANGE 3).
+export const TIER_LEVELS_ASCENDING: TierLevel[] = [
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+  "diamond",
+];
 
 /** Map a PascalCase clients.tier value (e.g. "Diamond") to its lowercase key. */
 export function tierKey(tier: string): TierLevel | null {

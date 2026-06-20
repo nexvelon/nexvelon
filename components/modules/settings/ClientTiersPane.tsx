@@ -166,13 +166,19 @@ function TierBlock({
   return (
     <Card className="bg-card p-6 shadow-sm">
       <h4 className="text-brand-navy font-serif text-base">{title}</h4>
-      <p className="text-muted-foreground mb-3 text-[11px]">
+      <p className="text-muted-foreground mb-1 text-[11px]">
         Shown to clients placed in the {title} prestige tier.
+      </p>
+      {/* CHANGE 7 — format helper for the new bullet-card layout. */}
+      <p className="mb-3 text-[11px] italic" style={{ color: "#b8902c" }}>
+        First line is the tier headline. Lines starting with &quot;- &quot;
+        (dash + space) appear as bullet points. Other lines render as paragraph
+        text.
       </p>
       <Textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        rows={5}
+        rows={7}
         disabled={loading || pending}
         className="text-xs leading-relaxed"
       />

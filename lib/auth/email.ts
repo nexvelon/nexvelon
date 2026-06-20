@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Resend } from "resend";
+import { parseTierText } from "@/lib/tier-text-parser";
 
 /**
  * Resend client.
@@ -271,9 +272,9 @@ const INQUIRIES_TO =
 // A small ornamental gold divider — a centered diamond flanked by thin rules.
 // Used between major sections of the royal-style invitation.
 function goldDivider(): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:26px 0;"><tr>
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:16px 0;"><tr>
     <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
-    <td style="padding:0 12px;text-align:center;color:#B8924B;font-size:13px;line-height:1;font-family:Georgia,'Times New Roman',serif;">&#9670;</td>
+    <td style="padding:0 12px;text-align:center;color:#B8924B;font-size:12px;line-height:1;font-family:Georgia,'Times New Roman',serif;">&#9670;</td>
     <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
   </tr></table>`;
 }
@@ -289,21 +290,26 @@ function emailShell(args: {
   royal?: boolean;
 }): string {
   const royal = args.royal === true;
+  // POLISH-8 — `royal` emails (invite + confirmation) are now compacted ~30%
+  // vertically with smaller titles.
   // Solid fallback first, gradient layered on for clients that support it.
   const outerBg = royal
     ? "background-color:#faf8f2;background-image:linear-gradient(160deg,#faf8f2 0%,#f7f0dd 55%,#f1e6c4 100%);"
     : "background:#F5F1E8;";
+  const headerPad = royal ? "28px 36px 18px" : "40px 48px 24px";
+  const bodyPad = royal ? "20px 36px" : "28px 48px";
+  const bodyFont = royal ? "font-size:13px;line-height:1.6;" : "font-size:15px;line-height:1.7;";
   const headingStyle = royal
-    ? "margin-top:18px;font-size:38px;line-height:1.15;color:#1a2332;font-weight:normal;font-style:italic;font-family:Georgia,'Times New Roman',serif;"
+    ? "margin-top:12px;font-size:22px;line-height:1.2;color:#1a2332;font-weight:normal;font-style:italic;font-family:Georgia,'Times New Roman',serif;"
     : "margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;";
   const eyebrowStyle = royal
-    ? "font-size:11px;letter-spacing:0.32em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;"
+    ? "font-size:15px;letter-spacing:4px;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;"
     : "font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;";
   const footer = royal
     ? `<tr>
-              <td style="padding:30px 48px;background:#1a2332;text-align:center;">
-                <div style="font-style:italic;font-family:Georgia,'Times New Roman',serif;color:#b8902c;font-size:17px;letter-spacing:0.04em;">Nexvelon Global</div>
-                <div style="margin-top:10px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">&copy; 2026 Nexvelon Global</div>
+              <td style="padding:20px 36px;background:#1a2332;text-align:center;">
+                <div style="font-style:italic;font-family:Georgia,'Times New Roman',serif;color:#b8902c;font-size:16px;letter-spacing:0.04em;">Nexvelon Global</div>
+                <div style="margin-top:8px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">&copy; 2026 Nexvelon Global</div>
               </td>
             </tr>`
     : `<tr>
@@ -313,13 +319,23 @@ function emailShell(args: {
             </tr>`;
   return `<!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /* Stack the 2-column tier cards on narrow viewports (CHANGE 2). */
+      @media only screen and (max-width:480px) {
+        .tier-col { display:block !important; width:100% !important; }
+      }
+    </style>
+  </head>
   <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="${outerBg}padding:48px 16px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="${outerBg}padding:32px 12px;">
       <tr>
         <td align="center">
-          <table width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #E5DFD0;">
+          <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #E5DFD0;">
             <tr>
-              <td style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
+              <td style="padding:${headerPad};border-bottom:1px solid #E5DFD0;">
                 <div style="${eyebrowStyle}">${escapeHtml(
                   args.eyebrow
                 )}</div>
@@ -328,7 +344,7 @@ function emailShell(args: {
                 )}</div>
                 ${
                   args.subtitle
-                    ? `<div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${escapeHtml(
+                    ? `<div style="margin-top:8px;font-style:italic;color:#5C5240;font-size:14px;">${escapeHtml(
                         args.subtitle
                       )}</div>`
                     : ""
@@ -336,7 +352,7 @@ function emailShell(args: {
               </td>
             </tr>
             <tr>
-              <td style="padding:28px 48px;font-size:15px;line-height:1.7;color:#2A2418;">
+              <td style="padding:${bodyPad};${bodyFont}color:#2A2418;">
                 ${args.bodyHtml}
               </td>
             </tr>
@@ -379,31 +395,48 @@ export interface TierDisclaimers {
   discretion: string;
 }
 
-// "Prestige Tier Levels" section for the invite email — reflects whatever the
-// admin has typed in Settings → Client Tiers (passed in at send time). Each tier
-// is a card: a serif navy tier name, a thin gold underline ornament, then the
-// description in a comfortable reading size (CHANGE 9).
+// "Prestige Tier Levels" — POLISH-8 compact, width-first 2-column cards with a
+// parsed headline + bullet benefits (parseTierText). Bronze → Diamond order; on
+// narrow screens the .tier-col cells stack to one column (media query in the
+// shell head). Diamond spans the full width as the climax.
+function tierCard(name: string, raw: string): string {
+  const p = parseTierText(raw);
+  const bullets = p.bullets.length
+    ? `<ul style="margin:5px 0 0;padding-left:16px;">${p.bullets
+        .map(
+          (b) =>
+            `<li style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#2A2418;line-height:1.5;margin:0 0 2px;">${escapeHtml(b)}</li>`
+        )
+        .join("")}</ul>`
+    : "";
+  const body = p.bodyParas
+    .map(
+      (par) =>
+        `<div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#5C5240;line-height:1.5;margin-top:4px;">${escapeHtml(par)}</div>`
+    )
+    .join("");
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FBF9F4;border-left:3px solid #b8902c;"><tr><td style="padding:12px 14px;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:16px;color:#b8902c;line-height:1.2;">${escapeHtml(name)}</div>
+      ${p.headline ? `<div style="font-family:Arial,Helvetica,sans-serif;font-style:italic;font-size:11px;color:#5C5240;line-height:1.4;margin-top:3px;">${escapeHtml(p.headline)}</div>` : ""}
+      ${bullets}${body}
+    </td></tr></table>`;
+}
+
 function tierLevelsHtml(texts: TierTexts, disclaimers?: TierDisclaimers): string {
-  const card = (name: string, body: string) =>
-    `<tr><td style="padding:16px 0;">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:16px;color:#1a2332;">${escapeHtml(name)}</div>
-      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:6px 0 8px;"><tr><td style="width:48px;height:1px;font-size:0;line-height:0;background:#b8902c;border-bottom:1px solid #b8902c;">&nbsp;</td></tr></table>
-      <div style="font-size:14px;color:#5C5240;line-height:1.6;">${escapeHtml(body)}</div>
-    </td></tr>`;
+  const col = (name: string, raw: string) =>
+    `<td class="tier-col" width="50%" valign="top" style="padding:5px;">${tierCard(name, raw)}</td>`;
   const fineprint = disclaimers
     ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-top:1px solid #E5DFD0;"><tr><td style="padding-top:10px;">
-        <div style="font-size:11px;font-style:italic;color:#8A8068;line-height:1.5;">${escapeHtml(disclaimers.requirements)}</div>
-        <div style="font-size:11px;font-style:italic;color:#8A8068;line-height:1.5;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-style:italic;color:#8A8068;line-height:1.5;">${escapeHtml(disclaimers.requirements)}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-style:italic;color:#8A8068;line-height:1.5;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
       </td></tr></table>`
     : "";
-  // Order, highest first: Diamond → Platinum → Gold → Silver → Bronze.
-  return `<div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Prestige Tier Levels</div>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
-      ${card("Diamond", texts.diamond)}
-      ${card("Platinum", texts.platinum)}
-      ${card("Gold", texts.gold)}
-      ${card("Silver", texts.silver)}
-      ${card("Bronze", texts.bronze)}
+  // Bronze → Silver → Gold → Platinum, then Diamond full-width (CHANGE 3).
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;color:#B8924B;border-bottom:1px solid #b8902c;padding-bottom:4px;display:inline-block;">Prestige Tier Levels</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
+      <tr>${col("Bronze", texts.bronze)}${col("Silver", texts.silver)}</tr>
+      <tr>${col("Gold", texts.gold)}${col("Platinum", texts.platinum)}</tr>
+      <tr><td class="tier-col" colspan="2" valign="top" style="padding:5px;">${tierCard("Diamond", texts.diamond)}</td></tr>
     </table>${fineprint}`;
 }
 
@@ -434,7 +467,7 @@ export async function sendClientInviteEmail(opts: {
       ? `${goldDivider()}${tierLevelsHtml(opts.tierTexts, opts.tierDisclaimers)}`
       : "";
     bodyHtml = `
-      <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum.</p>
+      <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum / Diamond.</p>
       ${tierSection}
       ${goldDivider()}
       ${royalButton(base, "Open Onboarding Portal")}
@@ -459,11 +492,11 @@ export async function sendClientInviteEmail(opts: {
           "",
           "PRESTIGE TIER LEVELS",
           "",
-          `Diamond: ${opts.tierTexts.diamond}`,
-          `Platinum: ${opts.tierTexts.platinum}`,
-          `Gold: ${opts.tierTexts.gold}`,
-          `Silver: ${opts.tierTexts.silver}`,
           `Bronze: ${opts.tierTexts.bronze}`,
+          `Silver: ${opts.tierTexts.silver}`,
+          `Gold: ${opts.tierTexts.gold}`,
+          `Platinum: ${opts.tierTexts.platinum}`,
+          `Diamond: ${opts.tierTexts.diamond}`,
           ...(opts.tierDisclaimers
             ? ["", opts.tierDisclaimers.requirements, "", opts.tierDisclaimers.discretion]
             : []),
@@ -477,7 +510,7 @@ export async function sendClientInviteEmail(opts: {
     "",
     siteOnly
       ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms at the link below for review and approval."
-      : "Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum.",
+      : "Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum / Diamond.",
     ...tierLines,
     "",
     `Open Onboarding Portal: ${base}`,
