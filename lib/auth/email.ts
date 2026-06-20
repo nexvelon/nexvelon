@@ -367,30 +367,44 @@ function royalButton(href: string, label: string): string {
  * existing client.
  */
 type TierTexts = {
-  bronze: string;
-  silver: string;
-  gold: string;
+  diamond: string;
   platinum: string;
+  gold: string;
+  silver: string;
+  bronze: string;
 };
+
+export interface TierDisclaimers {
+  requirements: string;
+  discretion: string;
+}
 
 // "Prestige Tier Levels" section for the invite email — reflects whatever the
 // admin has typed in Settings → Client Tiers (passed in at send time). Each tier
 // is a card: a serif navy tier name, a thin gold underline ornament, then the
 // description in a comfortable reading size (CHANGE 9).
-function tierLevelsHtml(texts: TierTexts): string {
+function tierLevelsHtml(texts: TierTexts, disclaimers?: TierDisclaimers): string {
   const card = (name: string, body: string) =>
     `<tr><td style="padding:16px 0;">
       <div style="font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:16px;color:#1a2332;">${escapeHtml(name)}</div>
       <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:6px 0 8px;"><tr><td style="width:48px;height:1px;font-size:0;line-height:0;background:#b8902c;border-bottom:1px solid #b8902c;">&nbsp;</td></tr></table>
       <div style="font-size:14px;color:#5C5240;line-height:1.6;">${escapeHtml(body)}</div>
     </td></tr>`;
+  const fineprint = disclaimers
+    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-top:1px solid #E5DFD0;"><tr><td style="padding-top:10px;">
+        <div style="font-size:11px;font-style:italic;color:#8A8068;line-height:1.5;">${escapeHtml(disclaimers.requirements)}</div>
+        <div style="font-size:11px;font-style:italic;color:#8A8068;line-height:1.5;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
+      </td></tr></table>`
+    : "";
+  // Order, highest first: Diamond → Platinum → Gold → Silver → Bronze.
   return `<div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Prestige Tier Levels</div>
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
-      ${card("Bronze", texts.bronze)}
-      ${card("Silver", texts.silver)}
-      ${card("Gold", texts.gold)}
+      ${card("Diamond", texts.diamond)}
       ${card("Platinum", texts.platinum)}
-    </table>`;
+      ${card("Gold", texts.gold)}
+      ${card("Silver", texts.silver)}
+      ${card("Bronze", texts.bronze)}
+    </table>${fineprint}`;
 }
 
 export async function sendClientInviteEmail(opts: {
@@ -399,6 +413,7 @@ export async function sendClientInviteEmail(opts: {
   baseUrl: string;
   inviteType?: "full" | "site_only";
   tierTexts?: TierTexts;
+  tierDisclaimers?: TierDisclaimers;
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
@@ -416,7 +431,7 @@ export async function sendClientInviteEmail(opts: {
   } else {
     // Full onboarding: intro → divider → Prestige Tier Levels → divider → CTA → closing.
     const tierSection = opts.tierTexts
-      ? `${goldDivider()}${tierLevelsHtml(opts.tierTexts)}`
+      ? `${goldDivider()}${tierLevelsHtml(opts.tierTexts, opts.tierDisclaimers)}`
       : "";
     bodyHtml = `
       <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum.</p>
@@ -444,10 +459,14 @@ export async function sendClientInviteEmail(opts: {
           "",
           "PRESTIGE TIER LEVELS",
           "",
-          `Bronze: ${opts.tierTexts.bronze}`,
-          `Silver: ${opts.tierTexts.silver}`,
-          `Gold: ${opts.tierTexts.gold}`,
+          `Diamond: ${opts.tierTexts.diamond}`,
           `Platinum: ${opts.tierTexts.platinum}`,
+          `Gold: ${opts.tierTexts.gold}`,
+          `Silver: ${opts.tierTexts.silver}`,
+          `Bronze: ${opts.tierTexts.bronze}`,
+          ...(opts.tierDisclaimers
+            ? ["", opts.tierDisclaimers.requirements, "", opts.tierDisclaimers.discretion]
+            : []),
         ]
       : [];
 

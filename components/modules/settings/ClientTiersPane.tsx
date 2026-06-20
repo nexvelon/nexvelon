@@ -16,33 +16,47 @@ import { useRole } from "@/lib/role-context";
 import {
   getTierTextsAction,
   setTierTextAction,
+  getTierDisclaimerAction,
+  setTierDisclaimerAction,
 } from "@/app/(app)/settings/company-settings-actions";
+// Type-only import (erased at build) — the company-settings module is
+// "server-only" and must not be a runtime dependency of this client component.
+import type { TierLevel } from "@/lib/api/company-settings";
 
-type TierLevel = "bronze" | "silver" | "gold" | "platinum";
-
-const TIERS: ReadonlyArray<{ level: TierLevel; title: string }> = [
-  { level: "bronze", title: "Bronze" },
-  { level: "silver", title: "Silver" },
-  { level: "gold", title: "Gold" },
-  { level: "platinum", title: "Platinum" },
+// Highest first: Diamond → Platinum → Gold → Silver → Bronze. Kept local so the
+// client bundle never pulls the server-only company-settings module.
+const TIER_LEVELS_ORDERED: TierLevel[] = [
+  "diamond",
+  "platinum",
+  "gold",
+  "silver",
+  "bronze",
 ];
+
+const TIERS: ReadonlyArray<{ level: TierLevel; title: string }> =
+  TIER_LEVELS_ORDERED.map((level) => ({
+    level,
+    title: level.charAt(0).toUpperCase() + level.slice(1),
+  }));
+
+const EMPTY_TEXTS = Object.fromEntries(
+  TIER_LEVELS_ORDERED.map((l) => [l, ""])
+) as Record<TierLevel, string>;
 
 export function ClientTiersPane() {
   const { role } = useRole();
-  const [texts, setTexts] = useState<Record<TierLevel, string>>({
-    bronze: "",
-    silver: "",
-    gold: "",
-    platinum: "",
-  });
+  const [texts, setTexts] = useState<Record<TierLevel, string>>(EMPTY_TEXTS);
+  const [disclaimer, setDisclaimer] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (role !== "Admin") return;
     let active = true;
-    getTierTextsAction()
-      .then((res) => {
-        if (active && res.ok) setTexts(res.data);
+    Promise.all([getTierTextsAction(), getTierDisclaimerAction()])
+      .then(([t, d]) => {
+        if (!active) return;
+        if (t.ok) setTexts(t.data);
+        if (d.ok) setDisclaimer(d.data);
       })
       .catch(() => {
         // keep the empty seed already in state
@@ -74,7 +88,55 @@ export function ClientTiersPane() {
           loading={loading}
         />
       ))}
+      <DisclaimerBlock
+        value={disclaimer}
+        onChange={setDisclaimer}
+        loading={loading}
+      />
     </div>
+  );
+}
+
+// POLISH-7 (CHANGE 5) — the Nexvelon-discretion disclaimer block.
+function DisclaimerBlock({
+  value,
+  onChange,
+  loading,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  loading: boolean;
+}) {
+  const [pending, startSave] = useTransition();
+  const handleSave = () => {
+    startSave(async () => {
+      const res = await setTierDisclaimerAction(value);
+      if (res.ok) toast.success("Tier assignment disclaimer saved");
+      else toast.error(res.error);
+    });
+  };
+  return (
+    <Card className="bg-card p-6 shadow-sm">
+      <h4 className="text-brand-navy font-serif text-base">
+        Tier Assignment Disclaimer
+      </h4>
+      <p className="text-muted-foreground mb-3 text-[11px]">
+        Shown beneath the tier list in the invite email + the client form&apos;s
+        tier opt-in (the Nexvelon-discretion fine print).
+      </p>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={4}
+        disabled={loading || pending}
+        className="text-xs leading-relaxed"
+      />
+      <div className="mt-3 flex justify-end">
+        <Button onClick={handleSave} disabled={loading || pending}>
+          {pending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Card>
   );
 }
 

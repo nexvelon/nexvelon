@@ -12,9 +12,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSetting,
   getTierTexts,
+  getTierDiscretionDisclaimer,
   TIER_DISCLAIMER,
   DEFAULT_TERMS_KEY,
   DEFAULT_TERMS_GUARDIAN_KEY,
+  type TierLevel,
 } from "@/lib/api/company-settings";
 import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import { businessDateTime } from "@/lib/format";
@@ -36,7 +38,7 @@ import type {
 export const TC1_LABEL = "Nexvelon Integrated Solutions Inc. — Default Terms and Conditions";
 export const TC2_LABEL = "Nexvelon Guardian Inc. — Default Terms and Conditions";
 
-const VALID_TIERS: DbClientTier[] = ["Platinum", "Gold", "Silver", "Bronze"];
+const VALID_TIERS: DbClientTier[] = ["Diamond", "Platinum", "Gold", "Silver", "Bronze"];
 
 function admin() {
   return createAdminClient();
@@ -369,8 +371,10 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
 export interface SubmissionSnapshot {
   tc1_text: string;
   tc2_text: string;
-  tier_descriptions: Record<"bronze" | "silver" | "gold" | "platinum", string>;
+  tier_descriptions: Record<TierLevel, string>;
   disclaimer_note: string;
+  // POLISH-7 — the Nexvelon-discretion disclaimer shown alongside disclaimer_note.
+  discretion_disclaimer: string;
   tier_requested: string | null;
   submitted_at: string;
 }
@@ -379,16 +383,19 @@ async function buildSnapshot(
   inv: DbClientInvitation,
   submittedAt: string
 ): Promise<SubmissionSnapshot> {
-  const [tc1_text, tc2_text, tier_descriptions] = await Promise.all([
-    getInviteTermsText("tc1"),
-    getInviteTermsText("tc2"),
-    getTierTexts(),
-  ]);
+  const [tc1_text, tc2_text, tier_descriptions, discretion_disclaimer] =
+    await Promise.all([
+      getInviteTermsText("tc1"),
+      getInviteTermsText("tc2"),
+      getTierTexts(),
+      getTierDiscretionDisclaimer(),
+    ]);
   return {
     tc1_text,
     tc2_text,
     tier_descriptions,
     disclaimer_note: TIER_DISCLAIMER,
+    discretion_disclaimer,
     tier_requested: inv.tier_requested ?? null,
     submitted_at: submittedAt,
   };

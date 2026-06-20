@@ -9,9 +9,11 @@ import {
   DEFAULT_TERMS_KEY,
   DEFAULT_TERMS_GUARDIAN_KEY,
   TIER_TEXT_KEYS,
+  TIER_DISCRETION_DISCLAIMER_KEY,
   getSetting,
   setSetting,
   getTierTexts,
+  getTierDiscretionDisclaimer,
   type TierLevel,
 } from "@/lib/api/company-settings";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -115,6 +117,29 @@ export async function setTierTextAction(
     const key = TIER_TEXT_KEYS[level];
     if (!key) return { ok: false, error: "Unknown tier." };
     await setSetting(key, value);
+    revalidatePath("/settings");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// POLISH-7 (CHANGE 5) — the Nexvelon-discretion disclaimer block.
+export async function getTierDisclaimerAction(): Promise<ActionResult<string>> {
+  try {
+    return { ok: true, data: await getTierDiscretionDisclaimer() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setTierDisclaimerAction(
+  value: string
+): Promise<ActionResult<null>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    await setSetting(TIER_DISCRETION_DISCLAIMER_KEY, value);
     revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {

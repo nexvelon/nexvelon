@@ -8,6 +8,9 @@ export const TIER_BADGE: Record<
   DbClientTier,
   { label: string; bg: string; text: string }
 > = {
+  // POLISH-7 — Diamond: pale sapphire / iced crystal against navy text, reading
+  // as more premium than Platinum's silver.
+  Diamond: { label: "D", bg: "#a8c4d8", text: "#0A1226" },
   Platinum: { label: "P", bg: "var(--brand-primary)", text: "var(--brand-bg)" },
   Gold: { label: "G", bg: "var(--brand-accent)", text: "var(--brand-primary)" },
   Silver: { label: "S", bg: "#A8B0C4", text: "#0A1226" },

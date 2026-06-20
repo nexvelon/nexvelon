@@ -12,7 +12,8 @@ export type DbClientType =
   | "Government"
   | "Heritage";
 
-export type DbClientTier = "Platinum" | "Gold" | "Silver" | "Bronze";
+// POLISH-7 — Diamond is the new top tier (Diamond > Platinum > Gold > Silver > Bronze).
+export type DbClientTier = "Diamond" | "Platinum" | "Gold" | "Silver" | "Bronze";
 
 export type DbClientStatus = "Active" | "Inactive" | "Prospect" | "Lost";
 

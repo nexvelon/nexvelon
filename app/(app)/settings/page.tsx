@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
   { key: "company", label: "Company Profile", description: "Legal name, GST/HST #, ESA, ULC, WSIB, defaults.", icon: Building2 },
   { key: "branding", label: "Branding & Themes", description: "Logo, login background, four theme presets, email signature.", icon: Palette },
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
-  { key: "client-tiers", label: "Client Tiers", description: "Prestige tier descriptions (Bronze/Silver/Gold/Platinum) shown in invite + outcome emails.", icon: Award },
+  { key: "client-tiers", label: "Client Tiers", description: "Prestige tier descriptions (Diamond/Platinum/Gold/Silver/Bronze) shown in invite + outcome emails.", icon: Award },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
   { key: "categories", label: "Categories", description: "Hierarchical part-category tree (arbitrary depth).", icon: Tag },
   { key: "manufacturers", label: "Manufacturers", description: "Manage the manufacturer options offered on the part form.", icon: Factory },
