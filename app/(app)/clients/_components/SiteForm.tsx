@@ -254,6 +254,11 @@ export function SiteForm({
   );
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
+  // ─── GC / Site Supervisor ───
+  const [gcName, setGcName] = useState(existing?.gc_name ?? "");
+  const [gcPhone, setGcPhone] = useState(existing?.gc_phone ?? "");
+  const [gcEmail, setGcEmail] = useState(existing?.gc_email ?? "");
+
   // ─── Site (physical) address ───
   const [address1, setAddress1] = useState(existing?.address_line1 ?? "");
   const [address2, setAddress2] = useState(existing?.address_line2 ?? "");
@@ -791,6 +796,11 @@ export function SiteForm({
       last_service_date: lastServiceDate || null,
       notes: notes.trim() || null,
 
+      // GC / Site Supervisor
+      gc_name: gcName.trim() || null,
+      gc_phone: gcPhone.trim() || null,
+      gc_email: gcEmail.trim() || null,
+
       // Site physical address (always editable)
       address_line1: address1.trim() || null,
       address_line2: address2.trim() || null,
@@ -1077,6 +1087,32 @@ export function SiteForm({
           onPostalChange={setPostal}
           streetPlaceholder="1842 Industrial Pkwy"
         />
+      </Section>
+
+      {/* SECTION 2b — GC / Site Supervisor */}
+      <Section title="GC / Site Supervisor">
+        <Field label="Name">
+          <Input
+            value={gcName}
+            onChange={(e) => setGcName(e.target.value)}
+            placeholder="e.g. John Doe"
+          />
+        </Field>
+        <Field label="Phone">
+          <Input
+            value={gcPhone}
+            onChange={(e) => setGcPhone(e.target.value)}
+            placeholder="e.g. (555) 123-4567"
+          />
+        </Field>
+        <Field label="Email">
+          <Input
+            type="email"
+            value={gcEmail}
+            onChange={(e) => setGcEmail(e.target.value)}
+            placeholder="name@example.com"
+          />
+        </Field>
       </Section>
 
       {/* SECTION 3 — Billing Address — ADDR-1 multi-country */}

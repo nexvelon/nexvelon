@@ -22,6 +22,12 @@ import {
   deleteClient,
 } from "@/lib/api/clients";
 import { getTierTexts, tierKey } from "@/lib/api/company-settings";
+import {
+  invitationSignedUrl,
+  copySignedPdfToClientAttachments,
+  INVITATION_SIG_BUCKET,
+  INVITATION_PDF_BUCKET,
+} from "@/lib/api/invitation-storage";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import type {
   DbClientWithCounts,
@@ -150,6 +156,13 @@ export interface SubmissionDetail {
   client: DbClient;
   sites: DbSite[];
   invitation: DbClientInvitation | null;
+  // POLISH-6 — short-lived signed URLs for the admin to view the drawn
+  // signatures + download the signed-T&C PDFs (private buckets). Null when the
+  // path is absent or the URL couldn't be signed.
+  tc1SignatureUrl: string | null;
+  tc2SignatureUrl: string | null;
+  tc1PdfUrl: string | null;
+  tc2PdfUrl: string | null;
 }
 
 export async function getSubmissionDetailAction(
@@ -161,9 +174,28 @@ export async function getSubmissionDetailAction(
     const detail = await getClientById(clientId);
     if (!detail) return { ok: false, error: "Client not found." };
     const invitation = await getInvitationByClientId(clientId);
+    const sig = async (p: string | null | undefined) =>
+      p ? await invitationSignedUrl(INVITATION_SIG_BUCKET, p) : null;
+    const pdf = async (p: string | null | undefined) =>
+      p ? await invitationSignedUrl(INVITATION_PDF_BUCKET, p) : null;
+    const [tc1SignatureUrl, tc2SignatureUrl, tc1PdfUrl, tc2PdfUrl] =
+      await Promise.all([
+        sig(invitation?.tc1_signature_image_path),
+        sig(invitation?.tc2_signature_image_path),
+        pdf(invitation?.tc1_signed_pdf_path),
+        pdf(invitation?.tc2_signed_pdf_path),
+      ]);
     return {
       ok: true,
-      data: { client: detail.client, sites: detail.sites, invitation },
+      data: {
+        client: detail.client,
+        sites: detail.sites,
+        invitation,
+        tc1SignatureUrl,
+        tc2SignatureUrl,
+        tc1PdfUrl,
+        tc2PdfUrl,
+      },
     };
   } catch (e) {
     return fail(e);
@@ -189,10 +221,41 @@ export async function approvePendingClientAction(
       decision: "approved",
       decidedBy: gate.id,
     });
-    // Notify the applicant — recipient is the invitation email (the address we
-    // invited), falling back to the client's portal contact email.
     const inv = await getInvitationByClientId(id);
     const detail = await getClientById(id);
+
+    // CHANGE 4 — auto-copy the signed-T&C PDFs into the client's attachments
+    // (folder "Signed Onboarding"). Best-effort.
+    if (inv) {
+      const copies: Promise<unknown>[] = [];
+      if (inv.tc1_signed_pdf_path)
+        copies.push(
+          copySignedPdfToClientAttachments({
+            pdfPath: inv.tc1_signed_pdf_path,
+            clientId: id,
+            filename: "Integrated-Solutions-TC-signed.pdf",
+            uploadedBy: gate.id,
+          })
+        );
+      if (inv.tc2_signed_pdf_path)
+        copies.push(
+          copySignedPdfToClientAttachments({
+            pdfPath: inv.tc2_signed_pdf_path,
+            clientId: id,
+            filename: "Guardian-TC-signed.pdf",
+            uploadedBy: gate.id,
+          })
+        );
+      try {
+        await Promise.all(copies);
+      } catch (e) {
+        console.error("[invite] signed-PDF attachment copy failed:", e);
+      }
+    }
+
+    // Notify the applicant — recipient is the invitation email (the address we
+    // invited), falling back to the client's portal contact email. CHANGE 6:
+    // acknowledge if approved at a different tier than requested.
     const to = inv?.email ?? detail?.client.portal_contact_email ?? null;
     if (to) {
       try {
@@ -200,6 +263,7 @@ export async function approvePendingClientAction(
           to,
           tierName: tier ?? null,
           tierText: tier ? await tierDescription(tier) : null,
+          requestedTierName: inv?.tier_requested ?? null,
         });
       } catch (e) {
         console.error("[invite] approval email failed:", e);

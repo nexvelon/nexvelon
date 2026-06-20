@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   Award,
   Bell,
-  Boxes,
   Building2,
   Code,
   CreditCard,
@@ -28,7 +27,6 @@ import { BrandingThemes } from "@/components/modules/settings/BrandingThemes";
 import { BackupsData } from "@/components/modules/settings/BackupsData";
 import { ClassificationsPane } from "@/components/modules/settings/ClassificationsPane";
 import { ClientTiersPane } from "@/components/modules/settings/ClientTiersPane";
-import { InventoryVocabPane } from "@/components/modules/settings/InventoryVocabPane";
 import { ManufacturersPane } from "@/components/modules/settings/ManufacturersPane";
 import { LocationsPane } from "@/components/modules/settings/LocationsPane";
 import { CategoriesPane } from "@/components/modules/settings/CategoriesPane";
@@ -66,7 +64,6 @@ const SECTIONS: Section[] = [
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
   { key: "client-tiers", label: "Client Tiers", description: "Prestige tier descriptions (Bronze/Silver/Gold/Platinum) shown in invite + outcome emails.", icon: Award },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
-  { key: "inventory-lists", label: "Inventory Lists", description: "Categories, manufacturers, units, storage locations.", icon: Boxes },
   { key: "categories", label: "Categories", description: "Hierarchical part-category tree (arbitrary depth).", icon: Tag },
   { key: "manufacturers", label: "Manufacturers", description: "Manage the manufacturer options offered on the part form.", icon: Factory },
   { key: "locations", label: "Locations", description: "Warehouses and trucks that stock can move between.", icon: Warehouse },
@@ -161,7 +158,6 @@ export default function SettingsPage() {
             {active === "quote" && <QuoteDefaults />}
             {active === "client-tiers" && <ClientTiersPane />}
             {active === "classifications" && <ClassificationsPane />}
-            {active === "inventory-lists" && <InventoryVocabPane />}
             {active === "categories" && <CategoriesPane />}
             {active === "manufacturers" && <ManufacturersPane />}
             {active === "locations" && <LocationsPane />}

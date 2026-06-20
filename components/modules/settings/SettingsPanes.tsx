@@ -22,8 +22,6 @@ import {
   setDefaultTermsAction,
   getDefaultTermsGuardianAction,
   setDefaultTermsGuardianAction,
-  getOnboardingGuardianTermsAction,
-  setOnboardingGuardianTermsAction,
 } from "@/app/(app)/settings/company-settings-actions";
 import {
   Select,
@@ -162,27 +160,21 @@ export function QuoteDefaults() {
         </ul>
       </Card>
 
+      {/* POLISH-6 — these two blocks are the SINGLE source for quote-PDF terms
+          AND the invite tc1/tc2 docs. The bogus onboarding-only third block was
+          removed. Display labels only — setting keys are unchanged. */}
       <DefaultTermsEditor
-        title="Integrated Solutions — Default Terms"
+        title="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
         fallback={DEFAULT_TERMS}
         load={getDefaultTermsAction}
         save={setDefaultTermsAction}
       />
 
       <DefaultTermsEditor
-        title="Guardian — Default Terms"
+        title="Nexvelon Guardian Inc. — Default Terms and Conditions"
         fallback={DEFAULT_TERMS_GUARDIAN}
         load={getDefaultTermsGuardianAction}
         save={setDefaultTermsGuardianAction}
-      />
-
-      {/* POLISH-4 — Guardian T&C for the CLIENT ONBOARDING invite (tc2). Blank
-          by default; the invite tc2 page blocks signing until this is filled. */}
-      <DefaultTermsEditor
-        title="Nexvelon Guardian Inc. Terms and Conditions (Client Onboarding)"
-        fallback=""
-        load={getOnboardingGuardianTermsAction}
-        save={setOnboardingGuardianTermsAction}
       />
 
       <SaveBar />

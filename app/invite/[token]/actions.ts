@@ -15,7 +15,11 @@ import {
   guardianTermsPublished,
   getInviteTermsText,
 } from "@/lib/api/client-invitations";
-import { sendClientSubmissionEmail } from "@/lib/auth/email";
+import {
+  sendClientSubmissionEmail,
+  sendClientConfirmationEmail,
+} from "@/lib/auth/email";
+import { getTierTexts } from "@/lib/api/company-settings";
 import type { DbClientInvitation } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -46,8 +50,10 @@ export interface InvitationView {
   submitted_at: string | null;
   client_form_data: Record<string, unknown> | null;
   site_form_data: Record<string, unknown> | null;
-  /** Whether the Guardian onboarding T&C (tc2) has been published in Settings. */
+  /** Retained for compat — always true now (tc2 reads the real Guardian block). */
   guardian_published: boolean;
+  /** The optional tier the client opted in for (CHANGE 6). */
+  tier_requested: string | null;
   ready: boolean;
 }
 
@@ -66,6 +72,7 @@ function toView(inv: DbClientInvitation, guardianPublished: boolean): Invitation
     client_form_data: inv.client_form_data,
     site_form_data: inv.site_form_data,
     guardian_published: guardianPublished,
+    tier_requested: inv.tier_requested ?? null,
     ready: isReadyToSubmit(inv, guardianPublished),
   };
 }
@@ -78,6 +85,18 @@ export async function getInvitationAction(
     if (!inv) return { ok: false, error: "This invitation link is invalid." };
     const guardian = await guardianTermsPublished();
     return { ok: true, data: toView(inv, guardian) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// CHANGE 6 — the four Prestige Tier descriptions for the client form's opt-in
+// cards (same single source as the invite/outcome emails).
+export async function getTierDescriptionsAction(): Promise<
+  ActionResult<Record<"bronze" | "silver" | "gold" | "platinum", string>>
+> {
+  try {
+    return { ok: true, data: await getTierTexts() };
   } catch (e) {
     return fail(e);
   }
@@ -120,10 +139,11 @@ export async function saveSiteFormAction(
 export async function signTcAction(
   token: string,
   which: "tc1" | "tc2",
-  name: string
+  name: string,
+  signatureDataUrl: string
 ): Promise<ActionResult<InvitationView>> {
   try {
-    const updated = await signTc(token, which, name);
+    const updated = await signTc(token, which, name, signatureDataUrl);
     return { ok: true, data: toView(updated, await guardianTermsPublished()) };
   } catch (e) {
     return fail(e);
@@ -134,10 +154,10 @@ export async function submitInvitationAction(
   token: string
 ): Promise<ActionResult<{ submitted: true }>> {
   try {
-    const { invitation, clientId } = await submitInvitation(token);
-    // Best-effort bundled notification — a mail failure must not unwind the
-    // already-created client/site.
+    const { invitation, clientId, pdfs } = await submitInvitation(token);
+    // Best-effort emails — a mail failure must not unwind the created client/site.
     try {
+      // To inquiries@ — the existing bundled internal summary.
       await sendClientSubmissionEmail({
         email: invitation.email,
         clientForm: invitation.client_form_data ?? {},
@@ -146,7 +166,20 @@ export async function submitInvitationAction(
         tc2: { name: invitation.tc2_signed_name, at: invitation.tc2_signed_at },
       });
     } catch (e) {
-      console.error("[invite] submission email failed:", e);
+      console.error("[invite] inquiries email failed:", e);
+    }
+    try {
+      // To the CLIENT — confirmation + both signed-T&C PDFs attached (CHANGE 4).
+      await sendClientConfirmationEmail({
+        to: invitation.email,
+        clientForm: invitation.client_form_data ?? {},
+        siteForm: invitation.site_form_data ?? {},
+        tc1At: invitation.tc1_signed_at,
+        tc2At: invitation.tc2_signed_at,
+        pdfs,
+      });
+    } catch (e) {
+      console.error("[invite] client confirmation email failed:", e);
     }
     void clientId;
     return { ok: true, data: { submitted: true } };

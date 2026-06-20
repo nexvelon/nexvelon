@@ -10,10 +10,10 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 
 export const DEFAULT_TERMS_KEY = "default_quote_terms";
 export const DEFAULT_TERMS_GUARDIAN_KEY = "default_quote_terms_guardian";
-// POLISH-4 — the client-onboarding Guardian T&C, a SEPARATE block from the
-// quote-PDF Guardian terms above. BLANK by default (no in-code fallback): the
-// invite tc2 page blocks signing until an admin pastes content here.
-export const ONBOARDING_GUARDIAN_TERMS_KEY = "onboarding_guardian_terms";
+// POLISH-6 (CHANGE 6/12) — the small-print disclaimer shown under the tier
+// opt-in section and snapshotted at submit.
+export const TIER_DISCLAIMER =
+  "Tier requirements and benefits are updated from time to time; clients are required to maintain qualifying conditions to retain their tier benefits.";
 
 // POLISH-5 — Prestige Tier description blocks. SINGLE SOURCE for the invite
 // email's tier list AND the approval / tier-change outcome emails. Keyed by the
@@ -31,11 +31,11 @@ export const TIER_TEXT_DEFAULTS: Record<TierLevel, string> = {
   bronze:
     "Bronze — for clients who bring business with us occasionally. Standard pricing and service levels apply.",
   silver:
-    "Silver — for clients bringing at least $500,000 of business annually with us. Enjoy priority scheduling and modest loyalty discounts on parts and labour.",
+    "Silver — For clients bringing at least $500,000 in business annually. Enjoy priority scheduling and modest loyalty discounts on parts and labour.",
   gold:
     "Gold — for clients who consolidate all of their security, access control, CCTV, and ULC fire alarm monitoring work with us exclusively, with at least $500,000 of annual business. Benefits include preferred response times, exclusive promotional pricing, and dedicated account support.",
   platinum:
-    "Platinum — for clients who bring $1,000,000 or more of annual business with us and remain exclusively partnered with Nexvelon Global for all security needs. Top-tier benefits: white-glove account management, the deepest exclusive discounts and promotions, and first-access to new services.",
+    "Platinum — for clients who bring $1,000,000 or more of annual business and remain exclusively partnered with Nexvelon Global for all security needs. Top-tier benefits include white-glove account management, the deepest exclusive discounts and promotions, first-access to new services along with priority service, and extended warranty on installations. Also includes one complimentary 1-week international all-inclusive vacation package annually, courtesy of Nexvelon Global, plus one year of complimentary ULC fire alarm monitoring services, and much more.",
 };
 
 /** Map a PascalCase clients.tier value (e.g. "Gold") to its lowercase key. */

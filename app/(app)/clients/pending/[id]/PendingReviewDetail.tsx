@@ -203,9 +203,23 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
 
   const openTerms = (which: "tc1" | "tc2", title: string) => {
     setTermsTitle(title);
+    setTermsOpen(true);
+    // Legal defensibility — prefer the snapshot text captured at submission
+    // time (what the client actually saw/signed). Only hit the live terms
+    // action when the snapshot or that specific field is absent.
+    const snapshot = detail?.invitation?.submission_snapshot;
+    const snapshotVal = snapshot
+      ? snapshot[which === "tc1" ? "tc1_text" : "tc2_text"]
+      : null;
+    const snapshotText =
+      typeof snapshotVal === "string" ? snapshotVal : null;
+    if (snapshotText) {
+      setTermsText(snapshotText);
+      setTermsLoading(false);
+      return;
+    }
     setTermsText(null);
     setTermsLoading(true);
-    setTermsOpen(true);
     getInviteTermsAction(which)
       .then((res) => {
         setTermsText(res.ok ? res.data : `Unable to load terms: ${res.error}`);
@@ -331,6 +345,26 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
       <Section eyebrow="Site information">
         <Row label="Site name" value={str(siteForm, "siteName")} anchor={isSiteOnly} />
         <Row label="Site address" value={addressLine(siteForm, "site")} />
+        {(() => {
+          // GC / Site Supervisor — prefer the persisted site row values, fall
+          // back to the invite-submitted jsonb keys. Skip when all blank.
+          const gcName = sites[0]?.gc_name ?? str(siteForm, "gcName");
+          const gcPhone = sites[0]?.gc_phone ?? str(siteForm, "gcPhone");
+          const gcEmail = sites[0]?.gc_email ?? str(siteForm, "gcEmail");
+          if (!gcName && !gcPhone && !gcEmail) return null;
+          return (
+            <div className="mt-3 rounded-md border border-[var(--border)] p-3">
+              <p className="text-brand-navy text-[11px] font-semibold uppercase tracking-wide">
+                GC / Site Supervisor
+              </p>
+              <div className="mt-1.5">
+                <Row label="Name" value={gcName} />
+                <Row label="Phone" value={gcPhone} />
+                <Row label="Email" value={gcEmail} />
+              </div>
+            </div>
+          );
+        })()}
       </Section>
 
       <Section eyebrow="Site addresses">
@@ -374,19 +408,29 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
       <Section eyebrow="Signed terms & conditions">
         <div className="space-y-3">
           <SignedTermsRow
-            title="Nexvelon Integrated Solutions Inc. Terms and Conditions"
+            title="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
             signedName={invitation?.tc1_signed_name ?? null}
             signedAt={invitation?.tc1_signed_at ?? null}
+            signatureUrl={detail.tc1SignatureUrl}
+            pdfUrl={detail.tc1PdfUrl}
             onView={() =>
-              openTerms("tc1", "Nexvelon Integrated Solutions Inc. Terms and Conditions")
+              openTerms(
+                "tc1",
+                "Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
+              )
             }
           />
           <SignedTermsRow
-            title="Nexvelon Guardian Inc. Terms and Conditions"
+            title="Nexvelon Guardian Inc. — Default Terms and Conditions"
             signedName={invitation?.tc2_signed_name ?? null}
             signedAt={invitation?.tc2_signed_at ?? null}
+            signatureUrl={detail.tc2SignatureUrl}
+            pdfUrl={detail.tc2PdfUrl}
             onView={() =>
-              openTerms("tc2", "Nexvelon Guardian Inc. Terms and Conditions")
+              openTerms(
+                "tc2",
+                "Nexvelon Guardian Inc. — Default Terms and Conditions"
+              )
             }
           />
         </div>
@@ -405,6 +449,12 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
+            <p className="text-brand-charcoal mb-1.5 text-xs font-semibold">
+              Tier requested:{" "}
+              <span className="text-brand-navy">
+                {invitation?.tier_requested ?? "None"}
+              </span>
+            </p>
             <Label className="text-muted-foreground text-[11px]">Assign tier</Label>
             <Select
               value={tier}
@@ -504,11 +554,15 @@ function SignedTermsRow({
   title,
   signedName,
   signedAt,
+  signatureUrl,
+  pdfUrl,
   onView,
 }: {
   title: string;
   signedName: string | null;
   signedAt: string | null;
+  signatureUrl: string | null;
+  pdfUrl: string | null;
   onView: () => void;
 }) {
   return (
@@ -525,6 +579,26 @@ function SignedTermsRow({
             "Not signed"
           )}
         </p>
+        {signatureUrl && (
+          // Short-lived signed-URL signature thumbnail — next/image isn't suitable.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={signatureUrl}
+            alt="signature"
+            style={{ maxHeight: 80 }}
+            className="border rounded bg-white mt-2"
+          />
+        )}
+        {pdfUrl && (
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener"
+            className="text-brand-navy hover:underline mt-2 inline-block text-[11px] font-medium"
+          >
+            Download signed PDF
+          </a>
+        )}
       </div>
       <Button variant="outline" size="xs" onClick={onView} className="shrink-0">
         View signed terms

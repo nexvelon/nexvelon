@@ -8,7 +8,6 @@ import { revalidatePath } from "next/cache";
 import {
   DEFAULT_TERMS_KEY,
   DEFAULT_TERMS_GUARDIAN_KEY,
-  ONBOARDING_GUARDIAN_TERMS_KEY,
   TIER_TEXT_KEYS,
   getSetting,
   setSetting,
@@ -88,32 +87,6 @@ export async function setDefaultTermsGuardianAction(
     await setSetting(DEFAULT_TERMS_GUARDIAN_KEY, value);
     revalidatePath("/settings");
     revalidatePath("/quotes/new");
-    return { ok: true, data: null };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-// POLISH-4 — the client-onboarding Guardian T&C (invite tc2). Separate, blank by
-// default; only revalidates /settings (it doesn't feed quote PDFs).
-export async function getOnboardingGuardianTermsAction(): Promise<
-  ActionResult<string | null>
-> {
-  try {
-    return { ok: true, data: await getSetting(ONBOARDING_GUARDIAN_TERMS_KEY) };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function setOnboardingGuardianTermsAction(
-  value: string
-): Promise<ActionResult<null>> {
-  try {
-    const gate = await requireAdmin();
-    if (!gate.ok) return gate;
-    await setSetting(ONBOARDING_GUARDIAN_TERMS_KEY, value);
-    revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);
