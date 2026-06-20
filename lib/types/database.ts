@@ -158,6 +158,10 @@ export interface DbClientInvitation {
   tc1_signed_pdf_path: string | null;
   tc2_signed_pdf_path: string | null;
   tier_requested: DbClientTier | null;
+  // POLISH-9 (migration 0062) — when the client ticked the Payment Policies
+  // acknowledgment on each form.
+  client_form_payment_policies_acknowledged_at: string | null;
+  site_form_payment_policies_acknowledged_at: string | null;
   created_at: string;
   updated_at: string;
 }

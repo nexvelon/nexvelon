@@ -155,6 +155,40 @@ function ContactRows({ map }: { map: Record<string, unknown> | null | undefined 
   );
 }
 
+/** POLISH-9 (CHANGE 4) — the "Payment Policies Acknowledged" block for one form.
+ *  Shows the acknowledgment timestamp (Toronto) and the exact policy text the
+ *  client saw, read from the submission snapshot. Renders nothing if neither is
+ *  present. */
+function PolicyAckRow({
+  acknowledgedAt,
+  policyText,
+}: {
+  acknowledgedAt: string | null | undefined;
+  policyText: string | null;
+}) {
+  if (!acknowledgedAt && !policyText) return null;
+  return (
+    <div>
+      <Row
+        label="Status"
+        value={
+          acknowledgedAt
+            ? `Acknowledged at ${businessDateTime(acknowledgedAt)}`
+            : "Not acknowledged"
+        }
+        anchor
+      />
+      {policyText && (
+        <div className="mt-2 rounded-md border border-[var(--border)] bg-muted/30 p-3">
+          <p className="text-brand-charcoal whitespace-pre-wrap text-[11px] leading-relaxed">
+            {policyText}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── tier select options ───────────────────────────────────────
 
 const TIER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -287,6 +321,20 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
   const siteForm = invitation?.site_form_data ?? null;
   const isSiteOnly = invitation?.invite_type === "site_only";
 
+  // POLISH-9 (CHANGE 4) — the snapshotted payment-policy text the client saw.
+  const snapshot = invitation?.submission_snapshot as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const clientPolicyText =
+    typeof snapshot?.client_form_payment_policies_text === "string"
+      ? snapshot.client_form_payment_policies_text
+      : null;
+  const sitePolicyText =
+    typeof snapshot?.site_form_payment_policies_text === "string"
+      ? snapshot.site_form_payment_policies_text
+      : null;
+
   // Validation anchors for the Approve button.
   const legalName = str(clientForm, "legalName");
   const siteName = str(siteForm, "siteName");
@@ -337,6 +385,15 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
             <Row label="Currency" value={str(clientForm, "currency")} />
           </Section>
 
+          <Section eyebrow="Payment policies acknowledged">
+            <PolicyAckRow
+              acknowledgedAt={
+                invitation?.client_form_payment_policies_acknowledged_at
+              }
+              policyText={clientPolicyText}
+            />
+          </Section>
+
           <Section eyebrow="Contacts">
             <ContactRows map={clientForm} />
           </Section>
@@ -384,6 +441,13 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
         <Row label="Payment terms" value={str(siteForm, "paymentTerms")} />
         <Row label="Payment method" value={str(siteForm, "paymentMethod")} />
         <Row label="Currency" value={str(siteForm, "currency")} />
+      </Section>
+
+      <Section eyebrow="Site payment policies acknowledged">
+        <PolicyAckRow
+          acknowledgedAt={invitation?.site_form_payment_policies_acknowledged_at}
+          policyText={sitePolicyText}
+        />
       </Section>
 
       <Section eyebrow="Site contacts">
