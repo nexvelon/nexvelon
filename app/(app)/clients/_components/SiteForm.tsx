@@ -254,8 +254,9 @@ export function SiteForm({
   );
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
-  // ─── GC / Site Supervisor ───
-  const [gcName, setGcName] = useState(existing?.gc_name ?? "");
+  // ─── GC / Site Supervisor ─── (POLISH-10 / 0063 — split name into first + last)
+  const [gcFirstName, setGcFirstName] = useState(existing?.gc_first_name ?? "");
+  const [gcLastName, setGcLastName] = useState(existing?.gc_last_name ?? "");
   const [gcPhone, setGcPhone] = useState(existing?.gc_phone ?? "");
   const [gcEmail, setGcEmail] = useState(existing?.gc_email ?? "");
 
@@ -797,7 +798,8 @@ export function SiteForm({
       notes: notes.trim() || null,
 
       // GC / Site Supervisor
-      gc_name: gcName.trim() || null,
+      gc_first_name: gcFirstName.trim() || null,
+      gc_last_name: gcLastName.trim() || null,
       gc_phone: gcPhone.trim() || null,
       gc_email: gcEmail.trim() || null,
 
@@ -1091,11 +1093,18 @@ export function SiteForm({
 
       {/* SECTION 2b — GC / Site Supervisor */}
       <Section title="GC / Site Supervisor">
-        <Field label="Name">
+        <Field label="First Name">
           <Input
-            value={gcName}
-            onChange={(e) => setGcName(e.target.value)}
-            placeholder="e.g. John Doe"
+            value={gcFirstName}
+            onChange={(e) => setGcFirstName(e.target.value)}
+            placeholder="e.g. John"
+          />
+        </Field>
+        <Field label="Last Name">
+          <Input
+            value={gcLastName}
+            onChange={(e) => setGcLastName(e.target.value)}
+            placeholder="e.g. Doe"
           />
         </Field>
         <Field label="Phone">

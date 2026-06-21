@@ -285,8 +285,10 @@ export interface DbSite {
   // inheritance — UI flag: when true the site reads payment/tax/portal from
   // its parent client; when false the site's own values above are used.
   inherit_payment_terms_from_client: boolean;
-  // POLISH-6 (migration 0060) — GC / Site Supervisor.
-  gc_name: string | null;
+  // POLISH-6 (migration 0060) — GC / Site Supervisor. POLISH-10 (migration 0063)
+  // split the single gc_name into first + last name.
+  gc_first_name: string | null;
+  gc_last_name: string | null;
   gc_phone: string | null;
   gc_email: string | null;
   created_at: string;
@@ -347,8 +349,10 @@ export type DbSiteInsert = {
   portal_access_enabled?: boolean;
   portal_contact_email?: string | null;
   inherit_payment_terms_from_client?: boolean;
-  // POLISH-6 (migration 0060) — GC / Site Supervisor.
-  gc_name?: string | null;
+  // POLISH-6 (migration 0060) — GC / Site Supervisor. POLISH-10 (migration 0063)
+  // split the single gc_name into first + last name.
+  gc_first_name?: string | null;
+  gc_last_name?: string | null;
   gc_phone?: string | null;
   gc_email?: string | null;
 };
