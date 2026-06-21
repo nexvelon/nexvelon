@@ -95,6 +95,7 @@ export function ProductDetailClient({
   movements,
   currentLabels,
   invoices,
+  categoryPath,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
@@ -104,6 +105,9 @@ export function ProductDetailClient({
   movements: DbStockMovement[];
   currentLabels: Record<string, string>;
   invoices: InvoiceListRow[];
+  // POLISH-12 — resolved category-tree path (root→leaf names); [] when the part
+  // has no category_id (legacy-only or uncategorized).
+  categoryPath: string[];
 }) {
   const router = useRouter();
   const { role } = useRole();
@@ -216,6 +220,17 @@ export function ProductDetailClient({
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [stock, isSerialized]);
   const [editBatch, setEditBatch] = useState<ReceivedBatch | null>(null);
+
+  // POLISH-12 (CHANGE 1) — stock rows with no receive_batch_id are receipts
+  // taken before batched-receiving shipped (or manually-added stock); they live
+  // under Stock Units, not here. `batches` is sorted newest-first, so the last
+  // entry's date is the earliest grouped receipt — a good proxy for "the cutoff".
+  const hasUngroupedStock = useMemo(
+    () => stock.some((s) => !s.receive_batch_id),
+    [stock]
+  );
+  const earliestBatchDate =
+    batches.length > 0 ? batches[batches.length - 1].createdAt : null;
 
   const handleDeleteBatch = (b: (typeof batches)[number]) => {
     if (
@@ -407,8 +422,13 @@ export function ProductDetailClient({
       {/* Catalog fields */}
       <Card className="bg-card p-5 shadow-sm">
         <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Detail label="Category" value={product.category} />
-          <Detail label="Sub-category" value={product.subcategory} />
+          {/* POLISH-12 (CHANGE 2) — single category cell: new tree path as chips,
+              else legacy strings, else uncategorized. Replaces the old two cells. */}
+          <CategoryDisplay
+            path={categoryPath}
+            legacyCategory={product.category}
+            legacySubcategory={product.subcategory}
+          />
           <Detail label="Manufacturer" value={product.manufacturer} />
           <Detail label="Vendor" value={product.vendor} />
           <Detail label="UPC / Barcode" value={product.upc} />
@@ -841,18 +861,39 @@ export function ProductDetailClient({
         </Card>
       </div>
 
-      {/* FIX-BATCH-O: received batches — edit qty / delete whole batch. */}
-      {batches.length > 0 && (
-        <div>
-          <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
-            Received Batches{" "}
-            <span className="text-muted-foreground font-normal normal-case">
-              ({batches.length})
-            </span>
-          </h2>
-          <Card className="bg-card overflow-hidden p-0 shadow-sm">
-            <Table>
-              <TableHeader>
+      {/* FIX-BATCH-O: received batches — edit qty / delete whole batch.
+          POLISH-12 (CHANGE 1): the panel always renders; when nothing is grouped
+          it explains where older receipts live, and when some pre-grouping stock
+          coexists with batches a note points back to Stock Units. */}
+      <div>
+        <h2 className="text-brand-navy mb-2 text-sm font-semibold tracking-wide uppercase">
+          Received Batches{" "}
+          <span className="text-muted-foreground font-normal normal-case">
+            ({batches.length})
+          </span>
+        </h2>
+        <Card className="bg-card overflow-hidden p-0 shadow-sm">
+          {batches.length === 0 ? (
+            <div className="px-6 py-8 text-center">
+              <p className="text-muted-foreground text-sm italic">
+                Receipts taken before this update are not grouped here.
+              </p>
+              <p className="text-muted-foreground mx-auto mt-1 max-w-md text-xs italic">
+                Older receipts still appear under Stock Units. New receipts going
+                forward will appear in this panel.
+              </p>
+            </div>
+          ) : (
+            <>
+              {hasUngroupedStock && earliestBatchDate && (
+                <p className="text-muted-foreground border-b border-[var(--border)] px-4 py-3 text-xs italic">
+                  Receipts from before{" "}
+                  {format(parseISO(earliestBatchDate), "MMM d, yyyy")} are not
+                  grouped — see Stock Units.
+                </p>
+              )}
+              <Table>
+                <TableHeader>
                 <TableRow>
                   <TableHead className="text-[11px] uppercase">Received</TableHead>
                   <TableHead className="text-[11px] uppercase">PO #</TableHead>
@@ -920,11 +961,12 @@ export function ProductDetailClient({
                     )}
                   </TableRow>
                 ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </div>
-      )}
+                </TableBody>
+              </Table>
+            </>
+          )}
+        </Card>
+      </div>
 
       {/* PARTS-2: per-part Purchase Order history (read-only). */}
       <div>
@@ -1203,6 +1245,55 @@ function Detail({ label, value }: { label: string; value: string | null }) {
         {label}
       </dt>
       <dd className="text-brand-charcoal mt-0.5 text-sm">{value || "—"}</dd>
+    </div>
+  );
+}
+
+// POLISH-12 (CHANGE 2) — the category cell. Prefers the new hierarchical tree
+// path (navy chips, gold "/" separators); falls back to the legacy free-text
+// strings ("Legacy: …"), then "Uncategorized". The editing surface is the
+// ProductForm's cascading category Selects — this view is read-only.
+function CategoryDisplay({
+  path,
+  legacyCategory,
+  legacySubcategory,
+}: {
+  path: string[];
+  legacyCategory: string | null;
+  legacySubcategory: string | null;
+}) {
+  return (
+    <div>
+      <dt className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+        Category
+      </dt>
+      <dd className="mt-1">
+        {path.length > 0 ? (
+          <span className="flex flex-wrap items-center gap-1">
+            {path.map((seg, i) => (
+              <Fragment key={i}>
+                {i > 0 ? (
+                  <span className="text-brand-gold text-xs" aria-hidden>
+                    /
+                  </span>
+                ) : null}
+                <span className="text-brand-navy border-brand-gold/40 bg-brand-navy/5 rounded border px-1.5 py-0.5 text-xs font-medium">
+                  {seg}
+                </span>
+              </Fragment>
+            ))}
+          </span>
+        ) : legacyCategory ? (
+          <span className="text-muted-foreground text-sm italic">
+            Legacy: {legacyCategory}
+            {legacySubcategory ? ` / ${legacySubcategory}` : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-sm italic">
+            Uncategorized
+          </span>
+        )}
+      </dd>
     </div>
   );
 }
