@@ -274,7 +274,7 @@ export type EmailShellProps = {
   headlineEmphasis: string; // "Welcome" — rendered italic, lighter brown
   headlineRest: string; // " to Nexvelon's Client Application Portal."
   bodyHtml: string; // already-styled <p>s for the letter body
-  statusLine: string; // "APPLICATION PORTAL · READY"
+  statusLine?: string; // "APPLICATION PORTAL · READY" — omitted = no status row
   ctaHref?: string; // if absent, no button + no fallback-URL block
   ctaLabel?: string; // "OPEN ONBOARDING PORTAL"
   ctaSubline?: string; // "EXPLORE THE PORTAL"
@@ -308,7 +308,7 @@ function emailShell(p: EmailShellProps): string {
         .nx-card { width:100% !important; }
         .nx-hero { padding:56px 28px 36px !important; }
         .nx-wordmark { font-size:32px !important; }
-        .nx-headline { font-size:24px !important; }
+        .nx-headline { font-size:28px !important; }
         .nx-flank { width:24px !important; }
         .nx-body { padding:8px 28px 0 !important; font-size:15px !important; }
         .nx-pad { padding-left:28px !important; padding-right:28px !important; }
@@ -338,7 +338,7 @@ function emailShell(p: EmailShellProps): string {
                 <div style="margin-top:24px;font-family:${SANS};font-size:10px;letter-spacing:0.42em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
                   p.eyebrow
                 )}</div>
-                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:28px;line-height:1.25;color:#0A1226;font-weight:500;">
+                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:26px;line-height:1.25;color:#0A1226;font-weight:500;">
                   <span style="font-style:italic;color:#3A3220;">${escapeHtml(
                     p.headlineEmphasis
                   )}</span>${escapeHtml(p.headlineRest)}
@@ -353,6 +353,9 @@ function emailShell(p: EmailShellProps): string {
               </td>
             </tr>
 
+${
+  p.statusLine
+    ? `
             <!-- Status line -->
             <tr>
               <td class="nx-pad" style="padding:48px 72px 0;">
@@ -365,7 +368,9 @@ function emailShell(p: EmailShellProps): string {
                   </td></tr>
                 </table>
               </td>
-            </tr>
+            </tr>`
+    : ""
+}
 ${
   hasCta
     ? `
@@ -416,7 +421,7 @@ ${
                     <div style="font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">If the button does not respond, <a href="${escapeHtml(
                       p.ctaHref as string
                     )}" style="color:#B8924B;text-decoration:underline;">click below</a></div>
-                    <div style="margin-top:12px;font-family:${MONO};font-size:12px;color:#0A1226;word-break:break-all;padding:14px 16px;background:#F2EDDF;border:1px solid #E5DFD0;">${escapeHtml(
+                    <div style="margin-top:12px;font-family:${MONO};font-size:11px;color:#0A1226;word-break:break-all;padding:14px 16px;background:#F2EDDF;border:1px solid #E5DFD0;">${escapeHtml(
                       p.ctaHref as string
                     )}</div>
                   </td></tr>
@@ -446,10 +451,12 @@ ${
               <td style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
                   <tr><td style="padding:40px 40px 24px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
-                      <td style="font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;">Nexvelon</td>
-                      <td style="text-align:right;font-family:${SANS};font-size:10px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">NEXVELON GLOBAL INC.</td>
-                    </tr></table>
+                    <!-- POLISH-14 (CHANGE 4) — the three operating entities,
+                         stacked; the prior right-side "NEXVELON GLOBAL INC."
+                         eyebrow is dropped as redundant with "Nexvelon Inc." -->
+                    <div style="font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Inc.</div>
+                    <div style="margin-top:6px;font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Guardian Inc.</div>
+                    <div style="margin-top:6px;font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Integrated Solutions Inc.</div>
                   </td></tr>
                   <tr><td style="padding:0 40px;"><div style="border-top:1px solid #1A2340;font-size:0;line-height:0;">&nbsp;</div></td></tr>
                   <tr><td style="padding:16px 40px 32px;text-align:center;">
@@ -516,34 +523,34 @@ export async function sendClientInviteEmail(opts: {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
 
-  // POLISH-13 — same copy as before, re-housed in the reference shell. The CTA,
-  // the portal-explore line, and the closing now map to shell props (button,
-  // afterCtaItalic, signatureItalic) rather than inline body markup.
-  const bodyHtml = siteOnly
-    ? letterParagraphs([
-        "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval.",
-      ])
-    : letterParagraphs([
-        "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).",
-      ]);
+  // POLISH-14 (CHANGE 2) — invite-specific flow: the Prestige-Tier explore line
+  // and the operational closing now sit in the BODY, above the CTA, so the reader
+  // sees them before clicking. The status line is dropped for invites. Other
+  // emails are untouched (they still pass their statusLine).
+  const intro = siteOnly
+    ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval."
+    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).";
+  const exploreLine = siteOnly
+    ? ""
+    : `<p style="margin:0 0 12px;font-family:${SERIF};font-style:italic;font-size:14px;color:#5C5240;line-height:1.6;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
+  const closingLine = `<p style="margin:0;font-family:${SERIF};font-size:14px;color:#5C5240;line-height:1.6;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
+  const bodyHtml = `${letterParagraphs([intro])}${exploreLine}${closingLine}`;
 
   const html = emailShell({
     eyebrow: siteOnly ? "SITE ONBOARDING" : "CLIENT ONBOARDING",
     headlineEmphasis: "Welcome",
+    // CHANGE 1 — shorter, more universal headline (drops "Nexvelon's").
     headlineRest: siteOnly
-      ? " to Nexvelon's Site Onboarding."
-      : " to Nexvelon's Client Application Portal.",
+      ? " to Site Onboarding."
+      : " to Client Application Portal.",
     bodyHtml,
-    statusLine: "APPLICATION PORTAL · READY",
+    // CHANGE 2 — no status line on invites.
     ctaHref: base,
     ctaLabel: "OPEN ONBOARDING PORTAL",
     ctaSubline: "EXPLORE THE PORTAL",
-    // Tier-program pointer is full-onboarding only (site invites have no tiers).
-    afterCtaItalic: siteOnly
-      ? undefined
-      : "Explore the full Prestige Tier benefits and program details on the portal once you open it.",
-    signatureItalic:
-      "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
+    // explore + closing moved into bodyHtml above; signature carries a brief
+    // sign-off since the operational closing is now above the CTA.
+    signatureItalic: "We look forward to welcoming you to Nexvelon Global.",
     signatureGroup: "The Nexvelon Global Group",
     signatureSubline: "CLIENT APPLICATION · PRIVATE INVITATION",
     outerNote: outerNoteFor("This invitation was prepared for", opts.to),
