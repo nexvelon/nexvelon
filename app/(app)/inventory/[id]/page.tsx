@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { getProductRowById, listStockForProduct } from "@/lib/api/products";
+import { resolveCategoryPaths } from "@/lib/api/categories";
 import { listSites } from "@/lib/api/clients";
 import { getPurchaseOrdersByProduct } from "@/lib/api/purchase-orders";
 import { listStockLocations } from "@/lib/api/stock-locations";
@@ -51,6 +52,14 @@ export default async function ProductDetailPage({
   // MOVE-1: resolve each stock row's current warehouse/truck/job label.
   const currentLabels = await getCurrentLocationLabels(stock);
 
+  // POLISH-12 (CHANGE 2) — resolve the new category-tree path (root→leaf names)
+  // for the part's category_id, so the detail view can show it as a chip chain.
+  const categoryPath = product.category_id
+    ? (await resolveCategoryPaths([product.category_id])).get(
+        product.category_id
+      ) ?? []
+    : [];
+
   return (
     <ProductDetailClient
       product={product}
@@ -61,6 +70,7 @@ export default async function ProductDetailPage({
       movements={movements}
       currentLabels={currentLabels}
       invoices={invoices}
+      categoryPath={categoryPath}
     />
   );
 }
