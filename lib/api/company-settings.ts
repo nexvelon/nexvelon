@@ -51,15 +51,18 @@ export const TIER_TEXT_KEYS: Record<TierLevel, string> = {
 // lib/tier-text-parser.ts). Defaults only; admin-edited Settings rows are never
 // overwritten. "entrusting" removed from Diamond per spec.
 export const TIER_TEXT_DEFAULTS: Record<TierLevel, string> = {
+  // POLISH-15 (CHANGE 7) — highest-value benefits first; "without exception"
+  // removed from the priority-service line. Default only — admin Settings edits
+  // are never overwritten.
   diamond: [
     "Diamond — For 3 to 5 year exclusive contract partners. The pinnacle of our partnership program.",
+    "- 1 year of complimentary ULC fire alarm monitoring services",
+    "- Complimentary 1-week international all-inclusive vacation annually courtesy of Nexvelon Global",
+    "- Extended warranties on installations and equipment",
     "- White-glove account management with dedicated executive contact",
     "- Deepest exclusive discounts and the strongest promotional pricing",
-    "- Extended warranties on installations and equipment",
+    "- Priority service across all engagements",
     "- First access to new services and emerging technologies",
-    "- Priority service across all engagements without exception",
-    "- Complimentary 1-week international all-inclusive vacation annually courtesy of Nexvelon Global",
-    "- 1 year of complimentary ULC fire alarm monitoring services",
     "- Additional curated benefits reserved exclusively for Diamond clients",
   ].join("\n"),
   platinum: [

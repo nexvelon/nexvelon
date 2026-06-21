@@ -89,12 +89,11 @@ const PAYMENT_METHODS = [
 const CURRENCY = ["CAD", "USD", "AED", "INR", "EUR"] as const;
 const TAX_EXEMPT = ["Yes", "No"] as const;
 
-const CONTACT_ROWS = [
-  "Primary Contact (Work)",
-  "Primary Contact (Personal)",
-  "AP (Work / Ext)",
-  "AP (Direct)",
-] as const;
+// POLISH-15 (CHANGE 4) — two contacts per form (Primary + AP), each carrying its
+// own First/Last/Email + Personal/Work/Office phones. Index 0 = Primary, 1 = AP.
+// Work phone keeps the legacy `c{i}Phone` key so existing email summaries (which
+// read c0Phone) keep working unchanged.
+const CONTACT_ROWS = ["Primary Contact", "AP Contact"] as const;
 
 type FormState = Record<string, string>;
 
@@ -115,7 +114,12 @@ function useInvitation(token: string) {
     refresh();
   }, [refresh]);
 
-  return { inv, loading, error, refresh };
+  // POLISH-15 — apply an authoritative view returned by a mutating action (e.g.
+  // signTcAction) directly, so the UI reflects it without a (possibly stale)
+  // refetch. This is the fix for the recurring T&C signing regression.
+  const applyView = useCallback((v: InvitationView) => setInv(v), []);
+
+  return { inv, loading, error, refresh, applyView };
 }
 
 // ── Small layout helpers ─────────────────────────────────────────────────────
@@ -514,30 +518,42 @@ function ContactsSection({ get, set }: { get: Getter; set: Setter }) {
             <Grid>
               <TextField
                 label="First Name"
+                required
                 value={get(`c${i}First`)}
                 onChange={(v) => set(`c${i}First`, v)}
               />
               <TextField
                 label="Last Name"
+                required
                 value={get(`c${i}Last`)}
                 onChange={(v) => set(`c${i}Last`, v)}
               />
               <TextField
-                label="Role"
-                value={get(`c${i}Role`)}
-                onChange={(v) => set(`c${i}Role`, v)}
-              />
-              <TextField
                 label="Email"
                 type="email"
+                required
                 value={get(`c${i}Email`)}
                 onChange={(v) => set(`c${i}Email`, v)}
               />
               <TextField
-                label="Phone"
+                label="Personal Phone"
                 type="tel"
+                required
+                value={get(`c${i}PersonalPhone`)}
+                onChange={(v) => set(`c${i}PersonalPhone`, v)}
+              />
+              <TextField
+                label="Work Phone"
+                type="tel"
+                required
                 value={get(`c${i}Phone`)}
                 onChange={(v) => set(`c${i}Phone`, v)}
+              />
+              <TextField
+                label="Office Phone"
+                type="tel"
+                value={get(`c${i}OfficePhone`)}
+                onChange={(v) => set(`c${i}OfficePhone`, v)}
               />
             </Grid>
           </div>
@@ -568,11 +584,13 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
   // CHANGE 3/5 — Bronze → Diamond, compact bullet cards (2-col on sm+).
   const ascending = [...TIERS].reverse();
   return (
-    <Section id="tier" title="Apply for a Prestige Tier (optional)">
+    <Section
+      id="tier"
+      title="Select the Tier benefits you would love to have with Nexvelon (stated conditions and benefits)"
+    >
       <p className="text-xs" style={{ color: MUTED }}>
-        Select the tier you&apos;d like to apply for. Final tier assignment is
-        determined by Nexvelon Global based on annual business volume and
-        exclusivity.
+        Final tier assignment is determined by Nexvelon Global based on annual
+        business volume and exclusivity.
       </p>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {ascending.map((tier) => {
@@ -636,18 +654,17 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
           );
         })}
       </div>
-      {/* None option (full width) */}
+      {/* None option (full width). CHANGE 6 — kept visually neutral even when it
+          is the (default) selection: no gold highlight border/gradient/shadow and
+          a plain, non-bold label, so it reads as one option among five rather
+          than the recommended choice. The radio dot still reflects selection. */}
       <button
         type="button"
         role="radio"
         aria-checked={selected === ""}
         onClick={() => set("tierRequested", "")}
         className="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors"
-        style={{
-          borderColor: selected === "" ? GOLD : BORDER,
-          background: selected === "" ? "linear-gradient(180deg, #FFFFFF 0%, #FBF4E2 100%)" : "#FFFFFF",
-          boxShadow: selected === "" ? `0 0 0 1px ${GOLD}` : "none",
-        }}
+        style={{ borderColor: BORDER, background: "#FFFFFF" }}
       >
         <span
           aria-hidden
@@ -658,23 +675,24 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
             <span className="h-2 w-2 rounded-full" style={{ background: GOLD }} />
           ) : null}
         </span>
-        <span className="text-sm font-semibold" style={{ color: NAVY, fontFamily: SERIF }}>
+        <span className="text-sm" style={{ color: NAVY }}>
           None — I&apos;d love to discuss first or customize add-on benefits
         </span>
       </button>
-      {/* CHANGE 5 — both fine-print disclaimers, requirements then discretion. */}
+      {/* Both fine-print disclaimers, requirements then discretion. POLISH-15
+          (CHANGE 2) — minimized to 9px, muted dark grey, italic, tight leading. */}
       <div className="space-y-1.5">
         <p
-          className="text-[11px]"
-          style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
+          className="text-[9px] italic leading-[1.4]"
+          style={{ color: "#3a3a3a" }}
         >
           {disclaimers?.requirements ??
             "Tier requirements and benefits are updated from time to time; clients are required to maintain qualifying conditions to retain their tier benefits."}
         </p>
         {disclaimers?.discretion ? (
           <p
-            className="text-[11px]"
-            style={{ color: MUTED, fontStyle: "italic", fontFamily: SERIF }}
+            className="text-[9px] italic leading-[1.4]"
+            style={{ color: "#3a3a3a" }}
           >
             {disclaimers.discretion}
           </p>
@@ -684,34 +702,53 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
   );
 }
 
-// CHANGE 7 — GC / Site Supervisor block on the SITE form. POLISH-10 (CHANGE 5)
-// splits the single name into first + last. Keys: gcFirst, gcLast, gcPhone,
-// gcEmail (all part of the site-form autosave map).
+// GC / Site Supervisor block on the SITE form. POLISH-10 split the name into
+// first + last; POLISH-15 (CHANGE 4) gives it the same contact field set as the
+// other contacts: First/Last/Email + Personal/Work/Office phones (Office is the
+// only optional one). Work phone keeps the `gcPhone` key (promoted to the
+// sites.gc_phone column on approval); personal/office live in the form jsonb.
 function GcSection({ get, set }: { get: Getter; set: Setter }) {
   return (
     <Section id="gc" title="GC / Site Supervisor">
       <Grid>
         <TextField
           label="First Name"
+          required
           value={get("gcFirst")}
           onChange={(v) => set("gcFirst", v)}
         />
         <TextField
           label="Last Name"
+          required
           value={get("gcLast")}
           onChange={(v) => set("gcLast", v)}
         />
         <TextField
-          label="Phone"
+          label="Email"
+          type="email"
+          required
+          value={get("gcEmail")}
+          onChange={(v) => set("gcEmail", v)}
+        />
+        <TextField
+          label="Personal Phone"
           type="tel"
+          required
+          value={get("gcPersonalPhone")}
+          onChange={(v) => set("gcPersonalPhone", v)}
+        />
+        <TextField
+          label="Work Phone"
+          type="tel"
+          required
           value={get("gcPhone")}
           onChange={(v) => set("gcPhone", v)}
         />
         <TextField
-          label="Email"
-          type="email"
-          value={get("gcEmail")}
-          onChange={(v) => set("gcEmail", v)}
+          label="Office Phone"
+          type="tel"
+          value={get("gcOfficePhone")}
+          onChange={(v) => set("gcOfficePhone", v)}
         />
       </Grid>
     </Section>
@@ -1025,13 +1062,18 @@ function SiteInfoFormInner({
 }
 
 // ── T&C signing ───────────────────────────────────────────────────────────────
+// POLISH-15 — explicit signing state machine. The recurring T&C regression came
+// from relying on a post-sign refetch (which could read stale data) instead of
+// the authoritative view the action already returns. We now apply that view
+// directly and track the flow as idle → signing → signed / error.
+type SignStatus = "idle" | "signing" | "signed" | "error";
+
 export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }) {
-  const { inv, loading, error, refresh } = useInvitation(token);
+  const { inv, loading, error, applyView } = useInvitation(token);
   const [terms, setTerms] = useState<string>("");
   const [termsLoaded, setTermsLoaded] = useState(false);
   const [name, setName] = useState("");
-  const [agreed, setAgreed] = useState(false);
-  const [signing, setSigning] = useState(false);
+  const [status, setStatus] = useState<SignStatus>("idle");
   const sigRef = useRef<SignatureCanvas>(null);
 
   useEffect(() => {
@@ -1056,27 +1098,28 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
   const signedName = inv ? (which === "tc1" ? inv.tc1_signed_name : inv.tc2_signed_name) : null;
 
   // Signing requires BOTH a typed name AND a drawn signature. Triggered by the
-  // agree checkbox: on check, validate → capture PNG data URL → signTcAction.
-  //
-  // POLISH-10 (CHANGE 1/11) — the checkbox is now properly controlled via
-  // `agreed`, so its visual state always matches React state. Previously it was
-  // hardcoded `checked={false}`, which desynced from the DOM on any early return
-  // (no re-render → the box stayed visually ticked → the next tap fired
-  // onChange(false) → silent no-op). We mirror `checked` into `agreed`, run the
-  // signing flow on check, and revert `agreed` on any validation/RPC failure so
-  // a failed attempt leaves a clean, re-tickable checkbox.
+  // agree checkbox: on check, validate → capture PNG → signTcAction → apply the
+  // returned view. POLISH-15 — on success we apply `res.data` (the authoritative
+  // signed invitation) DIRECTLY rather than refetching, so the "Signed at …"
+  // view renders deterministically; the old refetch could return stale data and
+  // leave the screen looking unsigned. The status machine also blocks
+  // double-clicks while in flight and reverts cleanly on validation/RPC failure.
+  const signing = status === "signing";
   async function onAgree(checked: boolean) {
-    setAgreed(checked);
-    if (!checked) return;
+    if (status === "signing") return; // ignore clicks while a sign is in flight
+    if (!checked) {
+      setStatus("idle");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Type your full name first.");
-      setAgreed(false);
+      setStatus("idle");
       return;
     }
     const pad = sigRef.current;
     if (!pad || pad.isEmpty()) {
       toast.error("Please draw your signature first.");
-      setAgreed(false);
+      setStatus("idle");
       return;
     }
     let dataUrl: string;
@@ -1087,16 +1130,16 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
     } catch {
       dataUrl = pad.getCanvas().toDataURL("image/png");
     }
-    setSigning(true);
+    setStatus("signing");
     const res = await signTcAction(token, which, name.trim(), dataUrl);
-    setSigning(false);
     if (!res.ok) {
       toast.error(res.error);
-      setAgreed(false);
+      setStatus("error"); // checkbox reverts to unchecked + re-enabled for retry
       return;
     }
+    applyView(res.data); // authoritative — signedAt is now set → signed view shows
+    setStatus("signed");
     toast.success("Signed");
-    refresh();
   }
 
   if (loading || !termsLoaded) return <Loading />;
@@ -1184,7 +1227,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
           >
             <input
               type="checkbox"
-              checked={agreed}
+              checked={status === "signing" || status === "signed"}
               disabled={signing}
               onChange={(e) => onAgree(e.target.checked)}
               className="h-4 w-4 cursor-pointer"
@@ -1266,108 +1309,6 @@ function StepRow({
         ›
       </span>
     </Link>
-  );
-}
-
-// POLISH-11 (CHANGE 3) — read-only Prestige Tier preview shown on the hub above
-// the application steps. Same parsed bullet format as the form's TierSection but
-// with no radio interaction (the opt-in still happens on the client form). Shown
-// for full onboarding only; site-only invites have no tier program.
-function TierBenefitsPreview() {
-  const [desc, setDesc] = useState<Record<string, string>>({});
-  const [disclaimers, setDisclaimers] = useState<{
-    requirements: string;
-    discretion: string;
-  } | null>(null);
-  useEffect(() => {
-    getTierDescriptionsAction().then((r) => {
-      if (r.ok) setDesc(r.data as Record<string, string>);
-    });
-    getTierDisclaimersAction().then((r) => {
-      if (r.ok) setDisclaimers(r.data);
-    });
-  }, []);
-  const ascending = [...TIERS].reverse(); // Bronze → Diamond
-  return (
-    <section className="space-y-3">
-      <div>
-        <SectionHeading>Prestige Tier Benefits</SectionHeading>
-        <p className="mt-1.5 text-[12px]" style={{ color: MUTED }}>
-          Review the program below before completing your application.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {ascending.map((tier) => {
-          const parsed = parseTierText(desc[tier.toLowerCase()] ?? "");
-          return (
-            <div
-              key={tier}
-              className="rounded-lg border px-3 py-2.5"
-              style={{
-                borderColor: BORDER,
-                borderLeft: `3px solid ${GOLD}`,
-                borderLeftColor: GOLD,
-                background: "#FFFFFF",
-              }}
-            >
-              <span
-                className="block text-sm font-semibold italic"
-                style={{ color: GOLD_DEEP, fontFamily: SERIF }}
-              >
-                {tier}
-              </span>
-              {parsed.headline ? (
-                <span
-                  className="mt-0.5 block text-[11px] italic leading-snug"
-                  style={{ color: MUTED }}
-                >
-                  {parsed.headline}
-                </span>
-              ) : null}
-              {parsed.bullets.length > 0 ? (
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  {parsed.bullets.map((b, i) => (
-                    <li
-                      key={i}
-                      className="text-[11px] leading-snug"
-                      style={{ color: "#2A2418" }}
-                    >
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {parsed.bodyParas.map((par, i) => (
-                <span
-                  key={i}
-                  className="mt-1 block text-[11px] leading-snug"
-                  style={{ color: MUTED }}
-                >
-                  {par}
-                </span>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-      <div className="space-y-1.5">
-        <p
-          className="text-[11px]"
-          style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
-        >
-          {disclaimers?.requirements ??
-            "Tier requirements and benefits are updated from time to time; clients are required to maintain qualifying conditions to retain their tier benefits."}
-        </p>
-        {disclaimers?.discretion ? (
-          <p
-            className="text-[11px]"
-            style={{ color: MUTED, fontStyle: "italic", fontFamily: SERIF }}
-          >
-            {disclaimers.discretion}
-          </p>
-        ) : null}
-      </div>
-    </section>
   );
 }
 
@@ -1478,10 +1419,9 @@ export function InviteStatus({ token }: { token: string }) {
         </div>
       </div>
 
-      {/* CHANGE 3 — Prestige Tier preview above the steps (full onboarding). */}
-      {isFull ? <TierBenefitsPreview /> : null}
-
-      {/* CHANGE 4 — steps get a titled heading matching the tier section. */}
+      {/* POLISH-15 (CHANGE 3) — the Prestige Tier preview was removed from the
+          hub; tier descriptions now live only on the client form's TierSection
+          (where the actual selection happens). The hub goes straight to steps. */}
       <div className="space-y-3">
         <SectionHeading>Application Steps</SectionHeading>
         <div className="space-y-2.5">

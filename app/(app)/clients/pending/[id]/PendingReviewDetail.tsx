@@ -110,24 +110,22 @@ function addressLine(
   return parts.join(", ");
 }
 
-const CONTACT_LABELS = [
-  "Primary Contact (Work)",
-  "Primary Contact (Personal)",
-  "AP (Work / Ext)",
-  "AP (Direct)",
-] as const;
+// POLISH-15 (CHANGE 4) — two contacts (Primary, AP), each with Email +
+// Personal/Work/Office phones. Work phone keeps the legacy c{i}Phone key.
+const CONTACT_LABELS = ["Primary Contact", "AP Contact"] as const;
 
-/** Render the four fixed contact rows from c0..c3 keys; skip a row if all five
- *  fields are blank. */
+/** Render the contact rows from c0..c1 keys; skip a row if all fields are blank. */
 function ContactRows({ map }: { map: Record<string, unknown> | null | undefined }) {
   const rows = CONTACT_LABELS.map((label, i) => {
     const first = str(map, `c${i}First`);
     const last = str(map, `c${i}Last`);
-    const role = str(map, `c${i}Role`);
     const email = str(map, `c${i}Email`);
-    const phone = str(map, `c${i}Phone`);
-    const empty = !first && !last && !role && !email && !phone;
-    return { label, first, last, role, email, phone, empty };
+    const personalPhone = str(map, `c${i}PersonalPhone`);
+    const workPhone = str(map, `c${i}Phone`);
+    const officePhone = str(map, `c${i}OfficePhone`);
+    const empty =
+      !first && !last && !email && !personalPhone && !workPhone && !officePhone;
+    return { label, first, last, email, personalPhone, workPhone, officePhone, empty };
   }).filter((r) => !r.empty);
 
   if (rows.length === 0)
@@ -144,9 +142,10 @@ function ContactRows({ map }: { map: Record<string, unknown> | null | undefined 
             </p>
             <div className="mt-1.5">
               <Row label="Name" value={name} />
-              <Row label="Role / Title" value={r.role} />
               <Row label="Email" value={r.email} />
-              <Row label="Phone" value={r.phone} />
+              <Row label="Personal phone" value={r.personalPhone} />
+              <Row label="Work phone" value={r.workPhone} />
+              <Row label="Office phone" value={r.officePhone} />
             </div>
           </div>
         );
@@ -415,9 +414,20 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
             .filter(Boolean)
             .join(" ");
           const gcName = persisted || submitted;
-          const gcPhone = sites[0]?.gc_phone ?? str(siteForm, "gcPhone");
           const gcEmail = sites[0]?.gc_email ?? str(siteForm, "gcEmail");
-          if (!gcName && !gcPhone && !gcEmail) return null;
+          // POLISH-15 (CHANGE 4) — work phone is the promoted gc_phone column;
+          // personal/office phones live only in the submitted site_form jsonb.
+          const gcWorkPhone = sites[0]?.gc_phone ?? str(siteForm, "gcPhone");
+          const gcPersonalPhone = str(siteForm, "gcPersonalPhone");
+          const gcOfficePhone = str(siteForm, "gcOfficePhone");
+          if (
+            !gcName &&
+            !gcEmail &&
+            !gcWorkPhone &&
+            !gcPersonalPhone &&
+            !gcOfficePhone
+          )
+            return null;
           return (
             <div className="mt-3 rounded-md border border-[var(--border)] p-3">
               <p className="text-brand-navy text-[11px] font-semibold uppercase tracking-wide">
@@ -425,8 +435,10 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
               </p>
               <div className="mt-1.5">
                 <Row label="Name" value={gcName} />
-                <Row label="Phone" value={gcPhone} />
                 <Row label="Email" value={gcEmail} />
+                <Row label="Personal phone" value={gcPersonalPhone} />
+                <Row label="Work phone" value={gcWorkPhone} />
+                <Row label="Office phone" value={gcOfficePhone} />
               </div>
             </div>
           );
