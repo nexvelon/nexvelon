@@ -1,7 +1,6 @@
 import "server-only";
 
 import { Resend } from "resend";
-import { parseTierText } from "@/lib/tier-text-parser";
 
 /**
  * Resend client.
@@ -365,11 +364,13 @@ function emailShell(args: {
 </html>`;
 }
 
-// Royal CTA: deep-navy fill, antique-gold border, generous padding, serif label.
+// POLISH-11 (CHANGE 2) — the email's focal point. Deep-navy fill, 2px antique-
+// gold border, generous touch target, italic Garamond gold label, soft gold
+// outline shadow (ignored gracefully by older clients).
 function royalButton(href: string, label: string): string {
-  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:10px auto;"><tr>
-    <td style="background:#1a2332;border:1px solid #b8902c;border-radius:4px;">
-      <a href="${escapeHtml(href)}" style="display:inline-block;padding:18px 40px;color:#faf8f2;font-size:16px;text-decoration:none;font-family:Georgia,'Times New Roman',serif;letter-spacing:0.06em;">${escapeHtml(
+  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:24px auto;"><tr>
+    <td style="background:#1a2332;border:2px solid #b8902c;border-radius:6px;box-shadow:0 2px 8px rgba(184,144,44,0.3);">
+      <a href="${escapeHtml(href)}" style="display:inline-block;padding:18px 36px;color:#b8902c;font-size:18px;font-style:italic;text-decoration:none;font-family:Garamond,'Times New Roman',Georgia,serif;letter-spacing:1.5px;">${escapeHtml(
         label
       )}</a>
     </td>
@@ -381,96 +382,42 @@ function royalButton(href: string, label: string): string {
  * primary link to the hub/status page (not four separate links). Type A
  * (full) = new client onboarding; Type B (site_only) = add a site to an
  * existing client.
+ *
+ * POLISH-11 — the email is now slim: the Prestige Tier cards + disclaimers moved
+ * to the portal hub (the page the CTA opens), so the email is just brand header,
+ * a short intro that names the tiers, the CTA, a one-line pointer to the portal,
+ * and the closing.
  */
-type TierTexts = {
-  diamond: string;
-  platinum: string;
-  gold: string;
-  silver: string;
-  bronze: string;
-};
-
-export interface TierDisclaimers {
-  requirements: string;
-  discretion: string;
-}
-
-// "Prestige Tier Levels" — POLISH-8 compact, width-first 2-column cards with a
-// parsed headline + bullet benefits (parseTierText). Bronze → Diamond order; on
-// narrow screens the .tier-col cells stack to one column (media query in the
-// shell head). Diamond spans the full width as the climax.
-function tierCard(name: string, raw: string): string {
-  const p = parseTierText(raw);
-  const bullets = p.bullets.length
-    ? `<ul style="margin:5px 0 0;padding-left:16px;">${p.bullets
-        .map(
-          (b) =>
-            `<li style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:400;color:#2A2418;line-height:1.55;margin:0 0 3px;">${escapeHtml(b)}</li>`
-        )
-        .join("")}</ul>`
-    : "";
-  const body = p.bodyParas
-    .map(
-      (par) =>
-        `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:400;color:#5C5240;line-height:1.55;margin-top:5px;">${escapeHtml(par)}</div>`
-    )
-    .join("");
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FBF9F4;border-left:3px solid #b8902c;"><tr><td style="padding:9px 11px;">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:17px;color:#b8902c;line-height:1.2;">${escapeHtml(name)}</div>
-      ${p.headline ? `<div style="font-family:Arial,Helvetica,sans-serif;font-style:italic;font-size:12px;color:#5C5240;line-height:1.45;margin-top:4px;">${escapeHtml(p.headline)}</div>` : ""}
-      ${bullets}${body}
-    </td></tr></table>`;
-}
-
-function tierLevelsHtml(texts: TierTexts, disclaimers?: TierDisclaimers): string {
-  const col = (name: string, raw: string) =>
-    `<td class="tier-col" width="50%" valign="top" style="padding:5px;">${tierCard(name, raw)}</td>`;
-  const fineprint = disclaimers
-    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-top:1px solid #E5DFD0;"><tr><td style="padding-top:10px;">
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-style:italic;color:#7A7058;line-height:1.55;">${escapeHtml(disclaimers.requirements)}</div>
-        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-style:italic;color:#7A7058;line-height:1.55;margin-top:6px;">${escapeHtml(disclaimers.discretion)}</div>
-      </td></tr></table>`
-    : "";
-  // Bronze → Silver → Gold → Platinum, then Diamond full-width (CHANGE 3).
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#B8924B;border-bottom:2px solid #b8902c;padding-bottom:5px;display:inline-block;">Prestige Tier Levels</div>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
-      <tr>${col("Bronze", texts.bronze)}${col("Silver", texts.silver)}</tr>
-      <tr>${col("Gold", texts.gold)}${col("Platinum", texts.platinum)}</tr>
-      <tr><td class="tier-col" colspan="2" valign="top" style="padding:5px;">${tierCard("Diamond", texts.diamond)}</td></tr>
-    </table>${fineprint}`;
-}
 
 export async function sendClientInviteEmail(opts: {
   to: string;
   token: string;
   baseUrl: string;
   inviteType?: "full" | "site_only";
-  tierTexts?: TierTexts;
-  tierDisclaimers?: TierDisclaimers;
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
 
   const closing = `<p style="margin:22px 0 0;font-size:13px;color:#5C5240;line-height:1.7;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
 
+  // POLISH-11 — a small italic pointer to the full tier program on the portal,
+  // sits between the CTA and the closing (full onboarding only).
+  const portalNote = `<p style="margin:16px 0 0;font-size:12px;font-style:italic;color:#5C5240;line-height:1.6;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
+
   let bodyHtml: string;
   if (siteOnly) {
-    // Site-only variant: references site setup, omits the tier section.
+    // Site-only variant: references site setup; no tier program applies.
     bodyHtml = `
-      <p style="margin:0 0 18px;">You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval.</p>
-      ${goldDivider()}
-      ${royalButton(base, "Open Onboarding Portal")}
+      <p style="margin:0 0 4px;">You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval.</p>
+      ${royalButton(base, "OPEN ONBOARDING PORTAL")}
       ${closing}`;
   } else {
-    // Full onboarding: intro → divider → Prestige Tier Levels → divider → CTA → closing.
-    const tierSection = opts.tierTexts
-      ? `${goldDivider()}${tierLevelsHtml(opts.tierTexts, opts.tierDisclaimers)}`
-      : "";
+    // POLISH-11 — slim full onboarding: intro (names the tiers) → CTA → portal
+    // pointer → closing. Tier cards + disclaimers now live on the portal hub.
     bodyHtml = `
-      <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum / Diamond.</p>
-      ${tierSection}
-      ${goldDivider()}
-      ${royalButton(base, "Open Onboarding Portal")}
+      <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).</p>
+      ${royalButton(base, "OPEN ONBOARDING PORTAL")}
+      ${portalNote}
       ${closing}`;
   }
 
@@ -486,23 +433,6 @@ export async function sendClientInviteEmail(opts: {
     royal: true,
   });
 
-  const tierLines =
-    !siteOnly && opts.tierTexts
-      ? [
-          "",
-          "PRESTIGE TIER LEVELS",
-          "",
-          `Bronze: ${opts.tierTexts.bronze}`,
-          `Silver: ${opts.tierTexts.silver}`,
-          `Gold: ${opts.tierTexts.gold}`,
-          `Platinum: ${opts.tierTexts.platinum}`,
-          `Diamond: ${opts.tierTexts.diamond}`,
-          ...(opts.tierDisclaimers
-            ? ["", opts.tierDisclaimers.requirements, "", opts.tierDisclaimers.discretion]
-            : []),
-        ]
-      : [];
-
   const text = [
     siteOnly
       ? "Nexvelon Global · Site Onboarding"
@@ -510,10 +440,15 @@ export async function sendClientInviteEmail(opts: {
     "",
     siteOnly
       ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms at the link below for review and approval."
-      : "Please review, fill, sign and submit the forms in the link below. Once your application is approved, you will receive a confirmation email along with your Prestige Level Tier assigned from Bronze / Silver / Gold / Platinum / Diamond.",
-    ...tierLines,
+      : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).",
     "",
     `Open Onboarding Portal: ${base}`,
+    ...(siteOnly
+      ? []
+      : [
+          "",
+          "Explore the full Prestige Tier benefits and program details on the portal once you open it.",
+        ]),
     "",
     "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
     "",

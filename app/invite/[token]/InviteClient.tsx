@@ -1239,7 +1239,7 @@ function StepRow({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-lg border border-l-4 px-4 py-3.5 transition-colors hover:bg-[#FBF6EA]"
+      className="flex items-center gap-3 rounded-lg border border-l-4 px-3 py-3 transition-colors hover:bg-[#FBF6EA] sm:px-4 sm:py-3.5"
       style={{
         borderColor: BORDER,
         borderLeftColor: complete ? GOLD : "#D8D0BC",
@@ -1266,6 +1266,108 @@ function StepRow({
         ›
       </span>
     </Link>
+  );
+}
+
+// POLISH-11 (CHANGE 3) — read-only Prestige Tier preview shown on the hub above
+// the application steps. Same parsed bullet format as the form's TierSection but
+// with no radio interaction (the opt-in still happens on the client form). Shown
+// for full onboarding only; site-only invites have no tier program.
+function TierBenefitsPreview() {
+  const [desc, setDesc] = useState<Record<string, string>>({});
+  const [disclaimers, setDisclaimers] = useState<{
+    requirements: string;
+    discretion: string;
+  } | null>(null);
+  useEffect(() => {
+    getTierDescriptionsAction().then((r) => {
+      if (r.ok) setDesc(r.data as Record<string, string>);
+    });
+    getTierDisclaimersAction().then((r) => {
+      if (r.ok) setDisclaimers(r.data);
+    });
+  }, []);
+  const ascending = [...TIERS].reverse(); // Bronze → Diamond
+  return (
+    <section className="space-y-3">
+      <div>
+        <SectionHeading>Prestige Tier Benefits</SectionHeading>
+        <p className="mt-1.5 text-[12px]" style={{ color: MUTED }}>
+          Review the program below before completing your application.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {ascending.map((tier) => {
+          const parsed = parseTierText(desc[tier.toLowerCase()] ?? "");
+          return (
+            <div
+              key={tier}
+              className="rounded-lg border px-3 py-2.5"
+              style={{
+                borderColor: BORDER,
+                borderLeft: `3px solid ${GOLD}`,
+                borderLeftColor: GOLD,
+                background: "#FFFFFF",
+              }}
+            >
+              <span
+                className="block text-sm font-semibold italic"
+                style={{ color: GOLD_DEEP, fontFamily: SERIF }}
+              >
+                {tier}
+              </span>
+              {parsed.headline ? (
+                <span
+                  className="mt-0.5 block text-[11px] italic leading-snug"
+                  style={{ color: MUTED }}
+                >
+                  {parsed.headline}
+                </span>
+              ) : null}
+              {parsed.bullets.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {parsed.bullets.map((b, i) => (
+                    <li
+                      key={i}
+                      className="text-[11px] leading-snug"
+                      style={{ color: "#2A2418" }}
+                    >
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {parsed.bodyParas.map((par, i) => (
+                <span
+                  key={i}
+                  className="mt-1 block text-[11px] leading-snug"
+                  style={{ color: MUTED }}
+                >
+                  {par}
+                </span>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div className="space-y-1.5">
+        <p
+          className="text-[11px]"
+          style={{ color: GOLD_DEEP, fontStyle: "italic", fontFamily: SERIF }}
+        >
+          {disclaimers?.requirements ??
+            "Tier requirements and benefits are updated from time to time; clients are required to maintain qualifying conditions to retain their tier benefits."}
+        </p>
+        {disclaimers?.discretion ? (
+          <p
+            className="text-[11px]"
+            style={{ color: MUTED, fontStyle: "italic", fontFamily: SERIF }}
+          >
+            {disclaimers.discretion}
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -1376,31 +1478,38 @@ export function InviteStatus({ token }: { token: string }) {
         </div>
       </div>
 
-      <div className="space-y-2.5">
-        {isFull ? (
+      {/* CHANGE 3 — Prestige Tier preview above the steps (full onboarding). */}
+      {isFull ? <TierBenefitsPreview /> : null}
+
+      {/* CHANGE 4 — steps get a titled heading matching the tier section. */}
+      <div className="space-y-3">
+        <SectionHeading>Application Steps</SectionHeading>
+        <div className="space-y-2.5">
+          {isFull ? (
+            <StepRow
+              href={`/invite/${token}/client`}
+              label="Client Information"
+              status={clientStatus}
+            />
+          ) : null}
           <StepRow
-            href={`/invite/${token}/client`}
-            label="Client Information"
-            status={clientStatus}
+            href={`/invite/${token}/site`}
+            label="Site Information"
+            status={siteStatus}
           />
-        ) : null}
-        <StepRow
-          href={`/invite/${token}/site`}
-          label="Site Information"
-          status={siteStatus}
-        />
-        <StepRow
-          href={`/invite/${token}/tc1`}
-          label="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
-          status={tc1Status}
-          subnote={tc1Note}
-        />
-        <StepRow
-          href={`/invite/${token}/tc2`}
-          label="Nexvelon Guardian Inc. — Default Terms and Conditions"
-          status={tc2Status}
-          subnote={tc2Note}
-        />
+          <StepRow
+            href={`/invite/${token}/tc1`}
+            label="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
+            status={tc1Status}
+            subnote={tc1Note}
+          />
+          <StepRow
+            href={`/invite/${token}/tc2`}
+            label="Nexvelon Guardian Inc. — Default Terms and Conditions"
+            status={tc2Status}
+            subnote={tc2Note}
+          />
+        </div>
       </div>
 
       <div className="border-t pt-5" style={{ borderColor: BORDER }}>
@@ -1417,10 +1526,18 @@ export function InviteStatus({ token }: { token: string }) {
           <Button
             onClick={onSubmit}
             disabled={!inv.ready || submitting}
-            className="w-full border py-6 font-semibold text-white"
+            className="w-full py-7 italic"
             style={{
-              background: inv.ready ? NAVY : "#C9C2B0",
-              borderColor: GOLD_DEEP,
+              // CHANGE 4 — match the email CTA: navy fill, 2px antique-gold
+              // border, italic Garamond gold label, soft gold shadow when ready.
+              background: inv.ready ? "#1a2332" : "#C9C2B0",
+              border: `2px solid ${inv.ready ? GOLD_DEEP : "#BBB3A0"}`,
+              borderRadius: 6,
+              color: inv.ready ? GOLD_DEEP : "#7A7560",
+              fontFamily: "Garamond, 'Times New Roman', Georgia, serif",
+              fontSize: 18,
+              letterSpacing: "1.5px",
+              boxShadow: inv.ready ? "0 2px 8px rgba(184,144,44,0.3)" : "none",
             }}
           >
             {submitting ? "Submitting…" : "Submit"}
