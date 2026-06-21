@@ -308,7 +308,7 @@ function emailShell(p: EmailShellProps): string {
         .nx-card { width:100% !important; }
         .nx-hero { padding:56px 28px 36px !important; }
         .nx-wordmark { font-size:32px !important; }
-        .nx-headline { font-size:28px !important; }
+        .nx-headline { font-size:22px !important; }
         .nx-flank { width:24px !important; }
         .nx-body { padding:8px 28px 0 !important; font-size:15px !important; }
         .nx-pad { padding-left:28px !important; padding-right:28px !important; }
@@ -325,7 +325,7 @@ function emailShell(p: EmailShellProps): string {
 
             <!-- Hero -->
             <tr>
-              <td class="nx-hero" style="padding:64px 56px 40px;text-align:center;">
+              <td class="nx-hero" style="padding:48px 56px 28px;text-align:center;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
                   <tr>
                     <td class="nx-flank" style="width:48px;border-bottom:1px solid #B8924B;font-size:0;line-height:0;">&nbsp;</td>
@@ -338,7 +338,7 @@ function emailShell(p: EmailShellProps): string {
                 <div style="margin-top:24px;font-family:${SANS};font-size:10px;letter-spacing:0.42em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
                   p.eyebrow
                 )}</div>
-                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:26px;line-height:1.25;color:#0A1226;font-weight:500;">
+                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:22px;line-height:1.25;color:#0A1226;font-weight:500;">
                   <span style="font-style:italic;color:#3A3220;">${escapeHtml(
                     p.headlineEmphasis
                   )}</span>${escapeHtml(p.headlineRest)}
@@ -348,7 +348,7 @@ function emailShell(p: EmailShellProps): string {
 
             <!-- Letter body -->
             <tr>
-              <td class="nx-body" style="padding:8px 72px 0;font-family:${SERIF};font-size:17px;line-height:1.7;color:#2A2418;">
+              <td class="nx-body" style="padding:8px 72px 0;font-family:${SERIF};font-size:17px;line-height:1.55;color:#2A2418;">
                 ${p.bodyHtml}
               </td>
             </tr>
@@ -376,7 +376,7 @@ ${
     ? `
             <!-- CTA -->
             <tr>
-              <td class="nx-pad" style="padding:24px 72px 8px;text-align:center;">
+              <td class="nx-pad" style="padding:16px 72px 8px;text-align:center;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
                   <tr><td style="background-color:#0A1226;border:1px solid #B8924B;">
                     <a class="nx-ctabtn" href="${escapeHtml(
@@ -410,30 +410,13 @@ ${
             </tr>`
     : ""
 }
-${
-  hasCta
-    ? `
-            <!-- Fallback URL -->
-            <tr>
-              <td class="nx-pad" style="padding:24px 64px 36px;">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
-                  <tr><td style="border-top:1px solid #E5DFD0;padding-top:20px;text-align:center;">
-                    <div style="font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">If the button does not respond, <a href="${escapeHtml(
-                      p.ctaHref as string
-                    )}" style="color:#B8924B;text-decoration:underline;">click below</a></div>
-                    <div style="margin-top:12px;font-family:${MONO};font-size:11px;color:#0A1226;word-break:break-all;padding:14px 16px;background:#F2EDDF;border:1px solid #E5DFD0;">${escapeHtml(
-                      p.ctaHref as string
-                    )}</div>
-                  </td></tr>
-                </table>
-              </td>
-            </tr>`
-    : ""
-}
+
+            <!-- POLISH-15 (CHANGE 11) — the fallback-URL block was removed; the
+                 CTA button is the single path forward, saving vertical space. -->
 
             <!-- Signature -->
             <tr>
-              <td class="nx-pad" style="padding:8px 72px 56px;">
+              <td class="nx-pad" style="padding:8px 72px 36px;">
                 <div style="font-family:${SERIF};font-style:italic;font-size:16px;color:#2A2418;line-height:1.5;">${escapeHtml(
                   p.signatureItalic
                 )}</div>
@@ -450,7 +433,7 @@ ${
             <tr>
               <td style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
-                  <tr><td style="padding:40px 40px 24px;">
+                  <tr><td style="padding:28px 40px 20px;">
                     <!-- POLISH-14 (CHANGE 4) — the three operating entities,
                          stacked; the prior right-side "NEXVELON GLOBAL INC."
                          eyebrow is dropped as redundant with "Nexvelon Inc." -->
@@ -459,7 +442,7 @@ ${
                     <div style="margin-top:6px;font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Integrated Solutions Inc.</div>
                   </td></tr>
                   <tr><td style="padding:0 40px;"><div style="border-top:1px solid #1A2340;font-size:0;line-height:0;">&nbsp;</div></td></tr>
-                  <tr><td style="padding:16px 40px 32px;text-align:center;">
+                  <tr><td style="padding:16px 40px 24px;text-align:center;">
                     <span style="font-family:${SANS};font-size:9px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">CONFIDENTIAL · DO NOT FORWARD</span>
                   </td></tr>
                 </table>
@@ -490,7 +473,7 @@ function letterParagraphs(parts: string[]): string {
     .filter((s) => s.trim() !== "")
     .map(
       (s) =>
-        `<p style="margin:0 0 16px;font-family:${SERIF};font-size:17px;line-height:1.7;color:#2A2418;">${s}</p>`
+        `<p style="margin:0 0 16px;font-family:${SERIF};font-size:17px;line-height:1.55;color:#2A2418;">${s}</p>`
     )
     .join("");
 }
@@ -530,19 +513,22 @@ export async function sendClientInviteEmail(opts: {
   const intro = siteOnly
     ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval."
     : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).";
+  // POLISH-15 (CHANGE 10) — explore and closing lines now share the EXACT same
+  // style: italic, 13px, #5C5240.
+  const lineStyle = `margin:0;font-family:${SERIF};font-style:italic;font-size:13px;color:#5C5240;line-height:1.6;`;
   const exploreLine = siteOnly
     ? ""
-    : `<p style="margin:0 0 12px;font-family:${SERIF};font-style:italic;font-size:14px;color:#5C5240;line-height:1.6;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
-  const closingLine = `<p style="margin:0;font-family:${SERIF};font-size:14px;color:#5C5240;line-height:1.6;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
+    : `<p style="${lineStyle}margin-bottom:12px;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
+  const closingLine = `<p style="${lineStyle}">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
   const bodyHtml = `${letterParagraphs([intro])}${exploreLine}${closingLine}`;
 
   const html = emailShell({
     eyebrow: siteOnly ? "SITE ONBOARDING" : "CLIENT ONBOARDING",
     headlineEmphasis: "Welcome",
-    // CHANGE 1 — shorter, more universal headline (drops "Nexvelon's").
+    // CHANGE 9 — restore the fuller headline; fits one line at the tightened 22px.
     headlineRest: siteOnly
-      ? " to Site Onboarding."
-      : " to Client Application Portal.",
+      ? " to Nexvelon's Site Onboarding."
+      : " to Nexvelon's Client Application Portal.",
     bodyHtml,
     // CHANGE 2 — no status line on invites.
     ctaHref: base,

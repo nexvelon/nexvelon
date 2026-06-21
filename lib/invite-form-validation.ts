@@ -56,16 +56,52 @@ function paymentComplete(d: Data): boolean {
   );
 }
 
-/** At least one contact row (c0..c3) with a first + last name and an email or
- *  phone — covers the spec's "at least one contact" + AP info (AP contacts are
- *  rows within this same Contacts section). */
-function hasOneContact(d: Data): boolean {
-  for (let i = 0; i < 4; i++) {
-    const hasName = filled(d, `c${i}First`) && filled(d, `c${i}Last`);
-    const hasReach = filled(d, `c${i}Email`) || filled(d, `c${i}Phone`);
-    if (hasName && hasReach) return true;
-  }
-  return false;
+// POLISH-15 (CHANGE 4) — every contact now requires First/Last/Email + Personal
+// & Work phones (Office phone is optional and never gates). Work phone uses the
+// legacy `c{i}Phone` key. The alert lists each contact's missing fields by name.
+const CONTACT_REQUIRED: ReadonlyArray<{ suffix: string; label: string }> = [
+  { suffix: "First", label: "First Name" },
+  { suffix: "Last", label: "Last Name" },
+  { suffix: "Email", label: "Email" },
+  { suffix: "PersonalPhone", label: "Personal Phone" },
+  { suffix: "Phone", label: "Work Phone" },
+];
+
+/** One MissingField per incomplete contact, naming the missing required fields:
+ *  e.g. "Primary Contact missing: Last Name, Email, Work Phone". */
+function contactMissing(
+  d: Data,
+  index: number,
+  contactLabel: string
+): MissingField | null {
+  const names = CONTACT_REQUIRED.filter(
+    (f) => !filled(d, `c${index}${f.suffix}`)
+  ).map((f) => f.label);
+  if (names.length === 0) return null;
+  return {
+    id: `contact-${index}`,
+    label: `${contactLabel} missing: ${names.join(", ")}`,
+    sectionId: "contacts",
+  };
+}
+
+/** GC / Site Supervisor missing required fields (site form only). Same field set
+ *  as a contact, keyed under gc*. Work phone uses `gcPhone`. */
+function gcMissing(d: Data): MissingField | null {
+  const fields: ReadonlyArray<{ key: string; label: string }> = [
+    { key: "gcFirst", label: "First Name" },
+    { key: "gcLast", label: "Last Name" },
+    { key: "gcEmail", label: "Email" },
+    { key: "gcPersonalPhone", label: "Personal Phone" },
+    { key: "gcPhone", label: "Work Phone" },
+  ];
+  const names = fields.filter((f) => !filled(d, f.key)).map((f) => f.label);
+  if (names.length === 0) return null;
+  return {
+    id: "gc",
+    label: `GC / Site Supervisor missing: ${names.join(", ")}`,
+    sectionId: "gc",
+  };
 }
 
 /** Missing required items on the CLIENT form (full invite). Empty array =
@@ -87,8 +123,10 @@ export function clientFormMissing(d: Data): MissingField[] {
     });
   if (!paymentComplete(d))
     out.push({ id: "payment", label: "Payment Information", sectionId: "payment" });
-  if (!hasOneContact(d))
-    out.push({ id: "contacts", label: "Contacts", sectionId: "contacts" });
+  const primary = contactMissing(d, 0, "Primary Contact");
+  if (primary) out.push(primary);
+  const ap = contactMissing(d, 1, "AP Contact");
+  if (ap) out.push(ap);
   return out;
 }
 
@@ -101,12 +139,8 @@ export function siteFormMissing(d: Data): MissingField[] {
     out.push({ id: "siteAddr", label: "Site address", sectionId: "site-address" });
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });
-  if (!filled(d, "gcFirst") || !filled(d, "gcLast"))
-    out.push({
-      id: "gc",
-      label: "GC / Site Supervisor name",
-      sectionId: "gc",
-    });
+  const gc = gcMissing(d);
+  if (gc) out.push(gc);
   if (!paymentComplete(d))
     out.push({ id: "payment", label: "Payment Information", sectionId: "payment" });
   if (!ackd(d))
@@ -115,7 +149,9 @@ export function siteFormMissing(d: Data): MissingField[] {
       label: "Payment Policies acknowledgment",
       sectionId: "payment-policies",
     });
-  if (!hasOneContact(d))
-    out.push({ id: "contacts", label: "Contacts", sectionId: "contacts" });
+  const primary = contactMissing(d, 0, "Primary Contact");
+  if (primary) out.push(primary);
+  const ap = contactMissing(d, 1, "AP Contact");
+  if (ap) out.push(ap);
   return out;
 }
