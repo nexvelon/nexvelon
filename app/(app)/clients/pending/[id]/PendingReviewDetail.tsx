@@ -406,8 +406,15 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
         <Row label="Site address" value={addressLine(siteForm, "site")} />
         {(() => {
           // GC / Site Supervisor — prefer the persisted site row values, fall
-          // back to the invite-submitted jsonb keys. Skip when all blank.
-          const gcName = sites[0]?.gc_name ?? str(siteForm, "gcName");
+          // back to the invite-submitted jsonb keys. POLISH-10 (0063) — name is
+          // now first + last; display "First Last" concatenated. Skip when blank.
+          const persisted = [sites[0]?.gc_first_name, sites[0]?.gc_last_name]
+            .filter(Boolean)
+            .join(" ");
+          const submitted = [str(siteForm, "gcFirst"), str(siteForm, "gcLast")]
+            .filter(Boolean)
+            .join(" ");
+          const gcName = persisted || submitted;
           const gcPhone = sites[0]?.gc_phone ?? str(siteForm, "gcPhone");
           const gcEmail = sites[0]?.gc_email ?? str(siteForm, "gcEmail");
           if (!gcName && !gcPhone && !gcEmail) return null;

@@ -272,7 +272,7 @@ const INQUIRIES_TO =
 // A small ornamental gold divider — a centered diamond flanked by thin rules.
 // Used between major sections of the royal-style invitation.
 function goldDivider(): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:16px 0;"><tr>
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:11px 0;"><tr>
     <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
     <td style="padding:0 12px;text-align:center;color:#B8924B;font-size:12px;line-height:1;font-family:Georgia,'Times New Roman',serif;">&#9670;</td>
     <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
@@ -296,8 +296,8 @@ function emailShell(args: {
   const outerBg = royal
     ? "background-color:#faf8f2;background-image:linear-gradient(160deg,#faf8f2 0%,#f7f0dd 55%,#f1e6c4 100%);"
     : "background:#F5F1E8;";
-  const headerPad = royal ? "28px 36px 18px" : "40px 48px 24px";
-  const bodyPad = royal ? "20px 36px" : "28px 48px";
+  const headerPad = royal ? "20px 36px 14px" : "40px 48px 24px";
+  const bodyPad = royal ? "14px 36px" : "28px 48px";
   const bodyFont = royal ? "font-size:13px;line-height:1.6;" : "font-size:15px;line-height:1.7;";
   const headingStyle = royal
     ? "margin-top:12px;font-size:22px;line-height:1.2;color:#1a2332;font-weight:normal;font-style:italic;font-family:Georgia,'Times New Roman',serif;"
@@ -333,9 +333,9 @@ function emailShell(args: {
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="${outerBg}padding:32px 12px;">
       <tr>
         <td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #E5DFD0;">
+          <table width="720" cellpadding="0" cellspacing="0" border="0" style="max-width:720px;background:#ffffff;border:1px solid #E5DFD0;">
             <tr>
-              <td style="padding:${headerPad};border-bottom:1px solid #E5DFD0;">
+              <td style="padding:${headerPad};border-bottom:1px solid #E5DFD0;text-align:center;">
                 <div style="${eyebrowStyle}">${escapeHtml(
                   args.eyebrow
                 )}</div>
@@ -415,7 +415,7 @@ function tierCard(name: string, raw: string): string {
         `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:400;color:#5C5240;line-height:1.55;margin-top:5px;">${escapeHtml(par)}</div>`
     )
     .join("");
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FBF9F4;border-left:3px solid #b8902c;"><tr><td style="padding:12px 14px;">
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background:#FBF9F4;border-left:3px solid #b8902c;"><tr><td style="padding:9px 11px;">
       <div style="font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:17px;color:#b8902c;line-height:1.2;">${escapeHtml(name)}</div>
       ${p.headline ? `<div style="font-family:Arial,Helvetica,sans-serif;font-style:italic;font-size:12px;color:#5C5240;line-height:1.45;margin-top:4px;">${escapeHtml(p.headline)}</div>` : ""}
       ${bullets}${body}

@@ -19,8 +19,10 @@ export const TIER_DISCLAIMER =
 // under this key; appears beneath TIER_DISCLAIMER in the invite email + form and
 // is snapshotted at submit.
 export const TIER_DISCRETION_DISCLAIMER_KEY = "tier_disclaimer_text";
+// POLISH-10 (CHANGE 10) — stronger legal language affirming sole discretion.
+// Default only; admin-edited Settings rows are preserved.
 export const TIER_DISCRETION_DISCLAIMER_DEFAULT =
-  "Tier assignment is at the sole discretion of Nexvelon Global and its operating entities. Nexvelon Global reserves the right to assign, modify, or revoke any client's prestige tier at any time, irrespective of the business volume or selections indicated by the client.";
+  "Tier eligibility, assignment, and continuation are determined exclusively at the sole discretion of Nexvelon Global and its operating entities. Nexvelon Global reserves the unconditional right to assign, withhold, modify, suspend, or revoke any client's prestige tier and any associated benefits at any time, in whole or in part, for any reason or for no reason, regardless of the business volume, exclusivity arrangements, or selections indicated by the client.\n\nTier benefits are provided as a courtesy and do not constitute a contractual obligation. All benefits, terms, and tier requirements are subject to change without prior notice. The client acknowledges and agrees that participation in the tier program is voluntary and that Nexvelon Global's decisions regarding tier matters are final and not subject to dispute, arbitration, or further review.";
 
 // POLISH-5/7 — Prestige Tier description blocks. SINGLE SOURCE for the invite
 // email's tier list AND the approval / tier-change outcome emails. Keyed by the

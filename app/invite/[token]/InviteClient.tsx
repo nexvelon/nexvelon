@@ -35,6 +35,11 @@ import { AddressSection } from "@/app/(app)/clients/_components/AddressSection";
 import { parseTierText } from "@/lib/tier-text-parser";
 import { paymentPolicyText } from "@/lib/payment-policy-text";
 import {
+  clientFormMissing,
+  siteFormMissing,
+  type MissingField,
+} from "@/lib/invite-form-validation";
+import {
   getInvitationAction,
   getInviteTermsAction,
   getTierDescriptionsAction,
@@ -211,7 +216,13 @@ function SelectField({
   );
 }
 
-function SectionHeading({ children }: { children: ReactNode }) {
+function SectionHeading({
+  children,
+  required,
+}: {
+  children: ReactNode;
+  required?: boolean;
+}) {
   return (
     <div>
       <h2
@@ -219,6 +230,10 @@ function SectionHeading({ children }: { children: ReactNode }) {
         style={{ color: "#1a2332", fontFamily: SERIF }}
       >
         {children}
+        {required ? (
+          // CHANGE 7 — visible red asterisk marking a mandatory section.
+          <span style={{ color: "#C0392B" }}> *</span>
+        ) : null}
       </h2>
       <div
         aria-hidden
@@ -244,12 +259,18 @@ function MailingNote() {
 }
 
 function Section({
+  id,
   title,
+  required,
   note,
   noteNode,
   children,
 }: {
+  /** Optional DOM id used as a scroll anchor by the missing-fields alert. */
+  id?: string;
   title: string;
+  /** CHANGE 7 — render a red asterisk on the heading for mandatory sections. */
+  required?: boolean;
   note?: string;
   /** Custom note element (e.g. the highlighted mailing note). Takes
    *  precedence over the plain `note` string. */
@@ -257,9 +278,13 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-3 border-t pt-5 first:border-t-0 first:pt-0" style={{ borderColor: BORDER }}>
+    <div
+      id={id}
+      className="scroll-mt-6 space-y-3 border-t pt-5 first:border-t-0 first:pt-0"
+      style={{ borderColor: BORDER }}
+    >
       <div>
-        <SectionHeading>{title}</SectionHeading>
+        <SectionHeading required={required}>{title}</SectionHeading>
         {noteNode ? (
           noteNode
         ) : note ? (
@@ -361,7 +386,7 @@ function useAutosave(
     return () => clearTimeout(t);
   }, [form, save, token]);
 
-  return { get, set, savedAt };
+  return { get, set, savedAt, values: form };
 }
 
 function SaveStatus({ savedAt }: { savedAt: number | null }) {
@@ -421,7 +446,7 @@ function AddressBlock({
 function TaxSection({ get, set }: { get: Getter; set: Setter }) {
   const exempt = get("taxExempt");
   return (
-    <Section title="Tax">
+    <Section id="tax" title="Tax Information" required>
       <Grid>
         <TextField
           label="HST / GST Number"
@@ -448,7 +473,7 @@ function TaxSection({ get, set }: { get: Getter; set: Setter }) {
 
 function PaymentSection({ get, set }: { get: Getter; set: Setter }) {
   return (
-    <Section title="Payment">
+    <Section id="payment" title="Payment Information" required>
       <Grid>
         <SelectField
           label="Payment Terms"
@@ -475,7 +500,7 @@ function PaymentSection({ get, set }: { get: Getter; set: Setter }) {
 
 function ContactsSection({ get, set }: { get: Getter; set: Setter }) {
   return (
-    <Section title="Contacts">
+    <Section id="contacts" title="Contacts" required>
       <div className="space-y-4">
         {CONTACT_ROWS.map((label, i) => (
           <div
@@ -543,7 +568,7 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
   // CHANGE 3/5 — Bronze → Diamond, compact bullet cards (2-col on sm+).
   const ascending = [...TIERS].reverse();
   return (
-    <Section title="Apply for a Prestige Tier (optional)">
+    <Section id="tier" title="Apply for a Prestige Tier (optional)">
       <p className="text-xs" style={{ color: MUTED }}>
         Select the tier you&apos;d like to apply for. Final tier assignment is
         determined by Nexvelon Global based on annual business volume and
@@ -634,7 +659,7 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
           ) : null}
         </span>
         <span className="text-sm font-semibold" style={{ color: NAVY, fontFamily: SERIF }}>
-          None — I&apos;d prefer not to apply for a tier
+          None — I&apos;d love to discuss first or customize add-on benefits
         </span>
       </button>
       {/* CHANGE 5 — both fine-print disclaimers, requirements then discretion. */}
@@ -659,16 +684,22 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
   );
 }
 
-// CHANGE 7 — GC / Site Supervisor block on the SITE form. Keys: gcName,
-// gcPhone, gcEmail (all part of the site-form autosave map).
+// CHANGE 7 — GC / Site Supervisor block on the SITE form. POLISH-10 (CHANGE 5)
+// splits the single name into first + last. Keys: gcFirst, gcLast, gcPhone,
+// gcEmail (all part of the site-form autosave map).
 function GcSection({ get, set }: { get: Getter; set: Setter }) {
   return (
-    <Section title="GC / Site Supervisor">
+    <Section id="gc" title="GC / Site Supervisor">
       <Grid>
         <TextField
-          label="Name"
-          value={get("gcName")}
-          onChange={(v) => set("gcName", v)}
+          label="First Name"
+          value={get("gcFirst")}
+          onChange={(v) => set("gcFirst", v)}
+        />
+        <TextField
+          label="Last Name"
+          value={get("gcLast")}
+          onChange={(v) => set("gcLast", v)}
         />
         <TextField
           label="Phone"
@@ -698,6 +729,7 @@ function PaymentPoliciesSection({ get, set }: { get: Getter; set: Setter }) {
   const acknowledged = get("payment_policies_acknowledged") === "true";
   return (
     <Section
+      id="payment-policies"
       title="Payment Policies"
       note="The rates below reflect your selected billing country."
     >
@@ -734,6 +766,55 @@ function PaymentPoliciesSection({ get, set }: { get: Getter; set: Setter }) {
         I acknowledge and accept the payment policies as set out above.
       </label>
     </Section>
+  );
+}
+
+// CHANGE 8 — a live completeness banner at the top of each form. While anything
+// required is missing it lists each item; clicking one scrolls to that section.
+// When everything's filled it confirms the form is ready to submit.
+function FormCompleteness({ missing }: { missing: MissingField[] }) {
+  if (missing.length === 0) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-md border px-4 py-3 text-[13px] font-medium"
+        style={{ borderColor: GOLD, background: PANEL, color: NAVY }}
+      >
+        <span aria-hidden style={{ color: GOLD_DEEP }}>
+          ◆
+        </span>
+        All required information is complete — return to the status page to submit.
+      </div>
+    );
+  }
+  const scrollTo = (sectionId: string) => {
+    document
+      .getElementById(sectionId)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  return (
+    <div
+      className="rounded-md border px-4 py-3"
+      style={{ borderColor: "#E2B7AE", background: "#FCF3F1" }}
+    >
+      <p className="text-[13px] font-semibold" style={{ color: "#7A2E22" }}>
+        Please complete the following to submit:
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
+        {missing.map((m, i) => (
+          <li key={m.id} className="text-[13px]" style={{ color: "#7A2E22" }}>
+            <button
+              type="button"
+              onClick={() => scrollTo(m.sectionId)}
+              className="font-medium underline underline-offset-2"
+              style={{ color: "#9B3A2C" }}
+            >
+              {m.label}
+            </button>
+            {i < missing.length - 1 ? <span aria-hidden>,</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -822,11 +903,12 @@ function ClientInfoFormInner({
     return { ...base, tierRequested };
   }, [initial, tierRequested]);
 
-  const { get, set, savedAt } = useAutosave(
+  const { get, set, savedAt, values } = useAutosave(
     token,
     seeded,
     (t, d) => saveClientFormAction(t, d)
   );
+  const missing = clientFormMissing(values);
 
   return (
     <FormShell
@@ -835,7 +917,8 @@ function ClientInfoFormInner({
       description="Your company's legal details, billing & mailing addresses, tax, payment, and contacts."
       savedAt={savedAt}
     >
-      <Section title="Company">
+      <FormCompleteness missing={missing} />
+      <Section id="company" title="Company">
         <Grid>
           <TextField
             label="Legal company name"
@@ -852,18 +935,20 @@ function ClientInfoFormInner({
         </Grid>
       </Section>
 
-      <Section title="Billing address">
+      <Section id="billing" title="Billing address">
         <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
       </Section>
 
-      <Section title="Mailing address" noteNode={<MailingNote />}>
+      <Section id="mailing" title="Mailing address" noteNode={<MailingNote />}>
         <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
       </Section>
 
+      {/* CHANGE 4 — Payment Policies sit between Tax and Payment Information so
+          the client reads the payment terms before choosing a payment method. */}
       <TaxSection get={get} set={set} />
+      <PaymentPoliciesSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <ContactsSection get={get} set={set} />
-      <PaymentPoliciesSection get={get} set={set} />
       <TierSection get={get} set={set} />
     </FormShell>
   );
@@ -887,11 +972,12 @@ function SiteInfoFormInner({
   token: string;
   initial: Record<string, unknown> | null;
 }) {
-  const { get, set, savedAt } = useAutosave(
+  const { get, set, savedAt, values } = useAutosave(
     token,
     initial,
     (t, d) => saveSiteFormAction(t, d)
   );
+  const missing = siteFormMissing(values);
 
   return (
     <FormShell
@@ -900,7 +986,8 @@ function SiteInfoFormInner({
       description="The site we'll be servicing, plus billing & mailing, tax, payment, and contacts."
       savedAt={savedAt}
     >
-      <Section title="Site">
+      <FormCompleteness missing={missing} />
+      <Section id="site" title="Site">
         <Grid>
           <TextField
             label="Site / Project name"
@@ -912,23 +999,27 @@ function SiteInfoFormInner({
         </Grid>
       </Section>
 
-      <Section title="Site address">
+      <Section id="site-address" title="Site address">
         <AddressBlock get={get} set={set} prefix="site" sectionPrefix="Site" />
       </Section>
 
-      <Section title="Billing address">
+      <Section id="billing" title="Billing address">
         <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
       </Section>
 
-      <Section title="Mailing address" noteNode={<MailingNote />}>
+      <Section id="mailing" title="Mailing address" noteNode={<MailingNote />}>
         <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
       </Section>
 
+      {/* CHANGE 5 — GC / Site Supervisor moves up (after Tax, before Payment);
+          Payment Policies sit after Payment; Contacts close the form. (This form
+          has no standalone "AP Info" section — AP is contact rows within
+          Contacts — so we follow the spec's explicit flow order.) */}
       <TaxSection get={get} set={set} />
-      <PaymentSection get={get} set={set} />
-      <ContactsSection get={get} set={set} />
-      <PaymentPoliciesSection get={get} set={set} />
       <GcSection get={get} set={set} />
+      <PaymentSection get={get} set={set} />
+      <PaymentPoliciesSection get={get} set={set} />
+      <ContactsSection get={get} set={set} />
     </FormShell>
   );
 }
@@ -939,6 +1030,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
   const [terms, setTerms] = useState<string>("");
   const [termsLoaded, setTermsLoaded] = useState(false);
   const [name, setName] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
   const sigRef = useRef<SignatureCanvas>(null);
 
@@ -965,15 +1057,26 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
 
   // Signing requires BOTH a typed name AND a drawn signature. Triggered by the
   // agree checkbox: on check, validate → capture PNG data URL → signTcAction.
+  //
+  // POLISH-10 (CHANGE 1/11) — the checkbox is now properly controlled via
+  // `agreed`, so its visual state always matches React state. Previously it was
+  // hardcoded `checked={false}`, which desynced from the DOM on any early return
+  // (no re-render → the box stayed visually ticked → the next tap fired
+  // onChange(false) → silent no-op). We mirror `checked` into `agreed`, run the
+  // signing flow on check, and revert `agreed` on any validation/RPC failure so
+  // a failed attempt leaves a clean, re-tickable checkbox.
   async function onAgree(checked: boolean) {
+    setAgreed(checked);
     if (!checked) return;
     if (!name.trim()) {
       toast.error("Type your full name first.");
+      setAgreed(false);
       return;
     }
     const pad = sigRef.current;
     if (!pad || pad.isEmpty()) {
       toast.error("Please draw your signature first.");
+      setAgreed(false);
       return;
     }
     let dataUrl: string;
@@ -989,6 +1092,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
     setSigning(false);
     if (!res.ok) {
       toast.error(res.error);
+      setAgreed(false);
       return;
     }
     toast.success("Signed");
@@ -1074,16 +1178,21 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm" style={{ color: NAVY }}>
+          <label
+            className="flex cursor-pointer items-center gap-2 text-sm"
+            style={{ color: NAVY }}
+          >
             <input
               type="checkbox"
-              checked={false}
+              checked={agreed}
               disabled={signing}
               onChange={(e) => onAgree(e.target.checked)}
-              className="h-4 w-4"
+              className="h-4 w-4 cursor-pointer"
               style={{ accentColor: GOLD }}
             />
-            I have read and agree to these Terms &amp; Conditions.
+            {signing
+              ? "Signing…"
+              : "I have read and agree to these Terms & Conditions."}
           </label>
         </div>
       )}
@@ -1295,25 +1404,36 @@ export function InviteStatus({ token }: { token: string }) {
       </div>
 
       <div className="border-t pt-5" style={{ borderColor: BORDER }}>
-        <Button
-          onClick={onSubmit}
-          disabled={!inv.ready || submitting}
-          className="w-full border py-6 font-semibold text-white"
-          style={{
-            background: inv.ready ? NAVY : "#C9C2B0",
-            borderColor: GOLD_DEEP,
-          }}
+        {/* CHANGE 8 — the disabled Submit carries a tooltip; the title attr sits
+            on a wrapper span so it surfaces on hover even while the button is
+            disabled (disabled controls don't fire hover in some browsers). */}
+        <span
+          title={
+            !inv.ready
+              ? "Some required information is missing — open each step above and complete the highlighted fields."
+              : undefined
+          }
         >
-          {submitting ? "Submitting…" : "Submit"}
-        </Button>
+          <Button
+            onClick={onSubmit}
+            disabled={!inv.ready || submitting}
+            className="w-full border py-6 font-semibold text-white"
+            style={{
+              background: inv.ready ? NAVY : "#C9C2B0",
+              borderColor: GOLD_DEEP,
+            }}
+          >
+            {submitting ? "Submitting…" : "Submit"}
+          </Button>
+        </span>
         {!inv.ready ? (
           <p
             className="mt-3 text-center text-[13px] italic"
             style={{ color: MUTED, fontFamily: SERIF }}
           >
             {isFull
-              ? "Complete all four to submit."
-              : "Complete all three to submit."}
+              ? "Complete all four steps to submit — each step shows what's still needed at the top."
+              : "Complete all three steps to submit — each step shows what's still needed at the top."}
           </p>
         ) : null}
       </div>

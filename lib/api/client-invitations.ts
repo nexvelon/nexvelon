@@ -22,6 +22,10 @@ import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import { businessDateTime } from "@/lib/format";
 import { paymentPolicyText } from "@/lib/payment-policy-text";
 import {
+  clientFormMissing,
+  siteFormMissing,
+} from "@/lib/invite-form-validation";
+import {
   uploadSignaturePng,
   uploadSignedPdf,
   signatureDataUrl,
@@ -141,15 +145,16 @@ async function requireOpen(token: string): Promise<DbClientInvitation> {
   return inv;
 }
 
-/** Save the client info form. `completed` is derived from a filled company name. */
+/** Save the client info form. POLISH-10 (CHANGE 8) — `completed` now requires
+ *  ALL mandatory fields (shared validation, so the hub Submit gate matches the
+ *  form's live missing-fields alert exactly). */
 export async function saveClientForm(
   token: string,
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
   const inv = await requireOpen(token);
-  // POLISH-9 — the Payment Policies acknowledgment is now part of the gate.
   const ack = isAck(data.payment_policies_acknowledged);
-  const completed = !!String(data.legalName ?? "").trim() && ack;
+  const completed = clientFormMissing(data).length === 0;
   // CHANGE 6 — the optional Prestige Tier opt-in is its own column.
   const reqRaw = String(data.tierRequested ?? "").trim();
   const tier_requested = (VALID_TIERS as string[]).includes(reqRaw) ? reqRaw : null;
@@ -173,15 +178,15 @@ export async function saveClientForm(
   return row as DbClientInvitation;
 }
 
-/** Save the site info form. `completed` is derived from a filled site name/address. */
+/** Save the site info form. POLISH-10 (CHANGE 8) — `completed` now requires ALL
+ *  mandatory fields (shared validation). */
 export async function saveSiteForm(
   token: string,
   data: Record<string, unknown>
 ): Promise<DbClientInvitation> {
   const inv = await requireOpen(token);
   const ack = isAck(data.payment_policies_acknowledged);
-  const completed =
-    !!String(data.siteName ?? data.siteStreet ?? "").trim() && ack;
+  const completed = siteFormMissing(data).length === 0;
   const patch: Record<string, unknown> = {
     site_form_data: data,
     site_form_completed: completed,
@@ -384,8 +389,9 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
     preferred_payment_method:
       e(sf.paymentMethod, PAYMENT_METHOD_VALUES) ?? undefined,
     preferred_currency: e(sf.currency, CURRENCY_VALUES) ?? undefined,
-    // CHANGE 7 — GC / Site Supervisor.
-    gc_name: s(sf.gcName),
+    // CHANGE 7 — GC / Site Supervisor. POLISH-10 (0063) — first + last name.
+    gc_first_name: s(sf.gcFirst),
+    gc_last_name: s(sf.gcLast),
     gc_phone: s(sf.gcPhone),
     gc_email: s(sf.gcEmail),
     notes: notes || null,
