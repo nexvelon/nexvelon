@@ -161,7 +161,51 @@ export async function sendLowStockAlert(
   const count = items.length;
   const subject = `Nexvelon — ${count} item${count === 1 ? "" : "s"} at or below the low-stock threshold`;
 
-  const html = renderLowStockHtml(items);
+  // POLISH-13 — the low-stock report now rides the shared reference shell; the
+  // item list renders as a hairline table inside the cream card's letter body.
+  const rows = items
+    .map(
+      (it) => `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:${MONO};font-size:13px;color:#0A1226;">${escapeHtml(
+          it.sku
+        )}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:${SERIF};font-size:14px;color:#2A2418;">${escapeHtml(
+          it.name
+        )}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:${SANS};font-size:13px;color:#0A1226;text-align:right;">${it.stock}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:${SANS};font-size:13px;color:#5C5240;text-align:right;">${it.reorderPoint}</td>
+      </tr>`
+    )
+    .join("");
+
+  const th =
+    "padding:8px 12px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;border-bottom:1px solid #E5DFD0;";
+  const bodyHtml = `
+    ${letterParagraphs([
+      `${count} item${count === 1 ? "" : "s"} at or below the low-stock threshold. Review and reorder as needed.`,
+    ])}
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border:1px solid #E5DFD0;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#F2EDDF;">
+          <th style="text-align:left;${th}">Part #</th>
+          <th style="text-align:left;${th}">Name</th>
+          <th style="text-align:right;${th}">On hand</th>
+          <th style="text-align:right;${th}">Low-stock at</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  const html = emailShell({
+    eyebrow: "INVENTORY ALERT",
+    headlineEmphasis: "Stock",
+    headlineRest: " running low.",
+    bodyHtml,
+    statusLine: "INVENTORY ALERT · ATTENTION REQUIRED",
+    signatureItalic: "Review and reorder the items above in Inventory.",
+    signatureGroup: "Nexvelon Global · Operations",
+    signatureSubline: "INVENTORY · INTERNAL ALERT",
+  });
   const text = renderLowStockText(items);
 
   const resend = client();
@@ -179,66 +223,6 @@ export async function sendLowStockAlert(
   if (result.error) {
     throw new Error(`sendLowStockAlert: ${result.error.message}`);
   }
-}
-
-function renderLowStockHtml(items: LowStockItem[]): string {
-  const rows = items
-    .map(
-      (it) => `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-family:'Courier New',monospace;font-size:13px;color:#0A1226;">${escapeHtml(
-          it.sku
-        )}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#2A2418;">${escapeHtml(
-          it.name
-        )}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#0A1226;text-align:right;">${it.stock}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5DFD0;font-size:13px;color:#5C5240;text-align:right;">${it.reorderPoint}</td>
-      </tr>`
-    )
-    .join("");
-
-  return `<!DOCTYPE html>
-<html>
-  <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;padding:48px 16px;">
-      <tr>
-        <td align="center">
-          <table width="640" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #E5DFD0;">
-            <tr>
-              <td style="padding:40px 48px 24px;border-bottom:1px solid #E5DFD0;">
-                <div style="font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:600;">Nexvelon · Inventory</div>
-                <div style="margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;">Low-stock report</div>
-                <div style="margin-top:10px;font-style:italic;color:#5C5240;font-size:15px;">${
-                  items.length
-                } item${items.length === 1 ? "" : "s"} at or below the low-stock threshold.</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 48px 40px;">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E5DFD0;border-collapse:collapse;">
-                  <thead>
-                    <tr style="background:#F5F1E8;">
-                      <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Part #</th>
-                      <th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Name</th>
-                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">On hand</th>
-                      <th style="padding:8px 12px;text-align:right;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5C5240;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #E5DFD0;">Low-stock at</th>
-                    </tr>
-                  </thead>
-                  <tbody>${rows}</tbody>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                &copy; 2026 Nexvelon Global
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
 }
 
 function renderLowStockText(items: LowStockItem[]): string {
@@ -278,85 +262,213 @@ function goldDivider(): string {
   </tr></table>`;
 }
 
-// Shared house shell (navy + gold) so every transactional email reads the same.
-// `royal` opts into the larger Georgia-italic headline, the off-white→faint-gold
-// background gradient, and the elegant italic signature footer (CHANGE 10).
-function emailShell(args: {
-  eyebrow: string;
-  heading: string;
-  subtitle: string;
-  bodyHtml: string;
-  royal?: boolean;
-}): string {
-  const royal = args.royal === true;
-  // POLISH-8 — `royal` emails (invite + confirmation) are now compacted ~30%
-  // vertically with smaller titles.
-  // Solid fallback first, gradient layered on for clients that support it.
-  const outerBg = royal
-    ? "background-color:#faf8f2;background-image:linear-gradient(160deg,#faf8f2 0%,#f7f0dd 55%,#f1e6c4 100%);"
-    : "background:#F5F1E8;";
-  const headerPad = royal ? "20px 36px 14px" : "40px 48px 24px";
-  const bodyPad = royal ? "14px 36px" : "28px 48px";
-  const bodyFont = royal ? "font-size:13px;line-height:1.6;" : "font-size:15px;line-height:1.7;";
-  const headingStyle = royal
-    ? "margin-top:12px;font-size:22px;line-height:1.2;color:#1a2332;font-weight:normal;font-style:italic;font-family:Georgia,'Times New Roman',serif;"
-    : "margin-top:18px;font-size:30px;line-height:1.1;color:#0A1226;font-weight:normal;";
-  const eyebrowStyle = royal
-    ? "font-size:15px;letter-spacing:4px;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:700;"
-    : "font-size:11px;letter-spacing:0.18em;color:#B8924B;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;font-weight:700;";
-  const footer = royal
-    ? `<tr>
-              <td style="padding:20px 36px;background:#1a2332;text-align:center;">
-                <div style="font-style:italic;font-family:Georgia,'Times New Roman',serif;color:#b8902c;font-size:16px;letter-spacing:0.04em;">Nexvelon Global</div>
-                <div style="margin-top:8px;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">&copy; 2026 Nexvelon Global</div>
-              </td>
-            </tr>`
-    : `<tr>
-              <td style="padding:24px 48px;background:#0A1226;color:#B8924B;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;">
-                &copy; 2026 Nexvelon Global
-              </td>
-            </tr>`;
+// POLISH-13 — font + colour tokens for the shared shell. Cormorant Garamond is
+// loaded via a Google Fonts <link> for clients that support it; Georgia / Times
+// New Roman are the fallback for Outlook desktop + corporate filters.
+const SERIF = "'Cormorant Garamond', Garamond, Georgia, 'Times New Roman', serif";
+const SANS = "'Helvetica Neue', Arial, sans-serif";
+const MONO = "'SF Mono', 'Courier New', monospace";
+
+export type EmailShellProps = {
+  eyebrow: string; // "CLIENT ONBOARDING"
+  headlineEmphasis: string; // "Welcome" — rendered italic, lighter brown
+  headlineRest: string; // " to Nexvelon's Client Application Portal."
+  bodyHtml: string; // already-styled <p>s for the letter body
+  statusLine: string; // "APPLICATION PORTAL · READY"
+  ctaHref?: string; // if absent, no button + no fallback-URL block
+  ctaLabel?: string; // "OPEN ONBOARDING PORTAL"
+  ctaSubline?: string; // "EXPLORE THE PORTAL"
+  afterCtaItalic?: string; // "Explore the full Prestige Tier..."
+  signatureItalic: string; // "Once all forms are complete..."
+  signatureGroup: string; // "The Nexvelon Global Group"
+  signatureSubline: string; // "CLIENT APPLICATION · PRIVATE INVITATION"
+  outerNote?: string; // HTML — "This invitation was prepared for <email>"
+};
+
+// POLISH-13 — the shared house shell, rebuilt to the supplied reference
+// aesthetic: a deep-navy radial-gradient canvas, a cream gold-bordered card with
+// a layered box-shadow (gold glow + navy depth), a wordmark flanked by gold
+// rules, an italic-emphasis Cormorant Garamond headline, a navy/gold CTA, a mono
+// fallback-URL block, a two-tier signature, and a dark gradient footer. All five
+// transactional email types plug their content into this one template. Table-
+// based + inline CSS + fallback fonts so Outlook degrades to a clean solid-colour
+// version (the gradients/shadows are simply ignored there).
+function emailShell(p: EmailShellProps): string {
+  const hasCta = !!(p.ctaHref && p.ctaLabel);
   return `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
     <style>
-      /* Stack the 2-column tier cards on narrow viewports (CHANGE 2). */
-      @media only screen and (max-width:480px) {
-        .tier-col { display:block !important; width:100% !important; }
+      body { margin:0; padding:0; }
+      @media only screen and (max-width:640px) {
+        .nx-card { width:100% !important; }
+        .nx-hero { padding:56px 28px 36px !important; }
+        .nx-wordmark { font-size:32px !important; }
+        .nx-headline { font-size:24px !important; }
+        .nx-flank { width:24px !important; }
+        .nx-body { padding:8px 28px 0 !important; font-size:15px !important; }
+        .nx-pad { padding-left:28px !important; padding-right:28px !important; }
+        .nx-ctabtn { padding:18px 36px !important; }
+        .nx-outer { padding:24px 24px 48px !important; }
       }
     </style>
   </head>
-  <body style="margin:0;padding:0;background:#F5F1E8;font-family:Georgia,'Times New Roman',serif;color:#0A1226;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="${outerBg}padding:32px 12px;">
+  <body style="margin:0;padding:0;background-color:#070C1C;font-family:${SERIF};color:#0A1226;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%),radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);padding:40px 12px;">
       <tr>
         <td align="center">
-          <table width="720" cellpadding="0" cellspacing="0" border="0" style="max-width:720px;background:#ffffff;border:1px solid #E5DFD0;">
+          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background-color:#FBF8F1;border:1px solid #8A6A2E;box-shadow:0 0 0 1px rgba(138,106,46,0.5),0 0 18px rgba(184,146,75,0.45),0 30px 80px -20px rgba(20,30,80,0.65),0 60px 140px -30px rgba(30,42,90,0.55);">
+
+            <!-- Hero -->
             <tr>
-              <td style="padding:${headerPad};border-bottom:1px solid #E5DFD0;text-align:center;">
-                <div style="${eyebrowStyle}">${escapeHtml(
-                  args.eyebrow
+              <td class="nx-hero" style="padding:64px 56px 40px;text-align:center;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                  <tr>
+                    <td class="nx-flank" style="width:48px;border-bottom:1px solid #B8924B;font-size:0;line-height:0;">&nbsp;</td>
+                    <td style="padding:0 18px;white-space:nowrap;">
+                      <span class="nx-wordmark" style="font-family:${SERIF};font-size:42px;color:#B8924B;font-weight:500;letter-spacing:0.06em;">NEXVELON GLOBAL</span>
+                    </td>
+                    <td class="nx-flank" style="width:48px;border-bottom:1px solid #B8924B;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+                <div style="margin-top:24px;font-family:${SANS};font-size:10px;letter-spacing:0.42em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
+                  p.eyebrow
                 )}</div>
-                <div style="${headingStyle}">${escapeHtml(
-                  args.heading
-                )}</div>
+                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:28px;line-height:1.25;color:#0A1226;font-weight:500;">
+                  <span style="font-style:italic;color:#3A3220;">${escapeHtml(
+                    p.headlineEmphasis
+                  )}</span>${escapeHtml(p.headlineRest)}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Letter body -->
+            <tr>
+              <td class="nx-body" style="padding:8px 72px 0;font-family:${SERIF};font-size:17px;line-height:1.7;color:#2A2418;">
+                ${p.bodyHtml}
+              </td>
+            </tr>
+
+            <!-- Status line -->
+            <tr>
+              <td class="nx-pad" style="padding:48px 72px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                  <tr><td style="border-top:1px solid #E5DFD0;padding-top:28px;text-align:center;">
+                    <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#B8924B;vertical-align:middle;">&nbsp;</span>
+                    <span style="font-family:${SANS};font-size:10px;letter-spacing:0.28em;color:#5C5240;font-weight:500;text-transform:uppercase;vertical-align:middle;">&nbsp;${escapeHtml(
+                      p.statusLine
+                    )}</span>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+${
+  hasCta
+    ? `
+            <!-- CTA -->
+            <tr>
+              <td class="nx-pad" style="padding:24px 72px 8px;text-align:center;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                  <tr><td style="background-color:#0A1226;border:1px solid #B8924B;">
+                    <a class="nx-ctabtn" href="${escapeHtml(
+                      p.ctaHref as string
+                    )}" style="display:inline-block;padding:15px 40px;font-family:${SANS};font-size:11px;letter-spacing:0.28em;font-weight:600;text-transform:uppercase;color:#FBF8F1;text-decoration:none;">${escapeHtml(
+                      p.ctaLabel as string
+                    )}</a>
+                  </td></tr>
+                </table>
                 ${
-                  args.subtitle
-                    ? `<div style="margin-top:8px;font-style:italic;color:#5C5240;font-size:14px;">${escapeHtml(
-                        args.subtitle
+                  p.ctaSubline
+                    ? `<div style="margin-top:14px;font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
+                        p.ctaSubline
                       )}</div>`
                     : ""
                 }
               </td>
-            </tr>
+            </tr>`
+    : ""
+}
+${
+  p.afterCtaItalic
+    ? `
+            <!-- After-CTA italic -->
             <tr>
-              <td style="padding:${bodyPad};${bodyFont}color:#2A2418;">
-                ${args.bodyHtml}
+              <td class="nx-pad" style="padding:8px 72px 0;text-align:center;">
+                <div style="font-family:${SERIF};font-style:italic;font-size:13px;color:#5C5240;line-height:1.6;">${escapeHtml(
+                  p.afterCtaItalic
+                )}</div>
+              </td>
+            </tr>`
+    : ""
+}
+${
+  hasCta
+    ? `
+            <!-- Fallback URL -->
+            <tr>
+              <td class="nx-pad" style="padding:24px 64px 36px;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                  <tr><td style="border-top:1px solid #E5DFD0;padding-top:20px;text-align:center;">
+                    <div style="font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">If the button does not respond, <a href="${escapeHtml(
+                      p.ctaHref as string
+                    )}" style="color:#B8924B;text-decoration:underline;">click below</a></div>
+                    <div style="margin-top:12px;font-family:${MONO};font-size:12px;color:#0A1226;word-break:break-all;padding:14px 16px;background:#F2EDDF;border:1px solid #E5DFD0;">${escapeHtml(
+                      p.ctaHref as string
+                    )}</div>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>`
+    : ""
+}
+
+            <!-- Signature -->
+            <tr>
+              <td class="nx-pad" style="padding:8px 72px 56px;">
+                <div style="font-family:${SERIF};font-style:italic;font-size:16px;color:#2A2418;line-height:1.5;">${escapeHtml(
+                  p.signatureItalic
+                )}</div>
+                <div style="margin-top:14px;font-family:${SERIF};font-size:22px;color:#0A1226;font-weight:500;letter-spacing:-0.2px;">${escapeHtml(
+                  p.signatureGroup
+                )}</div>
+                <div style="margin-top:10px;font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
+                  p.signatureSubline
+                )}</div>
               </td>
             </tr>
-            ${footer}
+
+            <!-- Dark footer band -->
+            <tr>
+              <td style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                  <tr><td style="padding:40px 40px 24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
+                      <td style="font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;">Nexvelon</td>
+                      <td style="text-align:right;font-family:${SANS};font-size:10px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">NEXVELON GLOBAL INC.</td>
+                    </tr></table>
+                  </td></tr>
+                  <tr><td style="padding:0 40px;"><div style="border-top:1px solid #1A2340;font-size:0;line-height:0;">&nbsp;</div></td></tr>
+                  <tr><td style="padding:16px 40px 32px;text-align:center;">
+                    <span style="font-family:${SANS};font-size:9px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">CONFIDENTIAL · DO NOT FORWARD</span>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
           </table>
+${
+  p.outerNote
+    ? `
+          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;">
+            <tr><td class="nx-outer" style="padding:28px 64px 56px;text-align:center;">
+              <div style="font-family:${SANS};font-size:11px;color:#6B7390;line-height:1.7;letter-spacing:0.04em;">${p.outerNote}</div>
+            </td></tr>
+          </table>`
+    : ""
+}
         </td>
       </tr>
     </table>
@@ -364,17 +476,23 @@ function emailShell(args: {
 </html>`;
 }
 
-// POLISH-11 (CHANGE 2) — the email's focal point. Deep-navy fill, 2px antique-
-// gold border, generous touch target, italic Garamond gold label, soft gold
-// outline shadow (ignored gracefully by older clients).
-function royalButton(href: string, label: string): string {
-  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:24px auto;"><tr>
-    <td style="background:#1a2332;border:2px solid #b8902c;border-radius:6px;box-shadow:0 2px 8px rgba(184,144,44,0.3);">
-      <a href="${escapeHtml(href)}" style="display:inline-block;padding:18px 36px;color:#b8902c;font-size:18px;font-style:italic;text-decoration:none;font-family:Garamond,'Times New Roman',Georgia,serif;letter-spacing:1.5px;">${escapeHtml(
-        label
-      )}</a>
-    </td>
-  </tr></table>`;
+// POLISH-13 — letter-body paragraphs styled for the new shell's Cormorant
+// Garamond body. Inline font on each <p> (not inherited) so Outlook renders it.
+function letterParagraphs(parts: string[]): string {
+  return parts
+    .filter((s) => s.trim() !== "")
+    .map(
+      (s) =>
+        `<p style="margin:0 0 16px;font-family:${SERIF};font-size:17px;line-height:1.7;color:#2A2418;">${s}</p>`
+    )
+    .join("");
+}
+
+// POLISH-13 — recipient eyebrow rendered on the dark canvas below the card.
+function outerNoteFor(prefix: string, email: string): string {
+  return `${escapeHtml(prefix)} <span style="color:#FBF8F1;letter-spacing:0.08em;">${escapeHtml(
+    email
+  )}</span>`;
 }
 
 /**
@@ -398,39 +516,37 @@ export async function sendClientInviteEmail(opts: {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
 
-  const closing = `<p style="margin:22px 0 0;font-size:13px;color:#5C5240;line-height:1.7;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
-
-  // POLISH-11 — a small italic pointer to the full tier program on the portal,
-  // sits between the CTA and the closing (full onboarding only).
-  const portalNote = `<p style="margin:16px 0 0;font-size:12px;font-style:italic;color:#5C5240;line-height:1.6;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
-
-  let bodyHtml: string;
-  if (siteOnly) {
-    // Site-only variant: references site setup; no tier program applies.
-    bodyHtml = `
-      <p style="margin:0 0 4px;">You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval.</p>
-      ${royalButton(base, "OPEN ONBOARDING PORTAL")}
-      ${closing}`;
-  } else {
-    // POLISH-11 — slim full onboarding: intro (names the tiers) → CTA → portal
-    // pointer → closing. Tier cards + disclaimers now live on the portal hub.
-    bodyHtml = `
-      <p style="margin:0;">Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).</p>
-      ${royalButton(base, "OPEN ONBOARDING PORTAL")}
-      ${portalNote}
-      ${closing}`;
-  }
+  // POLISH-13 — same copy as before, re-housed in the reference shell. The CTA,
+  // the portal-explore line, and the closing now map to shell props (button,
+  // afterCtaItalic, signatureItalic) rather than inline body markup.
+  const bodyHtml = siteOnly
+    ? letterParagraphs([
+        "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval.",
+      ])
+    : letterParagraphs([
+        "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).",
+      ]);
 
   const html = emailShell({
-    eyebrow: siteOnly
-      ? "Nexvelon Global · Site Onboarding"
-      : "Nexvelon Global · Client Onboarding",
-    heading: siteOnly
-      ? "Welcome to Nexvelon Global Site Onboarding."
-      : "Welcome to Nexvelon's Client Application Portal.",
-    subtitle: "",
+    eyebrow: siteOnly ? "SITE ONBOARDING" : "CLIENT ONBOARDING",
+    headlineEmphasis: "Welcome",
+    headlineRest: siteOnly
+      ? " to Nexvelon's Site Onboarding."
+      : " to Nexvelon's Client Application Portal.",
     bodyHtml,
-    royal: true,
+    statusLine: "APPLICATION PORTAL · READY",
+    ctaHref: base,
+    ctaLabel: "OPEN ONBOARDING PORTAL",
+    ctaSubline: "EXPLORE THE PORTAL",
+    // Tier-program pointer is full-onboarding only (site invites have no tiers).
+    afterCtaItalic: siteOnly
+      ? undefined
+      : "Explore the full Prestige Tier benefits and program details on the portal once you open it.",
+    signatureItalic:
+      "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "CLIENT APPLICATION · PRIVATE INVITATION",
+    outerNote: outerNoteFor("This invitation was prepared for", opts.to),
   });
 
   const text = [
@@ -519,10 +635,15 @@ export async function sendClientSubmissionEmail(opts: {
     ${section("Site information", siteRows || kv("—", "No data"))}
     ${section("Signed agreements", tcRows)}`;
   const html = emailShell({
-    eyebrow: "Nexvelon · Onboarding submitted",
-    heading: "New client pending review.",
-    subtitle: opts.email,
+    eyebrow: "ONBOARDING SUBMITTED",
+    headlineEmphasis: "New",
+    headlineRest: " client pending review.",
     bodyHtml,
+    statusLine: "PENDING REVIEW · ACTION REQUIRED",
+    signatureItalic: "Review the submission in Clients → Pending Review.",
+    signatureGroup: "Nexvelon Global · Operations",
+    signatureSubline: "INTERNAL NOTIFICATION",
+    outerNote: outerNoteFor("Submitted by", opts.email),
   });
   const text = [
     "Nexvelon · Onboarding submitted",
@@ -591,19 +712,24 @@ export async function sendClientConfirmationEmail(opts: {
     kv("Guardian Inc. T&C signed", fmtAt(opts.tc2At));
 
   const bodyHtml = `
-    <p style="margin:0;">Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.</p>
+    ${letterParagraphs([
+      "Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.",
+    ])}
     ${goldDivider()}
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;font-family:Arial,Helvetica,sans-serif;">Your Submission</div>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${summaryRows}</table>
-    ${goldDivider()}
-    <p style="margin:0;font-size:14px;color:#5C5240;line-height:1.7;">Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms &amp; Conditions — are attached to this email for your records. If you have any questions, please reply to this email.</p>`;
+    <div style="font-family:${SANS};font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;">Your Submission</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${summaryRows}</table>`;
 
   const html = emailShell({
-    eyebrow: "Nexvelon Global · Application Received",
-    heading: "Thank you for your application.",
-    subtitle: "",
+    eyebrow: "APPLICATION RECEIVED",
+    headlineEmphasis: "Thank you",
+    headlineRest: " for your application.",
     bodyHtml,
-    royal: true,
+    statusLine: "APPLICATION RECEIVED · IN REVIEW",
+    signatureItalic:
+      "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records. If you have any questions, please reply to this email.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "CLIENT APPLICATION · CONFIRMATION",
+    outerNote: outerNoteFor("This confirmation was sent to", opts.to),
   });
 
   const text = [
@@ -649,16 +775,6 @@ export async function sendClientConfirmationEmail(opts: {
 // so edits there flow into subsequent emails. All use the same house shell.
 // ----------------------------------------------------------------------------
 
-function paragraphs(parts: string[]): string {
-  return parts
-    .filter((p) => p.trim() !== "")
-    .map(
-      (p) =>
-        `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#2A2418;">${p}</p>`
-    )
-    .join("");
-}
-
 /** Approved — with an assigned tier name + its description, or neither. */
 export async function sendApplicationApprovedEmail(opts: {
   to: string;
@@ -675,7 +791,7 @@ export async function sendApplicationApprovedEmail(opts: {
   const requestedLineText = showRequestedLine
     ? `You applied for ${requested}. After review, we've approved you at ${assignedLabel} level.`
     : "";
-  const bodyHtml = paragraphs([
+  const bodyHtml = letterParagraphs([
     "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
     showRequestedLine
       ? `You applied for <strong>${escapeHtml(
@@ -688,13 +804,18 @@ export async function sendApplicationApprovedEmail(opts: {
       ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
       : "",
     hasTier ? escapeHtml(opts.tierText as string) : "",
-    "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
   ]);
   const html = emailShell({
-    eyebrow: "Nexvelon Global · Application Approved",
-    heading: "Your application is approved.",
-    subtitle: "",
+    eyebrow: "APPLICATION APPROVED",
+    headlineEmphasis: "Welcome",
+    headlineRest: " to Nexvelon Global.",
     bodyHtml,
+    statusLine: "APPROVED · TIER ASSIGNED",
+    signatureItalic:
+      "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "CLIENT ACCOUNT · ACTIVE",
+    outerNote: outerNoteFor("This message was sent to", opts.to),
   });
   const text = [
     "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
@@ -724,18 +845,22 @@ export async function sendApplicationDeclinedEmail(opts: {
   reason?: string | null;
 }): Promise<void> {
   const hasReason = !!opts.reason && opts.reason.trim() !== "";
-  const bodyHtml = paragraphs([
+  const bodyHtml = letterParagraphs([
     hasReason
       ? "Thank you for your interest in Nexvelon Global. After review, we will not be able to move forward with your application at this time."
       : "Thank you for your interest in Nexvelon Global. After careful review, we will not be able to move forward with your application at this time.",
     hasReason ? `<strong>Reason:</strong> ${escapeHtml(opts.reason as string)}` : "",
-    "We appreciate the time you took to apply and wish you the best.",
   ]);
   const html = emailShell({
-    eyebrow: "Nexvelon Global · Application Update",
-    heading: "An update on your application.",
-    subtitle: "",
+    eyebrow: "APPLICATION UPDATE",
+    headlineEmphasis: "An update",
+    headlineRest: " regarding your application.",
     bodyHtml,
+    statusLine: "UPDATE FROM OUR REVIEW",
+    signatureItalic: "We appreciate the time you took to apply and wish you the best.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "APPLICATION · UPDATE",
+    outerNote: outerNoteFor("This message was sent to", opts.to),
   });
   const text = [
     hasReason
@@ -767,18 +892,23 @@ export async function sendTierChangedEmail(opts: {
   newTierName: string; // e.g. "Gold"
   tierText: string; // description from Settings
 }): Promise<void> {
-  const bodyHtml = paragraphs([
+  const bodyHtml = letterParagraphs([
     `Your Prestige Tier with Nexvelon Global has been updated from <strong>${escapeHtml(
       opts.oldTierLabel
     )}</strong> to <strong>${escapeHtml(opts.newTierName)}</strong>.`,
     escapeHtml(opts.tierText),
-    "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
   ]);
   const html = emailShell({
-    eyebrow: "Nexvelon Global · Prestige Tier",
-    heading: "Your Prestige Tier has been updated.",
-    subtitle: "",
+    eyebrow: "TIER UPDATE",
+    headlineEmphasis: "Your Tier",
+    headlineRest: " has been updated.",
     bodyHtml,
+    statusLine: "PRESTIGE TIER · UPDATED",
+    signatureItalic:
+      "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "PRESTIGE TIER · NOTIFICATION",
+    outerNote: outerNoteFor("This message was sent to", opts.to),
   });
   const text = [
     `Your Prestige Tier with Nexvelon Global has been updated from ${opts.oldTierLabel} to ${opts.newTierName}.`,
