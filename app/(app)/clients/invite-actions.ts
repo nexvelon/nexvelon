@@ -21,12 +21,7 @@ import {
   updateClient,
   deleteClient,
 } from "@/lib/api/clients";
-import {
-  getTierTexts,
-  tierKey,
-  getTierDiscretionDisclaimer,
-  TIER_DISCLAIMER,
-} from "@/lib/api/company-settings";
+import { getTierTexts, tierKey } from "@/lib/api/company-settings";
 import {
   invitationSignedUrl,
   copySignedPdfToClientAttachments,
@@ -47,14 +42,6 @@ async function tierDescription(tier: DbClientTier): Promise<string> {
   const texts = await getTierTexts();
   const key = tierKey(tier);
   return key ? texts[key] : "";
-}
-
-// POLISH-7 — the two fine-print disclaimers shown under the email's tier list.
-async function tierDisclaimers(): Promise<{ requirements: string; discretion: string }> {
-  return {
-    requirements: TIER_DISCLAIMER,
-    discretion: await getTierDiscretionDisclaimer(),
-  };
 }
 
 export type ActionResult<T = unknown> =
@@ -107,8 +94,6 @@ export async function sendClientInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "full",
-      tierTexts: await getTierTexts(),
-      tierDisclaimers: await tierDisclaimers(),
     });
     revalidatePath("/clients");
     return { ok: true, data: { token: inv.token } };
@@ -142,8 +127,6 @@ export async function sendSiteInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "site_only",
-      tierTexts: await getTierTexts(),
-      tierDisclaimers: await tierDisclaimers(),
     });
     revalidatePath(`/clients/${clientId}`);
     return { ok: true, data: { token: inv.token } };
