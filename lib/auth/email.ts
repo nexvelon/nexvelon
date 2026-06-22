@@ -375,9 +375,11 @@ ${
 ${
   hasCta
     ? `
-            <!-- CTA -->
+            <!-- CTA. POLISH-21 — extra breathing room above the button
+                 (closing → CTA gap 16px → 32px); compensated by a tighter
+                 sign-off → footer gap below so overall height is ~unchanged. -->
             <tr>
-              <td class="nx-pad" style="padding:16px 72px 8px;text-align:center;">
+              <td class="nx-pad" style="padding:32px 72px 8px;text-align:center;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
                   <tr><td class="nx-cta-td" style="background-color:#0A1226;background-image:linear-gradient(180deg,#0A1226 0%,#15203F 100%);border:1.5px solid #C9A35C;border-radius:3px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 4px 12px rgba(10,18,38,0.5),0 0 0 1px rgba(201,163,92,0.2);">
                     <a class="nx-ctabtn" href="${escapeHtml(
@@ -419,7 +421,7 @@ ${
                  style (serif, 15px, normal, #2A2418) and the whole block is
                  centered for a clean, cohesive close. -->
             <tr>
-              <td class="nx-pad" style="padding:8px 72px 32px;text-align:center;">
+              <td class="nx-pad" style="padding:8px 72px 18px;text-align:center;">
                 <div class="nx-p" style="font-family:${SERIF};font-size:15px;font-weight:400;color:#2A2418;line-height:1.5;margin:20px 0 24px;">${escapeHtml(
                   p.signatureItalic
                 )}</div>
