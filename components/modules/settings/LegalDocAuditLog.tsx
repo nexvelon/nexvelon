@@ -30,6 +30,7 @@ import { useRole } from "@/lib/role-context";
 import {
   getAuditLogAction,
   restoreLegalDocumentAction,
+  deleteAuditEntryAction,
 } from "@/app/(app)/settings/settings-audit-actions";
 import type { DbSettingsAuditRow } from "@/lib/api/settings-audit";
 import { wordDiff } from "@/lib/word-diff";
@@ -87,6 +88,7 @@ export function LegalDocAuditLog({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewRow, setViewRow] = useState<DbSettingsAuditRow | null>(null);
   const [restoreRow, setRestoreRow] = useState<DbSettingsAuditRow | null>(null);
+  const [deleteRow, setDeleteRow] = useState<DbSettingsAuditRow | null>(null);
   const [pending, startAction] = useTransition();
 
   const reload = useCallback(() => {
@@ -132,6 +134,24 @@ export function LegalDocAuditLog({
       }
       toast.success("Restored. The previous version is in the audit log.");
       onRestored?.();
+      reload();
+    });
+  };
+
+  // POLISH-30 — admin hard-delete of a single version (confirmed, permanent).
+  const confirmDelete = () => {
+    if (!deleteRow) return;
+    const id = deleteRow.id;
+    startAction(async () => {
+      const res = await deleteAuditEntryAction(id);
+      setDeleteRow(null);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Audit entry deleted.");
+      // Optimistic remove + reload to stay consistent.
+      setRows((prev) => prev.filter((r) => r.id !== id));
       reload();
     });
   };
@@ -248,6 +268,17 @@ export function LegalDocAuditLog({
                   >
                     Restore this version
                   </Button>
+                  {/* POLISH-30 — admin per-version hard delete (serious but not
+                      dominant: subtle red, last in the row). */}
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:text-red-700"
+                    onClick={() => setDeleteRow(r)}
+                    disabled={pending}
+                  >
+                    Delete
+                  </Button>
                 </div>
 
                 {expanded && (
@@ -306,6 +337,37 @@ export function LegalDocAuditLog({
             </Button>
             <Button onClick={confirmRestore} disabled={pending}>
               {pending ? "Restoring…" : "Yes, Restore"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-30 — delete confirmation */}
+      <Dialog open={deleteRow !== null} onOpenChange={(o) => !o && setDeleteRow(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              Delete this audit log entry?
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this version from the history? This
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteRow(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={pending}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {pending ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
