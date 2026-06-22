@@ -522,11 +522,14 @@ export async function sendClientInviteEmail(opts: {
   // normal body paragraph (no italic / no muted styling); explicit per-line
   // margins give CHANGE 1's breathing room (intro→explore 14px, explore→closing 12px).
   const para = `font-family:${SERIF};font-size:15px;font-weight:400;color:#2A2418;line-height:1.6;`;
-  const introLine = `<p class="nx-p" style="${para}margin:0 0 14px;">${intro}</p>`;
+  // POLISH-24 (CHANGE 1) — a luxurious antique-gold bullet (✦, U+2726) at the
+  // start of each body paragraph. HTML only; the plain-text mirror is unchanged.
+  const bullet = `<span style="color:#B8924B;font-size:13px;margin-right:8px;vertical-align:middle;">&#10022;</span>`;
+  const introLine = `<p class="nx-p" style="${para}margin:0 0 14px;">${bullet}${intro}</p>`;
   const exploreLine = siteOnly
     ? ""
-    : `<p class="nx-p" style="${para}margin:0 0 12px;">Explore all Prestige Tier benefits and conditions on the portal under client form.</p>`;
-  const closingLine = `<p class="nx-p" style="${para}margin:0;">Once all forms are complete, please return to the status page and press Submit. <br/>For any questions, please reply to this email.</p>`;
+    : `<p class="nx-p" style="${para}margin:0 0 12px;">${bullet}Explore all Prestige Tier benefits and conditions on the portal under client form.</p>`;
+  const closingLine = `<p class="nx-p" style="${para}margin:0;">${bullet}Once all forms are complete, please return to the status page and press Submit. <br/>For any questions, please reply to this email.</p>`;
   const bodyHtml = `${introLine}${exploreLine}${closingLine}`;
 
   const html = emailShell({

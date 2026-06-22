@@ -463,7 +463,16 @@ function SameAsCheckbox({
         className="h-4 w-4 cursor-pointer"
         style={{ accentColor: GOLD }}
       />
-      {label}
+      <span>
+        {label}{" "}
+        {/* POLISH-24 (CHANGE 2) — small italic helper clarifying the toggle. */}
+        <span
+          className="text-[10px] font-normal italic"
+          style={{ color: "#5C5240" }}
+        >
+          (uncheck and type if different)
+        </span>
+      </span>
     </label>
   );
 }
