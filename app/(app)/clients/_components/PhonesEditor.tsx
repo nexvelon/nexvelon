@@ -9,6 +9,8 @@ import type { ContactPhone } from "@/lib/types/database";
 // CL-5c — locked label set offered by the phone-type dropdown.
 const PHONE_LABELS = [
   "Office",
+  // POLISH-27 (CHANGE 3) — "Work" inserted after "Office".
+  "Work",
   "Personal",
   "Mobile",
   "Emergency",

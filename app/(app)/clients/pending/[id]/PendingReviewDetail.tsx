@@ -110,19 +110,24 @@ function addressLine(
   return parts.join(", ");
 }
 
-// POLISH-15 (CHANGE 4) — two contacts (Primary, AP), each with Email +
-// Personal/Work/Office phones. Work phone keeps the legacy c{i}Phone key.
-const CONTACT_LABELS = ["Primary Contact", "AP Contact"] as const;
+// POLISH-27 — contacts: Primary (c0), AP (c1), and the GC / Site Supervisor (gc,
+// formerly a separate section). Each has Email + Personal/Work/Office phones
+// (Work uses the legacy `{prefix}Phone` key). Empty rows are skipped.
+const CONTACT_ROWS_DISPLAY = [
+  { label: "Primary Contact", prefix: "c0" },
+  { label: "AP Contact", prefix: "c1" },
+  { label: "GC / Site Supervisor", prefix: "gc" },
+] as const;
 
-/** Render the contact rows from c0..c1 keys; skip a row if all fields are blank. */
+/** Render the contact rows; skip a row if all fields are blank. */
 function ContactRows({ map }: { map: Record<string, unknown> | null | undefined }) {
-  const rows = CONTACT_LABELS.map((label, i) => {
-    const first = str(map, `c${i}First`);
-    const last = str(map, `c${i}Last`);
-    const email = str(map, `c${i}Email`);
-    const personalPhone = str(map, `c${i}PersonalPhone`);
-    const workPhone = str(map, `c${i}Phone`);
-    const officePhone = str(map, `c${i}OfficePhone`);
+  const rows = CONTACT_ROWS_DISPLAY.map(({ label, prefix }) => {
+    const first = str(map, `${prefix}First`);
+    const last = str(map, `${prefix}Last`);
+    const email = str(map, `${prefix}Email`);
+    const personalPhone = str(map, `${prefix}PersonalPhone`);
+    const workPhone = str(map, `${prefix}Phone`);
+    const officePhone = str(map, `${prefix}OfficePhone`);
     const empty =
       !first && !last && !email && !personalPhone && !workPhone && !officePhone;
     return { label, first, last, email, personalPhone, workPhone, officePhone, empty };
@@ -400,49 +405,11 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
       )}
 
       {/* ── Site info ──────────────────────────────────────────── */}
+      {/* POLISH-27 — the GC / Site Supervisor is no longer a separate block here;
+          it renders as a contact row in the "Site contacts" section below. */}
       <Section eyebrow="Site information">
         <Row label="Site name" value={str(siteForm, "siteName")} anchor={isSiteOnly} />
         <Row label="Site address" value={addressLine(siteForm, "site")} />
-        {(() => {
-          // GC / Site Supervisor — prefer the persisted site row values, fall
-          // back to the invite-submitted jsonb keys. POLISH-10 (0063) — name is
-          // now first + last; display "First Last" concatenated. Skip when blank.
-          const persisted = [sites[0]?.gc_first_name, sites[0]?.gc_last_name]
-            .filter(Boolean)
-            .join(" ");
-          const submitted = [str(siteForm, "gcFirst"), str(siteForm, "gcLast")]
-            .filter(Boolean)
-            .join(" ");
-          const gcName = persisted || submitted;
-          const gcEmail = sites[0]?.gc_email ?? str(siteForm, "gcEmail");
-          // POLISH-15 (CHANGE 4) — work phone is the promoted gc_phone column;
-          // personal/office phones live only in the submitted site_form jsonb.
-          const gcWorkPhone = sites[0]?.gc_phone ?? str(siteForm, "gcPhone");
-          const gcPersonalPhone = str(siteForm, "gcPersonalPhone");
-          const gcOfficePhone = str(siteForm, "gcOfficePhone");
-          if (
-            !gcName &&
-            !gcEmail &&
-            !gcWorkPhone &&
-            !gcPersonalPhone &&
-            !gcOfficePhone
-          )
-            return null;
-          return (
-            <div className="mt-3 rounded-md border border-[var(--border)] p-3">
-              <p className="text-brand-navy text-[11px] font-semibold uppercase tracking-wide">
-                GC / Site Supervisor
-              </p>
-              <div className="mt-1.5">
-                <Row label="Name" value={gcName} />
-                <Row label="Email" value={gcEmail} />
-                <Row label="Personal phone" value={gcPersonalPhone} />
-                <Row label="Work phone" value={gcWorkPhone} />
-                <Row label="Office phone" value={gcOfficePhone} />
-              </div>
-            </div>
-          );
-        })()}
       </Section>
 
       <Section eyebrow="Site addresses">

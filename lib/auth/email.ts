@@ -538,7 +538,7 @@ export async function sendClientInviteEmail(opts: {
     eyebrow: siteOnly ? "SITE ONBOARDING" : "CLIENT ONBOARDING",
     // CHANGE 2 — single uniform headline.
     headline: siteOnly
-      ? "Welcome to Nexvelon's Site Onboarding."
+      ? "Welcome to Nexvelon Global's Site Application Portal."
       : "Welcome to Nexvelon Global's Client Application Portal.",
     bodyHtml,
     // CHANGE 2 — no status line on invites.

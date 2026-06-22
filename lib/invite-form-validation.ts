@@ -88,39 +88,22 @@ const CONTACT_REQUIRED: ReadonlyArray<{ suffix: string; label: string }> = [
 ];
 
 /** One MissingField per incomplete contact, naming the missing required fields:
- *  e.g. "Primary Contact missing: Last Name, Email, Work Phone". */
+ *  e.g. "Primary Contact missing: Last Name, Email, Work Phone". POLISH-27 —
+ *  keyed by prefix (c0/c1 for Primary/AP, gc for the GC / Site Supervisor, which
+ *  is now a contact row rather than a separate section). */
 function contactMissing(
   d: Data,
-  index: number,
+  prefix: string,
   contactLabel: string
 ): MissingField | null {
   const names = CONTACT_REQUIRED.filter(
-    (f) => !filled(d, `c${index}${f.suffix}`)
+    (f) => !filled(d, `${prefix}${f.suffix}`)
   ).map((f) => f.label);
   if (names.length === 0) return null;
   return {
-    id: `contact-${index}`,
+    id: `contact-${prefix}`,
     label: `${contactLabel} missing: ${names.join(", ")}`,
     sectionId: "contacts",
-  };
-}
-
-/** GC / Site Supervisor missing required fields (site form only). Same field set
- *  as a contact, keyed under gc*. Work phone uses `gcPhone`. */
-function gcMissing(d: Data): MissingField | null {
-  const fields: ReadonlyArray<{ key: string; label: string }> = [
-    { key: "gcFirst", label: "First Name" },
-    { key: "gcLast", label: "Last Name" },
-    { key: "gcEmail", label: "Email" },
-    { key: "gcPersonalPhone", label: "Personal Phone" },
-    { key: "gcPhone", label: "Work Phone" },
-  ];
-  const names = fields.filter((f) => !filled(d, f.key)).map((f) => f.label);
-  if (names.length === 0) return null;
-  return {
-    id: "gc",
-    label: `GC / Site Supervisor missing: ${names.join(", ")}`,
-    sectionId: "gc",
   };
 }
 
@@ -145,10 +128,12 @@ export function clientFormMissing(d: Data): MissingField[] {
     });
   if (!paymentComplete(d))
     out.push({ id: "payment", label: "Payment Information", sectionId: "payment" });
-  const primary = contactMissing(d, 0, "Primary Contact");
+  const primary = contactMissing(d, "c0", "Primary Contact");
   if (primary) out.push(primary);
-  const ap = contactMissing(d, 1, "AP Contact");
+  const ap = contactMissing(d, "c1", "AP Contact");
   if (ap) out.push(ap);
+  // POLISH-27 — GC / Site Supervisor is an OPTIONAL contact on the client form,
+  // so it is intentionally not validated here.
   return out;
 }
 
@@ -165,8 +150,6 @@ export function siteFormMissing(d: Data): MissingField[] {
     out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });
-  const gc = gcMissing(d);
-  if (gc) out.push(gc);
   if (!paymentComplete(d))
     out.push({ id: "payment", label: "Payment Information", sectionId: "payment" });
   if (!ackd(d))
@@ -175,9 +158,12 @@ export function siteFormMissing(d: Data): MissingField[] {
       label: "Payment Policies acknowledgment",
       sectionId: "payment-policies",
     });
-  const primary = contactMissing(d, 0, "Primary Contact");
+  // POLISH-27 — Primary, AP, and GC / Site Supervisor are all required contacts.
+  const primary = contactMissing(d, "c0", "Primary Contact");
   if (primary) out.push(primary);
-  const ap = contactMissing(d, 1, "AP Contact");
+  const ap = contactMissing(d, "c1", "AP Contact");
   if (ap) out.push(ap);
+  const gc = contactMissing(d, "gc", "GC / Site Supervisor");
+  if (gc) out.push(gc);
   return out;
 }

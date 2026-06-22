@@ -89,11 +89,22 @@ const PAYMENT_METHODS = [
 const CURRENCY = ["CAD", "USD", "AED", "INR", "EUR"] as const;
 const TAX_EXEMPT = ["Yes", "No"] as const;
 
-// POLISH-15 (CHANGE 4) — two contacts per form (Primary + AP), each carrying its
-// own First/Last/Email + Personal/Work/Office phones. Index 0 = Primary, 1 = AP.
-// Work phone keeps the legacy `c{i}Phone` key so existing email summaries (which
-// read c0Phone) keep working unchanged.
-const CONTACT_ROWS = ["Primary Contact", "AP Contact"] as const;
+// Contacts. POLISH-15 gave each contact First/Last/Email + Personal/Work/Office
+// phones (Work uses the legacy `c{i}Phone` key). POLISH-27 (CHANGE 2) merges the
+// GC / Site Supervisor in as a third contact ROW (reusing the existing `gc*`
+// keys, so the submit-mapping to sites.gc_* is unchanged). Required on the site
+// form; optional on the client form.
+type ContactSpec = { label: string; prefix: string; required: boolean };
+const CLIENT_CONTACTS: readonly ContactSpec[] = [
+  { label: "Primary Contact", prefix: "c0", required: true },
+  { label: "AP Contact", prefix: "c1", required: true },
+  { label: "GC / Site Supervisor", prefix: "gc", required: false },
+];
+const SITE_CONTACTS: readonly ContactSpec[] = [
+  { label: "Primary Contact", prefix: "c0", required: true },
+  { label: "AP Contact", prefix: "c1", required: true },
+  { label: "GC / Site Supervisor", prefix: "gc", required: true },
+];
 
 type FormState = Record<string, string>;
 
@@ -540,58 +551,72 @@ function PaymentSection({ get, set }: { get: Getter; set: Setter }) {
   );
 }
 
-function ContactsSection({ get, set }: { get: Getter; set: Setter }) {
+function ContactsSection({
+  get,
+  set,
+  contacts,
+}: {
+  get: Getter;
+  set: Setter;
+  contacts: readonly ContactSpec[];
+}) {
   return (
     <Section id="contacts" title="Contacts" required>
       <div className="space-y-4">
-        {CONTACT_ROWS.map((label, i) => (
+        {contacts.map(({ label, prefix, required }) => (
           <div
-            key={i}
+            key={prefix}
             className="space-y-2 rounded-lg border p-3"
             style={{ borderColor: BORDER, background: PANEL }}
           >
             <p className="text-xs font-medium" style={{ color: NAVY }}>
               {label}
+              {!required ? (
+                <span className="font-normal" style={{ color: MUTED }}>
+                  {" "}
+                  (optional)
+                </span>
+              ) : null}
             </p>
             <Grid>
               <TextField
                 label="First Name"
-                required
-                value={get(`c${i}First`)}
-                onChange={(v) => set(`c${i}First`, v)}
+                required={required}
+                value={get(`${prefix}First`)}
+                onChange={(v) => set(`${prefix}First`, v)}
               />
               <TextField
                 label="Last Name"
-                required
-                value={get(`c${i}Last`)}
-                onChange={(v) => set(`c${i}Last`, v)}
+                required={required}
+                value={get(`${prefix}Last`)}
+                onChange={(v) => set(`${prefix}Last`, v)}
               />
               <TextField
                 label="Email"
                 type="email"
-                required
-                value={get(`c${i}Email`)}
-                onChange={(v) => set(`c${i}Email`, v)}
+                required={required}
+                value={get(`${prefix}Email`)}
+                onChange={(v) => set(`${prefix}Email`, v)}
               />
               <TextField
                 label="Personal Phone"
                 type="tel"
-                required
-                value={get(`c${i}PersonalPhone`)}
-                onChange={(v) => set(`c${i}PersonalPhone`, v)}
+                required={required}
+                value={get(`${prefix}PersonalPhone`)}
+                onChange={(v) => set(`${prefix}PersonalPhone`, v)}
               />
               <TextField
                 label="Work Phone"
                 type="tel"
-                required
-                value={get(`c${i}Phone`)}
-                onChange={(v) => set(`c${i}Phone`, v)}
+                required={required}
+                value={get(`${prefix}Phone`)}
+                onChange={(v) => set(`${prefix}Phone`, v)}
               />
               <TextField
                 label="Office Phone"
                 type="tel"
-                value={get(`c${i}OfficePhone`)}
-                onChange={(v) => set(`c${i}OfficePhone`, v)}
+                value={get(`${prefix}OfficePhone`)}
+                onChange={(v) => set(`${prefix}OfficePhone`, v)}
               />
             </Grid>
           </div>
@@ -745,59 +770,6 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
           </p>
         ) : null}
       </div>
-    </Section>
-  );
-}
-
-// GC / Site Supervisor block on the SITE form. POLISH-10 split the name into
-// first + last; POLISH-15 (CHANGE 4) gives it the same contact field set as the
-// other contacts: First/Last/Email + Personal/Work/Office phones (Office is the
-// only optional one). Work phone keeps the `gcPhone` key (promoted to the
-// sites.gc_phone column on approval); personal/office live in the form jsonb.
-function GcSection({ get, set }: { get: Getter; set: Setter }) {
-  return (
-    <Section id="gc" title="GC / Site Supervisor">
-      <Grid>
-        <TextField
-          label="First Name"
-          required
-          value={get("gcFirst")}
-          onChange={(v) => set("gcFirst", v)}
-        />
-        <TextField
-          label="Last Name"
-          required
-          value={get("gcLast")}
-          onChange={(v) => set("gcLast", v)}
-        />
-        <TextField
-          label="Email"
-          type="email"
-          required
-          value={get("gcEmail")}
-          onChange={(v) => set("gcEmail", v)}
-        />
-        <TextField
-          label="Personal Phone"
-          type="tel"
-          required
-          value={get("gcPersonalPhone")}
-          onChange={(v) => set("gcPersonalPhone", v)}
-        />
-        <TextField
-          label="Work Phone"
-          type="tel"
-          required
-          value={get("gcPhone")}
-          onChange={(v) => set("gcPhone", v)}
-        />
-        <TextField
-          label="Office Phone"
-          type="tel"
-          value={get("gcOfficePhone")}
-          onChange={(v) => set("gcOfficePhone", v)}
-        />
-      </Grid>
     </Section>
   );
 }
@@ -1041,7 +1013,7 @@ function ClientInfoFormInner({
       <TaxSection get={get} set={set} />
       <PaymentPoliciesSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
-      <ContactsSection get={get} set={set} />
+      <ContactsSection get={get} set={set} contacts={CLIENT_CONTACTS} />
       <TierSection get={get} set={set} />
     </FormShell>
   );
@@ -1121,15 +1093,13 @@ function SiteInfoFormInner({
         )}
       </Section>
 
-      {/* CHANGE 5 — GC / Site Supervisor moves up (after Tax, before Payment);
-          Payment Policies sit after Payment; Contacts close the form. (This form
-          has no standalone "AP Info" section — AP is contact rows within
-          Contacts — so we follow the spec's explicit flow order.) */}
+      {/* POLISH-27 (CHANGE 2) — the GC / Site Supervisor is now the third row of
+          the Contacts section (was a standalone section), so the site form ends
+          Tax → Payment → Payment Policies → Contacts (Primary / AP / GC). */}
       <TaxSection get={get} set={set} />
-      <GcSection get={get} set={set} />
       <PaymentSection get={get} set={set} />
       <PaymentPoliciesSection get={get} set={set} />
-      <ContactsSection get={get} set={set} />
+      <ContactsSection get={get} set={set} contacts={SITE_CONTACTS} />
     </FormShell>
   );
 }
