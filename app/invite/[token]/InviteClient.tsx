@@ -481,7 +481,7 @@ function SameAsCheckbox({
           className="text-[10px] font-normal italic"
           style={{ color: "#5C5240" }}
         >
-          (uncheck and type if different)
+          (uncheck and enter details if different)
         </span>
       </span>
     </label>
