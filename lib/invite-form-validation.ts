@@ -27,15 +27,35 @@ const ackd = (d: Data): boolean => {
   return v === true || String(v ?? "").trim() === "true";
 };
 
-/** All five address sub-fields present for a key prefix (e.g. "billing"). */
-function addressComplete(d: Data, prefix: string): boolean {
-  return (
-    filled(d, `${prefix}Street`) &&
-    filled(d, `${prefix}City`) &&
-    filled(d, `${prefix}Province`) &&
-    filled(d, `${prefix}Postal`) &&
-    filled(d, `${prefix}Country`)
+// POLISH-22 (CHANGE 1) — address validation is now field-level so the banner
+// surfaces EACH missing sub-field (e.g. "Mailing address: Postal code").
+const ADDR_FIELDS: ReadonlyArray<{ suffix: string; label: string }> = [
+  { suffix: "Street", label: "Street" },
+  { suffix: "City", label: "City" },
+  { suffix: "Province", label: "State / Province" },
+  { suffix: "Postal", label: "Postal code" },
+  { suffix: "Country", label: "Country" },
+];
+
+function addressMissing(
+  d: Data,
+  prefix: string,
+  sectionId: string,
+  label: string
+): MissingField[] {
+  return ADDR_FIELDS.filter((f) => !filled(d, `${prefix}${f.suffix}`)).map(
+    (f) => ({
+      id: `${prefix}-${f.suffix}`,
+      label: `${label}: ${f.label}`,
+      sectionId,
+    })
   );
+}
+
+/** "Same as …" toggles default to ON (true); only an explicit "false" turns the
+ *  hidden address back into required fields. */
+export function sameAs(d: Data, key: string): boolean {
+  return String(d[key] ?? "").trim() !== "false";
 }
 
 /** Tax section: an HST/GST number AND a Tax-Exempt selection; if exempt is
@@ -111,8 +131,10 @@ export function clientFormMissing(d: Data): MissingField[] {
   const out: MissingField[] = [];
   if (!filled(d, "legalName"))
     out.push({ id: "legalName", label: "Legal company name", sectionId: "company" });
-  if (!addressComplete(d, "billing"))
-    out.push({ id: "billing", label: "Billing address", sectionId: "billing" });
+  out.push(...addressMissing(d, "billing", "billing", "Billing address"));
+  // Mailing is required only when "Same as Billing" is unchecked.
+  if (!sameAs(d, "mailing_same_as_billing"))
+    out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });
   if (!ackd(d))
@@ -135,8 +157,12 @@ export function siteFormMissing(d: Data): MissingField[] {
   const out: MissingField[] = [];
   if (!filled(d, "siteName"))
     out.push({ id: "siteName", label: "Site / Project name", sectionId: "site" });
-  if (!addressComplete(d, "site"))
-    out.push({ id: "siteAddr", label: "Site address", sectionId: "site-address" });
+  out.push(...addressMissing(d, "site", "site-address", "Site address"));
+  // Billing + Mailing are required only when their "Same as Site" is unchecked.
+  if (!sameAs(d, "billing_same_as_site"))
+    out.push(...addressMissing(d, "billing", "billing", "Billing address"));
+  if (!sameAs(d, "mailing_same_as_site"))
+    out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });
   const gc = gcMissing(d);

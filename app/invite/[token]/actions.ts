@@ -163,10 +163,27 @@ export async function signTcAction(
   name: string,
   signatureDataUrl: string
 ): Promise<ActionResult<InvitationView>> {
+  // POLISH-22 (item 11) — server-side instrumentation so the next signing
+  // failure is diagnosable from the server logs (the only at-sign step that can
+  // realistically fail is the signature-image upload; PDFs + emails happen at
+  // submit, not here).
+  console.error("[TC SIGN ACTION]", {
+    token,
+    which,
+    signedName: name,
+    signatureLength: signatureDataUrl?.length ?? 0,
+  });
   try {
     const updated = await signTc(token, which, name, signatureDataUrl);
-    return { ok: true, data: toView(updated, await guardianTermsPublished()) };
+    const result = { ok: true as const, data: toView(updated, await guardianTermsPublished()) };
+    console.error("[TC SIGN RESULT]", {
+      ok: true,
+      dataKeys: Object.keys(result.data ?? {}),
+    });
+    return result;
   } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    console.error("[TC SIGN RESULT]", { ok: false, errorMessage });
     return fail(e);
   }
 }
