@@ -518,20 +518,24 @@ export async function sendClientInviteEmail(opts: {
   // sees them before clicking. The status line is dropped for invites. Other
   // emails are untouched (they still pass their statusLine).
   const intro = siteOnly
-    ? "You've been invited to add a new site to your Nexvelon Global account. <br/>Please review, fill, sign and submit the site setup forms in the link below for review and approval."
-    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: <br/>(Bronze / Silver / Gold / Platinum / Diamond).";
+    ? "You've been invited to add a new site to your Nexvelon Global account. <br style='line-height:12px;' />Please review, fill, sign and submit the site setup forms in the link below for review and approval."
+    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: <br style='line-height:12px;' />(Bronze / Silver / Gold / Platinum / Diamond).";
   // POLISH-16 (CHANGE 3) — intro, explore, and closing all read as the same
   // normal body paragraph (no italic / no muted styling); explicit per-line
   // margins give CHANGE 1's breathing room (intro→explore 14px, explore→closing 12px).
-  const para = `font-family:${SERIF};font-size:15px;font-weight:400;color:#2A2418;line-height:1.6;`;
-  // POLISH-24 (CHANGE 1) — a luxurious antique-gold bullet (✦, U+2726) at the
-  // start of each body paragraph. HTML only; the plain-text mirror is unchanged.
-  const bullet = `<span style="color:#B8924B;font-size:13px;margin-right:8px;vertical-align:middle;">&#10022;</span>`;
-  const introLine = `<p class="nx-p" style="${para}margin:0 0 14px;">${bullet}${intro}</p>`;
+  // POLISH-31 (CHANGE 1) — the three middle paragraphs read cleaner in a sans-
+  // serif body than in Garamond (which is dense when stacked three deep). The
+  // headline, sign-off, CTA, and footer keep Garamond for the luxury accent.
+  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;`;
+  // POLISH-31 (CHANGE 3) — smaller, softer warm-gold bullet (was 13px #B8924B).
+  const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
+  // CHANGE 2 — more breathing between paragraphs (24px), with extra space before
+  // the CTA after the closing line (28px).
+  const introLine = `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}${intro}</p>`;
   const exploreLine = siteOnly
     ? ""
-    : `<p class="nx-p" style="${para}margin:0 0 12px;">${bullet}Explore all Prestige Tier benefits and conditions on the portal under client form.</p>`;
-  const closingLine = `<p class="nx-p" style="${para}margin:0;">${bullet}Once all forms are complete, please return to the status page and press Submit. <br/>For any questions, please reply to this email.</p>`;
+    : `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Explore all Prestige Tier benefits and conditions on the portal under client form.</p>`;
+  const closingLine = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}Once all forms are complete, please return to the status page and press Submit. <br style="line-height:12px;" />For any questions, please reply to this email.</p>`;
   const bodyHtml = `${introLine}${exploreLine}${closingLine}`;
 
   const html = emailShell({
