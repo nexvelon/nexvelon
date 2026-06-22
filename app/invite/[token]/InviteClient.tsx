@@ -723,7 +723,7 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
           ) : null}
         </span>
         <span className="text-sm" style={{ color: NAVY }}>
-          None — I&apos;d love to discuss first or customize add-on benefits
+          None — I&apos;d love to discuss and customize add-on benefits
         </span>
       </button>
       {/* Both fine-print disclaimers, requirements then discretion. POLISH-15
