@@ -2,9 +2,9 @@
 
 // POLISH-17 — server actions for the locked legal-document editor + audit log.
 // Only the two T&C settings keys can be written through here. Every save and
-// restore appends an immutable row to settings_audit_log. Admin-gated (defense
-// in depth on top of RLS). There is intentionally NO delete action — the audit
-// log is append-only.
+// restore appends a row to settings_audit_log. Admin-gated (defense in depth on
+// top of RLS). POLISH-30 — admins may now hard-delete an individual version
+// (deleteAuditEntryAction); the log is no longer strictly append-only.
 
 import { revalidatePath } from "next/cache";
 import { getSetting, setSetting } from "@/lib/api/company-settings";
@@ -13,6 +13,7 @@ import {
   insertAuditRow,
   listAuditRows,
   getAuditRow,
+  deleteAuditRow,
   type DbSettingsAuditRow,
   type AuditFilters,
 } from "@/lib/api/settings-audit";
@@ -144,6 +145,24 @@ export async function restoreLegalDocumentAction(
     revalidatePath("/settings");
     revalidatePath("/quotes/new");
     return { ok: true, data: { newAuditId: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** POLISH-30 — Admin-only hard delete of a single audit-log version. Permanent;
+ *  the deletion itself is intentionally NOT logged. Any entry that restored from
+ *  this version keeps working (its restored_from_audit_id FK is ON DELETE SET
+ *  NULL). This relaxes POLISH-17's append-only guarantee, by request. */
+export async function deleteAuditEntryAction(
+  auditId: string
+): Promise<ActionResult<{ deleted: true }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    await deleteAuditRow(auditId);
+    revalidatePath("/settings");
+    return { ok: true, data: { deleted: true } };
   } catch (e) {
     return fail(e);
   }

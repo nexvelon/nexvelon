@@ -7,6 +7,7 @@ import "server-only";
 // enforced at the action layer on top.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type SettingsAuditAction = "edit" | "restore";
 
@@ -105,4 +106,17 @@ export async function getAuditRow(
     .maybeSingle();
   if (error) throw new Error(`getAuditRow: ${error.message}`);
   return (data as DbSettingsAuditRow | null) ?? null;
+}
+
+/** POLISH-30 — hard-delete a single audit row (admin-gated at the action layer).
+ *  Uses the service-role client. The restored_from_audit_id FK is ON DELETE SET
+ *  NULL, so any entry that restored from this version keeps working (its
+ *  reference simply becomes null). */
+export async function deleteAuditRow(id: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("settings_audit_log")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(`deleteAuditRow: ${error.message}`);
 }
