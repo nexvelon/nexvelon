@@ -309,7 +309,7 @@ function emailShell(p: EmailShellProps): string {
         .nx-card { width:100% !important; }
         .nx-hero { padding:56px 28px 36px !important; }
         .nx-wordmark { font-size:32px !important; }
-        .nx-headline { font-size:22px !important; }
+        .nx-headline { font-size:20px !important; }
         .nx-flank { width:24px !important; }
         .nx-body { padding:16px 28px 0 !important; font-size:14px !important; }
         .nx-p { font-size:14px !important; }
@@ -341,7 +341,7 @@ function emailShell(p: EmailShellProps): string {
                 <div style="margin-top:24px;font-family:${SANS};font-size:10px;letter-spacing:0.42em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
                   p.eyebrow
                 )}</div>
-                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:22px;line-height:1.15;letter-spacing:-0.4px;color:#0A1226;font-weight:400;">${escapeHtml(
+                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:20px;line-height:1.15;letter-spacing:-0.4px;color:#0A1226;font-weight:400;">${escapeHtml(
                   p.headline
                 )}</div>
               </td>
@@ -517,7 +517,7 @@ export async function sendClientInviteEmail(opts: {
   // emails are untouched (they still pass their statusLine).
   const intro = siteOnly
     ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval."
-    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier <br/>(Bronze / Silver / Gold / Platinum / Diamond).";
+    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: <br/>(Bronze / Silver / Gold / Platinum / Diamond).";
   // POLISH-16 (CHANGE 3) — intro, explore, and closing all read as the same
   // normal body paragraph (no italic / no muted styling); explicit per-line
   // margins give CHANGE 1's breathing room (intro→explore 14px, explore→closing 12px).
@@ -534,7 +534,7 @@ export async function sendClientInviteEmail(opts: {
     // CHANGE 2 — single uniform headline.
     headline: siteOnly
       ? "Welcome to Nexvelon's Site Onboarding."
-      : "Welcome to Nexvelon's Client Application Portal.",
+      : "Welcome to Nexvelon Global's Client Application Portal.",
     bodyHtml,
     // CHANGE 2 — no status line on invites.
     ctaHref: base,
@@ -556,7 +556,7 @@ export async function sendClientInviteEmail(opts: {
     "",
     siteOnly
       ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms at the link below for review and approval."
-      : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier\n(Bronze / Silver / Gold / Platinum / Diamond).",
+      : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from:\n(Bronze / Silver / Gold / Platinum / Diamond).",
     "",
     `Open Onboarding Portal: ${base}`,
     ...(siteOnly

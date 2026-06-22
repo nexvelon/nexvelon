@@ -223,7 +223,23 @@ export async function signTc(
   if (!signatureDataUrlIn || !signatureDataUrlIn.startsWith("data:image")) {
     throw new Error("Draw your signature before signing.");
   }
-  const imagePath = await uploadSignaturePng(token, which, signatureDataUrlIn);
+  // POLISH-22 (item 11) — the signature-image upload is the one storage step in
+  // the at-sign path (PDF generation + emails are deferred to submit). Wrap it
+  // so a storage/RLS/size failure surfaces a step-specific message instead of a
+  // generic error, and log the payload size for diagnosis.
+  let imagePath: string;
+  try {
+    imagePath = await uploadSignaturePng(token, which, signatureDataUrlIn);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[TC SIGN UPLOAD FAILED]", {
+      token,
+      which,
+      signatureLength: signatureDataUrlIn.length,
+      error: msg,
+    });
+    throw new Error(`Signature image upload failed: ${msg}`);
+  }
   const now = new Date().toISOString();
   const patch =
     which === "tc1"
@@ -300,26 +316,34 @@ const CURRENCY_VALUES: readonly DbClientCurrency[] = [
 ];
 
 // Readable contacts summary for the client/site `notes` field (the full data is
-// preserved in the jsonb for admin review). Reads the 4 fixed-row keys c0..c3.
+// preserved in the jsonb for admin review).
+// POLISH-22 (CHANGE 10) — reflects the POLISH-15 two-contact model (Primary +
+// AP), each with Email + Personal/Work/Office phones. Previously this read the
+// stale 4-row/`Role` model, ORPHANING the personal + office phone numbers (they
+// were saved in jsonb but never written to the approved client/site notes).
 function contactsNotes(d: Record<string, unknown>): string {
-  const labels = [
-    "Primary (work)",
-    "Primary (personal)",
-    "AP (work/ext)",
-    "AP (direct)",
-  ];
+  const labels = ["Primary Contact", "AP Contact"];
   const lines: string[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 2; i++) {
     const name = [s(d[`c${i}First`]), s(d[`c${i}Last`])].filter(Boolean).join(" ");
+    const personal = s(d[`c${i}PersonalPhone`]);
+    const work = s(d[`c${i}Phone`]); // legacy key = work phone
+    const office = s(d[`c${i}OfficePhone`]);
     const parts = [
       name,
-      s(d[`c${i}Role`]),
       s(d[`c${i}Email`]),
-      s(d[`c${i}Phone`]),
+      personal ? `personal ${personal}` : null,
+      work ? `work ${work}` : null,
+      office ? `office ${office}` : null,
     ].filter(Boolean);
     if (parts.length > 0) lines.push(`${labels[i]}: ${parts.join(" · ")}`);
   }
   return lines.join("\n");
+}
+
+// "Same as …" toggles default ON; only an explicit "false" turns inheritance off.
+function notSame(v: unknown): boolean {
+  return String(v ?? "").trim() === "false";
 }
 
 // Map the saved client jsonb to a DbClient insert payload (pending review).
@@ -329,6 +353,10 @@ function clientInsertFrom(
   now: string
 ) {
   const notes = contactsNotes(cf);
+  // CHANGE 1 — mailing inherits billing unless "Same as Billing" was unchecked.
+  const mailingSame = !notSame(cf.mailing_same_as_billing);
+  const mail = (suffix: string) =>
+    mailingSame ? s(cf[`billing${suffix}`]) : s(cf[`mailing${suffix}`]);
   return {
     name: s(cf.legalName) ?? s(cf.tradeName) ?? email,
     legal_name: s(cf.legalName),
@@ -338,12 +366,12 @@ function clientInsertFrom(
     billing_province: s(cf.billingProvince),
     billing_postal: s(cf.billingPostal),
     billing_country: s(cf.billingCountry),
-    mailing_street: s(cf.mailingStreet),
-    mailing_unit: s(cf.mailingUnit),
-    mailing_city: s(cf.mailingCity),
-    mailing_province: s(cf.mailingProvince),
-    mailing_postal: s(cf.mailingPostal),
-    mailing_country: s(cf.mailingCountry),
+    mailing_street: mail("Street"),
+    mailing_unit: mail("Unit"),
+    mailing_city: mail("City"),
+    mailing_province: mail("Province"),
+    mailing_postal: mail("Postal"),
+    mailing_country: mail("Country"),
     client_hst_gst_number: s(cf.hstNumber),
     tax_exempt: s(cf.taxExempt) === "Yes",
     tax_exempt_certificate_number: s(cf.taxExemptCert),
@@ -360,7 +388,24 @@ function clientInsertFrom(
 
 // Map the saved site jsonb to a DbSite insert payload under a client.
 function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
-  const notes = contactsNotes(sf);
+  // CHANGE 1 — billing + mailing each inherit the SITE address unless their
+  // "Same as Site" toggle was unchecked.
+  const billingSame = !notSame(sf.billing_same_as_site);
+  const mailingSame = !notSame(sf.mailing_same_as_site);
+  const bill = (suffix: string) =>
+    billingSame ? s(sf[`site${suffix}`]) : s(sf[`billing${suffix}`]);
+  const mail = (suffix: string) =>
+    mailingSame ? s(sf[`site${suffix}`]) : s(sf[`mailing${suffix}`]);
+  // CHANGE 10 — the GC personal/office phones have no dedicated column (only
+  // gc_phone = work), so append them to notes rather than orphaning them.
+  const gcExtra = [
+    s(sf.gcPersonalPhone) ? `personal ${s(sf.gcPersonalPhone)}` : null,
+    s(sf.gcOfficePhone) ? `office ${s(sf.gcOfficePhone)}` : null,
+  ].filter(Boolean);
+  const gcLine = gcExtra.length
+    ? `GC / Site Supervisor (extra phones): ${gcExtra.join(" · ")}`
+    : "";
+  const notes = [contactsNotes(sf), gcLine].filter(Boolean).join("\n");
   return {
     client_id: clientId,
     name: s(sf.siteName) ?? "Primary site",
@@ -370,18 +415,18 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
     province: s(sf.siteProvince),
     postal_code: s(sf.sitePostal),
     country: s(sf.siteCountry) ?? "Canada",
-    billing_street: s(sf.billingStreet),
-    billing_unit: s(sf.billingUnit),
-    billing_city: s(sf.billingCity),
-    billing_province: s(sf.billingProvince),
-    billing_postal: s(sf.billingPostal),
-    billing_country: s(sf.billingCountry),
-    mailing_street: s(sf.mailingStreet),
-    mailing_unit: s(sf.mailingUnit),
-    mailing_city: s(sf.mailingCity),
-    mailing_province: s(sf.mailingProvince),
-    mailing_postal: s(sf.mailingPostal),
-    mailing_country: s(sf.mailingCountry),
+    billing_street: bill("Street"),
+    billing_unit: bill("Unit"),
+    billing_city: bill("City"),
+    billing_province: bill("Province"),
+    billing_postal: bill("Postal"),
+    billing_country: bill("Country"),
+    mailing_street: mail("Street"),
+    mailing_unit: mail("Unit"),
+    mailing_city: mail("City"),
+    mailing_province: mail("Province"),
+    mailing_postal: mail("Postal"),
+    mailing_country: mail("Country"),
     site_hst_gst_number: s(sf.hstNumber),
     tax_exempt: s(sf.taxExempt) === "Yes",
     tax_exempt_certificate_number: s(sf.taxExemptCert),

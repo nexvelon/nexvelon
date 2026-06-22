@@ -101,6 +101,28 @@ describe("TcSign — T&C signing checkbox", () => {
     );
   });
 
+  // POLISH-22 (item 11) — the silent-revert-on-failure that hid the signing bug
+  // is replaced by a visible error banner. This guards it forever.
+  it("shows a visible error banner (no silent revert) when signing fails", async () => {
+    const user = userEvent.setup();
+    signTcAction.mockResolvedValueOnce({ ok: false, error: "Test error" });
+    render(<TcSign token="tok" which="tc1" />);
+
+    const nameInput = await screen.findByPlaceholderText("Jane Smith");
+    await user.type(nameInput, "Jane Smith");
+    await user.click(screen.getByRole("checkbox"));
+
+    // The failure surfaces in a banner; it does NOT silently revert to idle.
+    await waitFor(() =>
+      expect(screen.getByText(/Signing failed: Test error/i)).toBeInTheDocument()
+    );
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Signed by/i)).not.toBeInTheDocument();
+    // Checkbox is disabled until the user explicitly retries.
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(signTcAction).toHaveBeenCalledTimes(1);
+  });
+
   it("does not sign (and reverts) when the name is empty", async () => {
     const user = userEvent.setup();
     render(<TcSign token="tok" which="tc2" />);

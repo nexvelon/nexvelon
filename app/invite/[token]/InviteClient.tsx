@@ -194,6 +194,7 @@ function SelectField({
   options,
   placeholder = "Select…",
   required,
+  uppercase,
 }: {
   label: string;
   value: string;
@@ -201,16 +202,20 @@ function SelectField({
   options: readonly { v: string; l: string }[];
   placeholder?: string;
   required?: boolean;
+  // CHANGE 9 — render BOTH the selected value (trigger) and the menu items in
+  // uppercase, so the chosen Payment Terms/Method stays all-caps after select.
+  uppercase?: boolean;
 }) {
+  const upper = uppercase ? "uppercase" : "";
   return (
     <Field label={label} required={required}>
       <Select value={value || undefined} onValueChange={(v) => onChange(v ?? "")}>
-        <SelectTrigger className={`w-full ${CONTROL_CLASS}`} style={CONTROL_STYLE}>
+        <SelectTrigger className={`w-full ${CONTROL_CLASS} ${upper}`} style={CONTROL_STYLE}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           {options.map((o) => (
-            <SelectItem key={o.v} value={o.v}>
+            <SelectItem key={o.v} value={o.v} className={upper}>
               {o.l}
             </SelectItem>
           ))}
@@ -245,20 +250,6 @@ function SectionHeading({
         style={{ background: GOLD_DEEP }}
       />
     </div>
-  );
-}
-
-// CHANGE 6 — the "Leave blank if same as billing" mailing note, rendered
-// prominently: deep navy, Inter SemiBold, 13px, NOT italic (overrides the prior
-// gold-italic treatment) so it reads as a clear, authoritative instruction.
-function MailingNote() {
-  return (
-    <p
-      className="mt-1 text-[13px] font-semibold"
-      style={{ color: "#1a2332" }}
-    >
-      Leave blank if same as billing.
-    </p>
   );
 }
 
@@ -447,8 +438,44 @@ function AddressBlock({
   );
 }
 
+// POLISH-22 (CHANGE 1) — "Same as …" toggle for an address section. When checked
+// (the default) the address fields are hidden and inherited from the source on
+// submit; unchecking reveals the fields and makes them required (the section
+// heading shows a red asterisk and the missing-fields banner lists each field).
+function SameAsCheckbox({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"
+      style={{ color: NAVY }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 cursor-pointer"
+        style={{ accentColor: GOLD }}
+      />
+      {label}
+    </label>
+  );
+}
+
 function TaxSection({ get, set }: { get: Getter; set: Setter }) {
-  const exempt = get("taxExempt");
+  const exempt = get("taxExempt") || "No";
+  // CHANGE 8 — default the Tax-Exempt selection to "No" so the field is never
+  // blank (keeps the required-field gate satisfied without forcing a click).
+  useEffect(() => {
+    if (!get("taxExempt")) set("taxExempt", "No");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <Section id="tax" title="Tax Information" required>
       <Grid>
@@ -458,7 +485,7 @@ function TaxSection({ get, set }: { get: Getter; set: Setter }) {
           onChange={(v) => set("hstNumber", v)}
         />
         <SelectField
-          label="Tax Exempt?"
+          label="Are you Tax Exempt?"
           value={exempt}
           onChange={(v) => set("taxExempt", v)}
           options={TAX_EXEMPT.map((t) => ({ v: t, l: t }))}
@@ -484,12 +511,14 @@ function PaymentSection({ get, set }: { get: Getter; set: Setter }) {
           value={get("paymentTerms")}
           onChange={(v) => set("paymentTerms", v)}
           options={PAYMENT_TERMS}
+          uppercase
         />
         <SelectField
           label="Payment Method"
           value={get("paymentMethod")}
           onChange={(v) => set("paymentMethod", v)}
           options={PAYMENT_METHODS}
+          uppercase
         />
         <SelectField
           label="Currency"
@@ -586,7 +615,16 @@ function TierSection({ get, set }: { get: Getter; set: Setter }) {
   return (
     <Section
       id="tier"
-      title="Select the Tier benefits you would love to have with Nexvelon (stated conditions and benefits)"
+      title="Select the Tier benefits you would love to have with Nexvelon"
+      noteNode={
+        // CHANGE 2 — second line: smaller italic muted, for visual hierarchy.
+        <p
+          className="mt-1 text-[12px] italic"
+          style={{ color: "#5C5240" }}
+        >
+          (stated conditions and benefits)
+        </p>
+      }
     >
       <p className="text-xs" style={{ color: MUTED }}>
         Final tier assignment is determined by Nexvelon Global based on annual
@@ -834,7 +872,7 @@ function FormCompleteness({ missing }: { missing: MissingField[] }) {
       style={{ borderColor: "#E2B7AE", background: "#FCF3F1" }}
     >
       <p className="text-[13px] font-semibold" style={{ color: "#7A2E22" }}>
-        Please complete the following to submit:
+        This box will show any missing items required to complete this form.
       </p>
       <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
         {missing.map((m, i) => (
@@ -946,12 +984,14 @@ function ClientInfoFormInner({
     (t, d) => saveClientFormAction(t, d)
   );
   const missing = clientFormMissing(values);
+  // CHANGE 1 — mailing inherits billing unless explicitly unchecked.
+  const mailingSame = get("mailing_same_as_billing") !== "false";
 
   return (
     <FormShell
       token={token}
       title="Client Information"
-      description="Your company's legal details, billing & mailing addresses, tax, payment, and contacts."
+      description="Enter your company's legal details, billing & mailing addresses, tax, payment, and contacts."
       savedAt={savedAt}
     >
       <FormCompleteness missing={missing} />
@@ -976,8 +1016,15 @@ function ClientInfoFormInner({
         <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
       </Section>
 
-      <Section id="mailing" title="Mailing address" noteNode={<MailingNote />}>
-        <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
+      <Section id="mailing" title="Mailing address" required={!mailingSame}>
+        <SameAsCheckbox
+          checked={mailingSame}
+          label="Same as Billing Address"
+          onChange={(c) => set("mailing_same_as_billing", c ? "true" : "false")}
+        />
+        {!mailingSame && (
+          <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
+        )}
       </Section>
 
       {/* CHANGE 4 — Payment Policies sit between Tax and Payment Information so
@@ -1015,12 +1062,15 @@ function SiteInfoFormInner({
     (t, d) => saveSiteFormAction(t, d)
   );
   const missing = siteFormMissing(values);
+  // CHANGE 1 — billing + mailing each inherit the site address unless unchecked.
+  const billingSame = get("billing_same_as_site") !== "false";
+  const mailingSame = get("mailing_same_as_site") !== "false";
 
   return (
     <FormShell
       token={token}
       title="Site Information"
-      description="The site we'll be servicing, plus billing & mailing, tax, payment, and contacts."
+      description="Enter your site's details, billing & mailing addresses, tax, payment, and contacts."
       savedAt={savedAt}
     >
       <FormCompleteness missing={missing} />
@@ -1040,12 +1090,26 @@ function SiteInfoFormInner({
         <AddressBlock get={get} set={set} prefix="site" sectionPrefix="Site" />
       </Section>
 
-      <Section id="billing" title="Billing address">
-        <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
+      <Section id="billing" title="Billing address" required={!billingSame}>
+        <SameAsCheckbox
+          checked={billingSame}
+          label="Same as Site Address"
+          onChange={(c) => set("billing_same_as_site", c ? "true" : "false")}
+        />
+        {!billingSame && (
+          <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
+        )}
       </Section>
 
-      <Section id="mailing" title="Mailing address" noteNode={<MailingNote />}>
-        <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
+      <Section id="mailing" title="Mailing address" required={!mailingSame}>
+        <SameAsCheckbox
+          checked={mailingSame}
+          label="Same as Site Address"
+          onChange={(c) => set("mailing_same_as_site", c ? "true" : "false")}
+        />
+        {!mailingSame && (
+          <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
+        )}
       </Section>
 
       {/* CHANGE 5 — GC / Site Supervisor moves up (after Tax, before Payment);
@@ -1074,6 +1138,9 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
   const [termsLoaded, setTermsLoaded] = useState(false);
   const [name, setName] = useState("");
   const [status, setStatus] = useState<SignStatus>("idle");
+  // POLISH-22 (item 11) — the specific failure message, shown in a persistent
+  // red banner instead of silently reverting to idle.
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const sigRef = useRef<SignatureCanvas>(null);
 
   useEffect(() => {
@@ -1130,11 +1197,47 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
     } catch {
       dataUrl = pad.getCanvas().toDataURL("image/png");
     }
+    setErrorMsg(null);
     setStatus("signing");
-    const res = await signTcAction(token, which, name.trim(), dataUrl);
-    if (!res.ok) {
-      toast.error(res.error);
-      setStatus("error"); // checkbox reverts to unchecked + re-enabled for retry
+    // POLISH-22 (item 11) — instrumentation + visible failures. The recurring
+    // "signing reverts to empty" bug hid because failures only toasted and reset
+    // to idle. We now log the result and, on ANY failure (rejected response OR
+    // thrown exception OR unexpected shape), park in `error` with a banner.
+    let res: Awaited<ReturnType<typeof signTcAction>>;
+    try {
+      res = await signTcAction(token, which, name.trim(), dataUrl);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error(
+        "[TC SIGN DEBUG]",
+        JSON.stringify(
+          { thrown: true, error: msg, token, which, signatureLength: dataUrl.length },
+          null,
+          2
+        )
+      );
+      setErrorMsg(msg);
+      setStatus("error");
+      return;
+    }
+    console.error(
+      "[TC SIGN DEBUG]",
+      JSON.stringify(
+        {
+          ok: res?.ok ?? false,
+          error: res && !res.ok ? res.error : null,
+          hasData: !!(res && res.ok && res.data),
+          token,
+          which,
+          signatureLength: dataUrl.length,
+        },
+        null,
+        2
+      )
+    );
+    if (!res || !res.ok) {
+      setErrorMsg((res && !res.ok && res.error) || "Unknown error");
+      setStatus("error");
       return;
     }
     applyView(res.data); // authoritative — signedAt is now set → signed view shows
@@ -1221,6 +1324,33 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
             </div>
           </div>
 
+          {/* POLISH-22 (item 11) — persistent error banner; the user must click
+              "Try again" to retry (no silent revert that hid the bug before). */}
+          {status === "error" && (
+            <div
+              className="rounded-md border px-4 py-3 text-sm"
+              style={{ borderColor: "#E2B7AE", background: "#FCF3F1", color: "#7A2E22" }}
+            >
+              <p className="font-semibold">
+                Signing failed: {errorMsg ?? "Unknown error"}.
+              </p>
+              <p className="mt-1 text-[13px]">
+                Please try again or contact support.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMsg(null);
+                  setStatus("idle");
+                }}
+                className="mt-2 rounded-md border px-3 py-1 text-[13px] font-medium"
+                style={{ borderColor: "#9B3A2C", color: "#9B3A2C" }}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
           <label
             className="flex cursor-pointer items-center gap-2 text-sm"
             style={{ color: NAVY }}
@@ -1228,7 +1358,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
             <input
               type="checkbox"
               checked={status === "signing" || status === "signed"}
-              disabled={signing}
+              disabled={signing || status === "error"}
               onChange={(e) => onAgree(e.target.checked)}
               className="h-4 w-4 cursor-pointer"
               style={{ accentColor: GOLD }}
