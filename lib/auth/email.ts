@@ -306,7 +306,9 @@ function emailShell(p: EmailShellProps): string {
       /* CHANGE 4 — premium CTA hover (clients that support it): brighter gold rim + deeper shadow. */
       .nx-cta-td:hover { border-color:#D4B66B !important; box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 6px 18px rgba(10,18,38,0.6),0 0 0 1px rgba(201,163,92,0.35) !important; }
       @media only screen and (max-width:640px) {
-        .nx-card { width:100% !important; }
+        /* POLISH-26 — keep the card centered on mobile (some clients drop the
+           outer td's align=center once .nx-card goes full-width). */
+        .nx-card { width:100% !important; margin:0 auto !important; padding-left:0 !important; padding-right:0 !important; }
         .nx-hero { padding:56px 28px 36px !important; }
         .nx-wordmark { font-size:32px !important; }
         .nx-headline { font-size:20px !important; }
@@ -324,7 +326,7 @@ function emailShell(p: EmailShellProps): string {
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%),radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);padding:40px 12px;">
       <tr>
         <td align="center">
-          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background-color:#FBF8F1;border:1px solid #8A6A2E;box-shadow:0 0 0 1px rgba(138,106,46,0.5),0 0 18px rgba(184,146,75,0.45),0 30px 80px -20px rgba(20,30,80,0.65),0 60px 140px -30px rgba(30,42,90,0.55);">
+          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;max-width:640px;background-color:#FBF8F1;border:1px solid #8A6A2E;box-shadow:0 0 0 1px rgba(138,106,46,0.5),0 0 18px rgba(184,146,75,0.45),0 30px 80px -20px rgba(20,30,80,0.65),0 60px 140px -30px rgba(30,42,90,0.55);">
 
             <!-- Hero -->
             <tr>
@@ -457,7 +459,7 @@ ${
 ${
   p.outerNote
     ? `
-          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;">
+          <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;max-width:640px;">
             <tr><td class="nx-outer" style="padding:28px 64px 56px;text-align:center;">
               <div style="font-family:${SANS};font-size:11px;color:#6B7390;line-height:1.7;letter-spacing:0.04em;">${p.outerNote}</div>
             </td></tr>
