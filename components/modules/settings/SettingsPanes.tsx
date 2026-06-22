@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -13,15 +13,11 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useRole } from "@/lib/role-context";
 import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import {
   getDefaultTermsAction,
-  setDefaultTermsAction,
   getDefaultTermsGuardianAction,
-  setDefaultTermsGuardianAction,
 } from "@/app/(app)/settings/company-settings-actions";
 import {
   Select,
@@ -43,6 +39,12 @@ import { auditLog } from "@/lib/mock-data/audit-log";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { MarginTiersTable } from "@/components/modules/settings/MarginTiersTable";
+import { LegalDocEditor } from "@/components/modules/settings/LegalDocEditor";
+import { LegalDocAuditLog } from "@/components/modules/settings/LegalDocAuditLog";
+import {
+  LEGAL_DOC_KEY_INTEGRATED,
+  LEGAL_DOC_KEY_GUARDIAN,
+} from "@/lib/legal-doc-keys";
 
 // ─────────────────────────────────────────────────────────────
 // Company Profile
@@ -109,6 +111,10 @@ export function CompanyProfile() {
 // ─────────────────────────────────────────────────────────────
 
 export function QuoteDefaults() {
+  // POLISH-17 — a save (editor) or restore (audit log) bumps this so both the
+  // editors and the audit log re-fetch and stay consistent.
+  const [docReload, setDocReload] = useState(0);
+  const bumpDocs = () => setDocReload((k) => k + 1);
   return (
     <div className="space-y-6">
       <Card className="bg-card grid grid-cols-1 gap-4 p-6 shadow-sm md:grid-cols-2">
@@ -161,101 +167,34 @@ export function QuoteDefaults() {
       </Card>
 
       {/* POLISH-6 — these two blocks are the SINGLE source for quote-PDF terms
-          AND the invite tc1/tc2 docs. The bogus onboarding-only third block was
-          removed. Display labels only — setting keys are unchanged. */}
-      <DefaultTermsEditor
+          AND the invite tc1/tc2 docs. POLISH-17 — they are now locked legal
+          documents: read-only by default, edited only after confirmation, and
+          every change/restore is recorded in the audit log below. Setting keys
+          are unchanged (quote-PDF + invite rendering still read them). */}
+      <LegalDocEditor
         title="Nexvelon Integrated Solutions Inc. — Default Terms and Conditions"
+        companyName="Nexvelon Integrated Solutions Inc."
+        settingKey={LEGAL_DOC_KEY_INTEGRATED}
         fallback={DEFAULT_TERMS}
         load={getDefaultTermsAction}
-        save={setDefaultTermsAction}
+        onSaved={bumpDocs}
+        reloadKey={docReload}
       />
 
-      <DefaultTermsEditor
+      <LegalDocEditor
         title="Nexvelon Guardian Inc. — Default Terms and Conditions"
+        companyName="Nexvelon Guardian Inc."
+        settingKey={LEGAL_DOC_KEY_GUARDIAN}
         fallback={DEFAULT_TERMS_GUARDIAN}
         load={getDefaultTermsGuardianAction}
-        save={setDefaultTermsGuardianAction}
+        onSaved={bumpDocs}
+        reloadKey={docReload}
       />
+
+      <LegalDocAuditLog reloadKey={docReload} onRestored={bumpDocs} />
 
       <SaveBar />
     </div>
-  );
-}
-
-// Chunk 2 / G2 — admin-only editor for a default quote Terms & Conditions
-// value. Loads the stored value (company_settings) on mount via `load`,
-// falling back to the in-code `fallback` const; saves via the requireAdmin-
-// gated `save` action. Hidden entirely for non-Admin roles (UI gate; the
-// action enforces the server gate too). One instance per entity (Integrated
-// + Guardian), each wired to its own get/set actions.
-type TermsActionResult =
-  | { ok: true; data: string | null }
-  | { ok: false; error: string };
-
-function DefaultTermsEditor({
-  title,
-  fallback,
-  load,
-  save,
-}: {
-  title: string;
-  fallback: string;
-  load: () => Promise<TermsActionResult>;
-  save: (value: string) => Promise<{ ok: true; data: null } | { ok: false; error: string }>;
-}) {
-  const { role } = useRole();
-  const [value, setValue] = useState<string>(fallback);
-  const [loading, setLoading] = useState(true);
-  const [pending, startSave] = useTransition();
-
-  useEffect(() => {
-    if (role !== "Admin") return;
-    let active = true;
-    load()
-      .then((res) => {
-        if (active && res.ok && res.data != null) setValue(res.data);
-      })
-      .catch(() => {
-        // keep the in-code fallback already in state
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [role, load]);
-
-  if (role !== "Admin") return null;
-
-  const handleSave = () => {
-    startSave(async () => {
-      const res = await save(value);
-      if (res.ok) toast.success("Default Terms saved");
-      else toast.error(res.error);
-    });
-  };
-
-  return (
-    <Card className="bg-card p-6 shadow-sm">
-      <h4 className="text-brand-navy font-serif text-base">{title}</h4>
-      <p className="text-muted-foreground mb-3 text-[11px]">
-        Shown on the Terms schedule of every new quote using this entity.
-        Editing this does not change quotes that already exist.
-      </p>
-      <Textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        rows={18}
-        disabled={loading || pending}
-        className="font-mono text-xs leading-relaxed"
-      />
-      <div className="mt-3 flex justify-end">
-        <Button onClick={handleSave} disabled={loading || pending}>
-          {pending ? "Saving…" : "Save Terms"}
-        </Button>
-      </div>
-    </Card>
   );
 }
 
