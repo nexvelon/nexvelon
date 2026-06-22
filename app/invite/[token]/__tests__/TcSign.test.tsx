@@ -40,9 +40,16 @@ const h = vi.hoisted(() => {
     site_form_completed: false,
     ready: false,
   } as Record<string, unknown>;
+  type SignResult =
+    | { ok: true; data: Record<string, unknown> }
+    | { ok: false; error: string };
   const signTcAction = vi.fn(
-    async (_token: string, which: "tc1" | "tc2", name: string) => ({
-      ok: true as const,
+    async (
+      _token: string,
+      which: "tc1" | "tc2",
+      name: string
+    ): Promise<SignResult> => ({
+      ok: true,
       data: {
         ...baseView,
         [`${which}_signed_at`]: "2026-06-21T10:00:00.000Z",
