@@ -518,7 +518,7 @@ export async function sendClientInviteEmail(opts: {
   // sees them before clicking. The status line is dropped for invites. Other
   // emails are untouched (they still pass their statusLine).
   const intro = siteOnly
-    ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval."
+    ? "You've been invited to add a new site to your Nexvelon Global account. <br/>Please review, fill, sign and submit the site setup forms in the link below for review and approval."
     : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: <br/>(Bronze / Silver / Gold / Platinum / Diamond).";
   // POLISH-16 (CHANGE 3) — intro, explore, and closing all read as the same
   // normal body paragraph (no italic / no muted styling); explicit per-line
@@ -560,7 +560,7 @@ export async function sendClientInviteEmail(opts: {
       : "Nexvelon Global · Client Onboarding",
     "",
     siteOnly
-      ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms at the link below for review and approval."
+      ? "You've been invited to add a new site to your Nexvelon Global account.\nPlease review, fill, sign and submit the site setup forms at the link below for review and approval."
       : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from:\n(Bronze / Silver / Gold / Platinum / Diamond).",
     "",
     `Open Onboarding Portal: ${base}`,
