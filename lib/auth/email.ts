@@ -198,8 +198,7 @@ export async function sendLowStockAlert(
 
   const html = emailShell({
     eyebrow: "INVENTORY ALERT",
-    headlineEmphasis: "Stock",
-    headlineRest: " running low.",
+    headline: "Stock running low.",
     bodyHtml,
     statusLine: "INVENTORY ALERT · ATTENTION REQUIRED",
     signatureItalic: "Review and reorder the items above in Inventory.",
@@ -271,8 +270,8 @@ const MONO = "'SF Mono', 'Courier New', monospace";
 
 export type EmailShellProps = {
   eyebrow: string; // "CLIENT ONBOARDING"
-  headlineEmphasis: string; // "Welcome" — rendered italic, lighter brown
-  headlineRest: string; // " to Nexvelon's Client Application Portal."
+  // POLISH-16 (CHANGE 2) — one uniform headline string (no italic-emphasis split).
+  headline: string; // "Welcome to Nexvelon's Client Application Portal."
   bodyHtml: string; // already-styled <p>s for the letter body
   statusLine?: string; // "APPLICATION PORTAL · READY" — omitted = no status row
   ctaHref?: string; // if absent, no button + no fallback-URL block
@@ -304,15 +303,19 @@ function emailShell(p: EmailShellProps): string {
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
     <style>
       body { margin:0; padding:0; }
+      /* CHANGE 4 — premium CTA hover (clients that support it): brighter gold rim + deeper shadow. */
+      .nx-cta-td:hover { border-color:#D4B66B !important; box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 6px 18px rgba(10,18,38,0.6),0 0 0 1px rgba(201,163,92,0.35) !important; }
       @media only screen and (max-width:640px) {
         .nx-card { width:100% !important; }
         .nx-hero { padding:56px 28px 36px !important; }
         .nx-wordmark { font-size:32px !important; }
         .nx-headline { font-size:22px !important; }
         .nx-flank { width:24px !important; }
-        .nx-body { padding:8px 28px 0 !important; font-size:15px !important; }
+        .nx-body { padding:16px 28px 0 !important; font-size:14px !important; }
+        .nx-p { font-size:14px !important; }
+        .nx-inc { font-size:13px !important; }
         .nx-pad { padding-left:28px !important; padding-right:28px !important; }
-        .nx-ctabtn { padding:18px 36px !important; }
+        .nx-ctabtn { padding:18px 40px !important; }
         .nx-outer { padding:24px 24px 48px !important; }
       }
     </style>
@@ -325,7 +328,7 @@ function emailShell(p: EmailShellProps): string {
 
             <!-- Hero -->
             <tr>
-              <td class="nx-hero" style="padding:48px 56px 28px;text-align:center;">
+              <td class="nx-hero" style="padding:52px 56px 32px;text-align:center;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
                   <tr>
                     <td class="nx-flank" style="width:48px;border-bottom:1px solid #B8924B;font-size:0;line-height:0;">&nbsp;</td>
@@ -338,17 +341,15 @@ function emailShell(p: EmailShellProps): string {
                 <div style="margin-top:24px;font-family:${SANS};font-size:10px;letter-spacing:0.42em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
                   p.eyebrow
                 )}</div>
-                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:22px;line-height:1.25;color:#0A1226;font-weight:500;">
-                  <span style="font-style:italic;color:#3A3220;">${escapeHtml(
-                    p.headlineEmphasis
-                  )}</span>${escapeHtml(p.headlineRest)}
-                </div>
+                <div class="nx-headline" style="margin-top:18px;font-family:${SERIF};font-size:22px;line-height:1.15;letter-spacing:-0.4px;color:#0A1226;font-weight:400;">${escapeHtml(
+                  p.headline
+                )}</div>
               </td>
             </tr>
 
             <!-- Letter body -->
             <tr>
-              <td class="nx-body" style="padding:8px 72px 0;font-family:${SERIF};font-size:17px;line-height:1.55;color:#2A2418;">
+              <td class="nx-body" style="padding:16px 72px 0;font-family:${SERIF};font-size:15px;line-height:1.6;color:#2A2418;">
                 ${p.bodyHtml}
               </td>
             </tr>
@@ -378,10 +379,10 @@ ${
             <tr>
               <td class="nx-pad" style="padding:16px 72px 8px;text-align:center;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-                  <tr><td style="background-color:#0A1226;border:1px solid #B8924B;">
+                  <tr><td class="nx-cta-td" style="background-color:#0A1226;background-image:linear-gradient(180deg,#0A1226 0%,#15203F 100%);border:1.5px solid #C9A35C;border-radius:3px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 4px 12px rgba(10,18,38,0.5),0 0 0 1px rgba(201,163,92,0.2);">
                     <a class="nx-ctabtn" href="${escapeHtml(
                       p.ctaHref as string
-                    )}" style="display:inline-block;padding:15px 40px;font-family:${SANS};font-size:11px;letter-spacing:0.28em;font-weight:600;text-transform:uppercase;color:#FBF8F1;text-decoration:none;">${escapeHtml(
+                    )}" style="display:inline-block;padding:18px 48px;font-family:${SERIF};font-style:italic;font-size:14px;letter-spacing:1.5px;color:#FBF8F1;text-decoration:none;">${escapeHtml(
                       p.ctaLabel as string
                     )}</a>
                   </td></tr>
@@ -414,13 +415,15 @@ ${
             <!-- POLISH-15 (CHANGE 11) — the fallback-URL block was removed; the
                  CTA button is the single path forward, saving vertical space. -->
 
-            <!-- Signature -->
+            <!-- Signature. CHANGE 5 — the sign-off line is normalized to body
+                 style (serif, 15px, normal, #2A2418) and the whole block is
+                 centered for a clean, cohesive close. -->
             <tr>
-              <td class="nx-pad" style="padding:8px 72px 36px;">
-                <div style="font-family:${SERIF};font-style:italic;font-size:16px;color:#2A2418;line-height:1.5;">${escapeHtml(
+              <td class="nx-pad" style="padding:8px 72px 32px;text-align:center;">
+                <div class="nx-p" style="font-family:${SERIF};font-size:15px;font-weight:400;color:#2A2418;line-height:1.5;margin:20px 0 24px;">${escapeHtml(
                   p.signatureItalic
                 )}</div>
-                <div style="margin-top:14px;font-family:${SERIF};font-size:22px;color:#0A1226;font-weight:500;letter-spacing:-0.2px;">${escapeHtml(
+                <div style="font-family:${SERIF};font-size:22px;color:#0A1226;font-weight:500;letter-spacing:-0.2px;">${escapeHtml(
                   p.signatureGroup
                 )}</div>
                 <div style="margin-top:10px;font-family:${SANS};font-size:10px;letter-spacing:0.3em;color:#B8924B;font-weight:600;text-transform:uppercase;">${escapeHtml(
@@ -434,12 +437,12 @@ ${
               <td style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
                   <tr><td style="padding:28px 40px 20px;">
-                    <!-- POLISH-14 (CHANGE 4) — the three operating entities,
-                         stacked; the prior right-side "NEXVELON GLOBAL INC."
-                         eyebrow is dropped as redundant with "Nexvelon Inc." -->
-                    <div style="font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Inc.</div>
-                    <div style="margin-top:6px;font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Guardian Inc.</div>
-                    <div style="margin-top:6px;font-family:${SERIF};font-size:22px;color:#FBF8F1;font-weight:500;letter-spacing:0.04em;">Nexvelon Integrated Solutions Inc.</div>
+                    <!-- Three operating entities, stacked. POLISH-16 (CHANGE 6) —
+                         reduced to a tasteful 14px corporate identifier (was 22px),
+                         tighter 4px gaps, slightly more tracking. -->
+                    <div class="nx-inc" style="font-family:${SERIF};font-size:14px;color:#FBF8F1;font-weight:500;letter-spacing:0.05em;line-height:1.4;">Nexvelon Inc.</div>
+                    <div class="nx-inc" style="margin-top:4px;font-family:${SERIF};font-size:14px;color:#FBF8F1;font-weight:500;letter-spacing:0.05em;line-height:1.4;">Nexvelon Guardian Inc.</div>
+                    <div class="nx-inc" style="margin-top:4px;font-family:${SERIF};font-size:14px;color:#FBF8F1;font-weight:500;letter-spacing:0.05em;line-height:1.4;">Nexvelon Integrated Solutions Inc.</div>
                   </td></tr>
                   <tr><td style="padding:0 40px;"><div style="border-top:1px solid #1A2340;font-size:0;line-height:0;">&nbsp;</div></td></tr>
                   <tr><td style="padding:16px 40px 24px;text-align:center;">
@@ -473,7 +476,7 @@ function letterParagraphs(parts: string[]): string {
     .filter((s) => s.trim() !== "")
     .map(
       (s) =>
-        `<p style="margin:0 0 16px;font-family:${SERIF};font-size:17px;line-height:1.55;color:#2A2418;">${s}</p>`
+        `<p class="nx-p" style="margin:0 0 20px;font-family:${SERIF};font-size:15px;line-height:1.6;color:#2A2418;">${s}</p>`
     )
     .join("");
 }
@@ -513,26 +516,28 @@ export async function sendClientInviteEmail(opts: {
   const intro = siteOnly
     ? "You've been invited to add a new site to your Nexvelon Global account. Please review, fill, sign and submit the site setup forms in the link below for review and approval."
     : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tier (Bronze / Silver / Gold / Platinum / Diamond).";
-  // POLISH-15 (CHANGE 10) — explore and closing lines now share the EXACT same
-  // style: italic, 13px, #5C5240.
-  const lineStyle = `margin:0;font-family:${SERIF};font-style:italic;font-size:13px;color:#5C5240;line-height:1.6;`;
+  // POLISH-16 (CHANGE 3) — intro, explore, and closing all read as the same
+  // normal body paragraph (no italic / no muted styling); explicit per-line
+  // margins give CHANGE 1's breathing room (intro→explore 14px, explore→closing 12px).
+  const para = `font-family:${SERIF};font-size:15px;font-weight:400;color:#2A2418;line-height:1.6;`;
+  const introLine = `<p class="nx-p" style="${para}margin:0 0 14px;">${intro}</p>`;
   const exploreLine = siteOnly
     ? ""
-    : `<p style="${lineStyle}margin-bottom:12px;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
-  const closingLine = `<p style="${lineStyle}">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
-  const bodyHtml = `${letterParagraphs([intro])}${exploreLine}${closingLine}`;
+    : `<p class="nx-p" style="${para}margin:0 0 12px;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
+  const closingLine = `<p class="nx-p" style="${para}margin:0;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
+  const bodyHtml = `${introLine}${exploreLine}${closingLine}`;
 
   const html = emailShell({
     eyebrow: siteOnly ? "SITE ONBOARDING" : "CLIENT ONBOARDING",
-    headlineEmphasis: "Welcome",
-    // CHANGE 9 — restore the fuller headline; fits one line at the tightened 22px.
-    headlineRest: siteOnly
-      ? " to Nexvelon's Site Onboarding."
-      : " to Nexvelon's Client Application Portal.",
+    // CHANGE 2 — single uniform headline.
+    headline: siteOnly
+      ? "Welcome to Nexvelon's Site Onboarding."
+      : "Welcome to Nexvelon's Client Application Portal.",
     bodyHtml,
     // CHANGE 2 — no status line on invites.
     ctaHref: base,
-    ctaLabel: "OPEN ONBOARDING PORTAL",
+    // CHANGE 4 — elegant Title Case inscription for the italic-serif CTA.
+    ctaLabel: "Open Onboarding Portal",
     ctaSubline: "EXPLORE THE PORTAL",
     // explore + closing moved into bodyHtml above; signature carries a brief
     // sign-off since the operational closing is now above the CTA.
@@ -629,8 +634,7 @@ export async function sendClientSubmissionEmail(opts: {
     ${section("Signed agreements", tcRows)}`;
   const html = emailShell({
     eyebrow: "ONBOARDING SUBMITTED",
-    headlineEmphasis: "New",
-    headlineRest: " client pending review.",
+    headline: "New client pending review.",
     bodyHtml,
     statusLine: "PENDING REVIEW · ACTION REQUIRED",
     signatureItalic: "Review the submission in Clients → Pending Review.",
@@ -714,8 +718,7 @@ export async function sendClientConfirmationEmail(opts: {
 
   const html = emailShell({
     eyebrow: "APPLICATION RECEIVED",
-    headlineEmphasis: "Thank you",
-    headlineRest: " for your application.",
+    headline: "Thank you for your application.",
     bodyHtml,
     statusLine: "APPLICATION RECEIVED · IN REVIEW",
     signatureItalic:
@@ -800,8 +803,7 @@ export async function sendApplicationApprovedEmail(opts: {
   ]);
   const html = emailShell({
     eyebrow: "APPLICATION APPROVED",
-    headlineEmphasis: "Welcome",
-    headlineRest: " to Nexvelon Global.",
+    headline: "Welcome to Nexvelon Global.",
     bodyHtml,
     statusLine: "APPROVED · TIER ASSIGNED",
     signatureItalic:
@@ -846,8 +848,7 @@ export async function sendApplicationDeclinedEmail(opts: {
   ]);
   const html = emailShell({
     eyebrow: "APPLICATION UPDATE",
-    headlineEmphasis: "An update",
-    headlineRest: " regarding your application.",
+    headline: "An update regarding your application.",
     bodyHtml,
     statusLine: "UPDATE FROM OUR REVIEW",
     signatureItalic: "We appreciate the time you took to apply and wish you the best.",
@@ -893,8 +894,7 @@ export async function sendTierChangedEmail(opts: {
   ]);
   const html = emailShell({
     eyebrow: "TIER UPDATE",
-    headlineEmphasis: "Your Tier",
-    headlineRest: " has been updated.",
+    headline: "Your Tier has been updated.",
     bodyHtml,
     statusLine: "PRESTIGE TIER · UPDATED",
     signatureItalic:
