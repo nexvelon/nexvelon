@@ -523,7 +523,7 @@ export async function sendClientInviteEmail(opts: {
   const introLine = `<p class="nx-p" style="${para}margin:0 0 14px;">${intro}</p>`;
   const exploreLine = siteOnly
     ? ""
-    : `<p class="nx-p" style="${para}margin:0 0 12px;">Explore the full Prestige Tier benefits and program details on the portal once you open it.</p>`;
+    : `<p class="nx-p" style="${para}margin:0 0 12px;">Explore all Prestige Tier benefits and conditions on the portal in client form.</p>`;
   const closingLine = `<p class="nx-p" style="${para}margin:0;">Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
   const bodyHtml = `${introLine}${exploreLine}${closingLine}`;
 
@@ -561,7 +561,7 @@ export async function sendClientInviteEmail(opts: {
       ? []
       : [
           "",
-          "Explore the full Prestige Tier benefits and program details on the portal once you open it.",
+          "Explore all Prestige Tier benefits and conditions on the portal in client form.",
         ]),
     "",
     "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
