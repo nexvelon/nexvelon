@@ -155,6 +155,11 @@ export interface DbClientInvitation {
   submission_snapshot: Record<string, unknown> | null;
   tc1_signature_image_path: string | null;
   tc2_signature_image_path: string | null;
+  // POLISH-23 (migration 0065) — the raw base64 signature is stored inline here
+  // at sign-time (no storage call) and uploaded to the signatures bucket at
+  // submit, which sets *_image_path and clears these.
+  tc1_signature_data_url: string | null;
+  tc2_signature_data_url: string | null;
   tc1_signed_pdf_path: string | null;
   tc2_signed_pdf_path: string | null;
   tier_requested: DbClientTier | null;

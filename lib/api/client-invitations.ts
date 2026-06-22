@@ -223,28 +223,31 @@ export async function signTc(
   if (!signatureDataUrlIn || !signatureDataUrlIn.startsWith("data:image")) {
     throw new Error("Draw your signature before signing.");
   }
-  // POLISH-22 (item 11) — the signature-image upload is the one storage step in
-  // the at-sign path (PDF generation + emails are deferred to submit). Wrap it
-  // so a storage/RLS/size failure surfaces a step-specific message instead of a
-  // generic error, and log the payload size for diagnosis.
-  let imagePath: string;
-  try {
-    imagePath = await uploadSignaturePng(token, which, signatureDataUrlIn);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[TC SIGN UPLOAD FAILED]", {
-      token,
-      which,
-      signatureLength: signatureDataUrlIn.length,
-      error: msg,
-    });
-    throw new Error(`Signature image upload failed: ${msg}`);
-  }
+  // POLISH-23 — the at-sign path no longer touches Supabase Storage. The raw
+  // base64 signature is stored INLINE on the row; the upload to the signatures
+  // bucket (and image-path set) is deferred to submitInvitation. This isolates
+  // signing to a single DB row update — no storage, no PDF gen, no email.
   const now = new Date().toISOString();
   const patch =
     which === "tc1"
-      ? { tc1_signed_at: now, tc1_signed_name: trimmed, tc1_signature_image_path: imagePath }
-      : { tc2_signed_at: now, tc2_signed_name: trimmed, tc2_signature_image_path: imagePath };
+      ? {
+          tc1_signed_at: now,
+          tc1_signed_name: trimmed,
+          tc1_signature_data_url: signatureDataUrlIn,
+        }
+      : {
+          tc2_signed_at: now,
+          tc2_signed_name: trimmed,
+          tc2_signature_data_url: signatureDataUrlIn,
+        };
+  // POLISH-23 (CHANGE 3) — log right before the row update so the next failure
+  // (if any) is pinned to the update itself, not storage.
+  console.error("[TC SIGN ROW UPDATE]", {
+    token,
+    which,
+    settingFields: Object.keys(patch),
+    signatureLength: signatureDataUrlIn.length,
+  });
   const supabase = admin();
   const { data: row, error } = await supabase
     .from("client_invitations")
@@ -252,7 +255,16 @@ export async function signTc(
     .eq("token", token)
     .select("*")
     .single();
-  if (error) throw new Error(`signTc: ${error.message}`);
+  if (error) {
+    console.error("[TC SIGN ROW UPDATE FAILED]", {
+      token,
+      which,
+      error: error.message,
+      code: error.code,
+      hint: error.hint,
+    });
+    throw new Error(`signTc: ${error.message}`);
+  }
   return row as DbClientInvitation;
 }
 
@@ -537,11 +549,36 @@ export async function submitInvitation(token: string): Promise<{
   // CHANGE 5 — snapshot the exact text/tiers/disclaimer shown.
   const snapshot = await buildSnapshot(inv, now);
 
+  // POLISH-23 — upload the inline signatures (captured at sign-time) to the
+  // signatures bucket NOW, and record the resulting paths. If a row already has
+  // an image path (pre-0065 signature), keep it. A storage failure here fails
+  // the submit with a clear message — but signing itself already succeeded.
+  let tc1ImgPath: string | null;
+  let tc2ImgPath: string | null;
+  try {
+    tc1ImgPath =
+      inv.tc1_signature_image_path ??
+      (inv.tc1_signature_data_url
+        ? await uploadSignaturePng(token, "tc1", inv.tc1_signature_data_url)
+        : null);
+    tc2ImgPath =
+      inv.tc2_signature_image_path ??
+      (inv.tc2_signature_data_url
+        ? await uploadSignaturePng(token, "tc2", inv.tc2_signature_data_url)
+        : null);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`submitInvitation/signature-upload: ${msg}`);
+  }
+
   // CHANGE 4 — generate the two signed-T&C PDFs from the SNAPSHOT text + the
-  // drawn signatures, upload them privately, and record their paths.
+  // drawn signatures. Prefer the inline data URL (already in hand); fall back to
+  // downloading from storage for older invitations that only have a path.
   const [sig1, sig2] = await Promise.all([
-    inv.tc1_signature_image_path ? signatureDataUrl(inv.tc1_signature_image_path) : null,
-    inv.tc2_signature_image_path ? signatureDataUrl(inv.tc2_signature_image_path) : null,
+    inv.tc1_signature_data_url ??
+      (tc1ImgPath ? signatureDataUrl(tc1ImgPath) : null),
+    inv.tc2_signature_data_url ??
+      (tc2ImgPath ? signatureDataUrl(tc2ImgPath) : null),
   ]);
   const [pdf1, pdf2] = await Promise.all([
     renderSignedTcPdf({
@@ -574,6 +611,12 @@ export async function submitInvitation(token: string): Promise<{
       submission_snapshot: snapshot,
       tc1_signed_pdf_path: pdf1Path,
       tc2_signed_pdf_path: pdf2Path,
+      // POLISH-23 — persist the uploaded signature paths and clear the inline
+      // base64 now that it's safely in storage.
+      tc1_signature_image_path: tc1ImgPath,
+      tc2_signature_image_path: tc2ImgPath,
+      tc1_signature_data_url: null,
+      tc2_signature_data_url: null,
     })
     .eq("token", token)
     .select("*")
