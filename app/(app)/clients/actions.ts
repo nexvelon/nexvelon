@@ -39,7 +39,9 @@ import type {
 // toast failures without unwrapping thrown errors across the network.
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  // POLISH-43 — optional `code` lets callers branch on a failure kind (e.g.
+  // "not_found" → self-heal the list) without string-matching the message.
+  | { ok: false; error: string; code?: string };
 
 function fail(err: unknown): { ok: false; error: string } {
   const message =
@@ -286,20 +288,44 @@ export async function deleteClientAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    // POLISH-43 (CHANGE 3) — diagnostic logging on the delete path.
+    const me = await getCurrentProfile();
+    console.error("[CLIENT DELETE]", { clientId: id, role: me?.role ?? null });
     // FIX-1: hard delete. Sites + contacts cascade via FK ON DELETE
     // CASCADE on their client_id (0001_clients_schema.sql).
     const deleted = await deleteClient(id);
     if (!deleted) {
-      return { ok: false, error: "Client not found" };
+      // POLISH-43 — a 0-row delete means the row is gone OR (pre-0068) RLS
+      // silently filtered it. Either way the list is stale; tell the caller to
+      // refresh rather than the vague "Client not found." (CHANGE 2).
+      const result = {
+        ok: false as const,
+        error:
+          "This client no longer exists — it may have already been deleted. Refreshing the list…",
+        code: "not_found",
+      };
+      console.error("[CLIENT DELETE RESULT]", {
+        ok: false,
+        error: result.error,
+        code: result.code,
+      });
+      return result;
     }
     // ATTACH-2: remove this client's attachments (objects + rows). Best-effort.
     await deleteAttachmentsForEntity("client", id).catch(() => {});
     // ACT-1: log survives the hard delete (no FK on activity_log.entity_id).
     await logActivity("client", id, "delete", {});
     revalidatePath("/clients");
+    console.error("[CLIENT DELETE RESULT]", { ok: true, error: null, code: null });
     return { ok: true, data: { id } };
   } catch (e) {
-    return fail(e);
+    const result = fail(e);
+    console.error("[CLIENT DELETE RESULT]", {
+      ok: false,
+      error: result.error,
+      code: null,
+    });
+    return result;
   }
 }
 
