@@ -1457,8 +1457,7 @@ export function InviteStatus({ token }: { token: string }) {
           Your Application has been submitted successfully.
         </h1>
         <p className="mx-auto max-w-md text-sm" style={{ color: "#2A2418" }}>
-          Thank you. We will review your application and contact you shortly with
-          the outcome.
+          Thank you. We will review your application and contact you shortly.
         </p>
         <p className="text-[13px] italic" style={{ color: MUTED }}>
           You may now close this window.
