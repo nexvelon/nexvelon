@@ -38,14 +38,11 @@ export function SiteDetailView({ site }: { site: DbSiteWithClient }) {
         <p className="text-sm">
           <span className="text-muted-foreground">Client: </span>
           {site.client?.deleted_at ? (
-            // POLISH-44 — parent client archived; show the name muted/italic with
-            // a clear "(deleted)" marker. Still links to the (archived) record.
-            <Link
-              href={`/clients/${site.client_id}`}
-              className="italic text-zinc-400 underline-offset-2 hover:underline"
-            >
+            // POLISH-45 — parent client archived: NOT clickable (the detail page
+            // 404s for archived clients). Plain muted/italic text with a marker.
+            <span className="italic text-zinc-400">
               {site.client?.name ?? "—"} (deleted)
-            </Link>
+            </span>
           ) : (
             <Link
               href={`/clients/${site.client_id}`}
