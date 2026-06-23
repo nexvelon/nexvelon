@@ -110,18 +110,30 @@ function addressLine(
   return parts.join(", ");
 }
 
-// POLISH-27 — contacts: Primary (c0), AP (c1), and the GC / Site Supervisor (gc,
-// formerly a separate section). Each has Email + Personal/Work/Office phones
-// (Work uses the legacy `{prefix}Phone` key). Empty rows are skipped.
-const CONTACT_ROWS_DISPLAY = [
+// Contacts. Each has Email + Personal/Work/Office phones (Work uses the legacy
+// `{prefix}Phone` key). Empty rows are skipped.
+// POLISH-47 — the GC / Site Supervisor (gc) is collected on the SITE form only,
+// so the client uses CLIENT_CONTACT_ROWS (Primary + AP) and the site uses the
+// full set including GC.
+const CLIENT_CONTACT_ROWS = [
+  { label: "Primary Contact", prefix: "c0" },
+  { label: "AP Contact", prefix: "c1" },
+] as const;
+const SITE_CONTACT_ROWS = [
   { label: "Primary Contact", prefix: "c0" },
   { label: "AP Contact", prefix: "c1" },
   { label: "GC / Site Supervisor", prefix: "gc" },
 ] as const;
 
 /** Render the contact rows; skip a row if all fields are blank. */
-function ContactRows({ map }: { map: Record<string, unknown> | null | undefined }) {
-  const rows = CONTACT_ROWS_DISPLAY.map(({ label, prefix }) => {
+function ContactRows({
+  map,
+  rows: rowSpec = SITE_CONTACT_ROWS,
+}: {
+  map: Record<string, unknown> | null | undefined;
+  rows?: readonly { label: string; prefix: string }[];
+}) {
+  const rows = rowSpec.map(({ label, prefix }) => {
     const first = str(map, `${prefix}First`);
     const last = str(map, `${prefix}Last`);
     const email = str(map, `${prefix}Email`);
@@ -399,7 +411,7 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
           </Section>
 
           <Section eyebrow="Contacts">
-            <ContactRows map={clientForm} />
+            <ContactRows map={clientForm} rows={CLIENT_CONTACT_ROWS} />
           </Section>
         </>
       )}
