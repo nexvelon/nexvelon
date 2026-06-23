@@ -1429,23 +1429,31 @@ export function InviteStatus({ token }: { token: string }) {
   if (error || !inv)
     return <ErrorCard message={error ?? "This invitation link is invalid."} />;
 
+  // POLISH-32 — success confirmation. submitInvitationAction sets submitted_at,
+  // so this card renders right after submit AND on any later refresh/revisit
+  // (the token is locked; sub-form pages show the LockedNotice). Garamond
+  // heading + sans-serif body + gold ✦, matching the portal aesthetic.
   if (inv.submitted_at) {
     return (
       <Card
-        className="space-y-3 p-8 text-center"
+        className="space-y-4 p-10 text-center"
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FCF7EC 100%)",
           borderColor: GOLD,
         }}
       >
-        <div aria-hidden style={{ color: GOLD, fontSize: 18 }}>
-          ◆
+        <div aria-hidden style={{ color: GOLD_DEEP, fontSize: 32, lineHeight: 1 }}>
+          &#10022;
         </div>
         <h1 className="text-2xl" style={{ color: NAVY, fontFamily: SERIF }}>
-          Submitted — thank you.
+          Your Application has been submitted successfully.
         </h1>
-        <p className="text-sm" style={{ color: MUTED }}>
-          Your onboarding is complete and now locked. Our team will be in touch.
+        <p className="mx-auto max-w-md text-sm" style={{ color: "#2A2418" }}>
+          Thank you. We will review your application and contact you shortly with
+          the outcome.
+        </p>
+        <p className="text-[13px] italic" style={{ color: MUTED }}>
+          You may now close this window.
         </p>
       </Card>
     );
