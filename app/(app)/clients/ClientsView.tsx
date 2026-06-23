@@ -499,6 +499,14 @@ export function ClientsView({ clients }: Props) {
         setConfirmDelete(null);
         toast.success("Client deleted");
         void reload();
+        router.refresh();
+      } else if (r.code === "not_found") {
+        // POLISH-43 — the row is already gone (stale list). Self-heal: close the
+        // dialog and refresh rather than leaving a vague error on screen.
+        setConfirmDelete(null);
+        toast.error(r.error);
+        void reload();
+        router.refresh();
       } else {
         // Keep the modal open + Delete button enabled so the user can retry.
         toast.error(r.error);
