@@ -237,11 +237,12 @@ export async function deleteClient(id: string): Promise<boolean> {
 
 export async function getSitesByClient(clientId: string): Promise<DbSite[]> {
   const supabase = await db();
-  // FIX-1: deleted_at filter dropped (hard-delete model).
+  // POLISH-46 — soft-delete model: only active sites (archived ones hidden).
   const { data, error } = await supabase
     .from("sites")
     .select("*")
     .eq("client_id", clientId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`getSitesByClient: ${error.message}`);
   return (data ?? []) as DbSite[];
@@ -264,7 +265,10 @@ export async function listSites(
   const supabase = await db();
   let query = supabase
     .from("sites")
-    .select("*, client:clients(id,name,client_code,default_opco,deleted_at)");
+    .select("*, client:clients(id,name,client_code,default_opco,deleted_at)")
+    // POLISH-46 — soft-delete model: the /sites list (and pickers) show active
+    // sites only. Archived sites stay in the DB for related-record references.
+    .is("deleted_at", null);
 
   if (filters.clientId) {
     query = query.eq("client_id", filters.clientId);
@@ -369,12 +373,19 @@ export async function updateSite(
  * site_id stay (their site_id flips to NULL via FK ON DELETE SET NULL,
  * preserving the contact at client-level).
  */
+/**
+ * POLISH-46: SOFT-delete a site (stamp deleted_at) instead of a hard DELETE.
+ * Related records (invoices/quotes/projects/contacts/inventory/attachments) and
+ * the parent client are preserved. Runs as an UPDATE (existing update RLS).
+ * Idempotent: an already-archived site matches no row → returns false.
+ */
 export async function deleteSite(id: string): Promise<boolean> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("sites")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
+    .is("deleted_at", null)
     .select("id");
   if (error) throw new Error(`deleteSite: ${error.message}`);
   return (data?.length ?? 0) > 0;

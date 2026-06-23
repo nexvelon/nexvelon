@@ -22,6 +22,8 @@ async function db() {
 export interface ProjectListRow extends DbProject {
   client_name: string | null;
   site_name: string | null;
+  // POLISH-46 — true when the linked site has been soft-deleted (archived).
+  site_deleted: boolean;
 }
 
 export interface ProjectLinkedQuote {
@@ -41,7 +43,7 @@ export interface ProjectDetail {
 // Join row shapes (Supabase nests the FK selects).
 type ProjectJoinRow = DbProject & {
   client: { name: string } | null;
-  site: { name: string } | null;
+  site: { name: string; deleted_at: string | null } | null;
 };
 type ProjectQuoteJoinRow = {
   quote_id: string;
@@ -55,6 +57,7 @@ function splitJoin(r: ProjectJoinRow): ProjectListRow {
     ...(proj as DbProject),
     client_name: client?.name ?? null,
     site_name: site?.name ?? null,
+    site_deleted: !!site?.deleted_at,
   };
 }
 
@@ -62,7 +65,7 @@ export async function listProjects(): Promise<ProjectListRow[]> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("projects")
-    .select("*, client:clients(name), site:sites(name)")
+    .select("*, client:clients(name), site:sites(name,deleted_at)")
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listProjects: ${error.message}`);
   return ((data ?? []) as ProjectJoinRow[]).map(splitJoin);
@@ -72,7 +75,7 @@ export async function getProjectById(id: string): Promise<ProjectDetail | null> 
   const supabase = await db();
   const { data: proj, error } = await supabase
     .from("projects")
-    .select("*, client:clients(name), site:sites(name)")
+    .select("*, client:clients(name), site:sites(name,deleted_at)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getProjectById: ${error.message}`);
