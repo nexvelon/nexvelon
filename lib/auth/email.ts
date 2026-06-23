@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Resend } from "resend";
+import { parseTierText } from "@/lib/tier-text-parser";
 
 /**
  * Resend client.
@@ -769,20 +770,43 @@ export async function sendApplicationApprovedEmail(opts: {
   const requestedLineText = showRequestedLine
     ? `You applied for ${requested}. After review, we've approved you at ${assignedLabel} level.`
     : "";
-  const bodyHtml = letterParagraphs([
-    "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
-    showRequestedLine
-      ? `You applied for <strong>${escapeHtml(
-          requested as string
-        )}</strong>. After review, we've approved you at <strong>${escapeHtml(
-          assignedLabel
-        )}</strong> level.`
-      : "",
-    hasTier
-      ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
-      : "",
-    hasTier ? escapeHtml(opts.tierText as string) : "",
-  ]);
+  // POLISH-41 — the tier description (a single Settings text block) is parsed
+  // into headline + bullets + body paragraphs and rendered as warm-gold ✦
+  // bullet lines instead of one run-on escaped paragraph. Bullet styling matches
+  // the invite email (POLISH-31): Inter sans body, 11px #C9A35C ✦, 24px spacing.
+  const parsed = hasTier ? parseTierText(opts.tierText) : null;
+  const tierPara =
+    "font-family:'Inter','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;";
+  const tierBullet =
+    '<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>';
+  const tierBlockHtml = parsed
+    ? [
+        parsed.headline
+          ? `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(parsed.headline)}</p>`
+          : "",
+        ...parsed.bullets.map(
+          (b) =>
+            `<p class="nx-p" style="${tierPara}margin:0 0 24px;">${tierBullet}${escapeHtml(b)}</p>`
+        ),
+        ...parsed.bodyParas.map(
+          (p) => `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(p)}</p>`
+        ),
+      ].join("")
+    : "";
+  const bodyHtml =
+    letterParagraphs([
+      "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
+      showRequestedLine
+        ? `You applied for <strong>${escapeHtml(
+            requested as string
+          )}</strong>. After review, we've approved you at <strong>${escapeHtml(
+            assignedLabel
+          )}</strong> level.`
+        : "",
+      hasTier
+        ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
+        : "",
+    ]) + tierBlockHtml;
   const html = emailShell({
     eyebrow: "APPLICATION APPROVED",
     headline: "Welcome to Nexvelon Global.",
@@ -794,10 +818,21 @@ export async function sendApplicationApprovedEmail(opts: {
     signatureSubline: "CLIENT ACCOUNT · ACTIVE",
     outerNote: outerNoteFor("This message was sent to", opts.to),
   });
+  // POLISH-41 — plain-text mirror of the bulleted tier description: headline,
+  // then "- " markers (one bullet per line), then any body paragraphs.
+  const tierTextBlock = parsed
+    ? [
+        parsed.headline,
+        ...parsed.bullets.map((b) => `- ${b}`),
+        ...parsed.bodyParas,
+      ]
+        .filter((l) => l && l.trim() !== "")
+        .join("\n")
+    : "";
   const text = [
     "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
     showRequestedLine ? `\n${requestedLineText}\n` : "",
-    hasTier ? `\nYour Prestige Tier: ${opts.tierName}\n\n${opts.tierText}\n` : "",
+    hasTier ? `\nYour Prestige Tier: ${opts.tierName}\n\n${tierTextBlock}\n` : "",
     "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
     "",
     "— Nexvelon Global",
