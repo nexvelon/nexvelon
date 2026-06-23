@@ -281,9 +281,28 @@ export async function listSites(
     query = query.or(`name.ilike.%${q}%,site_code.ilike.%${q}%`);
   }
 
-  const { data, error } = await query.order("site_code", { ascending: true });
+  // POLISH-48 — order by created_at DESC (newest first). Was `site_code ASC`,
+  // which buried invite-created sites at the bottom: they have site_code = NULL
+  // (siteInsertFrom omits it, unlike createSite's auto-generated code) and
+  // Postgres sorts NULLs LAST for ASC, so a freshly-approved site appeared below
+  // every coded site. Newest-first surfaces it immediately after approval.
+  console.error("[LIST SITES]", { filters });
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) throw new Error(`listSites: ${error.message}`);
-  return (data ?? []) as DbSiteWithClient[];
+  const rows = (data ?? []) as DbSiteWithClient[];
+
+  // POLISH-48 (CHANGE 2) — diagnostic: compare what the embed query returned to
+  // the raw active-site count. A mismatch would prove a query/RLS drop (it does
+  // not in our analysis); equality confirms the issue was ordering/visibility.
+  const { count: totalInDb } = await supabase
+    .from("sites")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null);
+  console.error("[LIST SITES RESULT]", {
+    returnedCount: rows.length,
+    totalInDb: totalInDb ?? null,
+  });
+  return rows;
 }
 
 /**
