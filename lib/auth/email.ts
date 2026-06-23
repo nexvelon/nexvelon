@@ -519,7 +519,7 @@ export async function sendClientInviteEmail(opts: {
   // emails are untouched (they still pass their statusLine).
   const intro = siteOnly
     ? "You've been invited to add a new site to your Nexvelon Global account. <br style='line-height:12px;' />Please review, fill, sign and submit the site setup forms in the link below for review and approval."
-    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: <br style='line-height:12px;' />(Bronze / Silver / Gold / Platinum / Diamond).";
+    : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: (Bronze / Silver / Gold / Platinum / Diamond).";
   // POLISH-16 (CHANGE 3) — intro, explore, and closing all read as the same
   // normal body paragraph (no italic / no muted styling); explicit per-line
   // margins give CHANGE 1's breathing room (intro→explore 14px, explore→closing 12px).
@@ -534,8 +534,8 @@ export async function sendClientInviteEmail(opts: {
   const introLine = `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}${intro}</p>`;
   const exploreLine = siteOnly
     ? ""
-    : `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Explore all Prestige Tier benefits and conditions on the portal under client form.</p>`;
-  const closingLine = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}Once all forms are complete, please return to the status page and press Submit. <br style="line-height:12px;" />For any questions, please reply to this email.</p>`;
+    : `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Explore all Prestige Tier benefits &amp; conditions under the client form.</p>`;
+  const closingLine = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.</p>`;
   const bodyHtml = `${introLine}${exploreLine}${closingLine}`;
 
   const html = emailShell({
@@ -565,17 +565,17 @@ export async function sendClientInviteEmail(opts: {
     "",
     siteOnly
       ? "You've been invited to add a new site to your Nexvelon Global account.\nPlease review, fill, sign and submit the site setup forms at the link below for review and approval."
-      : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from:\n(Bronze / Silver / Gold / Platinum / Diamond).",
+      : "Please review, fill, sign and submit the forms in the link below. Once approved, you will receive a confirmation email along with your assigned Prestige Tiers from: (Bronze / Silver / Gold / Platinum / Diamond).",
     "",
     `Open Onboarding Portal: ${base}`,
     ...(siteOnly
       ? []
       : [
           "",
-          "Explore all Prestige Tier benefits and conditions on the portal under client form.",
+          "Explore all Prestige Tier benefits & conditions under the client form.",
         ]),
     "",
-    "Once all forms are complete, please return to the status page and press Submit.\nFor any questions, please reply to this email.",
+    "Once all forms are complete, please return to the status page and press Submit. For any questions, please reply to this email.",
     "",
     "— Nexvelon Global",
   ].join("\n");
