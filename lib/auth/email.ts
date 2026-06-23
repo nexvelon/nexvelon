@@ -299,6 +299,10 @@ function emailShell(p: EmailShellProps): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- POLISH-33 (CHANGE 1) — the email is designed for light only; tell modern
+         clients (Apple Mail, Gmail, …) NOT to apply dark-mode colour shifting. -->
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light only" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
     <style>
@@ -320,10 +324,24 @@ function emailShell(p: EmailShellProps): string {
         .nx-ctabtn { padding:18px 40px !important; }
         .nx-outer { padding:24px 24px 48px !important; }
       }
-    </style>
+      /* POLISH-33 (CHANGE 2) — re-assert EVERY colour to its light value inside
+         dark mode, with !important, so clients that ignore the color-scheme meta
+         still render the email identically (no auto-inversion). */
+      @media (prefers-color-scheme: dark) {
+        body, .nx-canvas { background-color:#070C1C !important; }
+        .nx-card { background-color:#FBF8F1 !important; color:#2A2418 !important; }
+        .nx-card .nx-cta-td { background-color:#0A1226 !important; }
+        .nx-ctabtn { color:#FBF8F1 !important; }
+        .nx-headline { color:#0A1226 !important; }
+        .nx-p { color:#2A2418 !important; }
+        .nx-bullet { color:#C9A35C !important; }
+        .nx-footer { background-color:#0A1226 !important; }
+        .nx-inc { color:#FBF8F1 !important; }
+        .nx-foot-note { color:#6B7390 !important; }
+      }
   </head>
   <body style="margin:0;padding:0;background-color:#070C1C;font-family:${SERIF};color:#0A1226;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%),radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);padding:40px 12px;">
+    <table class="nx-canvas" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#070C1C;background-image:radial-gradient(ellipse 90% 60% at 50% 0%, #1E2A5A 0%, #101840 28%, #0A1226 55%, #050912 100%),radial-gradient(ellipse 80% 50% at 50% 100%, #1A2350 0%, #0D1530 35%, #050912 100%);padding:40px 12px;">
       <tr>
         <td align="center">
           <table class="nx-card" width="640" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;max-width:640px;background-color:#FBF8F1;border:1px solid #8A6A2E;box-shadow:0 0 0 1px rgba(138,106,46,0.5),0 0 18px rgba(184,146,75,0.45),0 30px 80px -20px rgba(20,30,80,0.65),0 60px 140px -30px rgba(30,42,90,0.55);">
@@ -438,7 +456,7 @@ ${
 
             <!-- Dark footer band -->
             <tr>
-              <td style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
+              <td class="nx-footer" style="background-color:#0A1226;background-image:linear-gradient(180deg,#16204A 0%,#0F1838 35%,#0A1226 100%);">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
                   <tr><td style="padding:28px 40px 20px;">
                     <!-- Three operating entities, stacked. POLISH-16 (CHANGE 6) —
@@ -450,7 +468,7 @@ ${
                   </td></tr>
                   <tr><td style="padding:0 40px;"><div style="border-top:1px solid #1A2340;font-size:0;line-height:0;">&nbsp;</div></td></tr>
                   <tr><td style="padding:16px 40px 24px;text-align:center;">
-                    <span style="font-family:${SANS};font-size:9px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">CONFIDENTIAL · DO NOT FORWARD</span>
+                    <span class="nx-foot-note" style="font-family:${SANS};font-size:9px;letter-spacing:0.22em;color:#6B7390;font-weight:500;text-transform:uppercase;">CONFIDENTIAL · DO NOT FORWARD</span>
                   </td></tr>
                 </table>
               </td>
@@ -528,7 +546,7 @@ export async function sendClientInviteEmail(opts: {
   // headline, sign-off, CTA, and footer keep Garamond for the luxury accent.
   const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;`;
   // POLISH-31 (CHANGE 3) — smaller, softer warm-gold bullet (was 13px #B8924B).
-  const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
+  const bullet = `<span class="nx-bullet" style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
   // CHANGE 2 — more breathing between paragraphs (24px), with extra space before
   // the CTA after the closing line (28px).
   const introLine = `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}${intro}</p>`;
