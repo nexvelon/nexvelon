@@ -41,6 +41,7 @@ import type {
   DbClientPaymentMethod,
   DbClientCurrency,
   DbClientTier,
+  DbContactInsert,
 } from "@/lib/types/database";
 
 // CHANGE 2 — the invite T&C labels (single source: same docs as quote PDFs).
@@ -364,30 +365,39 @@ const CURRENCY_VALUES: readonly DbClientCurrency[] = [
   "EUR",
 ];
 
-// Readable contacts summary for the client/site `notes` field (the full data is
-// preserved in the jsonb for admin review).
-// POLISH-22 (CHANGE 10) — reflects the POLISH-15 two-contact model (Primary +
-// AP), each with Email + Personal/Work/Office phones. Previously this read the
-// stale 4-row/`Role` model, ORPHANING the personal + office phone numbers (they
-// were saved in jsonb but never written to the approved client/site notes).
-function contactsNotes(d: Record<string, unknown>): string {
-  const labels = ["Primary Contact", "AP Contact"];
-  const lines: string[] = [];
-  for (let i = 0; i < 2; i++) {
-    const name = [s(d[`c${i}First`]), s(d[`c${i}Last`])].filter(Boolean).join(" ");
-    const personal = s(d[`c${i}PersonalPhone`]);
-    const work = s(d[`c${i}Phone`]); // legacy key = work phone
-    const office = s(d[`c${i}OfficePhone`]);
-    const parts = [
-      name,
-      s(d[`c${i}Email`]),
-      personal ? `personal ${personal}` : null,
-      work ? `work ${work}` : null,
-      office ? `office ${office}` : null,
-    ].filter(Boolean);
-    if (parts.length > 0) lines.push(`${labels[i]}: ${parts.join(" · ")}`);
+// POLISH-49 — build real contacts-table rows from the invite form jsonb instead
+// of dumping contact info into the client/site `notes` field. Phones use the
+// canonical ContactPhone shape ({ label, number }); "role" is encoded with the
+// boolean flags + contact_type_custom (no role enum), mirroring createContact.
+// Skips a contact whose first/last/email are all empty. Form keys per prefix:
+// {p}First {p}Last {p}Email {p}PersonalPhone {p}Phone(=work) {p}OfficePhone.
+function inviteContactInserts(
+  form: Record<string, unknown>,
+  base: { client_id: string | null; site_id: string | null },
+  specs: ReadonlyArray<{ prefix: string; flags: Partial<DbContactInsert> }>
+): DbContactInsert[] {
+  const rows: DbContactInsert[] = [];
+  for (const { prefix, flags } of specs) {
+    const first = s(form[`${prefix}First`]);
+    const last = s(form[`${prefix}Last`]);
+    const email = s(form[`${prefix}Email`]);
+    if (!first && !last && !email) continue; // don't create blank rows
+    const phones = [
+      { label: "Personal", number: s(form[`${prefix}PersonalPhone`]) },
+      { label: "Work", number: s(form[`${prefix}Phone`]) },
+      { label: "Office", number: s(form[`${prefix}OfficePhone`]) },
+    ].filter((p): p is { label: string; number: string } => !!p.number);
+    rows.push({
+      client_id: base.client_id,
+      site_id: base.site_id,
+      first_name: first ?? "",
+      last_name: last ?? "",
+      email,
+      phones,
+      ...flags,
+    });
   }
-  return lines.join("\n");
+  return rows;
 }
 
 // "Same as …" toggles default ON; only an explicit "false" turns inheritance off.
@@ -401,9 +411,9 @@ function clientInsertFrom(
   email: string,
   now: string
 ) {
-  // POLISH-47 — the client form collects only Primary + AP contacts. The GC /
-  // Site Supervisor belongs to the SITE form (sites.gc_* columns), not here.
-  const notes = contactsNotes(cf);
+  // POLISH-49 — contacts are now written to the contacts table (not folded into
+  // notes). The client notes field is left empty here.
+  const notes = null;
   // CHANGE 1 — mailing inherits billing unless "Same as Billing" was unchecked.
   const mailingSame = !notSame(cf.mailing_same_as_billing);
   const mail = (suffix: string) =>
@@ -447,16 +457,11 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
     billingSame ? s(sf[`site${suffix}`]) : s(sf[`billing${suffix}`]);
   const mail = (suffix: string) =>
     mailingSame ? s(sf[`site${suffix}`]) : s(sf[`mailing${suffix}`]);
-  // CHANGE 10 — the GC personal/office phones have no dedicated column (only
-  // gc_phone = work), so append them to notes rather than orphaning them.
-  const gcExtra = [
-    s(sf.gcPersonalPhone) ? `personal ${s(sf.gcPersonalPhone)}` : null,
-    s(sf.gcOfficePhone) ? `office ${s(sf.gcOfficePhone)}` : null,
-  ].filter(Boolean);
-  const gcLine = gcExtra.length
-    ? `GC / Site Supervisor (extra phones): ${gcExtra.join(" · ")}`
-    : "";
-  const notes = [contactsNotes(sf), gcLine].filter(Boolean).join("\n");
+  // POLISH-49 — site contacts (incl. the GC / Site Supervisor and all their
+  // phones) are now written to the contacts table, not folded into notes. The
+  // sites.gc_* columns still get the GC name/email/work-phone (siteInsertFrom
+  // below); notes is left empty.
+  const notes = null;
   return {
     client_id: clientId,
     name: s(sf.siteName) ?? "Primary site",
@@ -608,6 +613,45 @@ export async function submitInvitation(token: string): Promise<{
     .single();
   if (lockErr) throw new Error(`submitInvitation/lock: ${lockErr.message}`);
   let invitation = locked as DbClientInvitation;
+
+  // POLISH-49 — write the submitted contacts to the contacts TABLE (was: folded
+  // into client/site notes). Best-effort, AFTER the lock so a failure can never
+  // orphan the submission. Client contacts (from the client form) link to the
+  // client only; site contacts (from the site form, incl. GC) link to the site
+  // only — so the client's Contacts tab shows just its Primary + AP. Service-
+  // role insert (the submitter is unauthenticated → contacts RLS would block).
+  try {
+    const contactRows: DbContactInsert[] = [];
+    if (inv.invite_type !== "site_only") {
+      contactRows.push(
+        ...inviteContactInserts(cf, { client_id: clientId, site_id: null }, [
+          { prefix: "c0", flags: { is_primary: true } },
+          { prefix: "c1", flags: { is_accounts_payable: true } },
+        ])
+      );
+    }
+    contactRows.push(
+      ...inviteContactInserts(sf, { client_id: null, site_id: siteId }, [
+        { prefix: "c0", flags: { is_primary: true } },
+        { prefix: "c1", flags: { is_accounts_payable: true } },
+        { prefix: "gc", flags: { contact_type_custom: "GC / Site Supervisor" } },
+      ])
+    );
+    if (contactRows.length > 0) {
+      const { error: contactErr } = await supabase.from("contacts").insert(contactRows);
+      if (contactErr) throw new Error(contactErr.message);
+    }
+    console.error("[INVITE CREATE CONTACTS]", {
+      clientId,
+      siteId,
+      contactsCreated: contactRows.length,
+      roles: contactRows.map((c) =>
+        c.is_primary ? "Primary" : c.is_accounts_payable ? "AP" : c.contact_type_custom ?? "Contact"
+      ),
+    });
+  } catch (e) {
+    console.error("[INVITE CREATE CONTACTS] failed (best-effort):", e);
+  }
 
   // POLISH-38 — the signed-T&C PDFs AND the application-form PDFs are now
   // BEST-EFFORT: a storage/render failure must not fail the submit (already
