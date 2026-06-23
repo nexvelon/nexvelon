@@ -207,7 +207,14 @@ export default function ProjectsListPage() {
                   </TableCell>
                   <TableCell className="text-xs">{r.client_name ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {r.site_name ?? "—"}
+                    {r.site_deleted ? (
+                      // POLISH-46 — site archived; keep the row, flag the site.
+                      <span className="italic text-zinc-400">
+                        {r.site_name ?? "—"} (deleted)
+                      </span>
+                    ) : (
+                      (r.site_name ?? "—")
+                    )}
                   </TableCell>
                   <TableCell>
                     <span className="bg-muted text-brand-primary rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">

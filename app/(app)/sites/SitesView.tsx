@@ -32,7 +32,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SiteFormDrawer } from "../clients/SiteFormDrawer";
-import { deleteSiteAction, listSitesAction } from "../clients/actions";
+import {
+  deleteSiteAction,
+  hardDeleteSiteAction,
+  listSitesAction,
+} from "../clients/actions";
 import type {
   DbClient,
   DbClientOpco,
@@ -97,6 +101,10 @@ export function SitesView({ initialSites, clients }: Props) {
   >({ open: false });
   const [confirmDelete, setConfirmDelete] = useState<DbSite | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // POLISH-46 — stage 2: type-to-confirm hard (permanent) delete.
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<DbSite | null>(null);
+  const [hardConfirmText, setHardConfirmText] = useState("");
+  const [hardDeleting, setHardDeleting] = useState(false);
 
   const refresh = async () => {
     const r = await listSitesAction();
@@ -127,8 +135,34 @@ export function SitesView({ initialSites, clients }: Props) {
       setDeleting(false);
       if (r.ok) {
         setConfirmDelete(null);
-        toast.success(`Deleted ${s.name}`);
+        toast.success("Site archived. Related records are preserved.");
         void refresh();
+        router.refresh();
+      } else if (r.code === "not_found") {
+        // Already archived / gone — self-heal the stale list.
+        setConfirmDelete(null);
+        toast.error(r.error);
+        void refresh();
+        router.refresh();
+      } else {
+        toast.error(r.error);
+      }
+    });
+  }
+
+  // POLISH-46 — STAGE 2: permanent (hard) delete after type-to-confirm.
+  function performHardDeleteSite() {
+    if (!hardDeleteTarget) return;
+    const s = hardDeleteTarget;
+    setHardDeleting(true);
+    hardDeleteSiteAction(s.id, hardConfirmText).then((r) => {
+      setHardDeleting(false);
+      if (r.ok) {
+        setHardDeleteTarget(null);
+        setHardConfirmText("");
+        toast.success("Site and all related records permanently deleted.");
+        void refresh();
+        router.refresh();
       } else {
         toast.error(r.error);
       }
@@ -247,6 +281,7 @@ export function SitesView({ initialSites, clients }: Props) {
         />
       )}
 
+      {/* POLISH-46 — STAGE 1: choose Archive (default) vs Permanently Delete. */}
       <Dialog
         open={!!confirmDelete}
         onOpenChange={(o) => {
@@ -255,12 +290,25 @@ export function SitesView({ initialSites, clients }: Props) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-serif">Delete site?</DialogTitle>
-            <DialogDescription>
-              {confirmDelete?.name} will be hidden from the active list. This is
-              a soft-delete — an admin can restore it later.
-            </DialogDescription>
+            <DialogTitle className="font-serif">Delete this site?</DialogTitle>
+            <DialogDescription>Choose how you want to handle this site:</DialogDescription>
           </DialogHeader>
+          <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+            <p>
+              <span className="font-semibold text-emerald-700">Archive:</span> The
+              site will be hidden from your site list. All related records
+              (invoices, quotes, contacts, inventory, attachments, projects) will
+              be preserved. The client this site belongs to will also be
+              preserved. <span className="font-medium">Recommended.</span>
+            </p>
+            <p>
+              <span className="font-semibold text-red-700">Permanently delete:</span>{" "}
+              The site AND all related records (invoices, quotes, contacts,
+              inventory, attachments, projects, labour entries) will be
+              PERMANENTLY DELETED. This cannot be undone. The CLIENT is not
+              affected — only this site and its records.
+            </p>
+          </div>
           <DialogFooter>
             <button
               type="button"
@@ -272,13 +320,105 @@ export function SitesView({ initialSites, clients }: Props) {
             </button>
             <button
               type="button"
+              onClick={() => {
+                setHardDeleteTarget(confirmDelete);
+                setHardConfirmText("");
+                setConfirmDelete(null);
+              }}
+              disabled={deleting}
+              className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold tracking-wide text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+            >
+              Permanently Delete
+            </button>
+            <button
+              type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-60"
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Archiving…" : "Archive"}
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-46 — STAGE 2: irreversible hard delete, type-to-confirm. */}
+      <Dialog
+        open={!!hardDeleteTarget}
+        onOpenChange={(o) => {
+          if (!o && !hardDeleting) {
+            setHardDeleteTarget(null);
+            setHardConfirmText("");
+          }
+        }}
+      >
+        <DialogContent>
+          {(() => {
+            const expected = hardDeleteTarget?.name?.trim() || "";
+            const matches = hardConfirmText.trim() === expected && expected !== "";
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-serif text-red-700">
+                    Permanently delete {expected || "this site"}?
+                  </DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete the site &apos;{expected}&apos; and
+                    all related records:
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    <li>The site record</li>
+                    <li>All invoices and invoice lines at this site</li>
+                    <li>All projects at this site (and labour entries, cost centers)</li>
+                    <li>All quotes referencing this site (quotes themselves stay; just their site link is cleared)</li>
+                    <li>All contacts at this site</li>
+                    <li>All inventory records at this site</li>
+                    <li>All file attachments at this site</li>
+                  </ul>
+                  <p className="font-medium">
+                    The CLIENT this site belongs to is NOT affected.
+                  </p>
+                  <p>
+                    To confirm, type the site name below:
+                    <br />
+                    <span className="font-mono text-[11px] text-brand-navy">
+                      {expected}
+                    </span>
+                  </p>
+                  <Input
+                    value={hardConfirmText}
+                    onChange={(e) => setHardConfirmText(e.target.value)}
+                    disabled={hardDeleting}
+                    placeholder="Type the site name exactly"
+                    autoComplete="off"
+                  />
+                </div>
+                <DialogFooter>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHardDeleteTarget(null);
+                      setHardConfirmText("");
+                    }}
+                    disabled={hardDeleting}
+                    className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={performHardDeleteSite}
+                    disabled={!matches || hardDeleting}
+                    className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {hardDeleting ? "Deleting…" : "Permanently Delete"}
+                  </button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -18,7 +18,6 @@ import {
   updateSite,
 } from "@/lib/api/clients";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
-import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -516,20 +515,136 @@ export async function deleteSiteAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    // FIX-1: hard delete. Contacts referencing this site keep their
-    // client_id (their site_id flips to NULL via FK ON DELETE SET NULL).
+    // POLISH-46 (CHANGE 8) — soft-delete logging.
+    const me = await getCurrentProfile();
+    console.error("[SITE SOFT DELETE]", { siteId: id, role: me?.role ?? null });
+    // POLISH-46 — soft delete (stamp deleted_at). Related records and the parent
+    // client are intentionally PRESERVED (not cascaded, attachments kept).
     const deleted = await deleteSite(id);
     if (!deleted) {
-      return { ok: false, error: "Site not found" };
+      const result = {
+        ok: false as const,
+        error:
+          "This site is already archived or no longer exists. Refreshing the list…",
+        code: "not_found",
+      };
+      console.error("[SITE SOFT DELETE RESULT]", { ok: false, error: result.error });
+      return result;
     }
-    // SITE-DETAIL: remove this site's attachments (objects + rows). Best-effort,
-    // mirrors the client/quote/product hard-delete cleanup.
-    await deleteAttachmentsForEntity("site", id).catch(() => {});
     await logActivity("site", id, "delete", {});
+    revalidatePath("/sites");
     revalidatePath("/clients");
+    console.error("[SITE SOFT DELETE RESULT]", { ok: true, error: null });
     return { ok: true, data: { id } };
   } catch (e) {
-    return fail(e);
+    const result = fail(e);
+    console.error("[SITE SOFT DELETE RESULT]", { ok: false, error: result.error });
+    return result;
+  }
+}
+
+/**
+ * POLISH-46 — IRREVERSIBLE hard delete of a SINGLE site and everything beneath
+ * it (invoices, projects, contacts, inventory, attachments), via the atomic
+ * hard_delete_site() function (0070). Quotes are preserved (site link cleared).
+ * The parent client is NEVER touched. Admin only; re-verifies the site name
+ * server-side. Storage objects removed best-effort after the DB cascade.
+ */
+export async function hardDeleteSiteAction(
+  siteId: string,
+  confirmedName: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const me = await getCurrentProfile();
+    console.error("[HARD DELETE SITE]", {
+      siteId,
+      role: me?.role ?? null,
+      confirmedName,
+    });
+    if (me?.role !== "Admin") {
+      return {
+        ok: false,
+        error: "Only admins can permanently delete a site.",
+        code: "forbidden",
+      };
+    }
+
+    const admin = createAdminClient();
+    const { data: site, error: sErr } = await admin
+      .from("sites")
+      .select("id, name")
+      .eq("id", siteId)
+      .maybeSingle();
+    if (sErr) throw new Error(sErr.message);
+    if (!site) return { ok: false, error: "Site not found.", code: "not_found" };
+
+    const expected = (site.name?.trim() || "");
+    if (confirmedName.trim() !== expected) {
+      console.error("[HARD DELETE SITE RESULT]", { ok: false, error: "name_mismatch" });
+      return {
+        ok: false,
+        error: "Confirmation text does not match site name",
+        code: "name_mismatch",
+      };
+    }
+
+    // Collect owned project/invoice ids + attachment storage paths BEFORE the
+    // cascade removes them. Quote attachments are NOT collected (quotes survive).
+    const [projRes, invRes] = await Promise.all([
+      admin.from("projects").select("id").eq("site_id", siteId),
+      admin.from("invoices").select("id").eq("site_id", siteId),
+    ]);
+    const projectIds = (projRes.data ?? []).map((r) => r.id as string);
+    const invoiceIds = (invRes.data ?? []).map((r) => r.id as string);
+
+    const attach = (type: string, ids: string[]) =>
+      admin.from("attachments").select("bucket,path").eq("entity_type", type).in("entity_id", ids);
+    type AttachRes = { data: { bucket: string; path: string }[] | null };
+    const attachPromises: PromiseLike<AttachRes>[] = [attach("site", [siteId])];
+    if (projectIds.length) attachPromises.push(attach("project", projectIds));
+    if (invoiceIds.length) attachPromises.push(attach("invoice", invoiceIds));
+    const attachResults = await Promise.all(attachPromises);
+    const objects = attachResults.flatMap((r) => r.data ?? []);
+
+    const { error: rpcErr } = await admin.rpc("hard_delete_site", {
+      p_site_id: siteId,
+    });
+    if (rpcErr) {
+      console.error("[HARD DELETE SITE RESULT]", {
+        ok: false,
+        error: rpcErr.message,
+        stepFailed: "rpc_cascade",
+      });
+      return {
+        ok: false,
+        error: `Permanent delete failed (no records were removed): ${rpcErr.message}`,
+        code: "cascade_failed",
+      };
+    }
+
+    const byBucket = new Map<string, string[]>();
+    for (const o of objects) {
+      if (!o.path) continue;
+      const arr = byBucket.get(o.bucket) ?? [];
+      arr.push(o.path);
+      byBucket.set(o.bucket, arr);
+    }
+    let removedFiles = 0;
+    for (const [bucket, paths] of byBucket) {
+      const { error: rmErr } = await admin.storage.from(bucket).remove(paths);
+      if (rmErr) console.error("[HARD DELETE SITE RESULT]", { step: `storage:${bucket}`, error: rmErr.message });
+      else removedFiles += paths.length;
+    }
+
+    await logActivity("site", siteId, "delete", {});
+    revalidatePath("/sites");
+    revalidatePath("/clients");
+    console.error("[HARD DELETE SITE RESULT]", { ok: true, siteId, removedFiles });
+    return { ok: true, data: { id: siteId } };
+  } catch (e) {
+    const result = fail(e);
+    console.error("[HARD DELETE SITE RESULT]", { ok: false, error: result.error });
+    return result;
   }
 }
 

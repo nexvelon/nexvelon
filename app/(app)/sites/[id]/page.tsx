@@ -18,7 +18,8 @@ export default async function SiteDetailPage({
   const { id } = await params;
   const site = await getSiteById(id);
 
-  if (!site) {
+  // POLISH-46 — archived (soft-deleted) sites are not browsable → 404.
+  if (!site || site.deleted_at) {
     notFound();
   }
 
