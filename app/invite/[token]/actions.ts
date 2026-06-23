@@ -193,28 +193,37 @@ export async function submitInvitationAction(
 ): Promise<ActionResult<{ submitted: true }>> {
   try {
     const { invitation, clientId, pdfs } = await submitInvitation(token);
+    // POLISH-38 — the four generated PDFs (best-effort; any may be null) become
+    // the email attachments for both the client and the internal recipients.
+    const attachments = [
+      pdfs.tc1 && { filename: "Integrated-Solutions-TC-signed.pdf", content: pdfs.tc1 },
+      pdfs.tc2 && { filename: "Guardian-TC-signed.pdf", content: pdfs.tc2 },
+      pdfs.clientForm && { filename: "Client-Application-Form.pdf", content: pdfs.clientForm },
+      pdfs.siteForm && { filename: "Site-Application-Form.pdf", content: pdfs.siteForm },
+    ].filter((a): a is { filename: string; content: Buffer } => Boolean(a));
     // Best-effort emails — a mail failure must not unwind the created client/site.
     try {
-      // To inquiries@ — the existing bundled internal summary.
+      // To inquiries@ + Clients&SitesInfo@ — bundled internal summary + 4 PDFs.
       await sendClientSubmissionEmail({
         email: invitation.email,
         clientForm: invitation.client_form_data ?? {},
         siteForm: invitation.site_form_data ?? {},
         tc1: { name: invitation.tc1_signed_name, at: invitation.tc1_signed_at },
         tc2: { name: invitation.tc2_signed_name, at: invitation.tc2_signed_at },
+        attachments,
       });
     } catch (e) {
       console.error("[invite] inquiries email failed:", e);
     }
     try {
-      // To the CLIENT — confirmation + both signed-T&C PDFs attached (CHANGE 4).
+      // To the CLIENT — confirmation + all four PDFs attached (CHANGE 4).
       await sendClientConfirmationEmail({
         to: invitation.email,
         clientForm: invitation.client_form_data ?? {},
         siteForm: invitation.site_form_data ?? {},
         tc1At: invitation.tc1_signed_at,
         tc2At: invitation.tc2_signed_at,
-        pdfs,
+        attachments,
       });
     } catch (e) {
       console.error("[invite] client confirmation email failed:", e);

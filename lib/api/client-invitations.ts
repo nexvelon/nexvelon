@@ -28,9 +28,13 @@ import {
 import {
   uploadSignaturePng,
   uploadSignedPdf,
+  uploadFormPdf,
   signatureDataUrl,
+  deleteInvitationStorage,
 } from "@/lib/api/invitation-storage";
 import { renderSignedTcPdf } from "@/lib/pdf/signed-tc-pdf";
+import { renderClientFormPdf } from "@/lib/pdf/client-form-pdf";
+import { renderSiteFormPdf } from "@/lib/pdf/site-form-pdf";
 import type {
   DbClientInvitation,
   DbClientPaymentTerms,
@@ -83,6 +87,39 @@ export async function createInvitation(input: {
     .single();
   if (error) throw new Error(`createInvitation: ${error.message}`);
   return data as DbClientInvitation;
+}
+
+/**
+ * POLISH-38 — hard-delete a pending application: its storage objects (signatures,
+ * signed-T&C PDFs, form PDFs), the invitation row(s), the site rows, and the
+ * pending client row. Admin-gated at the action layer. Service-role throughout.
+ */
+export async function deletePendingApplication(clientId: string): Promise<void> {
+  const supabase = admin();
+  // Storage cleanup keyed by each originating invitation token.
+  const { data: invRows } = await supabase
+    .from("client_invitations")
+    .select("token")
+    .eq("client_id", clientId);
+  for (const r of (invRows ?? []) as { token: string | null }[]) {
+    if (r.token) await deleteInvitationStorage(r.token);
+  }
+  // Delete in FK-safe order: invitation → sites → client.
+  const { error: invErr } = await supabase
+    .from("client_invitations")
+    .delete()
+    .eq("client_id", clientId);
+  if (invErr) throw new Error(`deletePendingApplication/invitation: ${invErr.message}`);
+  const { error: siteErr } = await supabase
+    .from("sites")
+    .delete()
+    .eq("client_id", clientId);
+  if (siteErr) throw new Error(`deletePendingApplication/sites: ${siteErr.message}`);
+  const { error: cErr } = await supabase
+    .from("clients")
+    .delete()
+    .eq("id", clientId);
+  if (cErr) throw new Error(`deletePendingApplication/client: ${cErr.message}`);
 }
 
 /** The most recent invitation that produced a given client (for admin review). */
@@ -533,7 +570,14 @@ export async function submitInvitation(token: string): Promise<{
   invitation: DbClientInvitation;
   clientId: string;
   siteId: string;
-  pdfs: { tc1: Buffer; tc2: Buffer };
+  // POLISH-38 — all four are best-effort; any may be null if its render/upload
+  // failed (the submission is still recorded). Used as email attachments.
+  pdfs: {
+    tc1: Buffer | null;
+    tc2: Buffer | null;
+    clientForm: Buffer | null;
+    siteForm: Buffer | null;
+  };
 }> {
   const inv = await requireOpen(token);
   if (!isReadyToSubmit(inv, await guardianTermsPublished())) {
@@ -570,86 +614,114 @@ export async function submitInvitation(token: string): Promise<{
   // CHANGE 5 — snapshot the exact text/tiers/disclaimer shown.
   const snapshot = await buildSnapshot(inv, now);
 
-  // POLISH-23 — upload the inline signatures (captured at sign-time) to the
-  // signatures bucket NOW, and record the resulting paths. If a row already has
-  // an image path (pre-0065 signature), keep it. A storage failure here fails
-  // the submit with a clear message — but signing itself already succeeded.
-  let tc1ImgPath: string | null;
-  let tc2ImgPath: string | null;
+  // POLISH-38 (CHANGE 1) — establish the invitation→client link + submitted_at
+  // lock + snapshot IMMEDIATELY (the form jsonb is already saved). This MUST
+  // commit before any storage/PDF work so a later artifact failure can never
+  // orphan the submission — that orphaning is exactly what left the Submission
+  // Detail page blank (a pending client with no linked invitation).
+  const { data: locked, error: lockErr } = await supabase
+    .from("client_invitations")
+    .update({ submitted_at: now, client_id: clientId, submission_snapshot: snapshot })
+    .eq("token", token)
+    .select("*")
+    .single();
+  if (lockErr) throw new Error(`submitInvitation/lock: ${lockErr.message}`);
+  let invitation = locked as DbClientInvitation;
+
+  // POLISH-38 — the signed-T&C PDFs AND the application-form PDFs are now
+  // BEST-EFFORT: a storage/render failure must not fail the submit (already
+  // recorded above). On success a follow-up update records their paths.
+  const pdfs: {
+    tc1: Buffer | null;
+    tc2: Buffer | null;
+    clientForm: Buffer | null;
+    siteForm: Buffer | null;
+  } = { tc1: null, tc2: null, clientForm: null, siteForm: null };
   try {
-    tc1ImgPath =
+    const tc1ImgPath =
       inv.tc1_signature_image_path ??
       (inv.tc1_signature_data_url
         ? await uploadSignaturePng(token, "tc1", inv.tc1_signature_data_url)
         : null);
-    tc2ImgPath =
+    const tc2ImgPath =
       inv.tc2_signature_image_path ??
       (inv.tc2_signature_data_url
         ? await uploadSignaturePng(token, "tc2", inv.tc2_signature_data_url)
         : null);
+    const [sig1, sig2] = await Promise.all([
+      inv.tc1_signature_data_url ?? (tc1ImgPath ? signatureDataUrl(tc1ImgPath) : null),
+      inv.tc2_signature_data_url ?? (tc2ImgPath ? signatureDataUrl(tc2ImgPath) : null),
+    ]);
+    const submittedAtFmt = businessDateTime(now);
+    const clientAckAt = inv.client_form_payment_policies_acknowledged_at
+      ? businessDateTime(inv.client_form_payment_policies_acknowledged_at)
+      : null;
+    const siteAckAt = inv.site_form_payment_policies_acknowledged_at
+      ? businessDateTime(inv.site_form_payment_policies_acknowledged_at)
+      : null;
+    const [pdf1, pdf2, clientPdf, sitePdf] = await Promise.all([
+      renderSignedTcPdf({
+        title: TC1_LABEL,
+        termsText: snapshot.tc1_text,
+        signerName: inv.tc1_signed_name ?? "—",
+        signatureDataUrl: sig1,
+        signedAt: inv.tc1_signed_at ? businessDateTime(inv.tc1_signed_at) : "—",
+        token,
+      }),
+      renderSignedTcPdf({
+        title: TC2_LABEL,
+        termsText: snapshot.tc2_text,
+        signerName: inv.tc2_signed_name ?? "—",
+        signatureDataUrl: sig2,
+        signedAt: inv.tc2_signed_at ? businessDateTime(inv.tc2_signed_at) : "—",
+        token,
+      }),
+      // CHANGE 2 — branded application-form PDFs from the captured form data.
+      renderClientFormPdf({
+        cf,
+        email: inv.email,
+        submittedAt: submittedAtFmt,
+        tierRequested: inv.tier_requested ?? null,
+        policyAckAt: clientAckAt,
+      }),
+      renderSiteFormPdf({
+        sf,
+        email: inv.email,
+        submittedAt: submittedAtFmt,
+        policyAckAt: siteAckAt,
+      }),
+    ]);
+    const [pdf1Path, pdf2Path, clientPdfPath, sitePdfPath] = await Promise.all([
+      uploadSignedPdf(token, "tc1", pdf1),
+      uploadSignedPdf(token, "tc2", pdf2),
+      uploadFormPdf(token, "client", clientPdf),
+      uploadFormPdf(token, "site", sitePdf),
+    ]);
+    const { data: withPaths } = await supabase
+      .from("client_invitations")
+      .update({
+        tc1_signed_pdf_path: pdf1Path,
+        tc2_signed_pdf_path: pdf2Path,
+        client_form_pdf_path: clientPdfPath,
+        site_form_pdf_path: sitePdfPath,
+        tc1_signature_image_path: tc1ImgPath,
+        tc2_signature_image_path: tc2ImgPath,
+        tc1_signature_data_url: null,
+        tc2_signature_data_url: null,
+      })
+      .eq("token", token)
+      .select("*")
+      .single();
+    if (withPaths) invitation = withPaths as DbClientInvitation;
+    pdfs.tc1 = pdf1;
+    pdfs.tc2 = pdf2;
+    pdfs.clientForm = clientPdf;
+    pdfs.siteForm = sitePdf;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`submitInvitation/signature-upload: ${msg}`);
+    console.error("[submitInvitation] PDF/storage (best-effort) failed:", e);
   }
 
-  // CHANGE 4 — generate the two signed-T&C PDFs from the SNAPSHOT text + the
-  // drawn signatures. Prefer the inline data URL (already in hand); fall back to
-  // downloading from storage for older invitations that only have a path.
-  const [sig1, sig2] = await Promise.all([
-    inv.tc1_signature_data_url ??
-      (tc1ImgPath ? signatureDataUrl(tc1ImgPath) : null),
-    inv.tc2_signature_data_url ??
-      (tc2ImgPath ? signatureDataUrl(tc2ImgPath) : null),
-  ]);
-  const [pdf1, pdf2] = await Promise.all([
-    renderSignedTcPdf({
-      title: TC1_LABEL,
-      termsText: snapshot.tc1_text,
-      signerName: inv.tc1_signed_name ?? "—",
-      signatureDataUrl: sig1,
-      signedAt: inv.tc1_signed_at ? businessDateTime(inv.tc1_signed_at) : "—",
-      token,
-    }),
-    renderSignedTcPdf({
-      title: TC2_LABEL,
-      termsText: snapshot.tc2_text,
-      signerName: inv.tc2_signed_name ?? "—",
-      signatureDataUrl: sig2,
-      signedAt: inv.tc2_signed_at ? businessDateTime(inv.tc2_signed_at) : "—",
-      token,
-    }),
-  ]);
-  const [pdf1Path, pdf2Path] = await Promise.all([
-    uploadSignedPdf(token, "tc1", pdf1),
-    uploadSignedPdf(token, "tc2", pdf2),
-  ]);
-
-  const { data: updated, error: uErr } = await supabase
-    .from("client_invitations")
-    .update({
-      submitted_at: now,
-      client_id: clientId,
-      submission_snapshot: snapshot,
-      tc1_signed_pdf_path: pdf1Path,
-      tc2_signed_pdf_path: pdf2Path,
-      // POLISH-23 — persist the uploaded signature paths and clear the inline
-      // base64 now that it's safely in storage.
-      tc1_signature_image_path: tc1ImgPath,
-      tc2_signature_image_path: tc2ImgPath,
-      tc1_signature_data_url: null,
-      tc2_signature_data_url: null,
-    })
-    .eq("token", token)
-    .select("*")
-    .single();
-  if (uErr) throw new Error(`submitInvitation/lock: ${uErr.message}`);
-
-  return {
-    invitation: updated as DbClientInvitation,
-    clientId,
-    siteId,
-    pdfs: { tc1: pdf1, tc2: pdf2 },
-  };
+  return { invitation, clientId, siteId, pdfs };
 }
 
 /**

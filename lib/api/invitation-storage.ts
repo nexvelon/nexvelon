@@ -9,6 +9,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const INVITATION_SIG_BUCKET = "invitation-signatures";
 export const INVITATION_PDF_BUCKET = "invitation-pdfs";
+// POLISH-38 — generated client/site application-form PDFs (private; create the
+// "invitation-form-pdfs" bucket in the Supabase Dashboard, service-role only).
+export const INVITATION_FORM_PDF_BUCKET = "invitation-form-pdfs";
 
 function admin() {
   return createAdminClient();
@@ -52,6 +55,37 @@ export async function uploadSignedPdf(
   return path;
 }
 
+/** POLISH-38 — upload a generated application-form PDF; returns the storage path. */
+export async function uploadFormPdf(
+  token: string,
+  which: "client" | "site",
+  buffer: Buffer
+): Promise<string> {
+  const path = `${token}/${which}_form.pdf`;
+  const { error } = await admin()
+    .storage.from(INVITATION_FORM_PDF_BUCKET)
+    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
+  if (error) throw new Error(`uploadFormPdf: ${error.message}`);
+  return path;
+}
+
+/** POLISH-38 — best-effort delete of every stored object for an invitation
+ *  (signatures, signed-T&C PDFs, form PDFs). Used by the admin pending-delete. */
+export async function deleteInvitationStorage(token: string): Promise<void> {
+  const supabase = admin();
+  await Promise.allSettled([
+    supabase.storage
+      .from(INVITATION_SIG_BUCKET)
+      .remove([`${token}/tc1.png`, `${token}/tc2.png`]),
+    supabase.storage
+      .from(INVITATION_PDF_BUCKET)
+      .remove([`${token}/tc1_signed.pdf`, `${token}/tc2_signed.pdf`]),
+    supabase.storage
+      .from(INVITATION_FORM_PDF_BUCKET)
+      .remove([`${token}/client_form.pdf`, `${token}/site_form.pdf`]),
+  ]);
+}
+
 /** Download any private object to a Buffer. */
 export async function downloadObject(
   bucket: string,
@@ -91,13 +125,19 @@ export async function invitationSignedUrl(
  * Onboarding") for an approved client. Service-role throughout.
  */
 export async function copySignedPdfToClientAttachments(input: {
-  pdfPath: string; // path within INVITATION_PDF_BUCKET
+  pdfPath: string; // path within `sourceBucket`
   clientId: string;
   filename: string;
   uploadedBy?: string | null;
+  // POLISH-38 — source bucket (defaults to the signed-T&C bucket; pass the
+  // form-PDF bucket for the application-form PDFs).
+  sourceBucket?: string;
 }): Promise<void> {
   const supabase = admin();
-  const buf = await downloadObject(INVITATION_PDF_BUCKET, input.pdfPath);
+  const buf = await downloadObject(
+    input.sourceBucket ?? INVITATION_PDF_BUCKET,
+    input.pdfPath
+  );
   const destPath = `client/${input.clientId}/signed-onboarding/${input.filename}`;
   const { error: upErr } = await supabase.storage
     .from("attachments")

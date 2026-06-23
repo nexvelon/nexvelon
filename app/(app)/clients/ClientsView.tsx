@@ -40,6 +40,7 @@ import { deleteClientAction, listClientsAction } from "./actions";
 import {
   sendClientInviteAction,
   listPendingClientsAction,
+  deletePendingApplicationAction,
 } from "./invite-actions";
 import type { DbClient, DbClientWithCounts } from "@/lib/types/database";
 
@@ -83,6 +84,10 @@ export function ClientsView({ clients }: Props) {
   const [view, setView] = useState<"active" | "pending">("active");
   const [pendingRows, setPendingRows] = useState<DbClientWithCounts[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  // POLISH-38 — admin hard-delete of a pending application (confirm dialog).
+  const [pendingDeleteTarget, setPendingDeleteTarget] =
+    useState<DbClientWithCounts | null>(null);
+  const [pendingDeleting, setPendingDeleting] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSending, setInviteSending] = useState(false);
@@ -93,6 +98,22 @@ export function ClientsView({ clients }: Props) {
     if (r.ok) setPendingRows(r.data);
     else toast.error(r.error);
     setPendingLoading(false);
+  };
+
+  // POLISH-38 — hard-delete the pending application after confirmation, then
+  // refresh the list.
+  const confirmPendingDelete = async () => {
+    if (!pendingDeleteTarget) return;
+    setPendingDeleting(true);
+    const r = await deletePendingApplicationAction(pendingDeleteTarget.id);
+    setPendingDeleting(false);
+    if (r.ok) {
+      toast.success("Application deleted.");
+      setPendingDeleteTarget(null);
+      await loadPending();
+    } else {
+      toast.error(r.error);
+    }
   };
   useEffect(() => {
     // Load the pending list/count once admin status is known (tab badge).
@@ -196,12 +217,12 @@ export function ClientsView({ clients }: Props) {
       ) : (
         <ul className="space-y-2">
           {pendingRows.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="flex items-stretch gap-2">
               {/* Whole row opens the full Submission Detail review page. */}
               <button
                 type="button"
                 onClick={() => router.push(`/clients/pending/${c.id}`)}
-                className="flex w-full items-center gap-3 rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
                 style={{ borderColor: "var(--brand-border)" }}
               >
                 <div className="min-w-0 flex-1">
@@ -219,6 +240,17 @@ export function ClientsView({ clients }: Props) {
                   Review →
                 </span>
               </button>
+              {/* POLISH-38 — admin-only hard delete (confirmation dialog). */}
+              {role === "Admin" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 self-stretch border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => setPendingDeleteTarget(c)}
+                >
+                  Delete
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -409,6 +441,45 @@ export function ClientsView({ clients }: Props) {
               className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
             >
               {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-38 — confirm hard-delete of a pending application. */}
+      <Dialog
+        open={!!pendingDeleteTarget}
+        onOpenChange={(o) => {
+          if (!o && !pendingDeleting) setPendingDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              Delete this pending application?
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete the application and all associated
+              data, including signed T&amp;Cs, form PDFs, and signature images.
+              This action cannot be undone. Are you sure?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setPendingDeleteTarget(null)}
+              disabled={pendingDeleting}
+              className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmPendingDelete}
+              disabled={pendingDeleting}
+              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+            >
+              {pendingDeleting ? "Deleting…" : "Delete"}
             </button>
           </DialogFooter>
         </DialogContent>
