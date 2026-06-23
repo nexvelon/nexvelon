@@ -390,25 +390,6 @@ function contactsNotes(d: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-// POLISH-27 — the GC / Site Supervisor contact (gc* keys). On the SITE form its
-// name/email/work-phone go to the sites.gc_* columns; on the CLIENT form (where
-// it's an optional contact and there are no gc_* columns) it's folded into notes
-// so it isn't orphaned.
-function gcContactLine(d: Record<string, unknown>): string {
-  const name = [s(d.gcFirst), s(d.gcLast)].filter(Boolean).join(" ");
-  const personal = s(d.gcPersonalPhone);
-  const work = s(d.gcPhone);
-  const office = s(d.gcOfficePhone);
-  const parts = [
-    name,
-    s(d.gcEmail),
-    personal ? `personal ${personal}` : null,
-    work ? `work ${work}` : null,
-    office ? `office ${office}` : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? `GC / Site Supervisor: ${parts.join(" · ")}` : "";
-}
-
 // "Same as …" toggles default ON; only an explicit "false" turns inheritance off.
 function notSame(v: unknown): boolean {
   return String(v ?? "").trim() === "false";
@@ -420,9 +401,9 @@ function clientInsertFrom(
   email: string,
   now: string
 ) {
-  // POLISH-27 — Primary + AP contacts, plus the optional GC contact (no gc_*
-  // columns on clients, so it lives in notes).
-  const notes = [contactsNotes(cf), gcContactLine(cf)].filter(Boolean).join("\n");
+  // POLISH-47 — the client form collects only Primary + AP contacts. The GC /
+  // Site Supervisor belongs to the SITE form (sites.gc_* columns), not here.
+  const notes = contactsNotes(cf);
   // CHANGE 1 — mailing inherits billing unless "Same as Billing" was unchecked.
   const mailingSame = !notSame(cf.mailing_same_as_billing);
   const mail = (suffix: string) =>

@@ -91,15 +91,14 @@ const CURRENCY = ["CAD", "USD", "AED", "INR", "EUR"] as const;
 const TAX_EXEMPT = ["Yes", "No"] as const;
 
 // Contacts. POLISH-15 gave each contact First/Last/Email + Personal/Work/Office
-// phones (Work uses the legacy `c{i}Phone` key). POLISH-27 (CHANGE 2) merges the
-// GC / Site Supervisor in as a third contact ROW (reusing the existing `gc*`
-// keys, so the submit-mapping to sites.gc_* is unchanged). Required on the site
-// form; optional on the client form.
+// phones (Work uses the legacy `c{i}Phone` key). POLISH-47 — the GC / Site
+// Supervisor contact belongs to a SITE, not the client entity, so the client
+// form has only Primary + AP. The site form keeps the GC row (reusing the `gc*`
+// keys → submit-mapping to sites.gc_* unchanged); required there.
 type ContactSpec = { label: string; prefix: string; required: boolean };
 const CLIENT_CONTACTS: readonly ContactSpec[] = [
   { label: "Primary Contact", prefix: "c0", required: true },
   { label: "AP Contact", prefix: "c1", required: true },
-  { label: "GC / Site Supervisor", prefix: "gc", required: false },
 ];
 const SITE_CONTACTS: readonly ContactSpec[] = [
   { label: "Primary Contact", prefix: "c0", required: true },
