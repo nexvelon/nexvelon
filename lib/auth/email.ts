@@ -903,12 +903,32 @@ export async function sendTierChangedEmail(opts: {
   newTierName: string; // e.g. "Gold"
   tierText: string; // description from Settings
 }): Promise<void> {
-  const bodyHtml = letterParagraphs([
-    `Your Prestige Tier with Nexvelon Global has been updated from <strong>${escapeHtml(
-      opts.oldTierLabel
-    )}</strong> to <strong>${escapeHtml(opts.newTierName)}</strong>.`,
-    escapeHtml(opts.tierText),
-  ]);
+  // POLISH-41 (follow-up) — parse the tier description into headline + bullets +
+  // body paragraphs and render warm-gold ✦ bullet lines (was one run-on escaped
+  // paragraph). Bullet styling matches the invite + approval emails (POLISH-31).
+  const parsed = parseTierText(opts.tierText);
+  const tierPara =
+    "font-family:'Inter','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;";
+  const tierBullet =
+    '<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>';
+  const tierBlockHtml = [
+    parsed.headline
+      ? `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(parsed.headline)}</p>`
+      : "",
+    ...parsed.bullets.map(
+      (b) =>
+        `<p class="nx-p" style="${tierPara}margin:0 0 24px;">${tierBullet}${escapeHtml(b)}</p>`
+    ),
+    ...parsed.bodyParas.map(
+      (p) => `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(p)}</p>`
+    ),
+  ].join("");
+  const bodyHtml =
+    letterParagraphs([
+      `Your Prestige Tier with Nexvelon Global has been updated from <strong>${escapeHtml(
+        opts.oldTierLabel
+      )}</strong> to <strong>${escapeHtml(opts.newTierName)}</strong>.`,
+    ]) + tierBlockHtml;
   const html = emailShell({
     eyebrow: "TIER UPDATE",
     headline: "Your Tier has been updated.",
@@ -920,10 +940,19 @@ export async function sendTierChangedEmail(opts: {
     signatureSubline: "PRESTIGE TIER · NOTIFICATION",
     outerNote: outerNoteFor("This message was sent to", opts.to),
   });
+  // POLISH-41 (follow-up) — plain-text mirror: headline, then "- " bullets (one
+  // per line), then body paragraphs.
+  const tierTextBlock = [
+    parsed.headline,
+    ...parsed.bullets.map((b) => `- ${b}`),
+    ...parsed.bodyParas,
+  ]
+    .filter((l) => l && l.trim() !== "")
+    .join("\n");
   const text = [
     `Your Prestige Tier with Nexvelon Global has been updated from ${opts.oldTierLabel} to ${opts.newTierName}.`,
     "",
-    opts.tierText,
+    tierTextBlock,
     "",
     "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
     "",
