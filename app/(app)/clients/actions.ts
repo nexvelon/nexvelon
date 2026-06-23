@@ -21,6 +21,8 @@ import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteInvitationStorage } from "@/lib/api/invitation-storage";
 import type {
   DbClientInsert,
   DbClientUpdate,
@@ -320,6 +322,136 @@ export async function deleteClientAction(
       ok: false,
       error: result.error,
     });
+    return result;
+  }
+}
+
+/**
+ * POLISH-45 — IRREVERSIBLE hard delete of a client and every related record
+ * (sites, quotes, invoices, projects, contacts, inventory, attachments). Admin
+ * only. Requires the caller to re-type the client's legal name (verified again
+ * server-side). The DB cascade runs in a single atomic plpgsql function
+ * (hard_delete_client, migration 0069) so a missed FK rolls back cleanly rather
+ * than leaving partial state. Storage objects are removed best-effort after the
+ * DB cascade succeeds. activity_log is intentionally preserved.
+ */
+export async function hardDeleteClientAction(
+  clientId: string,
+  confirmedName: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const me = await getCurrentProfile();
+    console.error("[HARD DELETE START]", {
+      clientId,
+      role: me?.role ?? null,
+      confirmedName,
+    });
+    if (me?.role !== "Admin") {
+      return {
+        ok: false,
+        error: "Only admins can permanently delete a client.",
+        code: "forbidden",
+      };
+    }
+
+    const admin = createAdminClient();
+    const { data: client, error: cErr } = await admin
+      .from("clients")
+      .select("id, name, legal_name")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (cErr) throw new Error(cErr.message);
+    if (!client) return { ok: false, error: "Client not found.", code: "not_found" };
+
+    // Server-side confirmation (never trust the client-side gate alone). The
+    // expected string is the legal name, falling back to the display name.
+    const expected = (client.legal_name?.trim() || client.name?.trim() || "");
+    if (confirmedName.trim() !== expected) {
+      console.error("[HARD DELETE FAILED]", {
+        error: "name_mismatch",
+        stepFailed: "verify",
+      });
+      return {
+        ok: false,
+        error: "Confirmation text does not match client name",
+        code: "name_mismatch",
+      };
+    }
+
+    // Collect owned entity ids + storage paths BEFORE the cascade removes them.
+    const [siteRes, quoteRes, invRes, projRes, inviteRes] = await Promise.all([
+      admin.from("sites").select("id").eq("client_id", clientId),
+      admin.from("quotes").select("id").eq("client_id", clientId),
+      admin.from("invoices").select("id").eq("client_id", clientId),
+      admin.from("projects").select("id").eq("client_id", clientId),
+      admin.from("client_invitations").select("token").eq("client_id", clientId),
+    ]);
+    const siteIds = (siteRes.data ?? []).map((r) => r.id as string);
+    const quoteIds = (quoteRes.data ?? []).map((r) => r.id as string);
+    const invoiceIds = (invRes.data ?? []).map((r) => r.id as string);
+    const projectIds = (projRes.data ?? []).map((r) => r.id as string);
+    const tokens = (inviteRes.data ?? [])
+      .map((r) => r.token as string | null)
+      .filter((t): t is string => !!t);
+
+    const attach = (type: string, ids: string[]) =>
+      admin.from("attachments").select("bucket,path").eq("entity_type", type).in("entity_id", ids);
+    type AttachRow = { bucket: string; path: string };
+    type AttachRes = { data: AttachRow[] | null };
+    const attachPromises: PromiseLike<AttachRes>[] = [attach("client", [clientId])];
+    if (siteIds.length) attachPromises.push(attach("site", siteIds));
+    if (quoteIds.length) attachPromises.push(attach("quote", quoteIds));
+    if (invoiceIds.length) attachPromises.push(attach("invoice", invoiceIds));
+    if (projectIds.length) attachPromises.push(attach("project", projectIds));
+    const attachResults = await Promise.all(attachPromises);
+    const objects = attachResults.flatMap((r) => r.data ?? []);
+
+    // Atomic DB cascade (migration 0069). All-or-nothing: a missed FK rolls back.
+    const { error: rpcErr } = await admin.rpc("hard_delete_client", {
+      p_client_id: clientId,
+    });
+    if (rpcErr) {
+      console.error("[HARD DELETE FAILED]", {
+        error: rpcErr.message,
+        stepFailed: "rpc_cascade",
+      });
+      return {
+        ok: false,
+        error: `Permanent delete failed (no records were removed): ${rpcErr.message}`,
+        code: "cascade_failed",
+      };
+    }
+
+    // DB is gone; clean up storage objects (best-effort — files only).
+    const byBucket = new Map<string, string[]>();
+    for (const o of objects) {
+      if (!o.path) continue;
+      const arr = byBucket.get(o.bucket) ?? [];
+      arr.push(o.path);
+      byBucket.set(o.bucket, arr);
+    }
+    let removedFiles = 0;
+    for (const [bucket, paths] of byBucket) {
+      const { error: rmErr } = await admin.storage.from(bucket).remove(paths);
+      if (rmErr) console.error("[HARD DELETE STEP]", { step: `storage:${bucket}`, error: rmErr.message });
+      else removedFiles += paths.length;
+    }
+    for (const token of tokens) {
+      await deleteInvitationStorage(token).catch(() => {});
+    }
+    console.error("[HARD DELETE STEP]", {
+      step: "storage",
+      removedFiles,
+      invitationTokens: tokens.length,
+    });
+
+    await logActivity("client", clientId, "delete", {});
+    revalidatePath("/clients");
+    console.error("[HARD DELETE SUCCESS]", { clientId });
+    return { ok: true, data: { id: clientId } };
+  } catch (e) {
+    const result = fail(e);
+    console.error("[HARD DELETE FAILED]", { error: result.error, stepFailed: "exception" });
     return result;
   }
 }

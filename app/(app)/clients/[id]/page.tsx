@@ -3,6 +3,7 @@
 // component). ACT-1 added the activity-log fetch alongside existing data.
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getClientById } from "@/lib/api/clients";
 import { listActivityFor } from "@/lib/api/activity-log";
 import type { DbClientWithCounts } from "@/lib/types/database";
@@ -33,6 +34,10 @@ export default async function ClientDetailPage({
   }
 
   const { client, sites, contacts } = result;
+
+  // POLISH-45 — archived (soft-deleted) clients are not browsable. Return the
+  // Next.js 404 page rather than rendering an archived record.
+  if (client.deleted_at) notFound();
 
   // ACT-1: fetch activity-log entries for THIS client (entity_type='client'
   // only — site / contact log rows exist in the DB but aren't surfaced on

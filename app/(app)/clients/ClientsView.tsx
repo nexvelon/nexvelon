@@ -36,7 +36,11 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
 import { TIER_BADGE, initials } from "./_components/shared";
-import { deleteClientAction, listClientsAction } from "./actions";
+import {
+  deleteClientAction,
+  hardDeleteClientAction,
+  listClientsAction,
+} from "./actions";
 import {
   sendClientInviteAction,
   listPendingClientsAction,
@@ -62,6 +66,10 @@ export function ClientsView({ clients }: Props) {
   const [rows, setRows] = useState<DbClientWithCounts[]>(clients);
   const [confirmDelete, setConfirmDelete] = useState<DbClient | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // POLISH-45 — stage 2: type-to-confirm hard (permanent) delete.
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<DbClient | null>(null);
+  const [hardConfirmText, setHardConfirmText] = useState("");
+  const [hardDeleting, setHardDeleting] = useState(false);
 
   const reload = async () => {
     const r = await listClientsAction();
@@ -410,6 +418,7 @@ export function ClientsView({ clients }: Props) {
         />
       )}
 
+      {/* POLISH-45 — STAGE 1: choose Archive (default) vs Permanently Delete. */}
       <Dialog
         open={!!confirmDelete}
         onOpenChange={(o) => {
@@ -419,14 +428,25 @@ export function ClientsView({ clients }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-serif">Delete this client?</DialogTitle>
-            <DialogDescription>
-              The client will be archived. Their sites, quotes, jobs, and other
-              related records will NOT be deleted — they remain in the system but
-              will be marked as belonging to a deleted client. You can manually
-              delete those records from their respective lists if needed. This
-              action cannot be undone (the client cannot be restored).
-            </DialogDescription>
+            <DialogDescription>Choose how you want to handle this client:</DialogDescription>
           </DialogHeader>
+          <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+            <p>
+              <span className="font-semibold text-emerald-700">Archive:</span> The
+              client will be hidden from your client list. All their sites, quotes,
+              invoices, and other records will be preserved and remain visible in
+              their respective lists (marked as belonging to an archived client).{" "}
+              <span className="font-medium">Recommended.</span>
+            </p>
+            <p>
+              <span className="font-semibold text-red-700">Permanently delete:</span>{" "}
+              The client AND every site, quote, invoice, job, contact, inventory
+              record, and attachment belonging to them will be PERMANENTLY DELETED.
+              This cannot be undone and removes all historical records of this client
+              from the system. Use only if you are absolutely certain you want no
+              trace of this client.
+            </p>
+          </div>
           <DialogFooter>
             <button
               type="button"
@@ -438,13 +458,109 @@ export function ClientsView({ clients }: Props) {
             </button>
             <button
               type="button"
+              onClick={() => {
+                // Move to stage 2; carry the target over.
+                setHardDeleteTarget(confirmDelete);
+                setHardConfirmText("");
+                setConfirmDelete(null);
+              }}
+              disabled={deleting}
+              className="rounded-md border border-red-300 px-4 py-2 text-xs font-semibold tracking-wide text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+            >
+              Permanently Delete
+            </button>
+            <button
+              type="button"
               onClick={performDeleteClient}
               disabled={deleting}
-              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-60"
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Archiving…" : "Archive"}
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POLISH-45 — STAGE 2: irreversible hard delete, type-to-confirm. */}
+      <Dialog
+        open={!!hardDeleteTarget}
+        onOpenChange={(o) => {
+          if (!o && !hardDeleting) {
+            setHardDeleteTarget(null);
+            setHardConfirmText("");
+          }
+        }}
+      >
+        <DialogContent>
+          {(() => {
+            const expected =
+              (hardDeleteTarget?.legal_name?.trim() ||
+                hardDeleteTarget?.name?.trim() ||
+                "");
+            const matches = hardConfirmText.trim() === expected && expected !== "";
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-serif text-red-700">
+                    PERMANENTLY DELETE {expected || "this client"}?
+                  </DialogTitle>
+                  <DialogDescription>This action is IRREVERSIBLE.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+                  <p>The following will be permanently deleted:</p>
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    <li>The client record</li>
+                    <li>All sites belonging to this client</li>
+                    <li>All quotes, quote items, and quote attachments</li>
+                    <li>All invoices and invoice items</li>
+                    <li>All jobs / projects (if any)</li>
+                    <li>All contacts</li>
+                    <li>All inventory records at this client&apos;s sites</li>
+                    <li>All file attachments (signed onboarding PDFs, etc.)</li>
+                  </ul>
+                  <p>
+                    <span className="font-medium">Records preserved:</span> audit
+                    logs / activity history (for legal compliance).
+                  </p>
+                  <p>
+                    To confirm, type the client&apos;s legal name below:
+                    <br />
+                    <span className="font-mono text-[11px] text-brand-navy">
+                      {expected}
+                    </span>
+                  </p>
+                  <Input
+                    value={hardConfirmText}
+                    onChange={(e) => setHardConfirmText(e.target.value)}
+                    disabled={hardDeleting}
+                    placeholder="Type the legal name exactly"
+                    autoComplete="off"
+                  />
+                </div>
+                <DialogFooter>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHardDeleteTarget(null);
+                      setHardConfirmText("");
+                    }}
+                    disabled={hardDeleting}
+                    className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={performHardDeleteClient}
+                    disabled={!matches || hardDeleting}
+                    className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {hardDeleting ? "Deleting…" : "Permanently Delete"}
+                  </button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -511,6 +627,26 @@ export function ClientsView({ clients }: Props) {
         router.refresh();
       } else {
         // Keep the modal open + Delete button enabled so the user can retry.
+        toast.error(r.error);
+      }
+    });
+  }
+
+  // POLISH-45 — STAGE 2: permanent (hard) delete after type-to-confirm.
+  function performHardDeleteClient() {
+    if (!hardDeleteTarget) return;
+    const c = hardDeleteTarget;
+    setHardDeleting(true);
+    hardDeleteClientAction(c.id, hardConfirmText).then((r) => {
+      setHardDeleting(false);
+      if (r.ok) {
+        setHardDeleteTarget(null);
+        setHardConfirmText("");
+        toast.success("Client and all related records permanently deleted.");
+        void reload();
+        router.refresh();
+      } else {
+        // Keep stage 2 open so the user can correct the name / retry.
         toast.error(r.error);
       }
     });
