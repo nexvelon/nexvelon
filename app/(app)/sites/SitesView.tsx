@@ -306,7 +306,14 @@ function SiteRow({
       </TableCell>
       <TableCell>
         <span className="inline-flex items-center gap-1.5">
-          <span className="text-sm">{site.client?.name ?? "—"}</span>
+          {site.client?.deleted_at ? (
+            // POLISH-44 — parent client archived; keep the row, flag the client.
+            <span className="text-sm italic text-zinc-400">
+              {site.client?.name ?? "—"} (deleted)
+            </span>
+          ) : (
+            <span className="text-sm">{site.client?.name ?? "—"}</span>
+          )}
           {site.client?.default_opco && (
             <OpcoBadge opco={site.client.default_opco} />
           )}

@@ -166,7 +166,16 @@ export default function InvoicesListPage() {
                       {OPCO_LABEL[r.opco] ?? r.opco}
                     </span>
                   </TableCell>
-                  <TableCell className="text-xs">{r.client_name ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {r.client_deleted ? (
+                      // POLISH-44 — bill-to client archived; keep the row, flag it.
+                      <span className="italic text-zinc-400">
+                        {r.client_name ?? "—"} (deleted)
+                      </span>
+                    ) : (
+                      (r.client_name ?? "—")
+                    )}
+                  </TableCell>
                   <TableCell
                     className="text-xs"
                     onClick={(e) => e.stopPropagation()}

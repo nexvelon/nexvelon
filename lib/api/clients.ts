@@ -49,9 +49,10 @@ export async function getClients(
     .select("*")
     .order("name", { ascending: true });
 
-  // FIX-1: hard-delete model — soft-delete filter dropped (deleted rows no
-  // longer exist in the table). The deleted_at column stays in the schema
-  // per §2.1 past-data preservation but is no longer written or read.
+  // POLISH-44 — soft-delete model: the list (and every picker fed by it) shows
+  // ACTIVE clients only. Archived clients (deleted_at set) are hidden here but
+  // remain in the DB so related rows keep their reference.
+  query = query.is("deleted_at", null);
 
   if (filters.search?.trim()) {
     const q = filters.search.trim();
@@ -204,24 +205,27 @@ export async function updateClient(
 }
 
 /**
- * FIX-1: hard-delete a client. Replaces softDeleteClient (which stamped
- * deleted_at + deleted_by). The deleted_at + deleted_by columns remain
- * in the schema per §2.1 past-data preservation but are no longer
- * written. Sites + contacts cascade-delete via FK ON DELETE CASCADE on
- * their client_id (defined in 0001_clients_schema.sql).
+ * POLISH-44: SOFT-delete a client (stamp deleted_at) instead of a hard DELETE.
+ * The row stays in the DB so related sites / quotes / jobs / invoices / contacts
+ * keep their client_id reference intact (and the inventory_stock site FK is
+ * never triggered, since no sites are deleted). Runs as an UPDATE, so it uses
+ * the existing clients_update_authenticated RLS policy.
  *
- * Activity-log rows for the deleted entity SURVIVE per ACT-1 design
- * (no FK on activity_log.entity_id).
+ * Idempotent: deleting an already-archived client matches no row (the
+ * `deleted_at IS NULL` guard), so it returns false — a safe no-op.
  *
- * @returns true when a row was actually removed; false when the id
- *          didn't match any client.
+ * Activity-log rows survive per ACT-1 design (no FK on activity_log.entity_id).
+ *
+ * @returns true when a row was archived; false when the id didn't match an
+ *          active client (unknown id, or already archived).
  */
 export async function deleteClient(id: string): Promise<boolean> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("clients")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
+    .is("deleted_at", null)
     .select("id");
   if (error) throw new Error(`deleteClient: ${error.message}`);
   return (data?.length ?? 0) > 0;
@@ -260,7 +264,7 @@ export async function listSites(
   const supabase = await db();
   let query = supabase
     .from("sites")
-    .select("*, client:clients(id,name,client_code,default_opco)");
+    .select("*, client:clients(id,name,client_code,default_opco,deleted_at)");
 
   if (filters.clientId) {
     query = query.eq("client_id", filters.clientId);
@@ -289,7 +293,7 @@ export async function getSiteById(
   const supabase = await db();
   const { data, error } = await supabase
     .from("sites")
-    .select("*, client:clients(id,name,client_code,default_opco)")
+    .select("*, client:clients(id,name,client_code,default_opco,deleted_at)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getSiteById: ${error.message}`);

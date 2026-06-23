@@ -37,12 +37,23 @@ export function SiteDetailView({ site }: { site: DbSiteWithClient }) {
         <p className="text-muted-foreground text-sm">{address}</p>
         <p className="text-sm">
           <span className="text-muted-foreground">Client: </span>
-          <Link
-            href={`/clients/${site.client_id}`}
-            className="text-brand-charcoal font-medium underline-offset-2 hover:underline"
-          >
-            {site.client?.name ?? "—"}
-          </Link>
+          {site.client?.deleted_at ? (
+            // POLISH-44 — parent client archived; show the name muted/italic with
+            // a clear "(deleted)" marker. Still links to the (archived) record.
+            <Link
+              href={`/clients/${site.client_id}`}
+              className="italic text-zinc-400 underline-offset-2 hover:underline"
+            >
+              {site.client?.name ?? "—"} (deleted)
+            </Link>
+          ) : (
+            <Link
+              href={`/clients/${site.client_id}`}
+              className="text-brand-charcoal font-medium underline-offset-2 hover:underline"
+            >
+              {site.client?.name ?? "—"}
+            </Link>
+          )}
         </p>
       </header>
 
