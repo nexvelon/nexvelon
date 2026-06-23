@@ -250,6 +250,17 @@ const INQUIRIES_FROM =
   process.env.RESEND_INQUIRIES_EMAIL ?? "Nexvelon <inquiries@nexvelonglobal.com>";
 const INQUIRIES_TO =
   process.env.RESEND_INQUIRIES_TO ?? "inquiries@nexvelonglobal.com";
+// POLISH-38 — second internal recipient of the bundled submission email. Ensure
+// this alias exists in M365 before relying on it. Overridable via env.
+const CLIENTS_SITES_INFO_TO =
+  process.env.RESEND_CLIENTS_SITES_INFO_TO ??
+  "Clients&SitesInfo@NexvelonGlobal.com";
+
+/** An email attachment (filename + raw buffer), for Resend. */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
 
 // A small ornamental gold divider — a centered diamond flanked by thin rules.
 // Used between major sections of the royal-style invitation.
@@ -601,6 +612,9 @@ export async function sendClientSubmissionEmail(opts: {
   siteForm: Record<string, unknown>;
   tc1: { name: string | null; at: string | null };
   tc2: { name: string | null; at: string | null };
+  // POLISH-38 — the four generated PDFs (T&Cs + form PDFs) attached to the
+  // internal bundle. Best-effort: any may be absent.
+  attachments?: EmailAttachment[];
 }): Promise<void> {
   const kv = (label: string, value: unknown) => {
     const v = String(value ?? "").trim();
@@ -670,10 +684,14 @@ export async function sendClientSubmissionEmail(opts: {
   const resend = client();
   const result = await resend.emails.send({
     from: INQUIRIES_FROM,
-    to: INQUIRIES_TO,
+    // POLISH-38 — both internal recipients receive the same bundle + attachments.
+    to: [INQUIRIES_TO, CLIENTS_SITES_INFO_TO],
     subject: `New client onboarding submitted — ${cf.legalName ?? opts.email}`,
     html,
     text,
+    ...(opts.attachments && opts.attachments.length
+      ? { attachments: opts.attachments }
+      : {}),
     headers: { "X-Entity-Ref-ID": `nexvelon-onboarding-${Date.now()}` },
   });
   if (result.error) throw new Error(`sendClientSubmissionEmail: ${result.error.message}`);
@@ -689,7 +707,9 @@ export async function sendClientConfirmationEmail(opts: {
   siteForm: Record<string, unknown>;
   tc1At: string | null;
   tc2At: string | null;
-  pdfs: { tc1: Buffer; tc2: Buffer };
+  // POLISH-38 — all available PDFs (signed T&Cs + form PDFs) attached for the
+  // client's records. Best-effort: any may be absent.
+  attachments?: EmailAttachment[];
 }): Promise<void> {
   const cf = opts.clientForm;
   const sf = opts.siteForm;
@@ -766,10 +786,9 @@ export async function sendClientConfirmationEmail(opts: {
       "Your Nexvelon Global application — confirmation and signed agreements",
     html,
     text,
-    attachments: [
-      { filename: "Integrated-Solutions-TC-signed.pdf", content: opts.pdfs.tc1 },
-      { filename: "Guardian-TC-signed.pdf", content: opts.pdfs.tc2 },
-    ],
+    ...(opts.attachments && opts.attachments.length
+      ? { attachments: opts.attachments }
+      : {}),
     headers: { "X-Entity-Ref-ID": `nexvelon-confirmation-${Date.now()}` },
   });
   if (result.error)

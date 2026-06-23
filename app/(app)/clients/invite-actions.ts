@@ -8,6 +8,7 @@ import {
   createInvitation,
   getInvitationByClientId,
   recordInvitationDecision,
+  deletePendingApplication,
 } from "@/lib/api/client-invitations";
 import {
   sendClientInviteEmail,
@@ -25,6 +26,7 @@ import { getTierTexts, tierKey } from "@/lib/api/company-settings";
 import {
   invitationSignedUrl,
   copySignedPdfToClientAttachments,
+  INVITATION_FORM_PDF_BUCKET,
   INVITATION_SIG_BUCKET,
   INVITATION_PDF_BUCKET,
 } from "@/lib/api/invitation-storage";
@@ -163,6 +165,33 @@ export interface SubmissionDetail {
   tc2PdfUrl: string | null;
 }
 
+/**
+ * POLISH-38 — Admin-only HARD delete of a pending application: storage objects,
+ * the invitation row(s), the site rows, and the pending client row. Guarded so
+ * an already-approved client can't be nuked through this path.
+ */
+export async function deletePendingApplicationAction(
+  clientId: string
+): Promise<ActionResult<{ deleted: true }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const detail = await getClientById(clientId);
+    if (!detail) return { ok: false, error: "Application not found." };
+    if (!detail.client.pending_review) {
+      return {
+        ok: false,
+        error: "Only pending applications can be deleted here.",
+      };
+    }
+    await deletePendingApplication(clientId);
+    revalidatePath("/clients");
+    return { ok: true, data: { deleted: true } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function getSubmissionDetailAction(
   clientId: string
 ): Promise<ActionResult<SubmissionDetail>> {
@@ -241,6 +270,28 @@ export async function approvePendingClientAction(
             pdfPath: inv.tc2_signed_pdf_path,
             clientId: id,
             filename: "Guardian-TC-signed.pdf",
+            uploadedBy: gate.id,
+          })
+        );
+      // POLISH-38 (CHANGE 5) — also copy the application-form PDFs (from the
+      // form-PDF bucket) into the same "Signed Onboarding" folder.
+      if (inv.client_form_pdf_path)
+        copies.push(
+          copySignedPdfToClientAttachments({
+            pdfPath: inv.client_form_pdf_path,
+            sourceBucket: INVITATION_FORM_PDF_BUCKET,
+            clientId: id,
+            filename: "Client-Application-Form.pdf",
+            uploadedBy: gate.id,
+          })
+        );
+      if (inv.site_form_pdf_path)
+        copies.push(
+          copySignedPdfToClientAttachments({
+            pdfPath: inv.site_form_pdf_path,
+            sourceBucket: INVITATION_FORM_PDF_BUCKET,
+            clientId: id,
+            filename: "Site-Application-Form.pdf",
             uploadedBy: gate.id,
           })
         );

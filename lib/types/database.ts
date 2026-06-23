@@ -162,6 +162,9 @@ export interface DbClientInvitation {
   tc2_signature_data_url: string | null;
   tc1_signed_pdf_path: string | null;
   tc2_signed_pdf_path: string | null;
+  // POLISH-38 (migration 0067) — generated client/site application-form PDFs.
+  client_form_pdf_path: string | null;
+  site_form_pdf_path: string | null;
   tier_requested: DbClientTier | null;
   // POLISH-9 (migration 0062) — when the client ticked the Payment Policies
   // acknowledgment on each form.
