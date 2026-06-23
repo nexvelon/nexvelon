@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import SignatureCanvas from "react-signature-canvas";
 import { Card } from "@/components/ui/card";
@@ -1423,17 +1424,24 @@ function StepRow({
 
 export function InviteStatus({ token }: { token: string }) {
   const { inv, loading, error, refresh } = useInvitation(token);
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  // POLISH-34 — show the success card IMMEDIATELY on a successful submit, without
+  // depending on a (possibly stale) refetch reading submitted_at back; surface
+  // failures in a visible banner instead of a silently-stuck button.
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (loading) return <Loading />;
   if (error || !inv)
     return <ErrorCard message={error ?? "This invitation link is invalid."} />;
 
-  // POLISH-32 — success confirmation. submitInvitationAction sets submitted_at,
-  // so this card renders right after submit AND on any later refresh/revisit
-  // (the token is locked; sub-form pages show the LockedNotice). Garamond
-  // heading + sans-serif body + gold ✦, matching the portal aesthetic.
-  if (inv.submitted_at) {
+  // POLISH-32/34 — success confirmation. Renders when the server has confirmed
+  // submission (inv.submitted_at) OR immediately after a successful submit
+  // (justSubmitted) — the latter guarantees the client sees it even if the
+  // post-submit refetch is momentarily stale. Token-locked; sub-form pages show
+  // the LockedNotice.
+  if (inv.submitted_at || justSubmitted) {
     return (
       <Card
         className="space-y-4 p-10 text-center"
@@ -1460,15 +1468,43 @@ export function InviteStatus({ token }: { token: string }) {
   }
 
   async function onSubmit() {
+    // POLISH-34 (CHANGE 1) — step-by-step diagnostic logging so a future failure
+    // is visible in the browser console (Safari Web Inspector / Chrome DevTools).
+    console.error("[SUBMIT START]", { token, ready: inv?.ready });
+    setSubmitError(null);
     setSubmitting(true);
-    const res = await submitInvitationAction(token);
-    setSubmitting(false);
-    if (!res.ok) {
-      toast.error(res.error);
+    let res: Awaited<ReturnType<typeof submitInvitationAction>>;
+    try {
+      console.error("[SUBMIT ACTION CALLED]", { token });
+      res = await submitInvitationAction(token);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("[SUBMIT RESULT]", { ok: false, thrown: true, error: msg });
+      setSubmitting(false);
+      setSubmitError(msg);
       return;
     }
+    console.error("[SUBMIT RESULT]", {
+      ok: res?.ok ?? false,
+      error: res && !res.ok ? res.error : null,
+      data: res && res.ok ? res.data : null,
+    });
+    setSubmitting(false);
+    if (!res || !res.ok) {
+      setSubmitError((res && !res.ok && res.error) || "Unknown error");
+      return;
+    }
+    // CHANGE 2 — show the success card right away, independent of the refetch.
+    setJustSubmitted(true);
     toast.success("Submitted — thank you!");
+    console.error("[SUBMIT STATE UPDATED]", {
+      justSubmitted: true,
+      willShowSuccessCard: true,
+    });
+    // CHANGE 4 — also refetch the invitation + refresh server components so the
+    // server-confirmed submitted_at is available on any later refresh/revisit.
     refresh();
+    router.refresh();
   }
 
   const isFull = inv.invite_type === "full";
@@ -1570,6 +1606,17 @@ export function InviteStatus({ token }: { token: string }) {
       </div>
 
       <div className="border-t pt-5" style={{ borderColor: BORDER }}>
+        {/* POLISH-34 (CHANGE 3) — visible submit failure (no silently-stuck
+            button). The console logs pinpoint where it broke. */}
+        {submitError && (
+          <div
+            className="mb-3 rounded-md border px-4 py-3 text-sm"
+            style={{ borderColor: "#E2B7AE", background: "#FCF3F1", color: "#7A2E22" }}
+          >
+            <p className="font-semibold">Submit failed: {submitError}.</p>
+            <p className="mt-1 text-[13px]">Please try again or contact support.</p>
+          </div>
+        )}
         {/* CHANGE 8 — the disabled Submit carries a tooltip; the title attr sits
             on a wrapper span so it surfaces on hover even while the button is
             disabled (disabled controls don't fire hover in some browsers). */}
