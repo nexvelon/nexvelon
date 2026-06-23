@@ -262,16 +262,6 @@ export interface EmailAttachment {
   content: Buffer;
 }
 
-// A small ornamental gold divider — a centered diamond flanked by thin rules.
-// Used between major sections of the royal-style invitation.
-function goldDivider(): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:11px 0;"><tr>
-    <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
-    <td style="padding:0 12px;text-align:center;color:#B8924B;font-size:12px;line-height:1;font-family:Georgia,'Times New Roman',serif;">&#9670;</td>
-    <td style="font-size:0;line-height:0;border-bottom:1px solid #E5DFD0;width:42%;">&nbsp;</td>
-  </tr></table>`;
-}
-
 // POLISH-13 — font + colour tokens for the shared shell. Cormorant Garamond is
 // loaded via a Google Fonts <link> for clients that support it; Georgia / Times
 // New Roman are the fallback for Outlook desktop + corporate filters.
@@ -711,49 +701,20 @@ export async function sendClientConfirmationEmail(opts: {
   // client's records. Best-effort: any may be absent.
   attachments?: EmailAttachment[];
 }): Promise<void> {
-  const cf = opts.clientForm;
-  const sf = opts.siteForm;
-  const fmtAt = (x: string | null) => (x ? new Date(x).toLocaleString() : "—");
-  const legalName = String(cf.legalName ?? "").trim();
-  const contactName = [cf.c0First, cf.c0Last]
-    .map((v) => String(v ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
-  const contactEmail = String(cf.c0Email ?? "").trim();
-  const siteName = String(sf.siteName ?? "").trim();
-
-  const kv = (label: string, value: string) => {
-    const v = value.trim();
-    if (!v) return "";
-    return `<tr><td style="padding:5px 14px 5px 0;color:#5C5240;font-size:13px;white-space:nowrap;vertical-align:top;">${escapeHtml(
-      label
-    )}</td><td style="padding:5px 0;color:#1a2332;font-size:13px;">${escapeHtml(
-      v
-    )}</td></tr>`;
-  };
-  const summaryRows =
-    kv("Client legal name", legalName) +
-    kv("Primary contact", contactName) +
-    kv("Contact email", contactEmail) +
-    kv("Site name", siteName) +
-    kv("Integrated Solutions Inc. T&C signed", fmtAt(opts.tc1At)) +
-    kv("Guardian Inc. T&C signed", fmtAt(opts.tc2At));
-
+  // POLISH-40 — the "Your Submission" summary table (and its gold divider) were
+  // removed; the client doesn't need their submitted data echoed back in-inbox.
+  // Body is now just the intro paragraph; the PDFs remain attached.
   const bodyHtml = `
     ${letterParagraphs([
       "Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.",
-    ])}
-    ${goldDivider()}
-    <div style="font-family:${SANS};font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#B8924B;">Your Submission</div>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${summaryRows}</table>`;
+    ])}`;
 
   const html = emailShell({
     eyebrow: "APPLICATION RECEIVED",
     headline: "Thank you for your application.",
     bodyHtml,
-    statusLine: "APPLICATION RECEIVED · IN REVIEW",
     signatureItalic:
-      "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records. If you have any questions, please reply to this email.",
+      "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records along with your forms submitted. If you have any questions, please reply to this email.",
     signatureGroup: "The Nexvelon Global Group",
     signatureSubline: "CLIENT APPLICATION · CONFIRMATION",
     outerNote: outerNoteFor("This confirmation was sent to", opts.to),
@@ -764,16 +725,7 @@ export async function sendClientConfirmationEmail(opts: {
     "",
     "Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.",
     "",
-    "YOUR SUBMISSION",
-    "",
-    `Client legal name: ${legalName || "—"}`,
-    `Primary contact: ${contactName || "—"}`,
-    `Contact email: ${contactEmail || "—"}`,
-    `Site name: ${siteName || "—"}`,
-    `Integrated Solutions Inc. T&C signed: ${fmtAt(opts.tc1At)}`,
-    `Guardian Inc. T&C signed: ${fmtAt(opts.tc2At)}`,
-    "",
-    "Your two signed agreements are attached to this email for your records. If you have any questions, please reply to this email.",
+    "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records along with your forms submitted. If you have any questions, please reply to this email.",
     "",
     "— Nexvelon Global",
   ].join("\n");
