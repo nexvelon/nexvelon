@@ -768,7 +768,7 @@ export async function sendApplicationApprovedEmail(opts: {
   const requested = opts.requestedTierName?.trim() || null;
   const showRequestedLine = !!requested && requested !== assignedLabel;
   const requestedLineText = showRequestedLine
-    ? `You applied for ${requested}. After review, we've approved you at ${assignedLabel} level.`
+    ? `You applied for ${requested}. After review, we've approved you at ${assignedLabel} Tier.`
     : "";
   // POLISH-41 — the tier description (a single Settings text block) is parsed
   // into headline + bullets + body paragraphs and rendered as warm-gold ✦
@@ -801,7 +801,7 @@ export async function sendApplicationApprovedEmail(opts: {
             requested as string
           )}</strong>. After review, we've approved you at <strong>${escapeHtml(
             assignedLabel
-          )}</strong> level.`
+          )}</strong> Tier.`
         : "",
       hasTier
         ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
