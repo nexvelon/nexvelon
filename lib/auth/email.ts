@@ -254,7 +254,7 @@ const INQUIRIES_TO =
 // this alias exists in M365 before relying on it. Overridable via env.
 const CLIENTS_SITES_INFO_TO =
   process.env.RESEND_CLIENTS_SITES_INFO_TO ??
-  "Clients&SitesInfo@NexvelonGlobal.com";
+  "ClientsAndSitesInfo@NexvelonGlobal.com";
 
 /** An email attachment (filename + raw buffer), for Resend. */
 export interface EmailAttachment {

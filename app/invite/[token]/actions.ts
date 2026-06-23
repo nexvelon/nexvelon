@@ -203,7 +203,7 @@ export async function submitInvitationAction(
     ].filter((a): a is { filename: string; content: Buffer } => Boolean(a));
     // Best-effort emails — a mail failure must not unwind the created client/site.
     try {
-      // To inquiries@ + Clients&SitesInfo@ — bundled internal summary + 4 PDFs.
+      // To inquiries@ + ClientsAndSitesInfo@ — bundled internal summary + 4 PDFs.
       await sendClientSubmissionEmail({
         email: invitation.email,
         clientForm: invitation.client_form_data ?? {},
