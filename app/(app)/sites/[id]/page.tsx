@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSiteById } from "@/lib/api/clients";
+import { getSiteById, getContactsBySite } from "@/lib/api/clients";
 import { SiteDetailView } from "./SiteDetailView";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,10 @@ export default async function SiteDetailPage({
     notFound();
   }
 
+  // POLISH-50 — site-scoped contacts for the new Contacts section.
+  const contacts = await getContactsBySite(id);
+  console.error("[SITE CONTACTS LOADED]", { siteId: id, count: contacts.length });
+
   return (
     <div className="space-y-4">
       <Link
@@ -31,7 +35,7 @@ export default async function SiteDetailPage({
       >
         ← Back to Sites
       </Link>
-      <SiteDetailView site={site} />
+      <SiteDetailView site={site} contacts={contacts} />
     </div>
   );
 }

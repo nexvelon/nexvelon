@@ -414,6 +414,24 @@ export async function deleteSite(id: string): Promise<boolean> {
 // Contacts
 // ----------------------------------------------------------------------------
 
+/**
+ * POLISH-50 — site-scoped contacts for the /sites/[id] Contacts section.
+ * (Invite submit writes site contacts keyed by site_id; POLISH-49.)
+ */
+export async function getContactsBySite(siteId: string): Promise<DbContact[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("*")
+    .eq("site_id", siteId)
+    .is("deleted_at", null)
+    .order("is_primary", { ascending: false })
+    .order("is_accounts_payable", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`getContactsBySite: ${error.message}`);
+  return (data ?? []) as DbContact[];
+}
+
 export async function getContactsByClient(
   clientId: string
 ): Promise<DbContact[]> {
