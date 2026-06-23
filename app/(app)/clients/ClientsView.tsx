@@ -418,11 +418,13 @@ export function ClientsView({ clients }: Props) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-serif">Delete client?</DialogTitle>
+            <DialogTitle className="font-serif">Delete this client?</DialogTitle>
             <DialogDescription>
-              {confirmDelete?.name} will be permanently deleted, along with
-              its sites and contacts. This cannot be undone. (The activity
-              log entry is preserved for audit purposes.)
+              The client will be archived. Their sites, quotes, jobs, and other
+              related records will NOT be deleted — they remain in the system but
+              will be marked as belonging to a deleted client. You can manually
+              delete those records from their respective lists if needed. This
+              action cannot be undone (the client cannot be restored).
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -497,7 +499,7 @@ export function ClientsView({ clients }: Props) {
       setDeleting(false);
       if (r.ok) {
         setConfirmDelete(null);
-        toast.success("Client deleted");
+        toast.success("Client archived. Related sites, quotes, and jobs are preserved.");
         void reload();
         router.refresh();
       } else if (r.code === "not_found") {

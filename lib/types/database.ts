@@ -375,6 +375,9 @@ export interface DbSiteWithClient extends DbSite {
     name: string;
     client_code: string | null;
     default_opco: DbClientOpco | null;
+    // POLISH-44 — non-null = the parent client was soft-deleted (archived). The
+    // site stays visible; the UI labels the client name as "(deleted)".
+    deleted_at: string | null;
   };
 }
 

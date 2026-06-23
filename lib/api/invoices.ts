@@ -37,6 +37,8 @@ export interface InvoiceCostCenterOption {
 /** A list row: the invoice + client / project display fields. */
 export interface InvoiceListRow extends DbInvoice {
   client_name: string | null;
+  // POLISH-44 — true when the bill-to client has been soft-deleted (archived).
+  client_deleted: boolean;
   project_number: string | null;
 }
 
@@ -75,7 +77,7 @@ export interface InvoiceMutationResult {
 
 // Supabase nests FK selects; split them back out.
 type InvoiceJoinRow = DbInvoice & {
-  client: { name: string } | null;
+  client: { name: string; deleted_at: string | null } | null;
   project: { project_number: string } | null;
 };
 
@@ -99,7 +101,7 @@ export async function listInvoices(): Promise<InvoiceListRow[]> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("invoices")
-    .select("*, client:clients(name), project:projects(project_number)")
+    .select("*, client:clients(name,deleted_at), project:projects(project_number)")
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listInvoices: ${error.message}`);
   return ((data ?? []) as InvoiceJoinRow[]).map((r) => {
@@ -107,6 +109,7 @@ export async function listInvoices(): Promise<InvoiceListRow[]> {
     return {
       ...(inv as DbInvoice),
       client_name: client?.name ?? null,
+      client_deleted: !!client?.deleted_at,
       project_number: project?.project_number ?? null,
     };
   });
@@ -215,7 +218,7 @@ export async function listInvoicesForProject(
   const supabase = await db();
   const { data, error } = await supabase
     .from("invoices")
-    .select("*, client:clients(name), project:projects(project_number)")
+    .select("*, client:clients(name,deleted_at), project:projects(project_number)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listInvoicesForProject: ${error.message}`);
@@ -224,6 +227,7 @@ export async function listInvoicesForProject(
     return {
       ...(inv as DbInvoice),
       client_name: client?.name ?? null,
+      client_deleted: !!client?.deleted_at,
       project_number: project?.project_number ?? null,
     };
   });
@@ -249,7 +253,7 @@ export async function listInvoicesForProduct(
 
   const { data, error } = await supabase
     .from("invoices")
-    .select("*, client:clients(name), project:projects(project_number)")
+    .select("*, client:clients(name,deleted_at), project:projects(project_number)")
     .in("id", ids)
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listInvoicesForProduct: ${error.message}`);
@@ -258,6 +262,7 @@ export async function listInvoicesForProduct(
     return {
       ...(inv as DbInvoice),
       client_name: client?.name ?? null,
+      client_deleted: !!client?.deleted_at,
       project_number: project?.project_number ?? null,
     };
   });

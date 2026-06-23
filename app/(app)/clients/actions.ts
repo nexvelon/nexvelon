@@ -288,42 +288,37 @@ export async function deleteClientAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    // POLISH-43 (CHANGE 3) — diagnostic logging on the delete path.
+    // POLISH-44 (CHANGE 5) — diagnostic logging on the soft-delete path.
     const me = await getCurrentProfile();
-    console.error("[CLIENT DELETE]", { clientId: id, role: me?.role ?? null });
-    // FIX-1: hard delete. Sites + contacts cascade via FK ON DELETE
-    // CASCADE on their client_id (0001_clients_schema.sql).
+    console.error("[CLIENT SOFT DELETE]", { clientId: id, role: me?.role ?? null });
+    // POLISH-44 — soft delete (stamp deleted_at). Sites/quotes/jobs/invoices/
+    // contacts/attachments are intentionally PRESERVED (not cascaded).
     const deleted = await deleteClient(id);
     if (!deleted) {
-      // POLISH-43 — a 0-row delete means the row is gone OR (pre-0068) RLS
-      // silently filtered it. Either way the list is stale; tell the caller to
-      // refresh rather than the vague "Client not found." (CHANGE 2).
+      // 0-row means the client is already archived or the id is unknown — either
+      // way the list is stale, so ask the caller to refresh (CHANGE 2 reuse).
       const result = {
         ok: false as const,
         error:
-          "This client no longer exists — it may have already been deleted. Refreshing the list…",
+          "This client is already archived or no longer exists. Refreshing the list…",
         code: "not_found",
       };
-      console.error("[CLIENT DELETE RESULT]", {
+      console.error("[CLIENT SOFT DELETE RESULT]", {
         ok: false,
         error: result.error,
-        code: result.code,
       });
       return result;
     }
-    // ATTACH-2: remove this client's attachments (objects + rows). Best-effort.
-    await deleteAttachmentsForEntity("client", id).catch(() => {});
-    // ACT-1: log survives the hard delete (no FK on activity_log.entity_id).
+    // ACT-1: activity log survives (no FK on activity_log.entity_id).
     await logActivity("client", id, "delete", {});
     revalidatePath("/clients");
-    console.error("[CLIENT DELETE RESULT]", { ok: true, error: null, code: null });
+    console.error("[CLIENT SOFT DELETE RESULT]", { ok: true, error: null });
     return { ok: true, data: { id } };
   } catch (e) {
     const result = fail(e);
-    console.error("[CLIENT DELETE RESULT]", {
+    console.error("[CLIENT SOFT DELETE RESULT]", {
       ok: false,
       error: result.error,
-      code: null,
     });
     return result;
   }
