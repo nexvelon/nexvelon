@@ -60,6 +60,13 @@ const h = vi.hoisted(() => {
   return { baseView, signTcAction };
 });
 
+// InviteStatus uses useRouter (POLISH-34) + next/link; stub next/navigation.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => {}, push: () => {}, prefetch: () => {} }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Mock the whole server-action module so the real server-only chain never loads.
 vi.mock("@/app/invite/[token]/actions", () => ({
   getInvitationAction: vi.fn(async () => ({ ok: true, data: { ...h.baseView } })),
@@ -72,7 +79,11 @@ vi.mock("@/app/invite/[token]/actions", () => ({
   getTierDisclaimersAction: vi.fn(async () => ({ ok: true, data: { requirements: "", discretion: "" } })),
 }));
 
-import { TcSign } from "@/app/invite/[token]/InviteClient";
+import { TcSign, InviteStatus } from "@/app/invite/[token]/InviteClient";
+import {
+  getInvitationAction,
+  submitInvitationAction,
+} from "@/app/invite/[token]/actions";
 
 const signTcAction = h.signTcAction;
 
@@ -142,5 +153,37 @@ describe("TcSign — T&C signing checkbox", () => {
     expect(signTcAction).not.toHaveBeenCalled();
     expect(checkbox).not.toBeChecked();
     expect(screen.queryByText(/Signed by/i)).not.toBeInTheDocument();
+  });
+});
+
+// POLISH-34 — the submit success card must render IMMEDIATELY on ok:true (via
+// local justSubmitted state), not depend on a refetch reading submitted_at.
+describe("InviteStatus — submit success card", () => {
+  it("shows the success card immediately when submit returns ok", async () => {
+    const user = userEvent.setup();
+    // Ready hub (all steps complete) so the Submit button is enabled; never
+    // reports submitted_at, so the card can only come from justSubmitted.
+    vi.mocked(getInvitationAction).mockResolvedValue({
+      ok: true,
+      data: { ...h.baseView, ready: true },
+    } as unknown as Awaited<ReturnType<typeof getInvitationAction>>);
+    vi.mocked(submitInvitationAction).mockResolvedValueOnce({
+      ok: true,
+      data: { submitted: true },
+    });
+
+    render(<InviteStatus token="tok" />);
+
+    const submit = await screen.findByRole("button", { name: /^submit$/i });
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(screen.getByText(/submitted successfully/i)).toBeInTheDocument()
+    );
+    // Restore the default loader for any later tests.
+    vi.mocked(getInvitationAction).mockResolvedValue({
+      ok: true,
+      data: { ...h.baseView },
+    } as unknown as Awaited<ReturnType<typeof getInvitationAction>>);
   });
 });
