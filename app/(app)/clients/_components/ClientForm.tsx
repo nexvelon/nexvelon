@@ -467,6 +467,16 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       if (parsed.billing.postal) setBillPostal(parsed.billing.postal);
       if (parsed.billing.country) setBillCountry(parsed.billing.country);
 
+      // ─── POLISH-60: Company Address (appended template section) ───
+      // Prefill the company fields. The operator decides the "Same as Company
+      // Address" toggle on Billing after reviewing the prefilled data.
+      if (parsed.company.street) setCoLine1(parsed.company.street);
+      if (parsed.company.unit) setCoLine2(parsed.company.unit);
+      if (parsed.company.city) setCoCity(parsed.company.city);
+      if (parsed.company.province) setCoProvince(parsed.company.province);
+      if (parsed.company.postal) setCoPostal(parsed.company.postal);
+      if (parsed.company.country) setCoCountry(parsed.company.country);
+
       // ─── Mailing address — if ANY mailing cell has content, populate
       // and flip same-as-billing OFF. If all blank, keep the default
       // (same as billing).
