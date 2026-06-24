@@ -25,6 +25,8 @@ import type { ContactPhone, DbContact, DbSite } from "@/lib/types/database";
 
 type Mode =
   | { kind: "create"; clientId: string }
+  // POLISH-58 — site-scoped create: client_id = NULL, site_id fixed to this site.
+  | { kind: "create-site"; siteId: string }
   | { kind: "edit"; contact: DbContact };
 
 interface Props {
@@ -38,7 +40,13 @@ interface Props {
 export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
   const isEdit = mode.kind === "edit";
   const existing = isEdit ? mode.contact : null;
-  const clientId = isEdit ? mode.contact.client_id : mode.clientId;
+  // POLISH-58 — create-site forces client_id NULL (site contacts don't pollute
+  // the client tab, per POLISH-49).
+  const clientId = isEdit
+    ? mode.contact.client_id
+    : mode.kind === "create"
+    ? mode.clientId
+    : null;
 
   const [firstName, setFirstName] = useState(existing?.first_name ?? "");
   const [lastName, setLastName] = useState(existing?.last_name ?? "");
@@ -49,8 +57,12 @@ export function ContactFormDrawer({ open, onClose, mode, sites = [] }: Props) {
   const [phones, setPhones] = useState<ContactPhone[]>(
     existing?.phones ?? [{ label: "Phone", number: "" }]
   );
-  const [siteId, setSiteId] = useState<string>(existing?.site_id ?? "none");
-  const [isPrimary, setIsPrimary] = useState(existing?.is_primary ?? true);
+  const [siteId, setSiteId] = useState<string>(
+    existing?.site_id ?? (mode.kind === "create-site" ? mode.siteId : "none")
+  );
+  const [isPrimary, setIsPrimary] = useState(
+    existing?.is_primary ?? (mode.kind === "create-site" ? false : true)
+  );
   const [isBilling, setIsBilling] = useState(existing?.is_billing ?? false);
   const [isEmergency, setIsEmergency] = useState(existing?.is_emergency ?? false);
   // CL-7
