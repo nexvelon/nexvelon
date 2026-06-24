@@ -495,6 +495,26 @@ function clientInsertFrom(
   };
 }
 
+// POLISH-57 — next global "S-NNN" site code for invite-created sites. Manual
+// sites use the per-client "S-{client_code}-NNN" scheme (createSite); invite
+// clients have no client_code, so these use a global sequence scanned across the
+// pure-numeric "S-NNN" codes only (manual codes contain letters and are ignored).
+async function nextInviteSiteCode(
+  supabase: ReturnType<typeof admin>
+): Promise<string> {
+  const { data, error } = await supabase
+    .from("sites")
+    .select("site_code")
+    .like("site_code", "S-%");
+  if (error) throw new Error(error.message);
+  let max = 0;
+  for (const r of (data ?? []) as { site_code: string | null }[]) {
+    const m = String(r.site_code ?? "").match(/^S-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `S-${String(max + 1).padStart(3, "0")}`;
+}
+
 // Map the saved site jsonb to a DbSite insert payload under a client.
 function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
   // Billing inherits the SITE address unless "Same as Site" was unchecked.
@@ -650,9 +670,19 @@ export async function submitInvitation(token: string): Promise<{
     clientId = (client as { id: string }).id;
   }
 
+  // POLISH-57 — give the new site a sequential code so it sorts naturally in
+  // /sites (was NULL → buried). Invite-created clients have no client_code, so
+  // the per-client "S-{client_code}-NNN" scheme (createSite) can't apply; use a
+  // global "S-NNN" sequence instead. Best-effort: a failure falls back to NULL
+  // (never blocks the submission).
+  const siteCode = await nextInviteSiteCode(supabase).catch(() => null);
+  const sitePayload = {
+    ...siteInsertFrom(sf, clientId),
+    ...(siteCode ? { site_code: siteCode } : {}),
+  };
   const { data: site, error: siErr } = await supabase
     .from("sites")
-    .insert(siteInsertFrom(sf, clientId))
+    .insert(sitePayload)
     .select("id")
     .single();
   if (siErr) throw new Error(`submitInvitation/site: ${siErr.message}`);

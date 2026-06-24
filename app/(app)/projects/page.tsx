@@ -205,7 +205,16 @@ export default function ProjectsListPage() {
                   <TableCell className="text-brand-charcoal max-w-[240px] truncate text-sm">
                     {r.title || "—"}
                   </TableCell>
-                  <TableCell className="text-xs">{r.client_name ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {r.client_deleted ? (
+                      // POLISH-57 — parent client archived; flag it (not clickable).
+                      <span className="italic text-zinc-400">
+                        {r.client_name ?? "—"} (deleted)
+                      </span>
+                    ) : (
+                      (r.client_name ?? "—")
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {r.site_deleted ? (
                       // POLISH-46 — site archived; keep the row, flag the site.
