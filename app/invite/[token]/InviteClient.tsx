@@ -967,6 +967,8 @@ function ClientInfoFormInner({
   const missing = clientFormMissing(values);
   // CHANGE 1 — mailing inherits billing unless explicitly unchecked.
   const mailingSame = get("mailing_same_as_billing") !== "false";
+  // POLISH-53 — billing inherits the Company Address unless explicitly unchecked.
+  const billingSame = get("billing_same_as_company") !== "false";
 
   return (
     <FormShell
@@ -993,8 +995,21 @@ function ClientInfoFormInner({
         </Grid>
       </Section>
 
-      <Section id="billing" title="Billing address">
-        <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
+      {/* POLISH-53 — Company Address (required) is the top-level address; billing
+          and mailing inherit down from it. */}
+      <Section id="company-address" title="Company address" required>
+        <AddressBlock get={get} set={set} prefix="company" sectionPrefix="Company" />
+      </Section>
+
+      <Section id="billing" title="Billing address" required={!billingSame}>
+        <SameAsCheckbox
+          checked={billingSame}
+          label="Same as Company Address"
+          onChange={(c) => set("billing_same_as_company", c ? "true" : "false")}
+        />
+        {!billingSame && (
+          <AddressBlock get={get} set={set} prefix="billing" sectionPrefix="Billing" />
+        )}
       </Section>
 
       <Section id="mailing" title="Mailing address" required={!mailingSame}>

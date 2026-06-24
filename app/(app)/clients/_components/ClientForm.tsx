@@ -235,6 +235,14 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
   const [industry, setIndustry] = useState(existing?.industry ?? "");
   const [tags, setTags] = useState((existing?.tags ?? []).join(", "));
 
+  // --- Section 2b: Company Address (POLISH-53) ---
+  const [coLine1, setCoLine1] = useState(existing?.company_address_line1 ?? "");
+  const [coLine2, setCoLine2] = useState(existing?.company_address_line2 ?? "");
+  const [coCity, setCoCity] = useState(existing?.company_address_city ?? "");
+  const [coProvince, setCoProvince] = useState(existing?.company_address_province ?? "");
+  const [coPostal, setCoPostal] = useState(existing?.company_address_postal ?? "");
+  const [coCountry, setCoCountry] = useState(existing?.company_address_country ?? "");
+
   // --- Section 3: Billing Address ---
   const [billStreet, setBillStreet] = useState(existing?.billing_street ?? "");
   const [billUnit, setBillUnit] = useState(existing?.billing_unit ?? "");
@@ -637,6 +645,13 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
             .map((t) => t.trim())
             .filter(Boolean)
         : null,
+      // POLISH-53 — Company Address (top-level).
+      company_address_line1: coLine1.trim() || null,
+      company_address_line2: coLine2.trim() || null,
+      company_address_city: coCity.trim() || null,
+      company_address_province: coProvince.trim() || null,
+      company_address_postal: coPostal.trim() || null,
+      company_address_country: coCountry.trim() || null,
       billing_street: billStreet.trim() || null,
       billing_unit: billUnit.trim() || null,
       billing_city: billCity.trim() || null,
@@ -919,6 +934,35 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       </Section>
 
       {/* SECTION 3 — ADDR-1 multi-country */}
+      {/* POLISH-53 — Company Address (top-level; billing/mailing inherit it). */}
+      <Section title="Company Address">
+        <AddressSection
+          sectionPrefix="company"
+          country={coCountry}
+          province={coProvince}
+          street={coLine1}
+          unit={coLine2}
+          city={coCity}
+          postal={coPostal}
+          onCountryChange={setCoCountry}
+          onProvinceChange={setCoProvince}
+          onStreetChange={setCoLine1}
+          onUnitChange={setCoLine2}
+          onCityChange={setCoCity}
+          onPostalChange={setCoPostal}
+          onStreetAutocomplete={(p) => {
+            setCoLine1(p.street);
+            if (p.city) setCoCity(p.city);
+            if (p.province) setCoProvince(p.province);
+            if (p.postal) setCoPostal(p.postal);
+            if (p.country) {
+              const normalized = normalizeAutocompleteCountry(p.country);
+              if (normalized) setCoCountry(normalized);
+            }
+          }}
+        />
+      </Section>
+
       <Section title="Billing Address">
         <AddressSection
           sectionPrefix=""

@@ -102,14 +102,26 @@ function contactBlock(cf: Record<string, unknown>, prefix: string, role: string)
 function ClientFormDoc(input: ClientFormPdfInput) {
   const { cf } = input;
 
-  const billing = composeAddress([
+  const company = composeAddress([
+    s(cf.companyStreet),
+    s(cf.companyUnit),
+    s(cf.companyCity),
+    s(cf.companyProvince),
+    s(cf.companyPostal),
+    s(cf.companyCountry),
+  ]);
+  const companyValue = company || "—";
+
+  const billingParts = [
     s(cf.billingStreet),
     s(cf.billingUnit),
     s(cf.billingCity),
     s(cf.billingProvince),
     s(cf.billingPostal),
     s(cf.billingCountry),
-  ]);
+  ];
+  const billing = composeAddress(billingParts);
+  const billingValue = billingParts.some(Boolean) ? billing : "Same as Company Address";
 
   const mailingParts = [
     s(cf.mailingStreet),
@@ -120,7 +132,7 @@ function ClientFormDoc(input: ClientFormPdfInput) {
     s(cf.mailingCountry),
   ];
   const mailing = composeAddress(mailingParts);
-  const mailingValue = mailingParts.some(Boolean) ? mailing : "Same as billing";
+  const mailingValue = mailingParts.some(Boolean) ? mailing : "Same as Billing Address";
 
   const contacts = [
     contactBlock(cf, "c0", "Primary"),
@@ -133,7 +145,8 @@ function ClientFormDoc(input: ClientFormPdfInput) {
       row("Legal name", s(cf.legalName)),
       row("Trade name", s(cf.tradeName)),
     ]),
-    section("Billing address", [row("Billing address", billing)]),
+    section("Company address", [row("Company address", companyValue)]),
+    section("Billing address", [row("Billing address", billingValue)]),
     section("Mailing address", [row("Mailing address", mailingValue)]),
     section("Tax information", [
       row("HST/GST #", s(cf.hstNumber)),

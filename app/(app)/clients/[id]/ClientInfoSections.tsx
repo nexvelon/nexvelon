@@ -56,6 +56,11 @@ function v(x: unknown): string {
   return s.trim() === "" ? "—" : s;
 }
 
+/** True when every address part is empty (used for inheritance display). */
+function addrEmpty(parts: Array<string | null>): boolean {
+  return parts.every((p) => !p || p.trim() === "");
+}
+
 function termsLabel(t: DbClientPaymentTerms | null, custom: string | null): string {
   if (!t) return "—";
   if (t === "custom") return custom?.trim() ? `Custom — ${custom.trim()}` : "Custom";
@@ -251,6 +256,49 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
         </div>
       </SectionCard>
 
+      {/* POLISH-53 · COMPANY ADDRESS (top-level; billing inherits it) */}
+      <SectionCard
+        title="Company address"
+        isEditing={ed("company")}
+        {...sc}
+        onEditStart={() =>
+          startEdit("company", {
+            company_address_line1: client.company_address_line1,
+            company_address_line2: client.company_address_line2,
+            company_address_city: client.company_address_city,
+            company_address_province: client.company_address_province,
+            company_address_postal: client.company_address_postal,
+            company_address_country: client.company_address_country,
+          })
+        }
+      >
+        {ed("company") ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <LabeledInput label="Street" value={ds("company_address_line1")} onChange={(x) => set({ company_address_line1: x })} />
+            <LabeledInput label="Unit" value={ds("company_address_line2")} onChange={(x) => set({ company_address_line2: x })} />
+            <LabeledInput label="City" value={ds("company_address_city")} onChange={(x) => set({ company_address_city: x })} />
+            <LabeledInput label="Province" value={ds("company_address_province")} onChange={(x) => set({ company_address_province: x })} />
+            <LabeledInput label="Postal" value={ds("company_address_postal")} onChange={(x) => set({ company_address_postal: x })} />
+            <LabeledInput label="Country" value={ds("company_address_country")} onChange={(x) => set({ company_address_country: x })} />
+          </div>
+        ) : addrEmpty([
+            client.company_address_line1, client.company_address_line2,
+            client.company_address_city, client.company_address_province,
+            client.company_address_postal, client.company_address_country,
+          ]) ? (
+          <p className="text-muted-foreground text-xs">Not set</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Street" value={v(client.company_address_line1)} />
+            <Field label="Unit" value={v(client.company_address_line2)} />
+            <Field label="City" value={v(client.company_address_city)} />
+            <Field label="Province" value={v(client.company_address_province)} />
+            <Field label="Postal" value={v(client.company_address_postal)} />
+            <Field label="Country" value={v(client.company_address_country)} />
+          </div>
+        )}
+      </SectionCard>
+
       {/* B · BILLING ADDRESS */}
       <SectionCard
         title="Billing address"
@@ -276,6 +324,11 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
             <LabeledInput label="Postal" value={ds("billing_postal")} onChange={(x) => set({ billing_postal: x })} />
             <LabeledInput label="Country" value={ds("billing_country")} onChange={(x) => set({ billing_country: x })} />
           </div>
+        ) : addrEmpty([
+            client.billing_street, client.billing_unit, client.billing_city,
+            client.billing_province, client.billing_postal, client.billing_country,
+          ]) ? (
+          <p className="text-muted-foreground text-xs">Same as Company Address</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Street" value={v(client.billing_street)} />
@@ -328,8 +381,12 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
               </div>
             )}
           </div>
-        ) : client.mailing_same_as_billing ? (
-          <p className="text-muted-foreground text-xs">Same as billing address</p>
+        ) : client.mailing_same_as_billing ||
+          addrEmpty([
+            client.mailing_street, client.mailing_unit, client.mailing_city,
+            client.mailing_province, client.mailing_postal, client.mailing_country,
+          ]) ? (
+          <p className="text-muted-foreground text-xs">Same as Billing Address</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Street" value={v(client.mailing_street)} />

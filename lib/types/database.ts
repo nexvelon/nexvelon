@@ -74,6 +74,13 @@ export interface DbClient {
   ytd_revenue: number;
   nps_score: number | null;
   last_nps_date: string | null;
+  // POLISH-53 (migration 0071) — Company Address (top-level; billing inherits it).
+  company_address_line1: string | null;
+  company_address_line2: string | null;
+  company_address_city: string | null;
+  company_address_province: string | null;
+  company_address_postal: string | null;
+  company_address_country: string | null;
   // CL-2 expansion (migration 0007)
   billing_street: string | null;
   billing_unit: string | null;
@@ -190,6 +197,13 @@ export type DbClientInsert = {
   ytd_revenue?: number;
   nps_score?: number | null;
   last_nps_date?: string | null;
+  // POLISH-53 (migration 0071) — Company Address (optional on insert/update).
+  company_address_line1?: string | null;
+  company_address_line2?: string | null;
+  company_address_city?: string | null;
+  company_address_province?: string | null;
+  company_address_postal?: string | null;
+  company_address_country?: string | null;
   // CL-2 expansion (migration 0007) — all optional on insert/update.
   billing_street?: string | null;
   billing_unit?: string | null;
