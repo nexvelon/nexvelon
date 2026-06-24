@@ -991,7 +991,7 @@ function ClientInfoFormInner({
             placeholder="ABC Corporation Ltd."
           />
           <TextField
-            label="Trade / business name"
+            label="Company Trade/Business Name"
             value={get("tradeName")}
             onChange={(v) => set("tradeName", v)}
           />

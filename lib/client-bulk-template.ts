@@ -193,7 +193,7 @@ interface HeaderDef {
 
 const HEADERS: HeaderDef[] = [
   { col: COL.LEGAL_NAME, label: "Legal Name *", required: true, width: 26 },
-  { col: COL.DISPLAY_NAME, label: "Display Name", width: 22 },
+  { col: COL.DISPLAY_NAME, label: "Company Trade/Business Name", width: 28 },
   { col: COL.STATUS, label: "Status", width: 12 },
   {
     col: COL.COMPANY_COUNTRY,

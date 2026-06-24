@@ -867,7 +867,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
             placeholder="e.g. Meridian Capital Plaza Holdings Inc."
           />
         </Field>
-        <Field label="Company trade / display name">
+        <Field label="Company Trade/Business Name">
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}

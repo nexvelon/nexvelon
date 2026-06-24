@@ -392,7 +392,7 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
         <>
           <Section eyebrow="Client information">
             <Row label="Legal name" value={legalName} anchor />
-            <Row label="Trade name" value={str(clientForm, "tradeName")} />
+            <Row label="Company Trade/Business Name" value={str(clientForm, "tradeName")} />
           </Section>
 
           <Section eyebrow="Addresses">

@@ -312,7 +312,7 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
         {ed("identity") ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <LabeledInput label="Legal name" value={ds("legal_name")} onChange={(x) => set({ legal_name: x })} />
-            <LabeledInput label="Display name" value={ds("name")} onChange={(x) => set({ name: x })} />
+            <LabeledInput label="Company Trade/Business Name" value={ds("name")} onChange={(x) => set({ name: x })} />
             <label className="flex flex-col gap-1">
               <span className="text-muted-foreground text-[10px] uppercase tracking-wide">Status</span>
               <Select value={ds("status") || client.status} onValueChange={(x) => set({ status: x as DbClientStatus })}>
@@ -326,7 +326,7 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Legal name" value={v(client.legal_name)} />
-            <Field label="Display name" value={v(client.name)} />
+            <Field label="Company Trade/Business Name" value={v(client.name)} />
             <Field label="Status" value={v(client.status)} />
             <Field label="Client code" value={v(client.client_code)} />
           </div>

@@ -458,7 +458,10 @@ function clientInsertFrom(
         country: s(cf.mailingCountry),
       };
   return {
-    name: s(cf.legalName) ?? s(cf.tradeName) ?? email,
+    // The Company Trade/Business Name the client entered becomes the display
+    // name (clients.name). Fall back to the legal name only when it's blank
+    // (name is NOT NULL) — do NOT copy legal over an entered trade name.
+    name: s(cf.tradeName) ?? s(cf.legalName) ?? email,
     legal_name: s(cf.legalName),
     company_address_line1: s(cf.companyStreet),
     company_address_line2: s(cf.companyUnit),
