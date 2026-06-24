@@ -242,6 +242,10 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
   const [coProvince, setCoProvince] = useState(existing?.company_address_province ?? "");
   const [coPostal, setCoPostal] = useState(existing?.company_address_postal ?? "");
   const [coCountry, setCoCountry] = useState(existing?.company_address_country ?? "");
+  // POLISH-54 — billing inherits the Company Address (copy-resolved on save).
+  const [billSameAsCompany, setBillSameAsCompany] = useState(
+    existing?.billing_same_as_company ?? false
+  );
 
   // --- Section 3: Billing Address ---
   const [billStreet, setBillStreet] = useState(existing?.billing_street ?? "");
@@ -652,22 +656,25 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       company_address_province: coProvince.trim() || null,
       company_address_postal: coPostal.trim() || null,
       company_address_country: coCountry.trim() || null,
-      billing_street: billStreet.trim() || null,
-      billing_unit: billUnit.trim() || null,
-      billing_city: billCity.trim() || null,
-      billing_province: billProvince.trim() || null,
-      billing_postal: billPostal.trim() || null,
-      billing_country: billCountry.trim() || null,
+      // POLISH-54 — billing copy-resolves from Company when "same as company";
+      // mailing copy-resolves from the RESOLVED billing when "same as billing".
+      billing_street: (billSameAsCompany ? coLine1 : billStreet).trim() || null,
+      billing_unit: (billSameAsCompany ? coLine2 : billUnit).trim() || null,
+      billing_city: (billSameAsCompany ? coCity : billCity).trim() || null,
+      billing_province: (billSameAsCompany ? coProvince : billProvince).trim() || null,
+      billing_postal: (billSameAsCompany ? coPostal : billPostal).trim() || null,
+      billing_country: (billSameAsCompany ? coCountry : billCountry).trim() || null,
+      billing_same_as_company: billSameAsCompany,
       billing_same_as_primary_site: false,
       // CL-5b: Mailing address (eager copy when same-as-billing)
-      mailing_street: (mailSameAsBilling ? billStreet : mailStreet).trim() || null,
-      mailing_unit: (mailSameAsBilling ? billUnit : mailUnit).trim() || null,
-      mailing_city: (mailSameAsBilling ? billCity : mailCity).trim() || null,
+      mailing_street: (mailSameAsBilling ? (billSameAsCompany ? coLine1 : billStreet) : mailStreet).trim() || null,
+      mailing_unit: (mailSameAsBilling ? (billSameAsCompany ? coLine2 : billUnit) : mailUnit).trim() || null,
+      mailing_city: (mailSameAsBilling ? (billSameAsCompany ? coCity : billCity) : mailCity).trim() || null,
       mailing_province:
-        (mailSameAsBilling ? billProvince : mailProvince).trim() || null,
-      mailing_postal: (mailSameAsBilling ? billPostal : mailPostal).trim() || null,
+        (mailSameAsBilling ? (billSameAsCompany ? coProvince : billProvince) : mailProvince).trim() || null,
+      mailing_postal: (mailSameAsBilling ? (billSameAsCompany ? coPostal : billPostal) : mailPostal).trim() || null,
       mailing_country:
-        (mailSameAsBilling ? billCountry : mailCountry).trim() || null,
+        (mailSameAsBilling ? (billSameAsCompany ? coCountry : billCountry) : mailCountry).trim() || null,
       mailing_same_as_billing: mailSameAsBilling,
       // CL-6 removed the Operating Company form section. Hardcoded here so
       // (a) createClient's client_code prefix resolves to "IS" (omitting the
@@ -964,6 +971,16 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       </Section>
 
       <Section title="Billing Address">
+        {/* POLISH-54 — when ticked, billing copy-resolves from Company on save. */}
+        <label className="mb-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={billSameAsCompany}
+            onChange={(e) => setBillSameAsCompany(e.target.checked)}
+          />
+          Same as Company Address
+        </label>
+        {!billSameAsCompany && (
         <AddressSection
           sectionPrefix=""
           country={billCountry}
@@ -989,6 +1006,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
             }
           }}
         />
+        )}
       </Section>
 
       {/* SECTION 3.5: Mailing Address (CL-5b) */}

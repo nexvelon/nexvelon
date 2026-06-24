@@ -20,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { updateClientAction } from "../actions";
 import type {
   DbClientWithCounts,
@@ -177,19 +185,78 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
     setEditing(null);
     setDraft({});
   };
-  const save = () => {
+  // POLISH-54 — cascade prompt: when a source address with an active downstream
+  // "same as" flag is edited, ask whether to propagate to the dependent address.
+  const [cascade, setCascade] = useState<
+    | { source: "company"; target: "billing"; draft: DbClientUpdate }
+    | { source: "billing"; target: "mailing"; draft: DbClientUpdate }
+    | null
+  >(null);
+
+  const doSave = (payload: DbClientUpdate) => {
     setSaving(true);
-    updateClientAction(client.id, draft).then((r) => {
+    updateClientAction(client.id, payload).then((r) => {
       setSaving(false);
       if (r.ok) {
         toast.success("Saved.");
         setEditing(null);
         setDraft({});
+        setCascade(null);
         router.refresh();
       } else {
         toast.error(r.error);
       }
     });
+  };
+  const save = () => {
+    // Editing Company while Billing is marked "same as company" → cascade prompt.
+    if (editing === "company" && client.billing_same_as_company) {
+      setCascade({ source: "company", target: "billing", draft });
+      return;
+    }
+    // Editing Billing while Mailing is marked "same as billing" → cascade prompt.
+    if (editing === "billing" && client.mailing_same_as_billing) {
+      setCascade({ source: "billing", target: "mailing", draft });
+      return;
+    }
+    doSave(draft);
+  };
+  // Cascade resolution. "update" copies the new source values into the target
+  // (flag stays true); "keep" leaves the target untouched and flips the flag off.
+  const resolveCascade = (mode: "update" | "keep") => {
+    if (!cascade) return;
+    const d = cascade.draft;
+    if (cascade.source === "company") {
+      doSave(
+        mode === "update"
+          ? {
+              ...d,
+              billing_street: d.company_address_line1 ?? null,
+              billing_unit: d.company_address_line2 ?? null,
+              billing_city: d.company_address_city ?? null,
+              billing_province: d.company_address_province ?? null,
+              billing_postal: d.company_address_postal ?? null,
+              billing_country: d.company_address_country ?? null,
+              billing_same_as_company: true,
+            }
+          : { ...d, billing_same_as_company: false }
+      );
+    } else {
+      doSave(
+        mode === "update"
+          ? {
+              ...d,
+              mailing_street: d.billing_street ?? null,
+              mailing_unit: d.billing_unit ?? null,
+              mailing_city: d.billing_city ?? null,
+              mailing_province: d.billing_province ?? null,
+              mailing_postal: d.billing_postal ?? null,
+              mailing_country: d.billing_country ?? null,
+              mailing_same_as_billing: true,
+            }
+          : { ...d, mailing_same_as_billing: false }
+      );
+    }
   };
   const set = (patch: DbClientUpdate) => setDraft((d) => ({ ...d, ...patch }));
   // Read a draft string field for inputs.
@@ -203,6 +270,7 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
   const sc = { onCancel: cancel, onSave: save, saving };
 
   return (
+    <>
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* A · IDENTITY */}
       <SectionCard
@@ -324,19 +392,19 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
             <LabeledInput label="Postal" value={ds("billing_postal")} onChange={(x) => set({ billing_postal: x })} />
             <LabeledInput label="Country" value={ds("billing_country")} onChange={(x) => set({ billing_country: x })} />
           </div>
-        ) : addrEmpty([
-            client.billing_street, client.billing_unit, client.billing_city,
-            client.billing_province, client.billing_postal, client.billing_country,
-          ]) ? (
-          <p className="text-muted-foreground text-xs">Same as Company Address</p>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Street" value={v(client.billing_street)} />
-            <Field label="Unit" value={v(client.billing_unit)} />
-            <Field label="City" value={v(client.billing_city)} />
-            <Field label="Province" value={v(client.billing_province)} />
-            <Field label="Postal" value={v(client.billing_postal)} />
-            <Field label="Country" value={v(client.billing_country)} />
+          <div className="space-y-2">
+            {client.billing_same_as_company && (
+              <p className="text-muted-foreground text-[10px] italic">Same as Company Address</p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Street" value={v(client.billing_street)} />
+              <Field label="Unit" value={v(client.billing_unit)} />
+              <Field label="City" value={v(client.billing_city)} />
+              <Field label="Province" value={v(client.billing_province)} />
+              <Field label="Postal" value={v(client.billing_postal)} />
+              <Field label="Country" value={v(client.billing_country)} />
+            </div>
           </div>
         )}
       </SectionCard>
@@ -381,13 +449,16 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
               </div>
             )}
           </div>
-        ) : client.mailing_same_as_billing ||
-          addrEmpty([
+        ) : addrEmpty([
             client.mailing_street, client.mailing_unit, client.mailing_city,
             client.mailing_province, client.mailing_postal, client.mailing_country,
-          ]) ? (
+          ]) && !client.mailing_same_as_billing ? (
           <p className="text-muted-foreground text-xs">Same as Billing Address</p>
         ) : (
+          <div className="space-y-2">
+            {client.mailing_same_as_billing && (
+              <p className="text-muted-foreground text-[10px] italic">Same as Billing Address</p>
+            )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Street" value={v(client.mailing_street)} />
             <Field label="Unit" value={v(client.mailing_unit)} />
@@ -395,6 +466,7 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
             <Field label="Province" value={v(client.mailing_province)} />
             <Field label="Postal" value={v(client.mailing_postal)} />
             <Field label="Country" value={v(client.mailing_country)} />
+          </div>
           </div>
         )}
       </SectionCard>
@@ -535,5 +607,36 @@ export function ClientInfoSections({ client }: { client: DbClientWithCounts }) {
         </SectionCard>
       </div>
     </div>
+
+    {/* POLISH-54 — cascade prompt when editing a source address that has an
+        active downstream "same as" relationship. */}
+    <Dialog
+      open={!!cascade}
+      onOpenChange={(o) => {
+        if (!o && !saving) setCascade(null);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-serif">
+            Update {cascade?.target === "billing" ? "Billing" : "Mailing"} Address?
+          </DialogTitle>
+          <DialogDescription>
+            {cascade?.target === "billing"
+              ? "Billing Address is currently marked as Same as Company Address. Would you like to update the Billing Address to match the new Company Address?"
+              : "Mailing Address is currently marked as Same as Billing Address. Would you like to update the Mailing Address to match the new Billing Address?"}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => resolveCascade("keep")} disabled={saving}>
+            Keep {cascade?.target === "billing" ? "Billing" : "Mailing"} as old values
+          </Button>
+          <Button size="sm" onClick={() => resolveCascade("update")} disabled={saving}>
+            {saving ? "Saving…" : `Update ${cascade?.target === "billing" ? "Billing" : "Mailing"} to match`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
