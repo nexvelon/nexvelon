@@ -414,17 +414,30 @@ function clientInsertFrom(
   // POLISH-49 — contacts are now written to the contacts table (not folded into
   // notes). The client notes field is left empty here.
   const notes = null;
-  // POLISH-53 — Company Address is the top-level address. Billing inherits it
-  // ("Same as Company Address", default ON) and Mailing inherits Billing
-  // ("Same as Billing", default ON). Inheriting stores NULL (per POLISH-15), so
-  // the resolved value is computed at display time. Only an explicit "false"
-  // toggle turns inheritance off.
+  // POLISH-54 — COPY-RESOLVED inheritance: when "same as" is on, copy the source
+  // address into the target columns AND record the flag (the resolved values are
+  // stored, not NULL). Billing inherits Company; Mailing inherits Billing (which
+  // is itself already resolved). Default ON; only an explicit "false" turns off.
   const billingSameAsCompany = !notSame(cf.billing_same_as_company);
   const mailingSameAsBilling = !notSame(cf.mailing_same_as_billing);
-  const billing = (suffix: string) =>
-    billingSameAsCompany ? null : s(cf[`billing${suffix}`]);
-  const mail = (suffix: string) =>
-    mailingSameAsBilling ? null : s(cf[`mailing${suffix}`]);
+  const billingVals = {
+    street: billingSameAsCompany ? s(cf.companyStreet) : s(cf.billingStreet),
+    unit: billingSameAsCompany ? s(cf.companyUnit) : s(cf.billingUnit),
+    city: billingSameAsCompany ? s(cf.companyCity) : s(cf.billingCity),
+    province: billingSameAsCompany ? s(cf.companyProvince) : s(cf.billingProvince),
+    postal: billingSameAsCompany ? s(cf.companyPostal) : s(cf.billingPostal),
+    country: billingSameAsCompany ? s(cf.companyCountry) : s(cf.billingCountry),
+  };
+  const mailingVals = mailingSameAsBilling
+    ? billingVals
+    : {
+        street: s(cf.mailingStreet),
+        unit: s(cf.mailingUnit),
+        city: s(cf.mailingCity),
+        province: s(cf.mailingProvince),
+        postal: s(cf.mailingPostal),
+        country: s(cf.mailingCountry),
+      };
   return {
     name: s(cf.legalName) ?? s(cf.tradeName) ?? email,
     legal_name: s(cf.legalName),
@@ -434,18 +447,20 @@ function clientInsertFrom(
     company_address_province: s(cf.companyProvince),
     company_address_postal: s(cf.companyPostal),
     company_address_country: s(cf.companyCountry),
-    billing_street: billing("Street"),
-    billing_unit: billing("Unit"),
-    billing_city: billing("City"),
-    billing_province: billing("Province"),
-    billing_postal: billing("Postal"),
-    billing_country: billing("Country"),
-    mailing_street: mail("Street"),
-    mailing_unit: mail("Unit"),
-    mailing_city: mail("City"),
-    mailing_province: mail("Province"),
-    mailing_postal: mail("Postal"),
-    mailing_country: mail("Country"),
+    billing_street: billingVals.street,
+    billing_unit: billingVals.unit,
+    billing_city: billingVals.city,
+    billing_province: billingVals.province,
+    billing_postal: billingVals.postal,
+    billing_country: billingVals.country,
+    billing_same_as_company: billingSameAsCompany,
+    mailing_street: mailingVals.street,
+    mailing_unit: mailingVals.unit,
+    mailing_city: mailingVals.city,
+    mailing_province: mailingVals.province,
+    mailing_postal: mailingVals.postal,
+    mailing_country: mailingVals.country,
+    mailing_same_as_billing: mailingSameAsBilling,
     client_hst_gst_number: s(cf.hstNumber),
     tax_exempt: s(cf.taxExempt) === "Yes",
     tax_exempt_certificate_number: s(cf.taxExemptCert),

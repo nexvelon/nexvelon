@@ -97,6 +97,9 @@ export interface DbClient {
   mailing_postal: string | null;
   mailing_country: string | null;
   mailing_same_as_billing: boolean | null;
+  // POLISH-54 (migration 0072) — copy-resolved inheritance flags.
+  billing_same_as_company: boolean | null;
+  mailing_same_as_company: boolean | null;
   default_opco: DbClientOpco | null;
   allowed_opcos: string[] | null;
   client_hst_gst_number: string | null;
@@ -220,6 +223,9 @@ export type DbClientInsert = {
   mailing_postal?: string | null;
   mailing_country?: string | null;
   mailing_same_as_billing?: boolean | null;
+  // POLISH-54 (migration 0072) — copy-resolved inheritance flags.
+  billing_same_as_company?: boolean | null;
+  mailing_same_as_company?: boolean | null;
   default_opco?: DbClientOpco | null;
   allowed_opcos?: string[] | null;
   client_hst_gst_number?: string | null;
