@@ -658,7 +658,12 @@ export async function createContactAction(
   try {
     const row = await createContact(payload);
     await logActivity("contact", row.id, "create", {});
+    // POLISH-58 — diagnostic for site-scoped contacts (CRUD on /sites/[id]).
+    if (payload.site_id) {
+      console.error("[SITE CONTACT CREATE]", { siteId: payload.site_id, contactId: row.id });
+    }
     revalidatePath("/clients");
+    revalidatePath(`/sites/${payload.site_id ?? ""}`);
     return { ok: true, data: { id: row.id } };
   } catch (e) {
     return fail(e);
@@ -683,6 +688,12 @@ export async function updateContactAction(
       await logActivity("contact", id, "update", changes);
     }
 
+    // POLISH-58 — diagnostic for site-scoped contacts (CRUD on /sites/[id]).
+    const siteId = (payload.site_id ?? before.site_id) as string | null;
+    if (siteId) {
+      console.error("[SITE CONTACT UPDATE]", { siteId, contactId: id });
+      revalidatePath(`/sites/${siteId}`);
+    }
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
