@@ -58,6 +58,15 @@ export interface ParsedClientTemplate {
     tax_exempt: boolean | null;
     tax_exempt_cert: string;
   };
+  // POLISH-60 — Company Address (appended section, rows 49–56). Optional.
+  company: {
+    street: string;
+    unit: string;
+    city: string;
+    province: string;
+    postal: string;
+    country: string;
+  };
   billing: {
     street: string;
     unit: string;
@@ -197,7 +206,9 @@ const TITLE_TEXT = "Client Form";
 // exclude this text (it lives in a merged A:L cell, not in column A).
 const SUBTITLE_TEXT =
   "Kindly complete the fields below — required fields marked with *";
-const VERSION_STAMP_VALUE = "nexvelon-onboarding-v3";
+// POLISH-60 — v4 appends a COMPANY ADDRESS section (rows 49–56). Old v3 (and
+// earlier) templates lack it and are rejected by the parser's version gate.
+const VERSION_STAMP_VALUE = "nexvelon-onboarding-v4";
 
 // ADDR-2: PAYMENT_TERMS_AND_CONDITIONS_TEXT constant removed — the
 // locked text cell now uses a dynamic Excel formula (VLOOKUP against
@@ -722,6 +733,29 @@ export async function generateClientTemplate(): Promise<Blob> {
     row.height = 20;
   }
 
+  // ─── POLISH-60 · Section 7: COMPANY ADDRESS (rows 49–56) ───
+  // APPENDED at the end (after Contacts) so the existing absolute-row parser map
+  // (billing 10–15, mailing 19–24, …) is preserved. Country-first order mirrors
+  // Billing/Mailing: Country 51, Province 52, Street 53, Unit 54, City 55,
+  // Postal 56. Optional in this admin flow — the operator confirms inheritance
+  // in the create-client form after upload.
+  sectionHeader(sheet, 49, "COMPANY ADDRESS");
+  noteRow(
+    sheet,
+    50,
+    "Your company's registered address. If your Billing Address is the same, fill this in and leave Billing blank — the system can inherit it."
+  );
+  labelValueRow(sheet, 51, "Country");
+  applyCountryDropdown(sheet.getCell("B51"));
+  labelValueRow(sheet, 52, "Province / State");
+  applyProvinceIndirectDropdown(sheet.getCell("B52"), "$B$51");
+  sheet.getCell("B52").note =
+    "If you change Country, please re-select Province / State — the dropdown options change but the cell value does not auto-clear.";
+  labelValueRow(sheet, 53, "Street");
+  labelValueRow(sheet, 54, "Unit / Suite");
+  labelValueRow(sheet, 55, "City");
+  labelValueRow(sheet, 56, "Postal Code");
+
   // ─── CL-17: Column A width hardcoded to 33 per operator request ───────
   // The dynamic auto-fit (CL-14 → CL-16) computed character-count widths,
   // but Excel renders width units as a function of the default font's
@@ -926,6 +960,17 @@ export async function parseClientTemplate(
       unit: cellToString(sheet.getRow(22).getCell(2)),
       city: cellToString(sheet.getRow(23).getCell(2)),
       postal: cellToString(sheet.getRow(24).getCell(2)),
+    },
+    // POLISH-60 — appended COMPANY ADDRESS section; same Country-first order,
+    // rows 51–56 (51 Country / 52 Province / 53 Street / 54 Unit / 55 City /
+    // 56 Postal). Read by absolute row, like billing/mailing.
+    company: {
+      country: cellToString(sheet.getRow(51).getCell(2)),
+      province: cellToString(sheet.getRow(52).getCell(2)),
+      street: cellToString(sheet.getRow(53).getCell(2)),
+      unit: cellToString(sheet.getRow(54).getCell(2)),
+      city: cellToString(sheet.getRow(55).getCell(2)),
+      postal: cellToString(sheet.getRow(56).getCell(2)),
     },
     payment: {
       terms: mapPaymentTermsLabel(
