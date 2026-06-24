@@ -528,7 +528,10 @@ export async function sendClientInviteEmail(opts: {
   // POLISH-31 (CHANGE 1) — the three middle paragraphs read cleaner in a sans-
   // serif body than in Garamond (which is dense when stacked three deep). The
   // headline, sign-off, CTA, and footer keep Garamond for the luxury accent.
-  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;`;
+  // POLISH-63 — hanging indent: the ✦ sits at the left edge (text-indent pulls
+  // the first line back), and wrapped lines align UNDER THE TEXT (padding-left),
+  // not under the bullet. 24px ≈ the ✦ glyph (11px) + its 10px right margin.
+  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
   // POLISH-31 (CHANGE 3) — smaller, softer warm-gold bullet (was 13px #B8924B).
   const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
   // CHANGE 2 — more breathing between paragraphs (24px), with extra space before
@@ -705,17 +708,20 @@ export async function sendClientConfirmationEmail(opts: {
   // POLISH-40 — the "Your Submission" summary table (and its gold divider) were
   // removed; the client doesn't need their submitted data echoed back in-inbox.
   // Body is now just the intro paragraph; the PDFs remain attached.
+  // POLISH-63 — closing copy simplified: the factual "attached for your records"
+  // line sits in the body; the reply-to line is the sign-off, giving a clean
+  // blank-line separation (body paragraph → signature block).
   const bodyHtml = `
     ${letterParagraphs([
       "Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.",
+      "Your signed agreements and submitted forms are attached to this email for your records.",
     ])}`;
 
   const html = emailShell({
     eyebrow: "APPLICATION RECEIVED",
     headline: "Thank you for your application.",
     bodyHtml,
-    signatureItalic:
-      "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records along with your forms submitted. If you have any questions, please reply to this email.",
+    signatureItalic: "If you have any questions, please reply to this email.",
     signatureGroup: "The Nexvelon Global Group",
     signatureSubline: "CLIENT APPLICATION · CONFIRMATION",
     outerNote: outerNoteFor("This confirmation was sent to", opts.to),
@@ -726,7 +732,9 @@ export async function sendClientConfirmationEmail(opts: {
     "",
     "Thank you for completing your Nexvelon Global application. We have received your submission and our team will be in touch with the outcome shortly.",
     "",
-    "Your two signed agreements — the Integrated Solutions Inc. and Guardian Inc. Terms & Conditions — are attached to this email for your records along with your forms submitted. If you have any questions, please reply to this email.",
+    "Your signed agreements and submitted forms are attached to this email for your records.",
+    "",
+    "If you have any questions, please reply to this email.",
     "",
     "— Nexvelon Global",
   ].join("\n");
