@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Gem, MapPin, Trash2 } from "lucide-react";
+import { Edit3, Gem, MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ import type {
   DbSite,
 } from "@/lib/types/database";
 import { ClientHeader, ClientStatsRow } from "../_components/ClientHeader";
+import { ClientInfoSections } from "./ClientInfoSections";
 import { BillingPortalCard } from "../_components/BillingPortalCard";
 import { TabBar, type TabKey } from "../_components/TabBar";
 import { SitesPane } from "../_components/SitesPane";
@@ -179,6 +180,17 @@ export function ClientDetailView({
           ← Back to Clients
         </Link>
         <div className="flex items-center gap-2">
+          {/* POLISH-52 — "Edit all" opens the full edit drawer (backup to the
+              per-section inline pencils below). */}
+          <button
+            type="button"
+            onClick={() => setClientEditDrawer(true)}
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-[11px] font-medium hover:text-brand-navy"
+            style={{ borderColor: "var(--brand-border)" }}
+          >
+            <Edit3 className="h-3 w-3" />
+            Edit all
+          </button>
           {isAdmin && (
             <button
               type="button"
@@ -327,6 +339,10 @@ export function ClientDetailView({
       />
 
       <ClientStatsRow client={client} />
+
+      {/* POLISH-52 — all client fields inline in a wide responsive grid, each
+          section editable in place. The "Edit all" drawer (top-right) remains. */}
+      <ClientInfoSections client={client} />
 
       <BillingPortalCard client={client} />
 
