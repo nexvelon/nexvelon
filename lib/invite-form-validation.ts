@@ -114,7 +114,11 @@ export function clientFormMissing(d: Data): MissingField[] {
   const out: MissingField[] = [];
   if (!filled(d, "legalName"))
     out.push({ id: "legalName", label: "Legal company name", sectionId: "company" });
-  out.push(...addressMissing(d, "billing", "billing", "Billing address"));
+  // POLISH-53 — Company Address is required (the top-level address).
+  out.push(...addressMissing(d, "company", "company-address", "Company address"));
+  // Billing is required only when "Same as Company Address" is unchecked.
+  if (!sameAs(d, "billing_same_as_company"))
+    out.push(...addressMissing(d, "billing", "billing", "Billing address"));
   // Mailing is required only when "Same as Billing" is unchecked.
   if (!sameAs(d, "mailing_same_as_billing"))
     out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));

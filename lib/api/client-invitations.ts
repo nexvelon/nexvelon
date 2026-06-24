@@ -414,19 +414,32 @@ function clientInsertFrom(
   // POLISH-49 — contacts are now written to the contacts table (not folded into
   // notes). The client notes field is left empty here.
   const notes = null;
-  // CHANGE 1 — mailing inherits billing unless "Same as Billing" was unchecked.
-  const mailingSame = !notSame(cf.mailing_same_as_billing);
+  // POLISH-53 — Company Address is the top-level address. Billing inherits it
+  // ("Same as Company Address", default ON) and Mailing inherits Billing
+  // ("Same as Billing", default ON). Inheriting stores NULL (per POLISH-15), so
+  // the resolved value is computed at display time. Only an explicit "false"
+  // toggle turns inheritance off.
+  const billingSameAsCompany = !notSame(cf.billing_same_as_company);
+  const mailingSameAsBilling = !notSame(cf.mailing_same_as_billing);
+  const billing = (suffix: string) =>
+    billingSameAsCompany ? null : s(cf[`billing${suffix}`]);
   const mail = (suffix: string) =>
-    mailingSame ? s(cf[`billing${suffix}`]) : s(cf[`mailing${suffix}`]);
+    mailingSameAsBilling ? null : s(cf[`mailing${suffix}`]);
   return {
     name: s(cf.legalName) ?? s(cf.tradeName) ?? email,
     legal_name: s(cf.legalName),
-    billing_street: s(cf.billingStreet),
-    billing_unit: s(cf.billingUnit),
-    billing_city: s(cf.billingCity),
-    billing_province: s(cf.billingProvince),
-    billing_postal: s(cf.billingPostal),
-    billing_country: s(cf.billingCountry),
+    company_address_line1: s(cf.companyStreet),
+    company_address_line2: s(cf.companyUnit),
+    company_address_city: s(cf.companyCity),
+    company_address_province: s(cf.companyProvince),
+    company_address_postal: s(cf.companyPostal),
+    company_address_country: s(cf.companyCountry),
+    billing_street: billing("Street"),
+    billing_unit: billing("Unit"),
+    billing_city: billing("City"),
+    billing_province: billing("Province"),
+    billing_postal: billing("Postal"),
+    billing_country: billing("Country"),
     mailing_street: mail("Street"),
     mailing_unit: mail("Unit"),
     mailing_city: mail("City"),

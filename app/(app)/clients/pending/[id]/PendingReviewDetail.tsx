@@ -385,8 +385,21 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
           </Section>
 
           <Section eyebrow="Addresses">
-            <Row label="Billing address" value={addressLine(clientForm, "billing")} />
-            <Row label="Mailing address" value={addressLine(clientForm, "mailing")} />
+            {addressLine(clientForm, "company") ? (
+              <Row label="Company address" value={addressLine(clientForm, "company")} />
+            ) : (
+              <p className="text-muted-foreground text-xs">No address provided.</p>
+            )}
+            {addressLine(clientForm, "billing") ? (
+              <Row label="Billing address" value={addressLine(clientForm, "billing")} />
+            ) : (
+              <Row label="Billing address" value="Same as Company Address" anchor />
+            )}
+            {addressLine(clientForm, "mailing") ? (
+              <Row label="Mailing address" value={addressLine(clientForm, "mailing")} />
+            ) : (
+              <Row label="Mailing address" value="Same as Billing Address" anchor />
+            )}
           </Section>
 
           <Section eyebrow="Tax">
