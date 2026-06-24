@@ -128,7 +128,14 @@ function SiteFormDoc(input: SiteFormPdfInput) {
     s(sf.mailingPostal),
     s(sf.mailingCountry),
   ];
-  const mailingValue = mailingParts.some(Boolean) ? composeAddress(mailingParts) : "Same as site address";
+  // POLISH-55 — mailing has two mutually-exclusive "same as" sources.
+  const mailingValue =
+    sf.mailing_same_as_billing === "true"
+      ? "Same as Billing Address"
+      : !mailingParts.some(Boolean) ||
+          String(sf.mailing_same_as_site ?? "").trim() !== "false"
+        ? "Same as Site Address"
+        : composeAddress(mailingParts);
 
   const gcName = [s(sf.gcFirst), s(sf.gcLast)].filter(Boolean).join(" ");
 

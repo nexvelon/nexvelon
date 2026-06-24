@@ -132,7 +132,14 @@ function ClientFormDoc(input: ClientFormPdfInput) {
     s(cf.mailingCountry),
   ];
   const mailing = composeAddress(mailingParts);
-  const mailingValue = mailingParts.some(Boolean) ? mailing : "Same as Billing Address";
+  // POLISH-55 — mailing has two mutually-exclusive "same as" sources.
+  const mailingValue =
+    String(cf.mailing_same_as_company ?? "").trim() === "true"
+      ? "Same as Company Address"
+      : !mailingParts.some(Boolean) ||
+          String(cf.mailing_same_as_billing ?? "").trim() !== "false"
+        ? "Same as Billing Address"
+        : mailing;
 
   const contacts = [
     contactBlock(cf, "c0", "Primary"),

@@ -965,8 +965,11 @@ function ClientInfoFormInner({
     (t, d) => saveClientFormAction(t, d)
   );
   const missing = clientFormMissing(values);
-  // CHANGE 1 — mailing inherits billing unless explicitly unchecked.
-  const mailingSame = get("mailing_same_as_billing") !== "false";
+  // POLISH-55 — mailing has two mutually-exclusive sources. Default: same as
+  // billing. Manual entry only when BOTH are unticked.
+  const mailSameBilling = get("mailing_same_as_billing") !== "false";
+  const mailSameCompany = get("mailing_same_as_company") === "true";
+  const mailManual = !mailSameBilling && !mailSameCompany;
   // POLISH-53 — billing inherits the Company Address unless explicitly unchecked.
   const billingSame = get("billing_same_as_company") !== "false";
 
@@ -1012,13 +1015,24 @@ function ClientInfoFormInner({
         )}
       </Section>
 
-      <Section id="mailing" title="Mailing address" required={!mailingSame}>
+      <Section id="mailing" title="Mailing address" required={mailManual}>
         <SameAsCheckbox
-          checked={mailingSame}
+          checked={mailSameBilling}
           label="Same as Billing Address"
-          onChange={(c) => set("mailing_same_as_billing", c ? "true" : "false")}
+          onChange={(c) => {
+            set("mailing_same_as_billing", c ? "true" : "false");
+            if (c) set("mailing_same_as_company", "false");
+          }}
         />
-        {!mailingSame && (
+        <SameAsCheckbox
+          checked={mailSameCompany}
+          label="Same as Company Address"
+          onChange={(c) => {
+            set("mailing_same_as_company", c ? "true" : "false");
+            if (c) set("mailing_same_as_billing", "false");
+          }}
+        />
+        {mailManual && (
           <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
         )}
       </Section>
@@ -1060,7 +1074,11 @@ function SiteInfoFormInner({
   const missing = siteFormMissing(values);
   // CHANGE 1 — billing + mailing each inherit the site address unless unchecked.
   const billingSame = get("billing_same_as_site") !== "false";
-  const mailingSame = get("mailing_same_as_site") !== "false";
+  // POLISH-55 — site mailing has two mutually-exclusive sources. Default: same as
+  // site. Manual entry only when BOTH are unticked.
+  const mailSameSite = get("mailing_same_as_site") !== "false";
+  const mailSameBilling = get("mailing_same_as_billing") === "true";
+  const mailManual = !mailSameSite && !mailSameBilling;
 
   return (
     <FormShell
@@ -1097,13 +1115,24 @@ function SiteInfoFormInner({
         )}
       </Section>
 
-      <Section id="mailing" title="Mailing address" required={!mailingSame}>
+      <Section id="mailing" title="Mailing address" required={mailManual}>
         <SameAsCheckbox
-          checked={mailingSame}
-          label="Same as Site Address"
-          onChange={(c) => set("mailing_same_as_site", c ? "true" : "false")}
+          checked={mailSameBilling}
+          label="Same as Billing Address"
+          onChange={(c) => {
+            set("mailing_same_as_billing", c ? "true" : "false");
+            if (c) set("mailing_same_as_site", "false");
+          }}
         />
-        {!mailingSame && (
+        <SameAsCheckbox
+          checked={mailSameSite}
+          label="Same as Site Address"
+          onChange={(c) => {
+            set("mailing_same_as_site", c ? "true" : "false");
+            if (c) set("mailing_same_as_billing", "false");
+          }}
+        />
+        {mailManual && (
           <AddressBlock get={get} set={set} prefix="mailing" sectionPrefix="Mailing" />
         )}
       </Section>
