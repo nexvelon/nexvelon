@@ -419,12 +419,22 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
       {/* ── Site info ──────────────────────────────────────────── */}
       {/* POLISH-27 — the GC / Site Supervisor is no longer a separate block here;
           it renders as a contact row in the "Site contacts" section below. */}
+      {/* POLISH-51 — Site information holds the site name only; the site's own
+          street address moved to the "Site addresses" section below. */}
       <Section eyebrow="Site information">
         <Row label="Site name" value={str(siteForm, "siteName")} anchor={isSiteOnly} />
-        <Row label="Site address" value={addressLine(siteForm, "site")} />
       </Section>
 
+      {/* POLISH-51 — the actual site address (site* keys) now renders here, where
+          it previously looked blank (only billing/mailing rows, which are usually
+          empty because they inherit "same as site"). Falls back to a clear note
+          when no site address was provided. */}
       <Section eyebrow="Site addresses">
+        {addressLine(siteForm, "site") ? (
+          <Row label="Site address" value={addressLine(siteForm, "site")} />
+        ) : (
+          <p className="text-muted-foreground text-xs">No address provided.</p>
+        )}
         <Row label="Billing address" value={addressLine(siteForm, "billing")} />
         <Row label="Mailing address" value={addressLine(siteForm, "mailing")} />
       </Section>
