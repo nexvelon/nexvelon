@@ -35,6 +35,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
+import { BulkImportClientsDialog } from "./_components/BulkImportClientsDialog";
 import { TIER_BADGE, initials } from "./_components/shared";
 import {
   deleteClientAction,
@@ -143,15 +144,19 @@ export function ClientsView({ clients }: Props) {
   };
 
   const InviteButton = isAdmin ? (
-    <button
-      type="button"
-      onClick={() => setInviteOpen(true)}
-      className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
-      style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
-    >
-      <UserPlus className="h-3.5 w-3.5" />
-      Invite new client
-    </button>
+    <>
+      {/* POLISH-61 — admin bulk client importer (one xlsx, many clients). */}
+      <BulkImportClientsDialog />
+      <button
+        type="button"
+        onClick={() => setInviteOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
+        style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
+      >
+        <UserPlus className="h-3.5 w-3.5" />
+        Invite new client
+      </button>
+    </>
   ) : null;
 
   const Tabs = isAdmin ? (
