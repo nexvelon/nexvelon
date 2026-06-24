@@ -1095,7 +1095,7 @@ function SiteInfoFormInner({
             required
             value={get("siteName")}
             onChange={(v) => set("siteName", v)}
-            placeholder="Head office"
+            placeholder="Project Name"
           />
         </Grid>
       </Section>
