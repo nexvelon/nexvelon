@@ -120,7 +120,8 @@ export function clientFormMissing(d: Data): MissingField[] {
   if (!sameAs(d, "billing_same_as_company"))
     out.push(...addressMissing(d, "billing", "billing", "Billing address"));
   // Mailing is required only when "Same as Billing" is unchecked.
-  if (!sameAs(d, "mailing_same_as_billing"))
+  // POLISH-55 — mailing required only when NEITHER same-as source is selected.
+  if (!sameAs(d, "mailing_same_as_billing") && d.mailing_same_as_company !== "true")
     out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });
@@ -150,7 +151,8 @@ export function siteFormMissing(d: Data): MissingField[] {
   // Billing + Mailing are required only when their "Same as Site" is unchecked.
   if (!sameAs(d, "billing_same_as_site"))
     out.push(...addressMissing(d, "billing", "billing", "Billing address"));
-  if (!sameAs(d, "mailing_same_as_site"))
+  // POLISH-55 — mailing required only when NEITHER same-as source is selected.
+  if (!sameAs(d, "mailing_same_as_site") && d.mailing_same_as_billing !== "true")
     out.push(...addressMissing(d, "mailing", "mailing", "Mailing address"));
   if (!taxComplete(d))
     out.push({ id: "tax", label: "Tax Information", sectionId: "tax" });

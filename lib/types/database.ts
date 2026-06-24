@@ -294,6 +294,8 @@ export interface DbSite {
   mailing_postal: string | null;
   mailing_country: string | null;
   mailing_same_as_billing: boolean;
+  // POLISH-55 (migration 0073) — mailing can also inherit the Site Address.
+  mailing_same_as_site: boolean;
   // tax
   site_hst_gst_number: string | null;
   tax_exempt: boolean;
@@ -363,6 +365,8 @@ export type DbSiteInsert = {
   mailing_postal?: string | null;
   mailing_country?: string | null;
   mailing_same_as_billing?: boolean;
+  // POLISH-55 (migration 0073) — mailing can also inherit the Site Address.
+  mailing_same_as_site?: boolean;
   site_hst_gst_number?: string | null;
   tax_exempt?: boolean;
   tax_exempt_certificate_number?: string | null;

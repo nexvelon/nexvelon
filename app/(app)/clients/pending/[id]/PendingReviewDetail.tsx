@@ -48,6 +48,17 @@ function str(map: Record<string, unknown> | null | undefined, key: string): stri
   return typeof v === "string" ? v.trim() : v == null ? "" : String(v);
 }
 
+// POLISH-55 — "same as" flag readers for the submitted invite-form jsonb.
+// Flags are stored as the strings "true"/"false" and may be absent.
+/** True only when the flag is explicitly the string "true". */
+const isTrue = (m: Record<string, unknown> | null | undefined, k: string): boolean =>
+  String((m ?? {})[k] ?? "").trim() === "true";
+/** Default-ON: true unless the flag is explicitly the string "false". */
+const onUnlessFalse = (
+  m: Record<string, unknown> | null | undefined,
+  k: string
+): boolean => String((m ?? {})[k] ?? "").trim() !== "false";
+
 /** A label/value row. Skips empty values unless `anchor` (renders "—"). */
 function Row({
   label,
@@ -395,10 +406,14 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
             ) : (
               <Row label="Billing address" value="Same as Company Address" anchor />
             )}
-            {addressLine(clientForm, "mailing") ? (
-              <Row label="Mailing address" value={addressLine(clientForm, "mailing")} />
-            ) : (
+            {/* POLISH-55 — mailing has two mutually-exclusive "same as" sources. */}
+            {isTrue(clientForm, "mailing_same_as_company") ? (
+              <Row label="Mailing address" value="Same as Company Address" anchor />
+            ) : !addressLine(clientForm, "mailing") ||
+              onUnlessFalse(clientForm, "mailing_same_as_billing") ? (
               <Row label="Mailing address" value="Same as Billing Address" anchor />
+            ) : (
+              <Row label="Mailing address" value={addressLine(clientForm, "mailing")} />
             )}
           </Section>
 
@@ -449,7 +464,15 @@ export function PendingReviewDetail({ clientId }: { clientId: string }) {
           <p className="text-muted-foreground text-xs">No address provided.</p>
         )}
         <Row label="Billing address" value={addressLine(siteForm, "billing")} />
-        <Row label="Mailing address" value={addressLine(siteForm, "mailing")} />
+        {/* POLISH-55 — mailing has two mutually-exclusive "same as" sources. */}
+        {isTrue(siteForm, "mailing_same_as_billing") ? (
+          <Row label="Mailing address" value="Same as Billing Address" anchor />
+        ) : !addressLine(siteForm, "mailing") ||
+          onUnlessFalse(siteForm, "mailing_same_as_site") ? (
+          <Row label="Mailing address" value="Same as Site Address" anchor />
+        ) : (
+          <Row label="Mailing address" value={addressLine(siteForm, "mailing")} />
+        )}
       </Section>
 
       <Section eyebrow="Site tax">

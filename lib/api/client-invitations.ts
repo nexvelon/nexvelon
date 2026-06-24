@@ -419,7 +419,24 @@ function clientInsertFrom(
   // stored, not NULL). Billing inherits Company; Mailing inherits Billing (which
   // is itself already resolved). Default ON; only an explicit "false" turns off.
   const billingSameAsCompany = !notSame(cf.billing_same_as_company);
+  // POLISH-55 — mailing has TWO mutually-exclusive sources: Same as Billing
+  // (default) OR Same as Company. Copy-resolve the chosen source; manual entry
+  // when neither. Defensive: if both arrive true, prefer Billing.
   const mailingSameAsBilling = !notSame(cf.mailing_same_as_billing);
+  let mailingSameAsCompany =
+    String(cf.mailing_same_as_company ?? "").trim() === "true";
+  if (mailingSameAsBilling && mailingSameAsCompany) {
+    console.warn("[clientInsertFrom] both mailing same-as flags true — preferring Billing");
+    mailingSameAsCompany = false;
+  }
+  const companyVals = {
+    street: s(cf.companyStreet),
+    unit: s(cf.companyUnit),
+    city: s(cf.companyCity),
+    province: s(cf.companyProvince),
+    postal: s(cf.companyPostal),
+    country: s(cf.companyCountry),
+  };
   const billingVals = {
     street: billingSameAsCompany ? s(cf.companyStreet) : s(cf.billingStreet),
     unit: billingSameAsCompany ? s(cf.companyUnit) : s(cf.billingUnit),
@@ -430,6 +447,8 @@ function clientInsertFrom(
   };
   const mailingVals = mailingSameAsBilling
     ? billingVals
+    : mailingSameAsCompany
+    ? companyVals
     : {
         street: s(cf.mailingStreet),
         unit: s(cf.mailingUnit),
@@ -461,6 +480,7 @@ function clientInsertFrom(
     mailing_postal: mailingVals.postal,
     mailing_country: mailingVals.country,
     mailing_same_as_billing: mailingSameAsBilling,
+    mailing_same_as_company: mailingSameAsCompany,
     client_hst_gst_number: s(cf.hstNumber),
     tax_exempt: s(cf.taxExempt) === "Yes",
     tax_exempt_certificate_number: s(cf.taxExemptCert),
@@ -477,14 +497,25 @@ function clientInsertFrom(
 
 // Map the saved site jsonb to a DbSite insert payload under a client.
 function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
-  // CHANGE 1 — billing + mailing each inherit the SITE address unless their
-  // "Same as Site" toggle was unchecked.
+  // Billing inherits the SITE address unless "Same as Site" was unchecked.
   const billingSame = !notSame(sf.billing_same_as_site);
-  const mailingSame = !notSame(sf.mailing_same_as_site);
   const bill = (suffix: string) =>
     billingSame ? s(sf[`site${suffix}`]) : s(sf[`billing${suffix}`]);
+  // POLISH-55 — mailing has TWO mutually-exclusive sources: Same as Billing OR
+  // Same as Site (default). Copy-resolve the chosen source; manual when neither.
+  // Defensive: if both arrive true, prefer Billing.
+  const mailSameBilling = String(sf.mailing_same_as_billing ?? "").trim() === "true";
+  let mailSameSite = !notSame(sf.mailing_same_as_site);
+  if (mailSameBilling && mailSameSite) {
+    console.warn("[siteInsertFrom] both mailing same-as flags true — preferring Billing");
+    mailSameSite = false;
+  }
   const mail = (suffix: string) =>
-    mailingSame ? s(sf[`site${suffix}`]) : s(sf[`mailing${suffix}`]);
+    mailSameBilling
+      ? bill(suffix)
+      : mailSameSite
+      ? s(sf[`site${suffix}`])
+      : s(sf[`mailing${suffix}`]);
   // POLISH-49 — site contacts (incl. the GC / Site Supervisor and all their
   // phones) are now written to the contacts table, not folded into notes. The
   // sites.gc_* columns still get the GC name/email/work-phone (siteInsertFrom
@@ -511,6 +542,8 @@ function siteInsertFrom(sf: Record<string, unknown>, clientId: string) {
     mailing_province: mail("Province"),
     mailing_postal: mail("Postal"),
     mailing_country: mail("Country"),
+    mailing_same_as_billing: mailSameBilling,
+    mailing_same_as_site: mailSameSite,
     site_hst_gst_number: s(sf.hstNumber),
     tax_exempt: s(sf.taxExempt) === "Yes",
     tax_exempt_certificate_number: s(sf.taxExemptCert),

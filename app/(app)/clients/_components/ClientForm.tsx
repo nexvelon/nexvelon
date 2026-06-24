@@ -273,7 +273,14 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
   // CL-6: default flipped to true — new clients use the billing address for
   // mailing unless the operator explicitly picks "Different address".
   const [mailSameAsBilling, setMailSameAsBilling] = useState(
-    existing?.mailing_same_as_billing ?? true
+    existing?.mailing_same_as_company
+      ? false
+      : (existing?.mailing_same_as_billing ?? true)
+  );
+  // POLISH-55 — mailing's second source: Same as Company (mutually exclusive
+  // with Same as Billing).
+  const [mailSameAsCompany, setMailSameAsCompany] = useState(
+    existing?.mailing_same_as_company ?? false
   );
 
   // --- Section 5: Tax ---
@@ -666,16 +673,18 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       billing_country: (billSameAsCompany ? coCountry : billCountry).trim() || null,
       billing_same_as_company: billSameAsCompany,
       billing_same_as_primary_site: false,
-      // CL-5b: Mailing address (eager copy when same-as-billing)
-      mailing_street: (mailSameAsBilling ? (billSameAsCompany ? coLine1 : billStreet) : mailStreet).trim() || null,
-      mailing_unit: (mailSameAsBilling ? (billSameAsCompany ? coLine2 : billUnit) : mailUnit).trim() || null,
-      mailing_city: (mailSameAsBilling ? (billSameAsCompany ? coCity : billCity) : mailCity).trim() || null,
+      // POLISH-55 — mailing copy-resolves from Company (if "same as company"),
+      // else from RESOLVED billing (if "same as billing"), else manual entry.
+      mailing_street: (mailSameAsCompany ? coLine1 : mailSameAsBilling ? (billSameAsCompany ? coLine1 : billStreet) : mailStreet).trim() || null,
+      mailing_unit: (mailSameAsCompany ? coLine2 : mailSameAsBilling ? (billSameAsCompany ? coLine2 : billUnit) : mailUnit).trim() || null,
+      mailing_city: (mailSameAsCompany ? coCity : mailSameAsBilling ? (billSameAsCompany ? coCity : billCity) : mailCity).trim() || null,
       mailing_province:
-        (mailSameAsBilling ? (billSameAsCompany ? coProvince : billProvince) : mailProvince).trim() || null,
-      mailing_postal: (mailSameAsBilling ? (billSameAsCompany ? coPostal : billPostal) : mailPostal).trim() || null,
+        (mailSameAsCompany ? coProvince : mailSameAsBilling ? (billSameAsCompany ? coProvince : billProvince) : mailProvince).trim() || null,
+      mailing_postal: (mailSameAsCompany ? coPostal : mailSameAsBilling ? (billSameAsCompany ? coPostal : billPostal) : mailPostal).trim() || null,
       mailing_country:
-        (mailSameAsBilling ? (billSameAsCompany ? coCountry : billCountry) : mailCountry).trim() || null,
+        (mailSameAsCompany ? coCountry : mailSameAsBilling ? (billSameAsCompany ? coCountry : billCountry) : mailCountry).trim() || null,
       mailing_same_as_billing: mailSameAsBilling,
+      mailing_same_as_company: mailSameAsCompany,
       // CL-6 removed the Operating Company form section. Hardcoded here so
       // (a) createClient's client_code prefix resolves to "IS" (omitting the
       // field would produce "C-XX-…") and (b) the row matches what the DB
@@ -1011,32 +1020,50 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
 
       {/* SECTION 3.5: Mailing Address (CL-5b) */}
       <Section title="Mailing Address">
-        {/* CL-6: 2-option radio replaces the old Toggle. Default = Same. */}
+        {/* POLISH-55 — 3-option radio: Same as Billing / Same as Company / Different. */}
         <div className="space-y-2">
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="mailing_same_as_billing"
+                name="mailing_source"
                 checked={mailSameAsBilling}
-                onChange={() => setMailSameAsBilling(true)}
+                onChange={() => {
+                  setMailSameAsBilling(true);
+                  setMailSameAsCompany(false);
+                }}
               />
-              Same as billing address
+              Same as Billing Address
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="mailing_same_as_billing"
-                checked={!mailSameAsBilling}
-                onChange={() => setMailSameAsBilling(false)}
+                name="mailing_source"
+                checked={mailSameAsCompany}
+                onChange={() => {
+                  setMailSameAsCompany(true);
+                  setMailSameAsBilling(false);
+                }}
+              />
+              Same as Company Address
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="mailing_source"
+                checked={!mailSameAsBilling && !mailSameAsCompany}
+                onChange={() => {
+                  setMailSameAsBilling(false);
+                  setMailSameAsCompany(false);
+                }}
               />
               Different address
             </label>
           </div>
-          {mailSameAsBilling && (
+          {(mailSameAsBilling || mailSameAsCompany) && (
             <p className="text-muted-foreground text-[11px]">
-              On save, mailing address is copied from this client&apos;s
-              billing address.
+              On save, mailing address is copied from this client&apos;s{" "}
+              {mailSameAsCompany ? "company" : "billing"} address.
             </p>
           )}
         </div>
@@ -1046,19 +1073,19 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
             state directly. */}
         <AddressSection
           sectionPrefix=""
-          country={mailSameAsBilling ? billCountry : mailCountry}
-          province={mailSameAsBilling ? billProvince : mailProvince}
-          street={mailSameAsBilling ? billStreet : mailStreet}
-          unit={mailSameAsBilling ? billUnit : mailUnit}
-          city={mailSameAsBilling ? billCity : mailCity}
-          postal={mailSameAsBilling ? billPostal : mailPostal}
+          country={mailSameAsCompany ? coCountry : mailSameAsBilling ? billCountry : mailCountry}
+          province={mailSameAsCompany ? coProvince : mailSameAsBilling ? billProvince : mailProvince}
+          street={mailSameAsCompany ? coLine1 : mailSameAsBilling ? billStreet : mailStreet}
+          unit={mailSameAsCompany ? coLine2 : mailSameAsBilling ? billUnit : mailUnit}
+          city={mailSameAsCompany ? coCity : mailSameAsBilling ? billCity : mailCity}
+          postal={mailSameAsCompany ? coPostal : mailSameAsBilling ? billPostal : mailPostal}
           onCountryChange={setMailCountry}
           onProvinceChange={setMailProvince}
           onStreetChange={setMailStreet}
           onUnitChange={setMailUnit}
           onCityChange={setMailCity}
           onPostalChange={setMailPostal}
-          disabled={mailSameAsBilling}
+          disabled={mailSameAsBilling || mailSameAsCompany}
           onStreetAutocomplete={(p) => {
             setMailStreet(p.street);
             if (p.city) setMailCity(p.city);
