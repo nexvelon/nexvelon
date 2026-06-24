@@ -26,6 +26,9 @@ import type {
   DbClientInsert,
   DbClientUpdate,
   DbClientWithCounts,
+  DbClientStatus,
+  DbClientPaymentTerms,
+  DbClientCurrency,
   DbContact,
   DbContactInsert,
   DbContactUpdate,
@@ -35,6 +38,7 @@ import type {
   DbSiteUpdate,
   DbSiteWithClient,
 } from "@/lib/types/database";
+import type { ParsedBulkClient, BulkAddress, BulkContact } from "@/lib/client-bulk-template";
 
 // Server actions return a uniform { ok, ... } shape so client callers can
 // toast failures without unwrapping thrown errors across the network.
@@ -668,6 +672,198 @@ export async function createContactAction(
   } catch (e) {
     return fail(e);
   }
+}
+
+// ----------------------------------------------------------------------------
+// POLISH-61 — Bulk client import
+// ----------------------------------------------------------------------------
+
+const BULK_TERMS_MAP: Record<string, DbClientPaymentTerms> = {
+  "due on receipt": "due_on_receipt",
+  "net 7": "net_7",
+  "net 15": "net_15",
+  "net 30": "net_30",
+  "net 60": "net_60",
+  "net 90": "net_90",
+};
+const BULK_CURRENCIES: DbClientCurrency[] = ["CAD", "USD", "AED", "INR", "EUR"];
+const BULK_STATUSES: DbClientStatus[] = ["Active", "Inactive", "Prospect", "Lost"];
+
+function bulkAddrEmpty(a: BulkAddress): boolean {
+  return ![a.country, a.province, a.street, a.unit, a.city, a.postal].some(
+    (x) => (x ?? "").trim() !== ""
+  );
+}
+function bulkContactRow(
+  c: BulkContact,
+  clientId: string,
+  flags: Partial<DbContactInsert>
+): DbContactInsert | null {
+  const first = c.first_name?.trim() ?? "";
+  const last = c.last_name?.trim() ?? "";
+  const email = c.email?.trim() ?? "";
+  if (!first && !last && !email) return null;
+  return {
+    client_id: clientId,
+    site_id: null,
+    first_name: first,
+    last_name: last,
+    email: email || null,
+    phones: (c.phones ?? [])
+      .filter((p) => p.number?.trim())
+      .map((p) => ({ label: p.label || "Phone", number: p.number.trim() })),
+    ...flags,
+  };
+}
+
+export interface BulkImportResult {
+  ok: boolean;
+  createdCount: number;
+  skippedCount: number;
+  errors: Array<{ rowNumber: number; legal_name: string; error: string }>;
+}
+
+/**
+ * POLISH-61 — create many clients from a parsed bulk template (one row per
+ * client). Admin-only. Best-effort PER ROW: a failure on one row never blocks
+ * the others (no whole-batch rollback). Reuses createClient (client_code gen,
+ * POLISH-59) + createContact, and the copy-resolved inheritance model
+ * (POLISH-54/55). Rows are parsed client-side; this re-validates the essentials.
+ */
+export async function bulkImportClientsAction(
+  rows: ParsedBulkClient[]
+): Promise<BulkImportResult> {
+  const me = await getCurrentProfile();
+  console.error("[BULK IMPORT START]", {
+    role: me?.role ?? null,
+    parsedCount: rows.length,
+  });
+  if (me?.role !== "Admin") {
+    return {
+      ok: false,
+      createdCount: 0,
+      skippedCount: rows.length,
+      errors: [{ rowNumber: 0, legal_name: "", error: "Only admins can bulk import clients." }],
+    };
+  }
+
+  let createdCount = 0;
+  let skippedCount = 0;
+  const errors: BulkImportResult["errors"] = [];
+
+  for (const row of rows) {
+    const d = row.data;
+    const legalName = d.legal_name?.trim() ?? "";
+    // Trust the parser's validation, but re-guard the essentials server-side.
+    if (!row.valid || !legalName || bulkAddrEmpty(d.company)) {
+      skippedCount++;
+      const msg = row.errors?.length
+        ? row.errors.join("; ")
+        : "Missing required fields (legal name / company address).";
+      console.error("[BULK IMPORT CLIENT SKIPPED]", { rowNumber: row.rowNumber, legal_name: legalName, errors: msg });
+      errors.push({ rowNumber: row.rowNumber, legal_name: legalName, error: msg });
+      continue;
+    }
+
+    try {
+      // ── Address inheritance (copy-resolved + flags) ──
+      const billingProvided = !bulkAddrEmpty(d.billing);
+      const billingSameAsCompany = !billingProvided;
+      const billingVals = billingSameAsCompany ? d.company : d.billing;
+
+      let mailingSameAsBilling = false;
+      let mailingSameAsCompany = false;
+      let mailingVals: BulkAddress;
+      if (d.mailing_same_as === "Billing") {
+        mailingSameAsBilling = true;
+        mailingVals = billingVals;
+      } else if (d.mailing_same_as === "Company") {
+        mailingSameAsCompany = true;
+        mailingVals = d.company;
+      } else if (bulkAddrEmpty(d.mailing)) {
+        // Infer: prefer same-as-billing when billing was provided, else company.
+        if (billingProvided) {
+          mailingSameAsBilling = true;
+          mailingVals = billingVals;
+        } else {
+          mailingSameAsCompany = true;
+          mailingVals = d.company;
+        }
+      } else {
+        mailingVals = d.mailing;
+      }
+
+      const status = (BULK_STATUSES as string[]).includes(d.status?.trim())
+        ? (d.status.trim() as DbClientStatus)
+        : "Active";
+      const terms = BULK_TERMS_MAP[(d.payment_terms ?? "").trim().toLowerCase()] ?? undefined;
+      const currency = (BULK_CURRENCIES as string[]).includes((d.currency ?? "").trim().toUpperCase())
+        ? ((d.currency.trim().toUpperCase()) as DbClientCurrency)
+        : undefined;
+      const n = (x: string) => (x?.trim() ? x.trim() : null);
+
+      const payload: DbClientInsert = {
+        name: n(d.display_name) ?? legalName,
+        legal_name: legalName,
+        status,
+        default_opco: "integrated_solutions",
+        company_address_line1: n(d.company.street),
+        company_address_line2: n(d.company.unit),
+        company_address_city: n(d.company.city),
+        company_address_province: n(d.company.province),
+        company_address_postal: n(d.company.postal),
+        company_address_country: n(d.company.country),
+        billing_street: n(billingVals.street),
+        billing_unit: n(billingVals.unit),
+        billing_city: n(billingVals.city),
+        billing_province: n(billingVals.province),
+        billing_postal: n(billingVals.postal),
+        billing_country: n(billingVals.country),
+        billing_same_as_company: billingSameAsCompany,
+        mailing_street: n(mailingVals.street),
+        mailing_unit: n(mailingVals.unit),
+        mailing_city: n(mailingVals.city),
+        mailing_province: n(mailingVals.province),
+        mailing_postal: n(mailingVals.postal),
+        mailing_country: n(mailingVals.country),
+        mailing_same_as_billing: mailingSameAsBilling,
+        mailing_same_as_company: mailingSameAsCompany,
+        client_hst_gst_number: n(d.hst_gst_number),
+        tax_exempt: d.tax_exempt ?? false,
+        tax_exempt_certificate_number: n(d.tax_exempt_reason),
+        payment_terms: terms,
+        preferred_currency: currency,
+        notes: n(d.notes),
+      };
+
+      const client = await createClient(payload); // auto-generates client_code
+
+      const contactRows = [
+        bulkContactRow(d.primary, client.id, { is_primary: true }),
+        bulkContactRow(d.ap, client.id, { is_accounts_payable: true }),
+      ].filter((c): c is DbContactInsert => c !== null);
+      for (const c of contactRows) {
+        await createContact(c);
+      }
+
+      createdCount++;
+      console.error("[BULK IMPORT CLIENT CREATED]", {
+        rowNumber: row.rowNumber,
+        legal_name: legalName,
+        clientId: client.id,
+        contactsCreated: contactRows.length,
+      });
+    } catch (e) {
+      skippedCount++;
+      const msg = e instanceof Error ? e.message : "Failed to create client.";
+      console.error("[BULK IMPORT CLIENT SKIPPED]", { rowNumber: row.rowNumber, legal_name: legalName, errors: msg });
+      errors.push({ rowNumber: row.rowNumber, legal_name: legalName, error: msg });
+    }
+  }
+
+  revalidatePath("/clients");
+  console.error("[BULK IMPORT END]", { createdCount, skippedCount });
+  return { ok: true, createdCount, skippedCount, errors };
 }
 
 export async function updateContactAction(
