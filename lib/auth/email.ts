@@ -786,7 +786,7 @@ export async function sendApplicationApprovedEmail(opts: {
           : "",
         ...parsed.bullets.map(
           (b) =>
-            `<p class="nx-p" style="${tierPara}margin:0 0 24px;">${tierBullet}${escapeHtml(b)}</p>`
+            `<p class="nx-p" style="${tierPara}margin:0 0 4px;">${tierBullet}${escapeHtml(b)}</p>`
         ),
         ...parsed.bodyParas.map(
           (p) => `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(p)}</p>`
@@ -917,7 +917,7 @@ export async function sendTierChangedEmail(opts: {
       : "",
     ...parsed.bullets.map(
       (b) =>
-        `<p class="nx-p" style="${tierPara}margin:0 0 24px;">${tierBullet}${escapeHtml(b)}</p>`
+        `<p class="nx-p" style="${tierPara}margin:0 0 4px;">${tierBullet}${escapeHtml(b)}</p>`
     ),
     ...parsed.bodyParas.map(
       (p) => `<p class="nx-p" style="${tierPara}margin:0 0 16px;">${escapeHtml(p)}</p>`
