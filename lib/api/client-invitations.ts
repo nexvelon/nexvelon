@@ -495,24 +495,60 @@ function clientInsertFrom(
   };
 }
 
-// POLISH-57 — next global "S-NNN" site code for invite-created sites. Manual
-// sites use the per-client "S-{client_code}-NNN" scheme (createSite); invite
-// clients have no client_code, so these use a global sequence scanned across the
-// pure-numeric "S-NNN" codes only (manual codes contain letters and are ignored).
-async function nextInviteSiteCode(
-  supabase: ReturnType<typeof admin>
+// POLISH-59 — next client_code in createClient's "C-{prefix}-{year}-{NNNN}"
+// format (per opco+year), so invite-approved clients get a proper account number.
+async function nextClientCode(
+  supabase: ReturnType<typeof admin>,
+  opco: string
 ): Promise<string> {
+  const OPCO_PREFIX: Record<string, string> = {
+    integrated_solutions: "IS",
+    guardian: "GD",
+  };
+  const year = new Date().getFullYear();
+  const prefix = OPCO_PREFIX[opco] ?? "XX";
+  const codePrefix = `C-${prefix}-${year}-`;
   const { data, error } = await supabase
+    .from("clients")
+    .select("client_code")
+    .eq("default_opco", opco)
+    .like("client_code", `${codePrefix}%`)
+    .order("client_code", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  let next = 1;
+  const last = data?.[0]?.client_code as string | undefined;
+  const m = last?.match(/-(\d{4})$/);
+  if (m) next = parseInt(m[1], 10) + 1;
+  return `${codePrefix}${String(next).padStart(4, "0")}`;
+}
+
+// POLISH-59 — next per-client "S-{client_code}-NNN" site code (mirrors
+// createSite), now usable for invite sites since their client has a code.
+// Returns null when the client has no client_code (caller falls back to NULL).
+async function nextSiteCodeForClient(
+  supabase: ReturnType<typeof admin>,
+  clientId: string
+): Promise<string | null> {
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select("client_code")
+    .eq("id", clientId)
+    .single();
+  const clientCode = (clientRow as { client_code: string | null } | null)?.client_code;
+  if (!clientCode) return null;
+  const prefix = `S-${clientCode}-`;
+  const { data: existing } = await supabase
     .from("sites")
     .select("site_code")
-    .like("site_code", "S-%");
-  if (error) throw new Error(error.message);
-  let max = 0;
-  for (const r of (data ?? []) as { site_code: string | null }[]) {
-    const m = String(r.site_code ?? "").match(/^S-(\d+)$/);
-    if (m) max = Math.max(max, parseInt(m[1], 10));
-  }
-  return `S-${String(max + 1).padStart(3, "0")}`;
+    .like("site_code", `${prefix}%`)
+    .order("site_code", { ascending: false })
+    .limit(1);
+  let next = 1;
+  const last = existing?.[0]?.site_code as string | undefined;
+  const mm = last?.match(/-(\d+)$/);
+  if (mm) next = parseInt(mm[1], 10) + 1;
+  return `${prefix}${String(next).padStart(3, "0")}`;
 }
 
 // Map the saved site jsonb to a DbSite insert payload under a client.
@@ -661,21 +697,30 @@ export async function submitInvitation(token: string): Promise<{
     if (!inv.client_id) throw new Error("Site invite has no client attached.");
     clientId = inv.client_id;
   } else {
+    // POLISH-59 — give the new client a proper client_code at creation (was NULL
+    // before), reusing createClient's C-{prefix}-{year}-{NNNN} mechanism, so its
+    // sites can use the unified per-client S-{client_code}-NNN format.
+    const clientCode = await nextClientCode(supabase, "integrated_solutions").catch(
+      () => null
+    );
+    const clientPayload = {
+      ...clientInsertFrom(cf, inv.email, now),
+      ...(clientCode ? { client_code: clientCode } : {}),
+    };
     const { data: client, error: cErr } = await supabase
       .from("clients")
-      .insert(clientInsertFrom(cf, inv.email, now))
+      .insert(clientPayload)
       .select("id")
       .single();
     if (cErr) throw new Error(`submitInvitation/client: ${cErr.message}`);
     clientId = (client as { id: string }).id;
   }
 
-  // POLISH-57 — give the new site a sequential code so it sorts naturally in
-  // /sites (was NULL → buried). Invite-created clients have no client_code, so
-  // the per-client "S-{client_code}-NNN" scheme (createSite) can't apply; use a
-  // global "S-NNN" sequence instead. Best-effort: a failure falls back to NULL
+  // POLISH-59 — the client now has a client_code (CHANGE 1 / existing for
+  // site-only), so the new site uses the UNIFIED per-client "S-{client_code}-NNN"
+  // format (same as manual sites). Best-effort: a failure falls back to NULL
   // (never blocks the submission).
-  const siteCode = await nextInviteSiteCode(supabase).catch(() => null);
+  const siteCode = await nextSiteCodeForClient(supabase, clientId).catch(() => null);
   const sitePayload = {
     ...siteInsertFrom(sf, clientId),
     ...(siteCode ? { site_code: siteCode } : {}),
