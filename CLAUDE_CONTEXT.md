@@ -3,11 +3,12 @@
 > **Single source of truth for the Nexvelon project.**
 > A fresh Claude Code session reads, in order:
 >   1. **`NEXVELON_PRINCIPLES.md`** — the six non-negotiables (incl. §6 Extensibility).
->   2. **`NEXVELON_SESSION_AD_HANDOFF.md`** — the LATEST session handoff and the
->      authoritative source for current project state (Quote / Client / Sites /
->      Contacts modules complete through PR #68; CL-5 trilogy shipped; the CL-6
->      sprint then the Inventory Sprint next). Read this first for current
->      reality. `NEXVELON_SESSION_AC_HANDOFF.md` is the prior session handoff.
+>   2. **`NEXVELON_SESSION_AE_HANDOFF.md`** — the LATEST session handoff and the
+>      authoritative source for current project state (Client / Sites / Contacts
+>      modules complete through the POLISH-N arc, PR #273; migrations applied
+>      through 0075; next migration 0076). Read this first for current reality.
+>      `NEXVELON_SESSION_AD_HANDOFF.md` (CL-5 trilogy, PR #68) is the prior
+>      session handoff.
 >   3. The `## Current Session State` block immediately below.
 >   4. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
 >   5. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
@@ -16,6 +17,28 @@
 ---
 
 ## Current Session State
+
+**As of 2026-06-25. Session AE CLOSED. POLISH-N polish arc wrapped (PRs #252–#273). Repo docs refreshed to current reality — no chat handover required for future sessions.**
+
+- **Latest migration applied:** **0075** (`0075_unify_site_codes.sql` — client_code backfill + per-client site renumber).
+- **Next migration number:** **0076.**
+- **Latest PR merged:** **#273** (trade-name routing fix — store entered trade name as display name).
+- **Active sprint:** **paused.** The POLISH-N polish series on Clients / Sites / Contacts is complete; no sprint currently pinned. Jay directs the next one.
+- **Recent architectural arcs complete (full narrative in `NEXVELON_SESSION_AE_HANDOFF.md`):**
+  - Client soft-delete + optional hard-delete (type-to-confirm); site hard-delete via **atomic plpgsql cascade** (`hard_delete_client`/`hard_delete_site`, migrations 0068–0070). WHY: hidden FK `ON DELETE RESTRICT` edges make sequential JS deletes unsafe.
+  - Contact routing bug fixed — invite-approved contacts now flow into `contacts` (were dumped as notes text). Schema reality: boolean flags (`is_primary`/`is_accounts_payable`/etc.) + `contact_type_custom`, **no `role` column**; phones jsonb is `{label, number}`. Site contacts use `client_id=NULL` + `site_id`.
+  - Site Contacts UI + CRUD via `ContactFormDrawer` `create-site` mode (extend-with-mode, not duplicate).
+  - Client detail redesign — inline 2-col grid + per-section pencil edit. **SectionCard hoisted to module scope** (focus-loss fix).
+  - Company Address field + **copy-resolved inheritance with flag columns** (migrations 0071–0073) replacing NULL-when-inheriting; cascade dialog on source edits; mailing supports two "same as" options. Real columns: `billing_street`/`billing_city` (NOT `billing_address_line1`); only company uses `_line1`/`_line2`.
+  - Site-code unification — `client_code` as `C-IS-{year}-{NNNN}`, sites as `S-{client_code}-NNN` (migrations 0074–0075); `nextClientCode`/`nextSiteCodeForClient` reused by invite + manual paths.
+  - Excel: single-client onboarding template v4 (Company Address safe end-append, rows 49–56) + new admin-only **bulk client importer** (46-col wide template, `bulkImportClientsAction`).
+  - T&C (manual, in DB via Settings → Quote Defaults, NOT in git): Warranty split into 5 sub-clauses; new Consumer Clients section (IS §24 / Guardian §27, Ontario CPA carve-out) — pending Ordower Law review.
+  - Email infra: M365 for nexvelonglobal.com (SPF+DKIM+DMARC complete); `ceo@` aliases configured.
+- **⚠️ Note on the older session-state history below:** the Session-Z-and-earlier blocks describe a *planned* Permissions design/build narrative that does NOT reflect what actually shipped. Actual delivery (per git) is the Clients/Sites/Contacts/Quotes builder surfaces through the POLISH arc. Treat AE handoff + live code/migrations as ground truth; the older blocks are preserved as historical strategic context only.
+
+---
+
+### Historical session-state (Session Z and earlier — strategic/planning narrative, NOT current delivery state)
 
 **As of 2026-05-12. Session Z CLOSED. 🏁 PERMISSIONS DESIGN PHASE COMPLETE — all 11 passes locked. Build phase opens.**
 
