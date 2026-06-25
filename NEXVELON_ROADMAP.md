@@ -16,6 +16,15 @@
 
 ---
 
+> **Session marker (2026-06-25): Session AE complete.** The POLISH-N polish
+> arc on Clients / Sites / Contacts wrapped (PRs #252–#273; migrations applied
+> through 0075, next 0076). See `NEXVELON_SESSION_AE_HANDOFF.md`. **Strategic
+> intent below is unchanged** — the module sequence and v1 acceptance bars
+> still stand; the polish arc was operator-directed surface work on the
+> already-shipped Clients/Sites/Contacts builder, not a change to this plan.
+
+---
+
 ## Sequence (in order — do not re-order without an explicit decision)
 
 1. **Comprehensive feature audit + sidebar expansion** *(next scoping
