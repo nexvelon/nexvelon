@@ -281,3 +281,92 @@ of the suite is also half-done; we don't ship that signal.
 - **Guided creation, never lazy creation.** Every lookup-table "+ Add" flow uses a multi-section wizard that walks the operator through identity → smart defaults inherited from the closest existing row → behavior bindings → workflow rule inheritance → preview → save. New rows are fully operational at save time — never label-only stubs requiring follow-up configuration. The wizard's smart-defaults inheritance reduces the cost of adding a new row (e.g. Diamond tier inherits Platinum's values, operator adjusts up).
 
 - **Versioned clauses, templates, and SLA language.** When an operator edits an onboarding-gate T&C clause, a quote template, or SLA template language, the system snapshots the previous version. Already-sent quotes / invoices / signed SLAs retain the version they were dispatched with. Only new dispatches use the edited version. This ensures contractual integrity — a customer who signed under v1 language can't be retroactively bound to v2.
+
+---
+
+## §3.0 — Supabase Data API GRANTs (NEW POLICY, effective Oct 30, 2026)
+
+**Background.** Supabase notified us in June 2026: starting **May 30, 2026** for new projects, and **October 30, 2026** for existing projects (including ours), tables in the `public` schema will no longer be auto-exposed to the Data API. Without explicit `GRANT` statements, `supabase-js`, PostgREST (`/rest/v1/`), and GraphQL (`/graphql/v1/`) cannot read or write the table.
+
+**Scope of impact.**
+
+- **All tables created BEFORE Oct 30, 2026:** keep their existing grants. No retroactive changes. They continue working forever.
+- **All tables created AFTER Oct 30, 2026:** require explicit `GRANT` statements in the same migration, or they will be invisible to the Data API. Calls return PostgREST error code `42501` with the exact GRANT statement needed.
+
+**The rule going forward.**
+
+Every migration that creates a new table in `public` MUST include:
+
+1. The `CREATE TABLE` statement
+2. Explicit `GRANT` statements for `authenticated` and `service_role`
+3. `ALTER TABLE … ENABLE ROW LEVEL SECURITY`
+4. At least one RLS policy (even if permissive)
+
+This is non-negotiable. Skipping any of the four steps will produce silent breakage at runtime.
+
+### Standard boilerplate (paste into every new-table migration)
+
+```sql
+-- ============================================
+-- Migration: 00XX_create_<table_name>.sql
+-- ============================================
+
+-- 1. Create the table
+create table public.your_table (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+  -- ... your columns
+);
+
+-- 2. GRANTs (REQUIRED — Data API will not see this table without these)
+grant select, insert, update, delete on public.your_table to authenticated;
+grant select, insert, update, delete on public.your_table to service_role;
+
+-- Note: do NOT grant to `anon` unless the table is intended for public/unauthenticated
+-- access. The Nexvelon ERP requires authentication for all data access.
+
+-- 3. Enable Row Level Security
+alter table public.your_table enable row level security;
+
+-- 4. Policies (adjust per table — examples below)
+
+-- Example A: authenticated users can manage all rows (use for org-wide tables)
+create policy "authenticated users can manage"
+  on public.your_table
+  for all to authenticated
+  using (true)
+  with check (true);
+
+-- Example B: users can only access their own rows
+-- create policy "users can read their own rows"
+--   on public.your_table
+--   for select to authenticated
+--   using (auth.uid() = user_id);
+
+-- Example C: service_role bypass (already implicit; do not add explicit policy)
+```
+
+### Special considerations
+
+- **`anon` role.** Do NOT grant to `anon` for Nexvelon ERP tables. We require authentication for everything. Only grant to `anon` for public-facing data that anonymous visitors should see (we currently have none).
+- **Ledger / append-only tables.** Even append-only ledgers (audit logs, activity log) still need `GRANT INSERT` for `authenticated` and `service_role`, plus `GRANT SELECT` for `authenticated` so users can read history.
+- **Junction tables.** Apply the same boilerplate. RLS policies on junction tables should typically follow the policy of the more-restrictive parent table.
+- **Views.** Views inherit access from underlying tables but ALSO need explicit GRANTs to be exposed via the Data API. Same pattern applies.
+- **Functions.** Stored functions exposed via RPC need `GRANT EXECUTE … TO authenticated, service_role`.
+
+### Verifying a table is properly exposed
+
+After running a migration, in Supabase Dashboard → **Security Advisor** (left sidebar) → look for:
+- ✅ Green checkmark next to the new table
+- ❌ Red warning saying "Table not exposed to API" → GRANT is missing, fix immediately
+
+Alternatively, test in the Table Editor → Data API → try `SELECT * FROM your_table LIMIT 1`. If it returns `42501 permission denied`, the GRANT is missing.
+
+### Why this matters
+
+If we ship a migration with a new table but forget the GRANTs, the ERP frontend will silently fail when trying to read/write that table — and the failure mode is a runtime PostgREST error, not a build-time error. The first time you'd find out is when a user clicks a button and gets a cryptic "permission denied" message. **Catch it in the migration spec, not in production.**
+
+### Reference
+
+Source: Email from Supabase to nexvelon's projects (Jay Shah), June 2026, subject line referencing the May 30 / October 30 rollout. See also Supabase docs at https://supabase.com/docs (Security Advisor section).
