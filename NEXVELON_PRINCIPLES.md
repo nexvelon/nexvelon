@@ -97,7 +97,96 @@ designed to avoid.
 
 ---
 
-## 3. Competitive bar
+## 3. Supabase Data API GRANTs (effective Oct 30, 2026)
+
+**Background.** Supabase notified us in June 2026: starting **May 30, 2026** for new projects, and **October 30, 2026** for existing projects (including ours), tables in the `public` schema will no longer be auto-exposed to the Data API. Without explicit `GRANT` statements, `supabase-js`, PostgREST (`/rest/v1/`), and GraphQL (`/graphql/v1/`) cannot read or write the table.
+
+**Scope of impact.**
+
+- **All tables created BEFORE Oct 30, 2026:** keep their existing grants. No retroactive changes. They continue working forever.
+- **All tables created AFTER Oct 30, 2026:** require explicit `GRANT` statements in the same migration, or they will be invisible to the Data API. Calls return PostgREST error code `42501` with the exact GRANT statement needed.
+
+**The rule going forward.**
+
+Every migration that creates a new table in `public` MUST include:
+
+1. The `CREATE TABLE` statement
+2. Explicit `GRANT` statements for `authenticated` and `service_role`
+3. `ALTER TABLE … ENABLE ROW LEVEL SECURITY`
+4. At least one RLS policy (even if permissive)
+
+This is non-negotiable. Skipping any of the four steps will produce silent breakage at runtime.
+
+### Standard boilerplate (paste into every new-table migration)
+
+```sql
+-- ============================================
+-- Migration: 00XX_create_<table_name>.sql
+-- ============================================
+
+-- 1. Create the table
+create table public.your_table (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+  -- ... your columns
+);
+
+-- 2. GRANTs (REQUIRED — Data API will not see this table without these)
+grant select, insert, update, delete on public.your_table to authenticated;
+grant select, insert, update, delete on public.your_table to service_role;
+
+-- Note: do NOT grant to `anon` unless the table is intended for public/unauthenticated
+-- access. The Nexvelon ERP requires authentication for all data access.
+
+-- 3. Enable Row Level Security
+alter table public.your_table enable row level security;
+
+-- 4. Policies (adjust per table — examples below)
+
+-- Example A: authenticated users can manage all rows (use for org-wide tables)
+create policy "authenticated users can manage"
+  on public.your_table
+  for all to authenticated
+  using (true)
+  with check (true);
+
+-- Example B: users can only access their own rows
+-- create policy "users can read their own rows"
+--   on public.your_table
+--   for select to authenticated
+--   using (auth.uid() = user_id);
+
+-- Example C: service_role bypass (already implicit; do not add explicit policy)
+```
+
+### Special considerations
+
+- **`anon` role.** Do NOT grant to `anon` for Nexvelon ERP tables. We require authentication for everything. Only grant to `anon` for public-facing data that anonymous visitors should see (we currently have none).
+- **Ledger / append-only tables.** Even append-only ledgers (audit logs, activity log) still need `GRANT INSERT` for `authenticated` and `service_role`, plus `GRANT SELECT` for `authenticated` so users can read history.
+- **Junction tables.** Apply the same boilerplate. RLS policies on junction tables should typically follow the policy of the more-restrictive parent table.
+- **Views.** Views inherit access from underlying tables but ALSO need explicit GRANTs to be exposed via the Data API. Same pattern applies.
+- **Functions.** Stored functions exposed via RPC need `GRANT EXECUTE … TO authenticated, service_role`.
+
+### Verifying a table is properly exposed
+
+After running a migration, in Supabase Dashboard → **Security Advisor** (left sidebar) → look for:
+- ✅ Green checkmark next to the new table
+- ❌ Red warning saying "Table not exposed to API" → GRANT is missing, fix immediately
+
+Alternatively, test in the Table Editor → Data API → try `SELECT * FROM your_table LIMIT 1`. If it returns `42501 permission denied`, the GRANT is missing.
+
+### Why this matters
+
+If we ship a migration with a new table but forget the GRANTs, the ERP frontend will silently fail when trying to read/write that table — and the failure mode is a runtime PostgREST error, not a build-time error. The first time you'd find out is when a user clicks a button and gets a cryptic "permission denied" message. **Catch it in the migration spec, not in production.**
+
+### Reference
+
+Source: Email from Supabase to nexvelon's projects (Jay Shah), June 2026, subject line referencing the May 30 / October 30 rollout. See also Supabase docs at https://supabase.com/docs (Security Advisor section).
+
+---
+
+## 4. Competitive bar
 
 **Competitors are reference floors, not ceilings — the bar is what a
 world-class SaaS would look like rebuilt from scratch in 2026 for
@@ -129,12 +218,12 @@ are correctness, not advantage.
 **When two designs satisfy the principle, choose the one that costs the
 customer less hand-entry.** Every form, every default, every list
 filter is measured in keystrokes saved versus the reference floor.
-Modules ship deeply or don't ship — see §6 on the depth-over-breadth
+Modules ship deeply or don't ship — see §7 on the depth-over-breadth
 constraint.
 
 ---
 
-## 4. Audit everything
+## 5. Audit everything
 
 **Every business-record mutation writes a row** capturing:
 
@@ -169,7 +258,7 @@ type added.
 
 ---
 
-## 5. Continuity
+## 6. Continuity
 
 **Any new Claude Code session reads, in order:**
 
@@ -212,7 +301,7 @@ it just walked into the room.
 
 ---
 
-## 6. Extensibility & Customization
+## 7. Extensibility & Customization
 
 **Every operator gets a different version of Nexvelon without forking
 the codebase.** The platform's surface area must bend to the
@@ -245,7 +334,7 @@ Phase 1 of each module ships with sensible defaults hard-coded; Phase
 2 hoists those rules into the data layer.
 
 **Field-level permissions, not just feature-level.** §2 covers role ×
-resource × action. §6 extends that to per-field: an Admin can hide an
+resource × action. §7 extends that to per-field: an Admin can hide an
 individual field on the quote form from SalesReps without removing
 their `quotes:edit` grant. Permissions storage model is one of the
 open architectural decisions in `NEXVELON_ROADMAP.md`.
@@ -268,13 +357,13 @@ dashboards — never need a parallel data path.
 **Depth over breadth: ship deeply or don't ship.** No "module lite."
 Demo-quality is forbidden. If a module can't ship with full audit
 coverage, full permissions integration, full custom-field support, and
-its named reference floor (§3) beaten on the operator's measured
+its named reference floor (§4) beaten on the operator's measured
 workflow — it doesn't ship yet. Deferred features go into
 `NEXVELON_ROADMAP.md` with a clear description of what's missing and
 why. A half-done module on the sidebar tells the operator the rest
 of the suite is also half-done; we don't ship that signal.
 
-**Session C clarifications (2026-05-12).** These extend §6 commitments based on Module 1 of the feature audit:
+**Session C clarifications (2026-05-12).** These extend §7 commitments based on Module 1 of the feature audit:
 
 - **Lookup-table rows carry behavior bindings, not just labels.** A status, tier, or type row isn't decorative — it's an operational config surface. A Tier row carries SLA defaults, discount %, payment terms, credit limit, AM-required flag, notification channel. A Client Status row carries whether quotes/projects/invoices are permitted at that status, and triggers for auto-promotion or credit hold. A Site Status row carries scheduling eligibility. Every lookup table built from this point forward includes its own behavior-binding columns alongside identity columns (name, sort_order, color, description, is_archived, default_for_new).
 
