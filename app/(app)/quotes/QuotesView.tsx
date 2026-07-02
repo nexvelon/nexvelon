@@ -25,7 +25,19 @@ import {
   type QuoteFilterValue,
 } from "@/components/modules/quotes/QuoteFilters";
 import { QuotesTable } from "@/components/modules/quotes/QuotesTable";
-import { sendQuoteAction, upsertQuoteAction } from "./actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  deleteQuoteAction,
+  sendQuoteAction,
+  upsertQuoteAction,
+} from "./actions";
 import { formatCurrency, businessDateISO } from "@/lib/format";
 import {
   newId,
@@ -65,6 +77,24 @@ export function QuotesView({
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
   ]);
+  // QUOTES-3 — the quote pending hard delete (admin, draft-only) drives the
+  // confirmation dialog; `deleting` disables the buttons during the round-trip.
+  const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!quoteToDelete) return;
+    setDeleting(true);
+    const res = await deleteQuoteAction(quoteToDelete.id);
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Cannot delete", { description: res.error });
+      return;
+    }
+    toast.success(`Quote ${quoteToDelete.number} deleted`);
+    setQuoteToDelete(null);
+    router.refresh();
+  };
 
   const counts = useMemo(() => {
     const c: Record<"All" | QuoteStatus, number> = {
@@ -212,6 +242,9 @@ export function QuotesView({
           description: "Archive is a soft action in this build.",
         });
       },
+      // QUOTES-3 — open the confirmation dialog; the actual delete + guards run
+      // server-side in confirmDelete → deleteQuoteAction.
+      onDelete: (q: Quote) => setQuoteToDelete(q),
     }),
     [router, projectsCount]
   );
@@ -307,6 +340,44 @@ export function QuotesView({
         probability) where Approved=100%, Sent=60%, Draft=25%; Closed quotes are
         excluded from the pipeline.
       </p>
+
+      {/* QUOTES-3 — hard-delete confirmation (admin, draft-only). Mirrors the
+          clients pending-delete dialog pattern. */}
+      <Dialog
+        open={!!quoteToDelete}
+        onOpenChange={(o) => {
+          if (!o && !deleting) setQuoteToDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Delete quote?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete quote{" "}
+              <span className="font-semibold">{quoteToDelete?.number}</span>.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setQuoteToDelete(null)}
+              disabled={deleting}
+              className="text-muted-foreground hover:bg-muted rounded-md px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="rounded-md bg-red-600 px-4 py-2 text-xs font-semibold tracking-wide text-white shadow-sm transition-colors hover:bg-red-700 disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

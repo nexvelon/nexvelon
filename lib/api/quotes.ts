@@ -95,3 +95,19 @@ export async function deleteQuote(id: string): Promise<boolean> {
   if (error) throw new Error(`deleteQuote: ${error.message}`);
   return (data?.length ?? 0) > 0;
 }
+
+// QUOTES-3 — project cost centers that were sourced from this quote
+// (0042_cost_center_source_quote: project_cost_centers.source_quote_id). Used as
+// a delete guard so we never sever a project's link back to its origin quote.
+export async function listProjectsReferencingQuote(
+  quoteId: string
+): Promise<{ id: string }[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_cost_centers")
+    .select("id")
+    .eq("source_quote_id", quoteId);
+  if (error)
+    throw new Error(`listProjectsReferencingQuote: ${error.message}`);
+  return (data ?? []) as { id: string }[];
+}

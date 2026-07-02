@@ -39,6 +39,7 @@ interface Props {
   onApprove: (q: Quote) => void;
   onConvert: (q: Quote) => void;
   onArchive: (q: Quote) => void;
+  onDelete?: (q: Quote) => void;
   sorting: SortingState;
   onSortingChange: (s: SortingState) => void;
 }
@@ -53,6 +54,7 @@ export function QuotesTable({
   onApprove,
   onConvert,
   onArchive,
+  onDelete,
   sorting,
   onSortingChange,
 }: Props) {
@@ -190,12 +192,13 @@ export function QuotesTable({
               onApprove={onApprove}
               onConvert={onConvert}
               onArchive={onArchive}
+              onDelete={onDelete}
             />
           </div>
         ),
       },
     ],
-    [clientById, siteById, ownerById, onView, onDuplicate, onSend, onApprove, onConvert, onArchive]
+    [clientById, siteById, ownerById, onView, onDuplicate, onSend, onApprove, onConvert, onArchive, onDelete]
   );
 
   const table = useReactTable({
