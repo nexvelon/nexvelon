@@ -23,7 +23,6 @@ import { QuoteStatusBadge } from "./QuoteStatusBadge";
 import { QuoteRowActions } from "./QuoteRowActions";
 import { formatCurrency } from "@/lib/format";
 import { ensureSections } from "@/lib/quote-helpers";
-import { sites as ALL_SITES } from "@/lib/mock-data/sites";
 import type { Quote } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +31,8 @@ interface Props {
   // QUOTES-1 — the list reads `name` + `type` for clients (by id) and `name`
   // for owners, so accept the minimal shapes the real-DB server page maps into.
   clients: { id: string; name: string; type?: string | null }[];
+  // QUOTES-4 — site-name column now reads real DB sites (was mock sites).
+  sites: { id: string; name: string; clientId?: string }[];
   owners: { id: string; name: string }[];
   onView: (q: Quote) => void;
   onDuplicate: (q: Quote) => void;
@@ -47,6 +48,7 @@ interface Props {
 export function QuotesTable({
   quotes,
   clients,
+  sites,
   owners,
   onView,
   onDuplicate,
@@ -59,7 +61,7 @@ export function QuotesTable({
   onSortingChange,
 }: Props) {
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
-  const siteById = useMemo(() => new Map(ALL_SITES.map((s) => [s.id, s])), []);
+  const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
   const ownerById = useMemo(() => new Map(owners.map((o) => [o.id, o])), [owners]);
 
   const columns = useMemo<ColumnDef<Quote>[]>(

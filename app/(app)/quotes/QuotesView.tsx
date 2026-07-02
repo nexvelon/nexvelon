@@ -53,10 +53,13 @@ import type { Quote, QuoteStatus } from "@/lib/types";
 // the server page.
 type RefOption = { id: string; name: string };
 type ClientRefOption = { id: string; name: string; type?: string | null };
+type SiteRefOption = { id: string; name: string; clientId?: string };
 
 interface Props {
   quotes: Quote[];
   clients: ClientRefOption[];
+  /** Active sites, for the site-name column lookup (by id). */
+  sites: SiteRefOption[];
   /** All users, for the owner-name column lookup. */
   users: RefOption[];
   /** Sales-facing users (SalesRep / ProjectManager / Admin), for the filter. */
@@ -68,6 +71,7 @@ interface Props {
 export function QuotesView({
   quotes: allQuotes,
   clients,
+  sites,
   users,
   owners,
   projectsCount,
@@ -293,6 +297,7 @@ export function QuotesView({
           return String(aVal ?? "").localeCompare(String(bVal ?? "")) * dir;
         })}
         clients={clients}
+        sites={sites}
         owners={users}
         sorting={sorting}
         onSortingChange={setSorting}
