@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { QuoteStatus, User } from "@/lib/types";
+import type { QuoteStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: ("All" | QuoteStatus)[] = [
   "All",
@@ -46,7 +46,7 @@ export const EMPTY_FILTERS: QuoteFilterValue = {
 interface Props {
   value: QuoteFilterValue;
   onChange: (next: QuoteFilterValue) => void;
-  owners: User[];
+  owners: { id: string; name: string }[];
   counts: Record<"All" | QuoteStatus, number>;
 }
 
