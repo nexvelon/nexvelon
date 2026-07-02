@@ -8,6 +8,7 @@ import {
   MoreVertical,
   Send,
   ThumbsUp,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ interface Props {
   onApprove: (q: Quote) => void;
   onConvert: (q: Quote) => void;
   onArchive: (q: Quote) => void;
+  onDelete?: (q: Quote) => void;
 }
 
 export function QuoteRowActions({
@@ -38,6 +40,7 @@ export function QuoteRowActions({
   onApprove,
   onConvert,
   onArchive,
+  onDelete,
 }: Props) {
   const { role } = useRole();
   const canApprove =
@@ -51,6 +54,9 @@ export function QuoteRowActions({
   // the security boundary.
   const isDraft = quote.status === "Draft";
   const canSend = isDraft && !!quote.clientId && !!quote.siteId;
+  // QUOTES-3 — hard delete is Admin-only and Draft-only. The server action
+  // re-checks both (plus project references), so this is UX-only gating.
+  const canDelete = hasPermission(role, "quotes", "delete") && isDraft;
 
   return (
     <DropdownMenu>
@@ -90,6 +96,15 @@ export function QuoteRowActions({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
+        {canDelete && (
+          <DropdownMenuItem
+            onClick={() => onDelete?.(quote)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={() => onArchive(quote)}
           className="text-red-600"

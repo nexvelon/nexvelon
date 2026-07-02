@@ -9,6 +9,7 @@ import {
   deleteQuote,
   getQuoteById,
   listQuotes,
+  listProjectsReferencingQuote,
   upsertQuote,
 } from "@/lib/api/quotes";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
@@ -191,14 +192,61 @@ export async function sendQuoteAction(
   }
 }
 
+// QUOTES-3 — Admin-only hard delete of a DRAFT quote. Signature preserved
+// (single string arg) so existing callers stay compatible. This is the durable
+// guard: it re-reads the quote server-side, so a direct API call can't bypass
+// the status/reference checks. Non-drafts keep their normal lifecycle
+// transitions; a quote referenced by a project cost center can't be deleted.
 export async function deleteQuoteAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+
+    // Source of truth — the DB row, not anything the client passed.
+    const quote = await getQuoteById(id);
+    if (!quote) return { ok: false, error: "Quote not found" };
+
+    if (quote.status !== "Draft") {
+      return {
+        ok: false,
+        error: `Cannot delete a ${quote.status} quote. Only drafts can be deleted.`,
+      };
+    }
+
+    // Block if a project sourced a cost center from this quote (0042) — the FK
+    // is ON DELETE SET NULL, so the DB wouldn't error, but we don't want to
+    // silently sever that provenance link.
+    const refs = await listProjectsReferencingQuote(id);
+    if (refs.length > 0) {
+      return {
+        ok: false,
+        error: `Cannot delete: this quote is referenced by ${refs.length} project cost center(s).`,
+      };
+    }
+
+    // Audit BEFORE the row is gone, so the trail survives the hard delete
+    // (quote_audit_log is not cascaded — deliberately durable). Best-effort:
+    // never let an audit hiccup block the delete the admin asked for.
+    try {
+      const actor = await resolveAuditActor();
+      await logQuoteAuditEvent({
+        quoteId: id,
+        actorId: actor.id,
+        actorName: actor.name,
+        eventType: "deleted",
+        changes: { before: quote, after: null },
+      });
+    } catch (auditErr) {
+      console.error("[quote_audit_log] delete event logging failed:", auditErr);
+    }
+
+    // Hard-delete + attachments cleanup (existing pattern).
+    await deleteAttachmentsForEntity("quote", id).catch(() => {});
     const deleted = await deleteQuote(id);
     if (!deleted) return { ok: false, error: "Quote not found" };
-    // ATTACH-2: remove this quote's attachments (objects + rows). Best-effort.
-    await deleteAttachmentsForEntity("quote", id).catch(() => {});
+
     revalidatePath("/quotes");
     return { ok: true, data: { id } };
   } catch (e) {
