@@ -165,6 +165,32 @@ export async function getQuoteAuditEventsAction(
   }
 }
 
+// QUOTES-2 — the durable server guard for "Send to Client". Takes only an id
+// and RE-READS the quote from the DB, so a crafted client payload can't bypass
+// the check by spreading a different status/client/site. Only a Draft with both
+// a client AND a site may transition to Sent. Delegates the actual write to
+// upsertQuoteAction so the status_changed audit event + revalidate still fire.
+// (No email is dispatched yet — that's a future ticket; this is the surface it
+// will hang off.)
+export async function sendQuoteAction(
+  quoteId: string
+): Promise<ActionResult<Quote>> {
+  try {
+    const quote = await getQuoteById(quoteId);
+    if (!quote) return { ok: false, error: "Quote not found" };
+    if (quote.status !== "Draft" || !quote.clientId || !quote.siteId) {
+      throw new Error(
+        `Cannot send: status=${quote.status}, client_id=${
+          quote.clientId ?? "null"
+        }, site_id=${quote.siteId ?? "null"}`
+      );
+    }
+    return await upsertQuoteAction({ ...quote, status: "Sent" });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function deleteQuoteAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
