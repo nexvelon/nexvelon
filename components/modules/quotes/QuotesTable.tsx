@@ -24,13 +24,15 @@ import { QuoteRowActions } from "./QuoteRowActions";
 import { formatCurrency } from "@/lib/format";
 import { ensureSections } from "@/lib/quote-helpers";
 import { sites as ALL_SITES } from "@/lib/mock-data/sites";
-import type { Client, Quote, User } from "@/lib/types";
+import type { Quote } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   quotes: Quote[];
-  clients: Client[];
-  owners: User[];
+  // QUOTES-1 — the list reads `name` + `type` for clients (by id) and `name`
+  // for owners, so accept the minimal shapes the real-DB server page maps into.
+  clients: { id: string; name: string; type?: string | null }[];
+  owners: { id: string; name: string }[];
   onView: (q: Quote) => void;
   onDuplicate: (q: Quote) => void;
   onSend: (q: Quote) => void;
