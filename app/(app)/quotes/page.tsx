@@ -6,7 +6,7 @@
 
 import { QuotesView } from "./QuotesView";
 import { listQuotes } from "@/lib/api/quotes";
-import { getClients } from "@/lib/api/clients";
+import { getClients, listSites } from "@/lib/api/clients";
 import { listVisibleProfilesAdmin } from "@/lib/api/users";
 import { listProjects } from "@/lib/api/projects";
 import type { DbProfile } from "@/lib/types/database";
@@ -27,14 +27,21 @@ function profileName(p: DbProfile): string {
 }
 
 export default async function QuotesPage() {
-  const [quotes, dbClients, dbProfiles, dbProjects] = await Promise.all([
+  const [quotes, dbClients, dbSites, dbProfiles, dbProjects] = await Promise.all([
     listQuotes(),
     getClients(),
+    listSites(),
     listVisibleProfilesAdmin(),
     listProjects(),
   ]);
 
   const clients = dbClients.map((c) => ({ id: c.id, name: c.name, type: c.type }));
+  // QUOTES-4 — the site-name column now reads real DB sites (was mock sites).
+  const sites = dbSites.map((s) => ({
+    id: s.id,
+    name: s.name,
+    clientId: s.client_id,
+  }));
   const users = dbProfiles.map((p) => ({ id: p.id, name: profileName(p) }));
   const owners = dbProfiles
     .filter((p) => SALES_ROLES.has(p.role))
@@ -44,6 +51,7 @@ export default async function QuotesPage() {
     <QuotesView
       quotes={quotes}
       clients={clients}
+      sites={sites}
       users={users}
       owners={owners}
       projectsCount={dbProjects.length}

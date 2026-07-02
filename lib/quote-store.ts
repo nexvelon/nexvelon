@@ -1,5 +1,15 @@
 "use client";
 
+// QUOTES-4 orientation note (do not mistake this for dead localStorage code):
+// the /quotes LIST page no longer uses this store — it moved to the
+// server-component + server-actions pattern (app/(app)/quotes/page.tsx +
+// QuotesView + actions.ts; PRs #276–#278). This store is NOT localStorage-backed
+// (see the F-1b note below — it wraps the quotes server actions with a reactive
+// in-memory cache) and is still the live source for the quote EDITOR
+// (QuoteBuilder, /quotes/new, /quotes/[id]) and GlobalSearch. Deleting or
+// "deprecating" it is out of scope until those editor surfaces are migrated;
+// just don't add new LIST-page consumers here.
+//
 // F-1b — quote store cutover: the public API (useQuotes / useQuote /
 // upsertQuote / getMergedQuotes / getQuoteById / resetOverrides) is preserved,
 // but the backing store is now the DB (via the quotes server actions) instead
