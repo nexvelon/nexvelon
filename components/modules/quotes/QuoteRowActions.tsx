@@ -45,7 +45,12 @@ export function QuoteRowActions({
   const canConvert =
     hasPermission(role, "quotes", "convert") &&
     quote.status === "Approved";
-  const canSend = quote.status === "Draft";
+  // QUOTES-2 — the Send item shows for any Draft, but is only enabled once a
+  // client AND site are set. Non-Draft statuses don't show it at all (status
+  // gate takes precedence). The server action re-validates, so this is UX, not
+  // the security boundary.
+  const isDraft = quote.status === "Draft";
+  const canSend = isDraft && !!quote.clientId && !!quote.siteId;
 
   return (
     <DropdownMenu>
@@ -62,8 +67,12 @@ export function QuoteRowActions({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        {canSend && (
-          <DropdownMenuItem onClick={() => onSend(quote)}>
+        {isDraft && (
+          <DropdownMenuItem
+            disabled={!canSend}
+            title={canSend ? undefined : "Add a client and site before sending."}
+            onClick={() => onSend(quote)}
+          >
             <Send className="mr-2 h-4 w-4" />
             Send to Client
           </DropdownMenuItem>

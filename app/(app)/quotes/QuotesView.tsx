@@ -25,7 +25,7 @@ import {
   type QuoteFilterValue,
 } from "@/components/modules/quotes/QuoteFilters";
 import { QuotesTable } from "@/components/modules/quotes/QuotesTable";
-import { upsertQuoteAction } from "./actions";
+import { sendQuoteAction, upsertQuoteAction } from "./actions";
 import { formatCurrency, businessDateISO } from "@/lib/format";
 import {
   newId,
@@ -143,18 +143,24 @@ export function QuotesView({
         });
         router.refresh();
       },
-      // QUOTES-2 will add the client/site guard here — for now the DB cutover
-      // preserves the existing (buggy) behavior: a Draft can be "sent" with no
-      // recipient and still reports success.
+      // QUOTES-2 — a Draft can only be sent once a client AND site are set.
+      // The UI already disables the menu item in that case; this is the second
+      // line of defense, and sendQuoteAction re-validates on the server (the
+      // real guard). No email is actually dispatched yet — the toast says so.
       onSend: async (q: Quote) => {
-        if (q.status !== "Draft") return;
-        const res = await upsertQuoteAction({ ...q, status: "Sent" });
+        if (q.status !== "Draft" || !q.clientId || !q.siteId) {
+          toast.error("Cannot send this quote", {
+            description: "A client and site must be selected first.",
+          });
+          return;
+        }
+        const res = await sendQuoteAction(q.id);
         if (!res.ok) {
           toast.error(`Couldn't send ${q.number}`, { description: res.error });
           return;
         }
-        toast.success(`${q.number} sent`, {
-          description: `Status updated to Sent. Client copy queued.`,
+        toast.success(`${q.number} marked as Sent`, {
+          description: "Status updated. Email delivery is not yet wired.",
         });
         router.refresh();
       },
