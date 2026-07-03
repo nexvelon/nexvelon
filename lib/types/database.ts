@@ -1006,6 +1006,10 @@ export interface DbVendor {
   // PARTS-4 (migration 0039) — purchasing fields.
   min_order_amount: number | null; // minimum / free-shipping threshold ($)
   excluded_parts: string[]; // part numbers this vendor does NOT carry (jsonb)
+  // PO-1 (migration 0076) — explicit sales-rep contact for PO delivery.
+  sales_rep_name: string | null;
+  sales_rep_email: string | null;
+  sales_rep_phone: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -1243,6 +1247,15 @@ export interface DbPurchaseOrder {
   reference: string | null;
   ship_to: string | null;
   notes: string | null;
+  // PO-1 (migration 0076) — PDF / tax / delivery / drop-ship fields.
+  issued_at: string | null;
+  sent_at: string | null;
+  sent_to_email: string | null;
+  ship_by_date: string | null;
+  terms: string | null;
+  site_id: string | null; // drop-ship destination site; NULL = ship to office
+  tax_rate: number | null; // e.g. 0.13
+  tax_amount: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -1275,6 +1288,8 @@ export interface DbPurchaseOrderLine {
   unit_cost: number;
   received_qty: number;
   line_no: number;
+  // PO-1 (migration 0076) — denormalized part-number snapshot for durable PDFs.
+  part_number: string | null;
   created_at: string;
   updated_at: string;
 }

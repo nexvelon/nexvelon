@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  buildPurchaseOrderPdfProps,
   createPurchaseOrder,
   deletePurchaseOrder,
   getLastVendorIdForProduct,
@@ -19,6 +20,7 @@ import {
   type PurchaseOrderWrite,
   type ReceiptInput,
 } from "@/lib/api/purchase-orders";
+import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
@@ -100,6 +102,21 @@ export async function listPurchaseOrdersAction(): Promise<
 > {
   try {
     return { ok: true, data: await getPurchaseOrders() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// PO-2 — assemble the props for the PO PDF preview. Gated on inventory:view
+// (a preview is a read of PO data the caller can already see); the UI restricts
+// the button itself to admins.
+export async function getPurchaseOrderPdfPropsAction(
+  id: string
+): Promise<ActionResult<PurchaseOrderDocumentProps>> {
+  try {
+    const gate = await requireInventory("view");
+    if (gate) return gate;
+    return { ok: true, data: await buildPurchaseOrderPdfProps(id) };
   } catch (e) {
     return fail(e);
   }

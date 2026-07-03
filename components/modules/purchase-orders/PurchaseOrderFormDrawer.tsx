@@ -6,7 +6,7 @@
 // status actions (issue / cancel / close / admin-reopen).
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -40,10 +40,13 @@ import {
   cancelPurchaseOrderAction,
   closePurchaseOrderAction,
   createPurchaseOrderAction,
+  getPurchaseOrderPdfPropsAction,
   issuePurchaseOrderAction,
   reopenPurchaseOrderAction,
   updatePurchaseOrderAction,
 } from "@/app/(app)/purchase-orders/actions";
+import { PurchaseOrderPdfPane } from "./PurchaseOrderPdfPane";
+import type { PurchaseOrderDocumentProps } from "./PurchaseOrderDocument";
 import {
   CategorySubcategoryFilter,
   matchesCatFilter,
@@ -129,6 +132,23 @@ export function PurchaseOrderFormDrawer({
   const editable = mode.kind === "create" || isEditableStatus(status);
   const { role } = useRole();
   const isAdmin = role === "Admin";
+
+  // PO-2 — PDF preview modal. Props are assembled server-side on demand (only
+  // meaningful for a persisted PO), then handed to the preview pane.
+  const [pdfProps, setPdfProps] = useState<PurchaseOrderDocumentProps | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handlePreview = async () => {
+    if (mode.kind !== "edit") return;
+    setPdfLoading(true);
+    const res = await getPurchaseOrderPdfPropsAction(mode.detail.header.id);
+    setPdfLoading(false);
+    if (!res.ok) {
+      toast.error("Couldn't build the PDF preview", { description: res.error });
+      return;
+    }
+    setPdfProps(res.data);
+  };
   const [receiving, setReceiving] = useState(false);
 
   const [vendorId, setVendorId] = useState(init?.header.vendor_id ?? "");
@@ -528,6 +548,19 @@ export function PurchaseOrderFormDrawer({
               Close
             </Button>
 
+            {/* Preview PDF (admin, persisted PO only) */}
+            {isEdit && isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreview}
+                disabled={busy || pdfLoading}
+              >
+                <FileText className="mr-1.5 h-4 w-4" />
+                {pdfLoading ? "Preparing…" : "Preview PDF"}
+              </Button>
+            )}
+
             {editable && (
               <Button type="button" onClick={handleSave} disabled={busy}>
                 {saving ? "Saving…" : isEdit ? "Save draft" : "Create draft"}
@@ -641,6 +674,20 @@ export function PurchaseOrderFormDrawer({
               {confirm?.cta}
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PO-2 — PDF preview modal (opens once props are assembled) */}
+      <Dialog open={!!pdfProps} onOpenChange={(o) => !o && setPdfProps(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Purchase Order PDF</DialogTitle>
+            <DialogDescription>
+              Preview of the vendor purchase order. Nothing is sent — emailing to
+              the vendor lands in a later step.
+            </DialogDescription>
+          </DialogHeader>
+          {pdfProps ? <PurchaseOrderPdfPane props={pdfProps} /> : null}
         </DialogContent>
       </Dialog>
     </Sheet>

@@ -9,6 +9,10 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessPONumber } from "@/lib/format";
 import { receiveStock } from "@/lib/api/products";
+import { getVendorById } from "@/lib/api/vendors";
+import { getSiteById } from "@/lib/api/clients";
+import { getQuoteTemplate } from "@/lib/company-profile";
+import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
 import type {
   DbPurchaseOrder,
   DbPurchaseOrderInsert,
@@ -625,4 +629,114 @@ async function insertLines(
   }));
   const { error } = await supabase.from("purchase_order_lines").insert(rows);
   if (error) throw new Error(`insertLines: ${error.message}`);
+}
+
+// PO-2 — assemble everything the PurchaseOrderDocument needs, from the DB.
+// Loads the PO (header + enriched lines), the full vendor (for sales-rep + full
+// address), and the drop-ship site when set; resolves opco branding from the
+// Integrated Solutions letterhead (company-profile). NULLs are tolerated — the
+// PDF renders empty lines rather than crashing.
+const ONTARIO_HST_RATE = 0.13; // Ontario default until issue snapshots tax_rate (PO-4)
+
+export async function buildPurchaseOrderPdfProps(
+  poId: string
+): Promise<PurchaseOrderDocumentProps> {
+  const detail = await getPurchaseOrderById(poId);
+  if (!detail) throw new Error("Purchase order not found");
+  const { header, lines } = detail;
+
+  const vendor = await getVendorById(header.vendor_id);
+
+  const t = getQuoteTemplate("integrated_solutions");
+  const opco: PurchaseOrderDocumentProps["opco"] = {
+    legal_name: t.legalName,
+    address_line1: t.address.line1,
+    address_line2: t.address.line2 || null,
+    city: t.address.city,
+    province: t.address.province,
+    postal_code: t.address.postalCode,
+    phone: t.phone,
+    email: t.email,
+    hst_number: t.hstNumber,
+    logoUrl: null, // no ERP logo asset yet — header renders the wordmark instead
+  };
+
+  // Ship-to: a drop-ship site when set, otherwise our own office.
+  let shipTo: PurchaseOrderDocumentProps["shipTo"];
+  if (header.site_id) {
+    const site = await getSiteById(header.site_id);
+    shipTo = {
+      kind: "site",
+      name: site?.name ?? "—",
+      address_line1: site?.address_line1 ?? null,
+      address_line2: site?.address_line2 ?? null,
+      city: site?.city ?? null,
+      province: site?.province ?? null,
+      postal_code: site?.postal_code ?? null,
+    };
+  } else {
+    shipTo = {
+      kind: "office",
+      name: t.legalName,
+      address_line1: t.address.line1,
+      address_line2: t.address.line2 || null,
+      city: t.address.city,
+      province: t.address.province,
+      postal_code: t.address.postalCode,
+    };
+  }
+
+  const outLines = lines.map((l) => {
+    const lineTotal = Number(l.quantity) * Number(l.unit_cost);
+    return {
+      line_no: l.line_no,
+      // Denormalized snapshot first (durable); fall back to the product SKU join.
+      part_number: l.part_number ?? l.product_sku ?? null,
+      description: l.description ?? l.product_name ?? "",
+      quantity: Number(l.quantity),
+      unit_cost: Number(l.unit_cost),
+      lineTotal,
+    };
+  });
+  const subtotal = outLines.reduce((sum, l) => sum + l.lineTotal, 0);
+
+  // Tax: use the issue-time snapshot when present; else default to Ontario HST
+  // so a draft preview shows a realistic grand total. Real snapshot lands at
+  // issue time (PO-4).
+  const taxRate = header.tax_rate != null ? Number(header.tax_rate) : ONTARIO_HST_RATE;
+  const taxAmount =
+    header.tax_amount != null ? Number(header.tax_amount) : subtotal * taxRate;
+
+  return {
+    po: {
+      id: header.id,
+      po_number: header.po_number,
+      order_date: header.order_date ?? header.created_at,
+      expected_date: header.expected_date,
+      ship_by_date: header.ship_by_date,
+      terms: header.terms,
+      notes: header.notes,
+      tax_rate: taxRate,
+      tax_amount: taxAmount,
+      status: header.status,
+    },
+    vendor: {
+      name: vendor?.name ?? header.vendor_name,
+      address_line1: vendor?.address_line1 ?? null,
+      address_line2: vendor?.address_line2 ?? null,
+      city: vendor?.city ?? null,
+      province: vendor?.province ?? null,
+      postal_code: vendor?.postal_code ?? null,
+      country: vendor?.country ?? null,
+      // Prefer the explicit sales rep; fall back to the vendor's generic contact.
+      sales_rep_name: vendor?.sales_rep_name ?? vendor?.contact_name ?? null,
+      sales_rep_email: vendor?.sales_rep_email ?? vendor?.email ?? null,
+      sales_rep_phone: vendor?.sales_rep_phone ?? vendor?.phone ?? null,
+      payment_terms: vendor?.payment_terms ?? null,
+    },
+    shipTo,
+    lines: outLines,
+    subtotal,
+    opco,
+  };
 }
