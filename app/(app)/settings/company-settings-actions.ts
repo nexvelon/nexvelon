@@ -17,6 +17,12 @@ import {
   type TierLevel,
 } from "@/lib/api/company-settings";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import {
+  getPoSenderEmail,
+  getPoSenderName,
+  setPoSenderEmail,
+  setPoSenderName,
+} from "@/lib/settings/po-sender";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -41,6 +47,44 @@ async function requireAdmin(): Promise<
     return { ok: false, error: "Your account is not active." };
   if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
   return { ok: true };
+}
+
+// PO-3 — the "From" address used when emailing purchase orders to vendors.
+// Read open (like the other getters); write is admin-gated. Mirrors
+// setDefaultTermsAction; settings_audit_log is not wired here (the generic
+// key-value setting panes don't audit — that surface is the T&C/LegalDoc editor
+// via lib/api/settings-audit.ts).
+export async function getPoSenderAction(): Promise<
+  ActionResult<{ email: string; name: string }>
+> {
+  try {
+    const [email, name] = await Promise.all([
+      getPoSenderEmail(),
+      getPoSenderName(),
+    ]);
+    return { ok: true, data: { email, name } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updatePoSenderAction(input: {
+  email: string;
+  name: string;
+}): Promise<ActionResult<{ email: string; name: string }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    await setPoSenderEmail(input.email); // throws on invalid email
+    await setPoSenderName(input.name);
+    revalidatePath("/settings");
+    return {
+      ok: true,
+      data: { email: input.email.trim(), name: input.name.trim() },
+    };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 export async function getDefaultTermsAction(): Promise<

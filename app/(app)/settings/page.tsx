@@ -13,6 +13,7 @@ import {
   FolderKanban,
   Hash,
   Lock,
+  Mail,
   Palette,
   Plug,
   Receipt,
@@ -32,6 +33,7 @@ import { LocationsPane } from "@/components/modules/settings/LocationsPane";
 import { CategoriesPane } from "@/components/modules/settings/CategoriesPane";
 import { TechsPane } from "@/components/modules/settings/TechsPane";
 import { LabourPane } from "@/components/modules/settings/LabourPane";
+import { PurchaseOrderEmailPane } from "@/components/modules/settings/PurchaseOrderEmailPane";
 import {
   ApiWebhooks,
   AuditCompliance,
@@ -56,6 +58,7 @@ interface Section {
   label: string;
   description: string;
   icon: LucideIcon;
+  adminOnly?: boolean;
 }
 
 const SECTIONS: Section[] = [
@@ -74,6 +77,7 @@ const SECTIONS: Section[] = [
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
   { key: "integrations", label: "Integrations", description: "QuickBooks, Xero, Stripe, Twilio, Genetec, Avigilon, ICT…", icon: Plug },
   { key: "vendors", label: "Vendors", description: "Vendor directory mirroring the inventory module.", icon: Building2 },
+  { key: "po-email", label: "Purchase Order Email", description: "The sender address used when emailing purchase orders to vendors.", icon: Mail, adminOnly: true },
   { key: "backups", label: "Backups & Data", description: "Cloud, local Mac folder, NAS, S3 — schedule, history, restore.", icon: Database },
   { key: "notifications", label: "Notifications", description: "Email/SMS preferences per event type.", icon: Bell },
   { key: "audit", label: "Audit & Compliance", description: "Audit log, retention policy, GDPR/PIPEDA export.", icon: ShieldCheck },
@@ -101,7 +105,11 @@ export default function SettingsPage() {
     );
   }
 
-  const activeSection = SECTIONS.find((s) => s.key === active) ?? SECTIONS[0];
+  // PO-3 — admin-only sections (e.g. Purchase Order Email) are hidden from the
+  // sidebar for non-admins; the underlying write action is requireAdmin-gated too.
+  const isAdmin = role === "Admin";
+  const visibleSections = SECTIONS.filter((s) => !s.adminOnly || isAdmin);
+  const activeSection = visibleSections.find((s) => s.key === active) ?? visibleSections[0];
 
   return (
     <div className="space-y-6">
@@ -114,7 +122,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
         <aside className="bg-card sticky top-32 self-start rounded-lg border border-[var(--border)] p-2 shadow-sm">
           <ul className="space-y-0.5">
-            {SECTIONS.map((s) => {
+            {visibleSections.map((s) => {
               const Icon = s.icon;
               const isActive = active === s.key;
               return (
@@ -163,6 +171,7 @@ export default function SettingsPage() {
             {active === "locations" && <LocationsPane />}
             {active === "techs" && <TechsPane />}
             {active === "labour" && <LabourPane />}
+            {active === "po-email" && isAdmin && <PurchaseOrderEmailPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
             {active === "tax" && <TaxCurrency />}
