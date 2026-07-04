@@ -915,3 +915,36 @@ export async function setBatchRowQuantity(
 
   return { delta, destroyedRows: newQty === 0 ? 1 : 0 };
 }
+
+// INV-1b — a GLOBAL recent-movements feed for the Transfers tab (the existing
+// listMovementsByProduct is per-product). stock_movements.product_id is NOT NULL
+// and carries a direct FK to inventory_products, so we join the product straight
+// off the movement (no need to route through the nullable stock_id). from_label
+// / to_label are already snapshots, so no location re-resolution is needed.
+export interface StockMovementRow extends DbStockMovement {
+  product_name: string | null;
+  product_sku: string | null;
+}
+
+export async function listRecentMovements(options?: {
+  limit?: number;
+  productId?: string;
+}): Promise<StockMovementRow[]> {
+  const supabase = await db();
+  let query = supabase
+    .from("stock_movements")
+    .select("*, product:inventory_products(name, sku)")
+    .order("created_at", { ascending: false })
+    .limit(options?.limit ?? 200);
+  if (options?.productId) query = query.eq("product_id", options.productId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`listRecentMovements: ${error.message}`);
+
+  type Row = DbStockMovement & { product: { name: string; sku: string } | null };
+  return ((data ?? []) as unknown as Row[]).map(({ product, ...rest }) => ({
+    ...rest,
+    product_name: product?.name ?? null,
+    product_sku: product?.sku ?? null,
+  }));
+}

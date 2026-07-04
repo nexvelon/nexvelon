@@ -1,28 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { format, parseISO } from "date-fns";
-import { Plus } from "lucide-react";
-import { toast } from "sonner";
+// INV-1b — real DB. Renders the global stock_movements ledger (via
+// listRecentMovements). from_label / to_label are snapshots taken at move time,
+// so they survive later renames/deletes. Real transfers happen on the product
+// detail page (MoveAssignDialog); this is a read-only feed.
+
+import { useMemo, useState } from "react";
+import { ArrowRight, Search } from "lucide-react";
+import { formatDistanceToNow, parseISO } from "date-fns";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -31,160 +18,124 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  WAREHOUSE_LOCATIONS,
-  transfers as SEED,
-  type StockTransfer,
-} from "@/lib/inventory-data";
-import { users } from "@/lib/mock-data/users";
-import { cn } from "@/lib/utils";
-import type { WarehouseLocation } from "@/lib/types";
+import type { StockMovementRow } from "@/lib/api/stock-movements";
 
-export function TransfersTab() {
-  const [list, setList] = useState<StockTransfer[]>(SEED);
-  const [open, setOpen] = useState(false);
-  const [from, setFrom] = useState<WarehouseLocation>("Main Warehouse");
-  const [to, setTo] = useState<WarehouseLocation>("Truck 1");
-  const [items, setItems] = useState<number>(4);
+function relative(iso: string): string {
+  try {
+    return formatDistanceToNow(parseISO(iso), { addSuffix: true });
+  } catch {
+    return iso;
+  }
+}
 
-  const userById = new Map(users.map((u) => [u.id, u]));
+export function TransfersTab({ movements }: { movements: StockMovementRow[] }) {
+  const [search, setSearch] = useState("");
 
-  const create = () => {
-    const next: StockTransfer = {
-      id: `tr-${Date.now()}`,
-      number: `TR-2026-${(SEED.length + list.length - SEED.length + 46).toString().padStart(4, "0")}`,
-      from,
-      to,
-      itemCount: items,
-      status: "Draft",
-      date: new Date().toISOString().slice(0, 10),
-      initiatedById: "u-001",
-    };
-    setList([next, ...list]);
-    setOpen(false);
-    toast.success(`${next.number} created`, { description: `${items} items, ${from} → ${to}.` });
-  };
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return movements;
+    return movements.filter((m) =>
+      [
+        m.product_name,
+        m.product_sku,
+        m.from_label,
+        m.to_label,
+        m.moved_by_name,
+        m.note,
+      ]
+        .filter(Boolean)
+        .some((f) => (f as string).toLowerCase().includes(q))
+    );
+  }, [movements, search]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-muted-foreground text-xs">
-          <span className="text-brand-charcoal font-semibold">{list.length}</span> transfers across {WAREHOUSE_LOCATIONS.length} locations.
+          <span className="text-brand-charcoal font-semibold">
+            {movements.length}
+          </span>{" "}
+          recent stock movements. Move stock from a part&apos;s detail page.
         </p>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          New Transfer
-        </Button>
+        <div className="relative w-64">
+          <Search className="text-muted-foreground absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
+          <Input
+            placeholder="Search product, location, person…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
       </div>
 
       <Card className="bg-card overflow-hidden p-0 shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-[11px] uppercase">Transfer #</TableHead>
-              <TableHead className="text-[11px] uppercase">From</TableHead>
-              <TableHead className="text-[11px] uppercase">To</TableHead>
-              <TableHead className="text-right text-[11px] uppercase">Items</TableHead>
-              <TableHead className="text-[11px] uppercase">Status</TableHead>
-              <TableHead className="text-[11px] uppercase">Date</TableHead>
-              <TableHead className="text-[11px] uppercase">Initiated By</TableHead>
-              <TableHead className="text-[11px] uppercase">Notes</TableHead>
+              <TableHead className="text-[11px] uppercase">When</TableHead>
+              <TableHead className="text-[11px] uppercase">Product</TableHead>
+              <TableHead className="text-[11px] uppercase">From → To</TableHead>
+              <TableHead className="text-right text-[11px] uppercase">Qty</TableHead>
+              <TableHead className="text-[11px] uppercase">By</TableHead>
+              <TableHead className="text-[11px] uppercase">Note</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {list.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell className="text-brand-navy font-mono text-xs font-semibold">
-                  {t.number}
-                </TableCell>
-                <TableCell className="text-xs">{t.from}</TableCell>
-                <TableCell className="text-xs">{t.to}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{t.itemCount}</TableCell>
-                <TableCell>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      t.status === "Received"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : t.status === "In Transit"
-                          ? "bg-brand-gold/15 text-amber-800"
-                          : "bg-slate-100 text-slate-600"
-                    )}
-                  >
-                    {t.status}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs tabular-nums">
-                  {format(parseISO(t.date), "MMM d, yyyy")}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {userById.get(t.initiatedById)?.name ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground max-w-[280px] truncate text-[11px]">
-                  {t.notes ?? "—"}
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="text-muted-foreground py-10 text-center text-sm"
+                >
+                  {movements.length === 0
+                    ? "No stock movements yet."
+                    : "No movements match your search."}
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filtered.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell
+                    className="text-muted-foreground text-xs"
+                    title={m.created_at}
+                  >
+                    {relative(m.created_at)}
+                  </TableCell>
+                  <TableCell className="text-brand-charcoal text-xs">
+                    {m.product_sku ? (
+                      <span className="text-brand-navy font-mono">
+                        {m.product_sku}
+                      </span>
+                    ) : null}
+                    {m.product_sku ? " · " : ""}
+                    {m.product_name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="text-brand-charcoal/80">
+                        {m.from_label ?? "—"}
+                      </span>
+                      <ArrowRight className="text-muted-foreground h-3 w-3" />
+                      <span className="text-brand-charcoal font-medium">
+                        {m.to_label ?? "—"}
+                      </span>
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">
+                    {Number(m.quantity)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {m.moved_by_name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[220px] truncate text-xs">
+                    {m.note ?? "—"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-serif">New Transfer</DialogTitle>
-            <DialogDescription>
-              Move stock between warehouse and field trucks. The transfer
-              starts as a Draft until confirmed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-muted-foreground text-xs">From</Label>
-              <Select value={from} onValueChange={(v) => setFrom((v ?? from) as WarehouseLocation)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WAREHOUSE_LOCATIONS.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">To</Label>
-              <Select value={to} onValueChange={(v) => setTo((v ?? to) as WarehouseLocation)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WAREHOUSE_LOCATIONS.filter((l) => l !== from).map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Item count</Label>
-              <Input
-                type="number"
-                min={1}
-                value={items}
-                onChange={(e) => setItems(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={create}>Create transfer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
