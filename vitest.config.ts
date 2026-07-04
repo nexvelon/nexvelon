@@ -6,7 +6,12 @@ import { resolve } from "node:path";
 // esbuild (automatic runtime) so no babel/vite-react plugin is needed.
 export default defineConfig({
   resolve: {
-    alias: { "@": resolve(process.cwd()) },
+    alias: {
+      "@": resolve(process.cwd()),
+      // `server-only` isn't in node_modules (Next provides it); stub it so
+      // server-only modules can be imported + unit-tested.
+      "server-only": resolve(process.cwd(), "vitest.stubs/server-only.ts"),
+    },
   },
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
   // Override the app's Tailwind v4 PostCSS pipeline with an empty one — tests

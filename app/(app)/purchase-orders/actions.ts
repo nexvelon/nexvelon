@@ -14,6 +14,7 @@ import {
   getPurchaseOrders,
   receivePurchaseOrderLines,
   setPurchaseOrderStatus,
+  stampPurchaseOrder,
   updatePurchaseOrder,
   type PurchaseOrderDetail,
   type PurchaseOrderListRow,
@@ -21,6 +22,11 @@ import {
   type ReceiptInput,
 } from "@/lib/api/purchase-orders";
 import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
+import { getVendorById } from "@/lib/api/vendors";
+import { getPoSenderFrom } from "@/lib/settings/po-sender";
+import { renderPurchaseOrderPdf } from "@/lib/pdf/render-po";
+import { uploadPoPdf } from "@/lib/storage/po-pdfs";
+import { sendPurchaseOrderEmail } from "@/lib/auth/email";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
@@ -249,14 +255,122 @@ async function transitionStatus(
   }
 }
 
-/** draft → issued. Rejected when the PO has no lines. */
+// PO-4 — success may carry a non-fatal warning (PDF/upload/email best-effort).
+export type IssueActionResult =
+  | { ok: true; data: { id: string }; warning?: string }
+  | { ok: false; error: string };
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * PO-4 — draft → issued, then (best-effort) render the PO PDF, upload it to
+ * Storage, and email it to the vendor's sales rep from the configured sender.
+ *
+ * Ordering guarantees:
+ *   1. Prechecks (status / lines / vendor recipient) run BEFORE any write, so a
+ *      failed check has zero side effects.
+ *   2. The status flip (+ issued_at) is the atomic commit — if it throws,
+ *      nothing else runs.
+ *   3. PDF render / upload / email are additive: a failure never unwinds the
+ *      issue; it's surfaced as a warning so the admin knows to retry.
+ */
 export async function issuePurchaseOrderAction(
   id: string
-): Promise<ActionResult<{ id: string }>> {
-  return transitionStatus(id, "issued", {
-    precheck: (d) =>
-      d.lines.length === 0 ? "Add at least one line before issuing." : null,
-  });
+): Promise<IssueActionResult> {
+  try {
+    const denied = await requireInventory("edit");
+    if (denied) return denied;
+
+    const detail = await getPurchaseOrderById(id);
+    if (!detail) return { ok: false, error: "Purchase order not found" };
+    if (detail.header.status !== "draft")
+      return { ok: false, error: "Only draft purchase orders can be issued." };
+    if (detail.lines.length === 0)
+      return { ok: false, error: "Add at least one line before issuing." };
+
+    // Recipient must exist BEFORE any state change.
+    const vendor = await getVendorById(detail.header.vendor_id);
+    if (!vendor) return { ok: false, error: "Vendor not found." };
+    const recipientEmail = vendor.sales_rep_email ?? vendor.email;
+    if (!recipientEmail) {
+      return {
+        ok: false,
+        error:
+          "This vendor has no sales rep email or general email. Add one before issuing.",
+      };
+    }
+
+    // Atomic gate: transition + stamp issued_at (validates the transition map).
+    const now = new Date().toISOString();
+    await setPurchaseOrderStatus(id, "issued", { issued_at: now });
+
+    // Best-effort artifacts.
+    const bestEffortErrors: string[] = [];
+    let pdfPath: string | null = null;
+    let emailId: string | null = null;
+
+    try {
+      const props = await buildPurchaseOrderPdfProps(id);
+      const pdf = await renderPurchaseOrderPdf(props);
+
+      try {
+        const up = await uploadPoPdf(id, detail.header.po_number, pdf);
+        pdfPath = up.path;
+      } catch (err) {
+        bestEffortErrors.push(`PDF upload failed: ${errMsg(err)}`);
+      }
+
+      try {
+        const from = await getPoSenderFrom();
+        const sent = await sendPurchaseOrderEmail({
+          to: recipientEmail,
+          from,
+          poNumber: detail.header.po_number,
+          vendorName: vendor.name,
+          salesRepName: vendor.sales_rep_name,
+          pdfBuffer: pdf,
+          pdfFilename: `PO_${detail.header.po_number}.pdf`,
+        });
+        emailId = sent.id;
+        await stampPurchaseOrder(id, {
+          sent_at: new Date().toISOString(),
+          sent_to_email: recipientEmail,
+        });
+      } catch (err) {
+        bestEffortErrors.push(`Email send failed: ${errMsg(err)}`);
+      }
+    } catch (err) {
+      bestEffortErrors.push(`PDF render failed: ${errMsg(err)}`);
+    }
+
+    // Audit — persists now that PO-1 widened the activity_log entity_type CHECK.
+    // activity_log.changes is a flat map of column → {from,to}, so the issue
+    // metadata is encoded as from:null → to:<value> entries.
+    await logActivity("purchase_order", id, "update", {
+      status: { from: "draft", to: "issued" },
+      emailed_to: { from: null, to: emailId ? recipientEmail : null },
+      pdf_stored: { from: null, to: pdfPath },
+      best_effort_errors: {
+        from: null,
+        to: bestEffortErrors.length ? bestEffortErrors.join("; ") : null,
+      },
+    });
+
+    revalidatePath("/purchase-orders");
+
+    if (bestEffortErrors.length) {
+      return {
+        ok: true,
+        data: { id },
+        warning: `Issued, but: ${bestEffortErrors.join("; ")}`,
+      };
+    }
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 /** → cancelled (from draft / issued / partially_received). */
