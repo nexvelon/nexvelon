@@ -46,6 +46,8 @@ import { buildPOs } from "@/lib/project-data";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
+import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
+import type { DbVendor, DbInventoryCategory } from "@/lib/types/database";
 
 // INV-6: code-split the Reports tab so its recharts dependency only loads when
 // the operator opens Reports — keeps the default (Stock) inventory view light.
@@ -73,7 +75,17 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-export function InventoryPageClient({ products }: { products: Product[] }) {
+export function InventoryPageClient({
+  products,
+  purchaseOrders,
+  vendors,
+  categories,
+}: {
+  products: Product[];
+  purchaseOrders: PurchaseOrderListRow[];
+  vendors: DbVendor[];
+  categories: DbInventoryCategory[];
+}) {
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
   const [tab, setTab] = useState<TabKey>("stock");
@@ -178,9 +190,11 @@ export function InventoryPageClient({ products }: { products: Product[] }) {
       {tab === "stock" && <StockTab products={products} />}
       {tab === "allocations" && <AllocationsTab />}
       {tab === "transfers" && <TransfersTab />}
-      {tab === "pos" && <PurchaseOrdersTab />}
-      {tab === "vendors" && <VendorsTab />}
-      {tab === "categories" && <CategoriesTab />}
+      {tab === "pos" && <PurchaseOrdersTab purchaseOrders={purchaseOrders} />}
+      {tab === "vendors" && <VendorsTab vendors={vendors} />}
+      {tab === "categories" && (
+        <CategoriesTab categories={categories} products={products} />
+      )}
       {tab === "reports" && <ReportsTab />}
     </div>
   );
