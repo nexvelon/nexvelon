@@ -36,18 +36,13 @@ import { VendorsTab } from "@/components/modules/inventory/VendorsTab";
 import { CategoriesTab } from "@/components/modules/inventory/CategoriesTab";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
-import {
-  computeInventoryStats,
-  isOpenPO,
-  standalonePOs,
-} from "@/lib/inventory-data";
-import { projects } from "@/lib/mock-data/projects";
-import { buildPOs } from "@/lib/project-data";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
 import type { DbVendor, DbInventoryCategory } from "@/lib/types/database";
+import type { StockMovementRow } from "@/lib/api/stock-movements";
+import type { AllocationsByProject } from "@/lib/api/inventory-allocations";
 
 // INV-6: code-split the Reports tab so its recharts dependency only loads when
 // the operator opens Reports — keeps the default (Stock) inventory view light.
@@ -80,24 +75,52 @@ export function InventoryPageClient({
   purchaseOrders,
   vendors,
   categories,
+  movements,
+  allocations,
 }: {
   products: Product[];
   purchaseOrders: PurchaseOrderListRow[];
   vendors: DbVendor[];
   categories: DbInventoryCategory[];
+  movements: StockMovementRow[];
+  allocations: AllocationsByProject[];
 }) {
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
   const [tab, setTab] = useState<TabKey>("stock");
 
+  // INV-1b — all stat cards now compute from real data (were partly mock).
   const stats = useMemo(() => {
-    const allPOs = [
-      ...projects.flatMap((p) => buildPOs(p)),
-      ...standalonePOs,
-    ];
-    const openCount = allPOs.filter((po) => isOpenPO(po.status)).length;
-    return computeInventoryStats(products, openCount);
-  }, [products]);
+    const stockValue = products.reduce(
+      (s, p) => s + p.stock * (p.avgCost ?? p.cost),
+      0
+    );
+    const lowStock = products.filter((p) => p.stock <= p.reorderPoint).length;
+    // Open PO = not yet closed/cancelled/received (still awaiting fulfilment).
+    const openPOs = purchaseOrders.filter(
+      (po) =>
+        po.status === "draft" ||
+        po.status === "issued" ||
+        po.status === "partially_received"
+    ).length;
+    // "Items Allocated" = total units currently sitting on project cost centers.
+    const itemsAllocated = allocations.reduce(
+      (sum, proj) =>
+        sum +
+        proj.costCenters.reduce(
+          (cs, cc) => cs + cc.stockRows.reduce((rs, r) => rs + r.quantity, 0),
+          0
+        ),
+      0
+    );
+    return {
+      stockValue,
+      skusTracked: products.length,
+      lowStock,
+      itemsAllocated,
+      openPOs,
+    };
+  }, [products, purchaseOrders, allocations]);
 
   return (
     <div className="space-y-6">
@@ -188,8 +211,8 @@ export function InventoryPageClient({
       </nav>
 
       {tab === "stock" && <StockTab products={products} />}
-      {tab === "allocations" && <AllocationsTab />}
-      {tab === "transfers" && <TransfersTab />}
+      {tab === "allocations" && <AllocationsTab allocations={allocations} />}
+      {tab === "transfers" && <TransfersTab movements={movements} />}
       {tab === "pos" && <PurchaseOrdersTab purchaseOrders={purchaseOrders} />}
       {tab === "vendors" && <VendorsTab vendors={vendors} />}
       {tab === "categories" && (
