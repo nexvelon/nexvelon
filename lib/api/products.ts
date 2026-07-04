@@ -709,7 +709,7 @@ export async function consumeStock(
   stockUnitId: string,
   qty: number,
   opts: { ref?: string } = {}
-): Promise<{ consumedRowId: string }> {
+): Promise<{ consumedRowId: string; serialNumber: string | null }> {
   if (!Number.isInteger(qty) || qty < 1) {
     throw new Error("consumeStock: qty must be a positive integer.");
   }
@@ -745,7 +745,7 @@ export async function consumeStock(
       .eq("id", stockUnitId)
       .eq("status", "in_stock");
     if (error) throw new Error(`consumeStock: ${error.message}`);
-    return { consumedRowId: stockUnitId };
+    return { consumedRowId: stockUnitId, serialNumber: u.serial_number };
   }
 
   // Partial — reduce the source lot, then insert a discrete consumed row.
@@ -778,7 +778,9 @@ export async function consumeStock(
     .select("id")
     .single();
   if (insErr) throw new Error(`consumeStock/insert: ${insErr.message}`);
-  return { consumedRowId: (ins as { id: string }).id };
+  // A partial consume only happens on bulk lots (serialized units are qty 1 →
+  // full consume above), so the split-off consumed row carries no serial.
+  return { consumedRowId: (ins as { id: string }).id, serialNumber: null };
 }
 
 // ----------------------------------------------------------------------------

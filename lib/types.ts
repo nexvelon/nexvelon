@@ -186,6 +186,10 @@ export interface BuilderLineItem {
   // presence marks the line committed — guards against double-decrement. Lives
   // in the quote jsonb blob; forward-only (no auto-return).
   committedStockId?: string;
+  // INV-2: serial number snapshot, captured at commit time when the committed
+  // stock unit is a serialized part (null/absent for bulk lots). Stored in the
+  // quote jsonb (no schema change) and rendered on the quote document/PDF.
+  serialNumber?: string;
   // QUOTE-LABOUR: optional labour metadata. PRESENCE of this object marks a line
   // as a managed labour line (the line still carries type "labor"); its absence
   // means a plain part/service/misc line that renders exactly as before. All

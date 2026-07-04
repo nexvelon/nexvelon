@@ -13,7 +13,7 @@
 // site-allocated rows still display their site name (read-only) and can still
 // be returned to stock. unit_cost is gated behind inventory:viewCost.
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
@@ -96,6 +96,7 @@ export function ProductDetailClient({
   currentLabels,
   invoices,
   categoryPath,
+  highlightStockId,
 }: {
   product: DbInventoryProduct;
   stock: DbInventoryStock[];
@@ -108,6 +109,8 @@ export function ProductDetailClient({
   // POLISH-12 — resolved category-tree path (root→leaf names); [] when the part
   // has no category_id (legacy-only or uncategorized).
   categoryPath: string[];
+  // INV-2: stock id to scroll to + pulse (from the serial-search deep link).
+  highlightStockId?: string | null;
 }) {
   const router = useRouter();
   const { role } = useRole();
@@ -175,6 +178,32 @@ export function ProductDetailClient({
   const [editingUnit, setEditingUnit] = useState<DbInventoryStock | null>(null);
   const toggleCost = (key: string) =>
     setExpandedCosts((s) => ({ ...s, [key]: !s[key] }));
+
+  // INV-2 — serial-search deep link. Expand the cost group holding the target
+  // unit, scroll it into view, and pulse it briefly. `highlightActive` drives
+  // the row styling and self-clears after the pulse.
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
+  const [highlightActive, setHighlightActive] = useState<boolean>(
+    !!highlightStockId
+  );
+  useEffect(() => {
+    if (!highlightStockId) return;
+    const group = costGroups.find((g) =>
+      g.units.some((u) => u.id === highlightStockId)
+    );
+    if (group) {
+      setExpandedCosts((s) => ({ ...s, [String(group.unitCost)]: true }));
+    }
+    setHighlightActive(true);
+  }, [highlightStockId, costGroups]);
+  useEffect(() => {
+    if (!highlightStockId || !highlightActive) return;
+    const el = highlightRowRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setHighlightActive(false), 2600);
+    return () => clearTimeout(t);
+  }, [highlightStockId, highlightActive, expandedCosts]);
 
   // FIX-BATCH-O: group rows by their receive batch (one intake = one batch).
   const batches = useMemo(() => {
@@ -611,8 +640,19 @@ export function ProductDetailClient({
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {g.units.map((s) => (
-                                  <TableRow key={s.id}>
+                                {g.units.map((s) => {
+                                  const isHighlight = s.id === highlightStockId;
+                                  return (
+                                  <TableRow
+                                    key={s.id}
+                                    ref={isHighlight ? highlightRowRef : undefined}
+                                    data-stock-id={s.id}
+                                    className={
+                                      isHighlight && highlightActive
+                                        ? "bg-brand-gold/10 ring-brand-gold ring-2 ring-inset transition-colors"
+                                        : "transition-colors"
+                                    }
+                                  >
                                     <TableCell className="font-mono text-xs">
                                       {s.serial_number ?? "—"}
                                     </TableCell>
@@ -846,7 +886,8 @@ export function ProductDetailClient({
                                       </DropdownMenu>
                                     </TableCell>
                                   </TableRow>
-                                ))}
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </div>

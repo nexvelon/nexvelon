@@ -19,10 +19,15 @@ export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  // INV-2: ?highlight=<stockId> deep-link from the serial search — scrolls to
+  // and pulses that unit in the stock table.
+  searchParams: Promise<{ highlight?: string }>;
 }) {
   const { id } = await params;
+  const { highlight } = await searchParams;
   const product = await getProductRowById(id);
 
   if (!product) {
@@ -71,6 +76,7 @@ export default async function ProductDetailPage({
       currentLabels={currentLabels}
       invoices={invoices}
       categoryPath={categoryPath}
+      highlightStockId={highlight ?? null}
     />
   );
 }
