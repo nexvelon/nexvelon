@@ -354,7 +354,10 @@ export async function updatePurchaseOrder(
  */
 export async function setPurchaseOrderStatus(
   id: string,
-  nextStatus: DbPurchaseOrderStatus
+  nextStatus: DbPurchaseOrderStatus,
+  // PO-4 — optional extra columns stamped atomically with the transition
+  // (e.g. { issued_at } on draft→issued). Existing callers pass nothing.
+  extra: Partial<DbPurchaseOrder> = {}
 ): Promise<DbPurchaseOrder> {
   const supabase = await db();
 
@@ -379,12 +382,27 @@ export async function setPurchaseOrderStatus(
   } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("purchase_orders")
-    .update({ status: nextStatus, updated_by: user?.id ?? null })
+    .update({ ...extra, status: nextStatus, updated_by: user?.id ?? null })
     .eq("id", id)
     .select("*")
     .single();
   if (error) throw new Error(`setPurchaseOrderStatus: ${error.message}`);
   return data as DbPurchaseOrder;
+}
+
+// PO-4 — patch a few header columns without touching status or the line editor
+// (updatePurchaseOrder does a full header+lines replace). Used to stamp
+// sent_at / sent_to_email after the vendor email goes out.
+export async function stampPurchaseOrder(
+  id: string,
+  patch: Partial<DbPurchaseOrder>
+): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("purchase_orders")
+    .update(patch)
+    .eq("id", id);
+  if (error) throw new Error(`stampPurchaseOrder: ${error.message}`);
 }
 
 // PO-4 — one receipt against one PO line.

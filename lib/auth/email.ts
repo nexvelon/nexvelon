@@ -979,3 +979,60 @@ export async function sendTierChangedEmail(opts: {
   if (result.error)
     throw new Error(`sendTierChangedEmail: ${result.error.message}`);
 }
+
+// PO-4 — email an issued purchase order (PDF attached) to the vendor's sales
+// rep. `from` is resolved by the caller from the configurable po_sender setting
+// (getPoSenderFrom); the branded shell matches the other Nexvelon mail.
+export async function sendPurchaseOrderEmail(params: {
+  to: string;
+  from: string;
+  poNumber: string;
+  vendorName: string;
+  salesRepName: string | null;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}): Promise<{ id: string | null }> {
+  const greetName = params.salesRepName ?? params.vendorName;
+  const subject = `Purchase Order ${params.poNumber} from Nexvelon Integrated Solutions`;
+
+  const bodyHtml = letterParagraphs([
+    `Hello ${greetName},`,
+    `Please find attached Purchase Order ${params.poNumber} from Nexvelon Integrated Solutions Inc.`,
+    "If you have any questions, please reply to this email.",
+  ]);
+
+  const html = emailShell({
+    eyebrow: "PURCHASE ORDER",
+    headline: `Purchase Order ${params.poNumber}`,
+    bodyHtml,
+    signatureItalic: "If you have any questions, please reply to this email.",
+    signatureGroup: "Nexvelon Integrated Solutions",
+    signatureSubline: "PURCHASE ORDER",
+    outerNote: outerNoteFor("This purchase order was sent to", params.to),
+  });
+
+  const text = [
+    `Purchase Order ${params.poNumber}`,
+    "",
+    `Hello ${greetName},`,
+    "",
+    `Please find attached Purchase Order ${params.poNumber} from Nexvelon Integrated Solutions Inc.`,
+    "",
+    "If you have any questions, please reply to this email.",
+    "",
+    "— Nexvelon Integrated Solutions",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: params.from,
+    to: params.to,
+    subject,
+    html,
+    text,
+    attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+  });
+  if (result.error)
+    throw new Error(`sendPurchaseOrderEmail: ${result.error.message}`);
+  return { id: result.data?.id ?? null };
+}

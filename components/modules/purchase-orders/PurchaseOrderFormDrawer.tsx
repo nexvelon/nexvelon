@@ -277,7 +277,14 @@ export function PurchaseOrderFormDrawer({
     const res = await issuePurchaseOrderAction(r.id);
     setWorking(false);
     if (res.ok) {
-      toast.success("Purchase order issued");
+      // PO-4 — best-effort PDF/email may have partially failed; surface it.
+      if ("warning" in res && res.warning) {
+        toast.warning("Purchase order issued with warnings", {
+          description: res.warning,
+        });
+      } else {
+        toast.success("Purchase order issued and emailed to the vendor");
+      }
       onSaved();
       onClose();
     } else {
