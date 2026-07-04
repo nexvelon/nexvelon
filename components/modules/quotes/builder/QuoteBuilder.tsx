@@ -935,6 +935,9 @@ export function QuoteBuilder({
     let committed = 0;
     const errors: string[] = [];
     const committedFor: Record<string, string> = {}; // lineId -> stockUnitId
+    // INV-2: lineId -> serial number captured from the committed unit (serialized
+    // parts only). Snapshotted onto the line so it renders on the quote/PDF.
+    const serialFor: Record<string, string> = {};
 
     for (const sec of sections) {
       for (const it of sec.items) {
@@ -950,18 +953,23 @@ export function QuoteBuilder({
         if (res.ok) {
           committed++;
           committedFor[it.id] = it.stockUnitId;
+          if (res.data.serialNumber) serialFor[it.id] = res.data.serialNumber;
         } else {
           errors.push(`${it.sku ?? it.name}: ${res.error}`);
         }
       }
     }
 
-    // Apply committedStockId markers to the sections.
+    // Apply committedStockId (+ serial snapshot) markers to the sections.
     const updated = sections.map((sec) => ({
       ...sec,
       items: sec.items.map((it) =>
         committedFor[it.id]
-          ? { ...it, committedStockId: committedFor[it.id] }
+          ? {
+              ...it,
+              committedStockId: committedFor[it.id],
+              ...(serialFor[it.id] ? { serialNumber: serialFor[it.id] } : {}),
+            }
           : it
       ),
     }));

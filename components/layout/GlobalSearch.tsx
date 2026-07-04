@@ -9,6 +9,7 @@ import {
   FolderKanban,
   LayoutDashboard,
   Receipt,
+  ScanBarcode,
   Settings,
   UserCog,
   Users,
@@ -28,7 +29,13 @@ import {
   searchClientsAction,
   type SearchResult,
 } from "@/app/(app)/global-search-actions";
+import { lookupBySerialAction } from "@/app/(app)/inventory/actions";
+import type { SerialLookupResult } from "@/lib/api/inventory-serial-lookup";
 import type { DbClientWithCounts } from "@/lib/types/database";
+
+// A query worth a serial lookup: no spaces, ≥6 alphanumerics (serials commonly
+// carry -, ., _). Keeps the DB call off ordinary word searches like "clients".
+const SERIAL_RE = /^[A-Za-z0-9._-]{6,}$/;
 
 interface NavItem {
   label: string;
@@ -69,6 +76,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
 
   const [query, setQuery] = useState("");
   const [clientResults, setClientResults] = useState<DbClientWithCounts[]>([]);
+  const [serialResults, setSerialResults] = useState<SerialLookupResult[]>([]);
   const [, setIsSearching] = useState(false);
 
   // Local quotes (localStorage + seed). Sync — filter client-side.
@@ -119,6 +127,25 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
     };
   }, [query]);
 
+  // INV-2: serial-number lookup. Only fires for serial-shaped input (≥6 chars,
+  // no spaces) and is debounced 300ms independently of the client search.
+  const serialDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (serialDebounceRef.current) clearTimeout(serialDebounceRef.current);
+    if (!SERIAL_RE.test(trimmed)) {
+      setSerialResults([]);
+      return;
+    }
+    serialDebounceRef.current = setTimeout(async () => {
+      const res = await lookupBySerialAction(trimmed);
+      setSerialResults(res.ok ? res.data : []);
+    }, 300);
+    return () => {
+      if (serialDebounceRef.current) clearTimeout(serialDebounceRef.current);
+    };
+  }, [query]);
+
   const go = (href: string) => {
     setOpen(false);
     setQuery("");
@@ -155,6 +182,41 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
             );
           })}
         </CommandGroup>
+
+        {serialResults.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Serial Numbers">
+              {serialResults.map((s) => (
+                <CommandItem
+                  key={s.stockId}
+                  value={`serial ${s.serial} ${s.productSku} ${s.productName}`}
+                  onSelect={() =>
+                    go(`/inventory/${s.productId}?highlight=${s.stockId}`)
+                  }
+                >
+                  <ScanBarcode className="mr-2 h-4 w-4" />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono font-semibold">{s.serial}</span>
+                      <span className="text-muted-foreground truncate text-xs">
+                        {s.productName}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                      <span>{s.currentLocation.label}</span>
+                      {s.custodyStatus && s.custodyStatus !== "in_stock" ? (
+                        <span className="bg-muted text-foreground/70 rounded px-1 py-px text-[10px] uppercase tracking-wide">
+                          {s.custodyStatus}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
 
         {query.trim() && clientResults.length > 0 && (
           <>

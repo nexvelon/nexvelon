@@ -31,6 +31,10 @@ import {
   type ReceiveStockInput,
 } from "@/lib/api/products";
 import { deleteReceivedPurchaseOrder } from "@/lib/api/purchase-orders";
+import {
+  lookupBySerial,
+  type SerialLookupResult,
+} from "@/lib/api/inventory-serial-lookup";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
@@ -107,12 +111,14 @@ export async function listStockForProductAction(
 // F-3b: commit (consume) qty from a pinned stock unit when a quote is
 // committed/converted. productId is supplied by the caller (the quote line) for
 // the activity log. Qty-aware consume/split lives in lib/api consumeStock.
+// INV-2: also returns the unit's serialNumber (null for bulk lots) so the
+// caller can snapshot it onto the committed quote line.
 export async function commitStockUnitAction(
   stockUnitId: string,
   productId: string,
   qty: number,
   ref: string
-): Promise<ActionResult<{ consumedRowId: string }>> {
+): Promise<ActionResult<{ consumedRowId: string; serialNumber: string | null }>> {
   try {
     const result = await consumeStock(stockUnitId, qty, { ref });
     await logActivity("inventory", productId, "update", {
@@ -122,6 +128,30 @@ export async function commitStockUnitAction(
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-2: read-level gate for serial lookup — mirrors requireInventoryAdmin but
+// checks inventory:view (the base permission every inventory-facing role has).
+async function requireInventoryView(): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "inventory", "view")) {
+    return "You don't have permission to view inventory.";
+  }
+  return null;
+}
+
+// INV-2: global serial-number lookup for the command palette. Gated on
+// inventory:view; empty query short-circuits to [] inside lookupBySerial.
+export async function lookupBySerialAction(
+  query: string
+): Promise<ActionResult<SerialLookupResult[]>> {
+  try {
+    const denied = await requireInventoryView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await lookupBySerial(query) };
   } catch (e) {
     return fail(e);
   }

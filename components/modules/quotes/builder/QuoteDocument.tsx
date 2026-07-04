@@ -1484,10 +1484,16 @@ function ParticularsPage({
                 masterPart ?? (showSku && it.sku ? it.sku : null);
               const upcPart = showUpc && it.upc ? it.upc : null;
               const vendorPart = showVendor && it.vendor ? it.vendor : null;
+              // INV-2: a committed serialized unit carries its serial snapshot —
+              // always surface it (it's a per-unit fact, not toggle-gated).
+              const serialPart = it.serialNumber?.trim()
+                ? `SN ${it.serialNumber.trim()}`
+                : null;
               const tertiarySegments = [
                 partNumber ? `Part # ${partNumber}` : null,
                 upcPart ? `UPC ${upcPart}` : null,
                 vendorPart,
+                serialPart,
               ].filter((s): s is string => !!s);
               return (
                 <View style={styles.partRow} key={it.id}>

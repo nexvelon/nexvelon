@@ -247,6 +247,12 @@ export function LineItemRow({
             isLabourLine ? "Labour" : isLabor ? "Notes" : "Description"
           }
         />
+        {/* INV-2: serial snapshot from a committed serialized unit. */}
+        {item.serialNumber ? (
+          <span className="text-muted-foreground mt-0.5 block font-mono text-[10px]">
+            SN {item.serialNumber}
+          </span>
+        ) : null}
       </td>
 
       <td className="w-12 px-1.5 text-right">
