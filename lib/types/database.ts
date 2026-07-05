@@ -620,7 +620,8 @@ export type ActivityEntityType =
   | "inventory"
   | "vendor"
   | "purchase_order"
-  | "attachment";
+  | "attachment"
+  | "pickup_slip";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -1222,6 +1223,73 @@ export type DbInvoiceLineInsert = {
 export type DbInvoiceLineUpdate = Partial<
   Omit<DbInvoiceLineInsert, "invoice_id">
 >;
+
+// ----------------------------------------------------------------------------
+// Pickup slips (INV-3, migration 0078) — signed artifact for stock issued
+// warehouse → truck (or → tech/sub). Header + snapshotted lines. recipient_id
+// points at stock_locations when recipient_type='truck' (no hard FK — it's
+// conditional). signature_data_url holds a drawn-signature PNG data URL
+// (nullable until signed); pdf_path is the private-bucket storage path.
+// ----------------------------------------------------------------------------
+export type PickupSlipRecipientType = "truck" | "tech" | "sub";
+
+export interface DbPickupSlip {
+  id: string;
+  slip_number: string; // 'PS-YYYY-NNNN'
+  issued_at: string;
+  issued_by: string | null;
+  issued_by_name: string | null;
+  recipient_type: string; // PickupSlipRecipientType
+  recipient_id: string | null;
+  recipient_name: string;
+  signature_data_url: string | null;
+  signature_captured_at: string | null;
+  pdf_path: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbPickupSlipInsert = {
+  slip_number: string;
+  issued_by?: string | null;
+  issued_by_name?: string | null;
+  recipient_type: PickupSlipRecipientType;
+  recipient_id?: string | null;
+  recipient_name: string;
+  signature_data_url?: string | null;
+  signature_captured_at?: string | null;
+  pdf_path?: string | null;
+  notes?: string | null;
+};
+
+export type DbPickupSlipUpdate = Partial<DbPickupSlipInsert>;
+
+export interface DbPickupSlipLine {
+  id: string;
+  pickup_slip_id: string;
+  stock_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  serial_number: string | null;
+  quantity: number;
+  line_no: number;
+  movement_id: string | null;
+  created_at: string;
+}
+
+export type DbPickupSlipLineInsert = {
+  pickup_slip_id: string;
+  stock_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  serial_number?: string | null;
+  quantity: number;
+  line_no: number;
+  movement_id?: string | null;
+};
 
 // ----------------------------------------------------------------------------
 // Purchase orders (PO-2, migration 0031) — header + lines. Header FKs vendors

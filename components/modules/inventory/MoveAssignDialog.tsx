@@ -32,6 +32,8 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { moveStockAction } from "@/app/(app)/inventory/movement-actions";
+import { createPickupSlipAction } from "@/app/(app)/inventory/actions";
+import { PickupSlipSignatureDialog } from "@/components/modules/inventory/PickupSlipSignatureDialog";
 import {
   listProjectsAction,
   getProjectByIdAction,
@@ -66,6 +68,24 @@ export function MoveAssignDialog({
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
 
+  // INV-3 — pickup-slip follow-up when stock is issued to a truck. `phase`
+  // gates which surface is shown; we defer onMoved() (which unmounts this
+  // dialog via the parent clearing `unit`) until the slip flow finishes.
+  type Phase = "form" | "offer" | "slip";
+  const [phase, setPhase] = useState<Phase>("form");
+  const [creatingSlip, setCreatingSlip] = useState(false);
+  const [moved, setMoved] = useState<{
+    movedStockId: string;
+    quantity: number;
+    recipientId: string;
+    recipientName: string;
+  } | null>(null);
+  const [slip, setSlip] = useState<{
+    slipId: string;
+    slipNumber: string;
+    unsignedPdfUrl: string | null;
+  } | null>(null);
+
   // Job picker state.
   const [projects, setProjects] = useState<ProjectListRow[]>([]);
   const [projectSearch, setProjectSearch] = useState("");
@@ -85,6 +105,9 @@ export function MoveAssignDialog({
       setProjectId("");
       setCostCenters([]);
       setCostCenterId("");
+      setPhase("form");
+      setMoved(null);
+      setSlip(null);
     }
   }, [open, unit]);
 
@@ -170,6 +193,13 @@ export function MoveAssignDialog({
         ? ({ kind: "location", locationId } as const)
         : ({ kind: "job", costCenterId } as const);
 
+    // Is this a "warehouse → truck" issue? Only truck destinations offer a
+    // pickup slip (the current model has no direct tech/sub move target — a
+    // truck's holder_name is the tech/sub it's assigned to).
+    const destLocation =
+      mode === "location" ? locations.find((l) => l.id === locationId) : undefined;
+    const isTruck = destLocation?.location_type === "truck";
+
     startTransition(async () => {
       const result = await moveStockAction({
         productId,
@@ -187,12 +217,80 @@ export function MoveAssignDialog({
           result.data.split ? " (split)" : ""
         }`
       );
+      if (isTruck && destLocation) {
+        // Offer a pickup slip; hold this dialog open (don't call onMoved yet).
+        setMoved({
+          movedStockId: result.data.movedStockId,
+          quantity: result.data.quantity,
+          recipientId: destLocation.id,
+          recipientName:
+            destLocation.holder_name?.trim() || destLocation.name,
+        });
+        setPhase("offer");
+        return;
+      }
       onMoved();
     });
   }
 
+  // Finish the whole flow: refresh the parent + close (unmounts this dialog).
+  function finish() {
+    onMoved();
+  }
+
+  async function createSlip() {
+    if (!moved) return;
+    setCreatingSlip(true);
+    const res = await createPickupSlipAction({
+      recipientType: "truck",
+      recipientId: moved.recipientId,
+      recipientName: moved.recipientName,
+      notes: note.trim() || null,
+      stockAssignments: [
+        { stockId: moved.movedStockId, quantity: moved.quantity },
+      ],
+    });
+    setCreatingSlip(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setSlip({
+      slipId: res.data.slipId,
+      slipNumber: res.data.slipNumber,
+      unsignedPdfUrl: res.data.signedUrl,
+    });
+    setPhase("slip");
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open && phase !== "slip"} onOpenChange={onOpenChange}>
+      {phase === "offer" ? (
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create pickup slip?</DialogTitle>
+            <DialogDescription>
+              {moved
+                ? `Generate a signed pickup slip for the ${moved.quantity} unit(s) issued to ${moved.recipientName}.`
+                : "Generate a signed pickup slip for this transfer."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={finish}
+              disabled={creatingSlip}
+            >
+              Not now
+            </Button>
+            <Button type="button" onClick={createSlip} disabled={creatingSlip}>
+              {creatingSlip ? "Creating…" : "Create pickup slip"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : (
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Move / Assign stock</DialogTitle>
@@ -365,6 +463,22 @@ export function MoveAssignDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      )}
     </Dialog>
+
+    {phase === "slip" && slip && moved && (
+      <PickupSlipSignatureDialog
+        open
+        onOpenChange={(next) => {
+          // Closing the slip dialog finishes the whole flow (refresh + close).
+          if (!next) finish();
+        }}
+        slipId={slip.slipId}
+        slipNumber={slip.slipNumber}
+        recipientName={moved.recipientName}
+        unsignedPdfUrl={slip.unsignedPdfUrl}
+      />
+    )}
+    </>
   );
 }
