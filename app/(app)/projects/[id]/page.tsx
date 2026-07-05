@@ -6,8 +6,35 @@
 import Link from "next/link";
 import { getProjectById } from "@/lib/api/projects";
 import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailView";
+import { ProjectStatusControl } from "@/components/modules/projects/ProjectStatusControl";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission } from "@/lib/permissions";
+import type { DbRole } from "@/lib/types/database";
+import type { Role } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+// DbRole (11) → app Role (7); mirrors the projects action helper.
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -15,7 +42,12 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const detail = await getProjectById(id);
+  const [detail, me] = await Promise.all([
+    getProjectById(id),
+    getCurrentProfile(),
+  ]);
+  const canEditStatus =
+    !!me && hasPermission(adaptRole(me.role), "projects", "edit");
 
   if (!detail) {
     return (
@@ -42,6 +74,25 @@ export default async function ProjectDetailPage({
       >
         ← Back to Projects
       </Link>
+      {/* PROJ2-1 — slim lifecycle strip above the detail view. PROJ2-2 folds
+          this into the real project header (which replaces the mock one). */}
+      <div className="bg-card flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-4 py-2.5 shadow-sm">
+        <div className="min-w-0">
+          <span className="text-brand-navy font-mono text-xs font-semibold">
+            {detail.project.project_number}
+          </span>
+          {detail.project.title ? (
+            <span className="text-muted-foreground ml-2 truncate text-xs">
+              {detail.project.title}
+            </span>
+          ) : null}
+        </div>
+        <ProjectStatusControl
+          projectId={detail.project.id}
+          currentStatus={detail.project.status}
+          canEdit={canEditStatus}
+        />
+      </div>
       <ProjectDetailView detail={detail} />
     </div>
   );

@@ -11,6 +11,7 @@ import { sectionSubtotal, round2 } from "@/lib/quote-helpers";
 import type {
   DbProject,
   DbProjectCostCenter,
+  ProjectStatus,
 } from "@/lib/types/database";
 import type { Quote } from "@/lib/types";
 
@@ -302,6 +303,55 @@ async function nextCostCenterSlot(
     ccNumber: costCenterNumber(projectNumber, maxPj + 1),
     sortOrder: maxSort + 1,
   };
+}
+
+// PROJ2-1 — minimal status read/write for updateProjectStatusAction. The read
+// returns just id + status so the action can validate the transition; the write
+// stamps updated_by (updated_at is maintained by the set_updated_at trigger).
+export async function getProjectStatus(
+  id: string
+): Promise<{ id: string; status: ProjectStatus } | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getProjectStatus: ${error.message}`);
+  return (data as { id: string; status: ProjectStatus } | null) ?? null;
+}
+
+export async function setProjectStatus(
+  id: string,
+  status: ProjectStatus,
+  actorId: string | null
+): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("projects")
+    .update({ status, updated_by: actorId })
+    .eq("id", id);
+  if (error) throw new Error(`setProjectStatus: ${error.message}`);
+}
+
+// PROJ2-1 — lightweight cost-center read used for best-effort audit logging on
+// rename/delete (captures the cc_number + prior name).
+export async function getCostCenterById(
+  id: string
+): Promise<Pick<DbProjectCostCenter, "id" | "project_id" | "cc_number" | "name"> | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_cost_centers")
+    .select("id, project_id, cc_number, name")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getCostCenterById: ${error.message}`);
+  return (
+    (data as Pick<
+      DbProjectCostCenter,
+      "id" | "project_id" | "cc_number" | "name"
+    > | null) ?? null
+  );
 }
 
 export async function addCostCenter(
