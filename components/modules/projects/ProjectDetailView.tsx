@@ -55,7 +55,15 @@ function roleLabel(role: string): string {
   return role;
 }
 
-export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
+export function ProjectDetailView({
+  detail,
+  hideHeader = false,
+}: {
+  detail: ProjectDetail;
+  // PROJ2-2 — when the real ProjectHeader renders above this view, suppress the
+  // legacy inline header here (minimum-touch; all tabs/mock data untouched).
+  hideHeader?: boolean;
+}) {
   const { project, client_name, site_name, quotes } = detail;
   const { role } = useRole();
   const router = useRouter();
@@ -234,34 +242,36 @@ export function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <Card
-        className="p-5 shadow-sm"
-        style={{ background: "var(--brand-card)", borderColor: "var(--brand-border)" }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-brand-navy font-mono text-xs font-semibold tracking-wider">
-              {project.project_number}
-            </p>
-            <h1 className="font-serif text-2xl font-semibold text-brand-primary">
-              {project.title || "Untitled project"}
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {client_name ?? "—"}
-              {site_name ? ` · ${site_name}` : ""}
-            </p>
+      {/* Header (legacy inline) — hidden when the real ProjectHeader renders. */}
+      {!hideHeader && (
+        <Card
+          className="p-5 shadow-sm"
+          style={{ background: "var(--brand-card)", borderColor: "var(--brand-border)" }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-brand-navy font-mono text-xs font-semibold tracking-wider">
+                {project.project_number}
+              </p>
+              <h1 className="font-serif text-2xl font-semibold text-brand-primary">
+                {project.title || "Untitled project"}
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {client_name ?? "—"}
+                {site_name ? ` · ${site_name}` : ""}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="bg-muted rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand-primary">
+                {OPCO_LABEL[project.opco] ?? project.opco}
+              </span>
+              <span className="rounded-full bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--brand-status-green)]">
+                {project.status}
+              </span>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="bg-muted rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand-primary">
-              {OPCO_LABEL[project.opco] ?? project.opco}
-            </span>
-            <span className="rounded-full bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--brand-status-green)]">
-              {project.status}
-            </span>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* JC-2 — project cost rollup */}
       {rollup && (

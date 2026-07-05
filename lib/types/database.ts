@@ -1073,6 +1073,13 @@ export interface DbProject {
   title: string | null;
   status: ProjectStatus;
   originating_quote_id: string | null;
+  // PROJ2-2 (migration 0081) — header fields, all nullable.
+  description: string | null;
+  start_date: string | null; // date (YYYY-MM-DD)
+  target_completion: string | null; // date
+  actual_completion: string | null; // date — set on → substantially_complete
+  pm_user_id: string | null; // no FK (matches created_by/updated_by)
+  lead_tech_id: string | null; // no FK (PROJ2-4 adds project_assignments)
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -1087,6 +1094,12 @@ export type DbProjectInsert = {
   title?: string | null;
   status?: ProjectStatus;
   originating_quote_id?: string | null;
+  description?: string | null;
+  start_date?: string | null;
+  target_completion?: string | null;
+  actual_completion?: string | null;
+  pm_user_id?: string | null;
+  lead_tech_id?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
 };

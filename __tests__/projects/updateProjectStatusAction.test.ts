@@ -11,14 +11,17 @@ const h = vi.hoisted(() => ({
     status: string;
   } | null,
   currentStatus: "active" as string | null, // null → project not found
-  setProjectStatus: vi.fn(async (..._args: unknown[]) => {}),
-  logActivity: vi.fn(async (..._args: unknown[]) => {}),
+  actualCompletion: null as string | null, // PROJ2-2 completion hook state
+  setProjectStatus: vi.fn(async () => {}),
+  logActivity: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/api/projects", () => ({
   // used by updateProjectStatusAction
   getProjectStatus: async (id: string) =>
-    h.currentStatus === null ? null : { id, status: h.currentStatus },
+    h.currentStatus === null
+      ? null
+      : { id, status: h.currentStatus, actual_completion: h.actualCompletion },
   setProjectStatus: h.setProjectStatus,
   // other named exports actions.ts imports (unused in these tests)
   getCostCenterById: vi.fn(),
@@ -40,6 +43,7 @@ import { updateProjectStatusAction } from "@/app/(app)/projects/actions";
 beforeEach(() => {
   h.profile = { id: "u1", role: "Admin", status: "Active" };
   h.currentStatus = "active";
+  h.actualCompletion = null;
   h.setProjectStatus.mockClear();
   h.logActivity.mockClear();
   h.logActivity.mockImplementation(async () => {});
@@ -97,9 +101,10 @@ describe("updateProjectStatusAction", () => {
       note: "waiting on parts",
     });
     expect(res.ok).toBe(true);
-    expect(h.setProjectStatus).toHaveBeenCalledWith("p1", "on_hold", "u1");
+    // 4th arg (actualCompletion) is undefined for a non-completion transition.
+    expect(h.setProjectStatus).toHaveBeenCalledWith("p1", "on_hold", "u1", undefined);
     expect(h.logActivity).toHaveBeenCalledTimes(1);
-    const [entity, id, action, changes] = h.logActivity.mock.calls[0];
+    const [entity, id, action, changes] = h.logActivity.mock.calls[0] as unknown[];
     expect(entity).toBe("project");
     expect(id).toBe("p1");
     expect(action).toBe("update");
@@ -119,6 +124,56 @@ describe("updateProjectStatusAction", () => {
       newStatus: "cancelled",
     });
     expect(res.ok).toBe(true);
-    expect(h.setProjectStatus).toHaveBeenCalledWith("p1", "cancelled", "u1");
+    expect(h.setProjectStatus).toHaveBeenCalledWith("p1", "cancelled", "u1", undefined);
+  });
+
+  // ── PROJ2-2 — actual_completion hook ───────────────────────────────────────
+  it("stamps actual_completion (today) on → substantially_complete when NULL", async () => {
+    h.currentStatus = "active";
+    h.actualCompletion = null;
+    const res = await updateProjectStatusAction({
+      projectId: "p1",
+      newStatus: "substantially_complete",
+    });
+    expect(res.ok).toBe(true);
+    expect(h.setProjectStatus).toHaveBeenCalledWith(
+      "p1",
+      "substantially_complete",
+      "u1",
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    );
+    const [, , , changes] = h.logActivity.mock.calls[0] as unknown[];
+    expect(changes).toMatchObject({
+      actual_completion: { from: null, to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+    });
+  });
+
+  it("does NOT overwrite actual_completion if already set", async () => {
+    h.currentStatus = "active";
+    h.actualCompletion = "2026-05-01"; // already completed once before
+    const res = await updateProjectStatusAction({
+      projectId: "p1",
+      newStatus: "substantially_complete",
+    });
+    expect(res.ok).toBe(true);
+    // 4th arg undefined → the existing completion date is preserved.
+    expect(h.setProjectStatus).toHaveBeenCalledWith(
+      "p1",
+      "substantially_complete",
+      "u1",
+      undefined
+    );
+  });
+
+  it("does NOT clear actual_completion when reopening closed → active (§2.2)", async () => {
+    h.currentStatus = "closed";
+    h.actualCompletion = "2026-05-01";
+    const res = await updateProjectStatusAction({
+      projectId: "p1",
+      newStatus: "active",
+    });
+    expect(res.ok).toBe(true);
+    // active is not a completion status → 4th arg undefined; completion untouched.
+    expect(h.setProjectStatus).toHaveBeenCalledWith("p1", "active", "u1", undefined);
   });
 });

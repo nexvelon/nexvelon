@@ -17,6 +17,8 @@ import {
   getProjectStatus,
   setProjectStatus,
   getCostCenterById,
+  getProjectRow,
+  updateProjectFields,
   type ProjectListRow,
   type ProjectDetail,
   type MergeCandidate,
@@ -264,17 +266,133 @@ export async function updateProjectStatusAction(input: {
       return { ok: false, error: "invalid_transition" };
     }
 
-    await setProjectStatus(input.projectId, input.newStatus, gate.actorId);
+    // PROJ2-2 — stamp actual_completion when a project first reaches
+    // substantially_complete and it isn't already set. Folded into the same
+    // UPDATE as the status change. Never cleared on a transition back (§2.2).
+    const stampCompletion =
+      input.newStatus === "substantially_complete" &&
+      !current.actual_completion;
+    const completionDate = stampCompletion
+      ? new Date().toISOString().slice(0, 10)
+      : undefined;
+
+    await setProjectStatus(
+      input.projectId,
+      input.newStatus,
+      gate.actorId,
+      completionDate
+    );
 
     // Best-effort audit (§2.8) — never fail the transition on a log error.
     try {
       const note = input.note?.trim();
       await logActivity("project", input.projectId, "update", {
         status: { from: current.status, to: input.newStatus },
+        ...(completionDate
+          ? { actual_completion: { from: null, to: completionDate } }
+          : {}),
         ...(note ? { note: { from: null, to: note } } : {}),
       });
     } catch (logErr) {
       console.error("[activity_log] project status log failed:", logErr);
+    }
+
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${input.projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// PROJ2-2 — edit the header-level project fields. Gated on projects:edit.
+// Deliberately does NOT accept status (own action), project_number, client_id,
+// site_id, opco, or originating_quote_id — those are snapshot/immutable here.
+// Empty-diff is a no-op (§2.8); only changed fields are written + logged.
+const EDITABLE_DATE_FIELDS = [
+  "start_date",
+  "target_completion",
+] as const;
+
+function isValidDate(v: string): boolean {
+  // YYYY-MM-DD and a real calendar date.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime());
+}
+
+export async function editProjectAction(input: {
+  projectId: string;
+  title?: string;
+  description?: string | null;
+  start_date?: string | null;
+  target_completion?: string | null;
+  pm_user_id?: string | null;
+  lead_tech_id?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    // Validation.
+    if (input.title !== undefined) {
+      const t = input.title.trim();
+      if (t.length === 0 || t.length > 200) {
+        return { ok: false, error: "invalid_title" };
+      }
+    }
+    if (
+      input.description !== undefined &&
+      input.description !== null &&
+      input.description.length > 2000
+    ) {
+      return { ok: false, error: "invalid_description" };
+    }
+    for (const f of EDITABLE_DATE_FIELDS) {
+      const v = input[f];
+      if (v !== undefined && v !== null && v !== "" && !isValidDate(v)) {
+        return { ok: false, error: `invalid_${f}` };
+      }
+    }
+
+    const current = await getProjectRow(input.projectId);
+    if (!current) return { ok: false, error: "not_found" };
+
+    // Build the diff — only provided fields whose value actually changed.
+    // Title is trimmed; empty-string dates/ids normalize to null.
+    const norm = (v: string | null | undefined): string | null =>
+      v === undefined ? undefined! : v === "" ? null : v;
+
+    const candidate: Record<string, string | null> = {};
+    if (input.title !== undefined) candidate.title = input.title.trim();
+    if (input.description !== undefined) candidate.description = norm(input.description);
+    if (input.start_date !== undefined) candidate.start_date = norm(input.start_date);
+    if (input.target_completion !== undefined)
+      candidate.target_completion = norm(input.target_completion);
+    if (input.pm_user_id !== undefined) candidate.pm_user_id = norm(input.pm_user_id);
+    if (input.lead_tech_id !== undefined)
+      candidate.lead_tech_id = norm(input.lead_tech_id);
+
+    const diff: Record<string, string | null> = {};
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [k, to] of Object.entries(candidate)) {
+      const from = (current as unknown as Record<string, unknown>)[k] ?? null;
+      if ((from ?? null) !== (to ?? null)) {
+        diff[k] = to;
+        changes[k] = { from: from ?? null, to };
+      }
+    }
+
+    // Empty diff — no write, no log (§2.8).
+    if (Object.keys(diff).length === 0) return { ok: true };
+
+    await updateProjectFields(input.projectId, diff, gate.actorId);
+
+    // Best-effort audit (§2.8).
+    try {
+      await logActivity("project", input.projectId, "update", changes);
+    } catch (logErr) {
+      console.error("[activity_log] project edit log failed:", logErr);
     }
 
     revalidatePath("/projects");
