@@ -65,6 +65,20 @@ export async function upsertQuoteAction(
     // first-create and status transitions.
     const prior = await getQuoteById(quote.id);
 
+    // QUOTES-5 defense-in-depth: block ANY path that flips a not-yet-Sent quote
+    // to Sent without a client + site. sendQuoteAction is the canonical
+    // validated Draft→Sent path; this catches direct upsert writes (the old
+    // builder button, future callers, or a crafted API payload).
+    if (quote.status === "Sent") {
+      const wasNotSent = !prior || prior.status !== "Sent";
+      if (wasNotSent && (!quote.clientId || !quote.siteId)) {
+        return {
+          ok: false,
+          error: "Cannot mark quote as Sent without a client and site.",
+        };
+      }
+    }
+
     const saved = await upsertQuote(quote);
     revalidatePath("/quotes");
     revalidatePath(`/quotes/${quote.id}`);

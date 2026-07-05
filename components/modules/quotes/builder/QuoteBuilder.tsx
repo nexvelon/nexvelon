@@ -66,6 +66,10 @@ import {
   type QuoteScheduleInstance,
 } from "@/lib/quote-schedules";
 import { upsertQuote, useQuotes } from "@/lib/quote-store";
+import {
+  sendQuoteAction,
+  upsertQuoteAction,
+} from "@/app/(app)/quotes/actions";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { useReadOnly } from "@/lib/use-read-only";
 import { useRole } from "@/lib/role-context";
@@ -808,12 +812,46 @@ export function QuoteBuilder({
     }, 250);
   };
 
-  const handleSend = () => {
+  // QUOTES-5 — "Send for Approval" now mirrors the list's hardened path.
+  // Previously this wrote status="Sent" directly via the fire-and-forget store
+  // upsert, with NO client/site validation, bypassing sendQuoteAction entirely
+  // (that hole flipped a draft to Sent by accident). Now we validate up front,
+  // durably persist any unsaved edits as a Draft FIRST (awaited, so the server
+  // re-reads the latest content), then route the transition through the
+  // validated sendQuoteAction.
+  const handleSend = async () => {
     if (ro.readOnly || status !== "Draft") return;
-    const next = persist("Sent");
-    upsertQuote(next);
-    setStatus("Sent");
-    toast.success(`${number} submitted for approval`);
+
+    if (!clientId || !siteId) {
+      toast.error("Cannot send this quote", {
+        description: "Add a client and site before sending.",
+      });
+      return;
+    }
+
+    // Persist current form state as a Draft first — awaited directly (the
+    // quote-store upsert is fire-and-forget) so sendQuoteAction reads fresh data.
+    const draftSnapshot = persist("Draft");
+    const saveRes = await upsertQuoteAction(draftSnapshot);
+    if (!saveRes.ok) {
+      toast.error("Couldn't save before sending", { description: saveRes.error });
+      return;
+    }
+
+    try {
+      const res = await sendQuoteAction(initial.id);
+      if (!res.ok) {
+        toast.error("Cannot send", { description: res.error });
+        return;
+      }
+      upsertQuote(res.data); // sync the store cache to the Sent quote
+      setStatus("Sent");
+      toast.success(`${number} sent for approval`, {
+        description: "Status updated to Sent.",
+      });
+    } catch (err) {
+      toast.error("Send failed", { description: (err as Error).message });
+    }
   };
 
   // F-3a: Sent -> Approved. Mirrors handleSend; gated in the header by the
@@ -1064,6 +1102,8 @@ export function QuoteBuilder({
         saving={saving}
         disabled={ro.readOnly}
         savedLabel={savedLabel}
+        hasClient={!!clientId}
+        hasSite={!!siteId}
         onSaveDraft={handleSaveDraft}
         onSend={handleSend}
         onApprove={handleApprove}

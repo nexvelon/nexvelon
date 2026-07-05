@@ -27,6 +27,10 @@ interface Props {
   disabled: boolean;
   /** POLISH-2 — last-saved indicator label (e.g. "Saved 3:42 PM"). */
   savedLabel?: string | null;
+  /** QUOTES-5 — Send for Approval requires a client + site (mirrors the list's
+   *  "Send to Client" gating and the hardened sendQuoteAction). */
+  hasClient: boolean;
+  hasSite: boolean;
   onSaveDraft: () => void;
   onSend: () => void;
   onApprove: () => void;
@@ -45,6 +49,8 @@ export function BuilderHeader({
   saving,
   disabled,
   savedLabel,
+  hasClient,
+  hasSite,
   onSaveDraft,
   onSend,
   onApprove,
@@ -132,7 +138,14 @@ export function BuilderHeader({
             type="button"
             variant="outline"
             size="sm"
-            disabled={disabled || saving || status !== "Draft"}
+            disabled={
+              disabled || saving || status !== "Draft" || !hasClient || !hasSite
+            }
+            title={
+              status === "Draft" && (!hasClient || !hasSite)
+                ? "Add a client and site before sending."
+                : undefined
+            }
             onClick={onSend}
             className="border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5"
           >
