@@ -35,6 +35,15 @@ import {
   lookupBySerial,
   type SerialLookupResult,
 } from "@/lib/api/inventory-serial-lookup";
+import {
+  createPickupSlip,
+  buildPickupSlipPdfProps,
+  attachSignatureToPickupSlip,
+  setPickupSlipPdfPath,
+  type CreatePickupSlipInput,
+} from "@/lib/api/pickup-slips";
+import { renderPickupSlipPdf } from "@/lib/pdf/render-pickup-slip";
+import { uploadPickupSlipPdf } from "@/lib/storage/pickup-slip-pdfs";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
@@ -152,6 +161,121 @@ export async function lookupBySerialAction(
     const denied = await requireInventoryView();
     if (denied) return { ok: false, error: denied };
     return { ok: true, data: await lookupBySerial(query) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Pickup slips (INV-3) ────────────────────────────────────────────────────
+
+// Operational write gate — issuing/signing a slip is the same posture as moving
+// stock (inventory:edit; Admin + PM).
+async function requireInventoryEdit(): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "inventory", "edit")) {
+    return "You don't have permission to issue pickup slips.";
+  }
+  return null;
+}
+
+function profileDisplayName(me: {
+  display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+}): string {
+  return (
+    me.display_name?.trim() ||
+    [me.first_name, me.last_name].filter(Boolean).join(" ").trim() ||
+    me.email
+  );
+}
+
+// Render the slip PDF (whatever its current signed/unsigned state), upload it to
+// the private bucket, and persist the path. Returns the path + a signed URL.
+// Shared by create/sign/render actions; caller must have gated already.
+async function renderAndStoreSlip(
+  slipId: string
+): Promise<{ pdfPath: string; signedUrl: string | null }> {
+  const props = await buildPickupSlipPdfProps(slipId);
+  const pdf = await renderPickupSlipPdf(props);
+  const up = await uploadPickupSlipPdf(slipId, props.slip.slip_number, pdf);
+  await setPickupSlipPdfPath(slipId, up.path);
+  return { pdfPath: up.path, signedUrl: up.signedUrl };
+}
+
+// INV-3: create a pickup slip (+ snapshotted lines) for issued stock. Stamps
+// issued_by / issued_by_name from the signed-in user. Renders an initial
+// (unsigned) PDF so a slip always has a printable artifact.
+export async function createPickupSlipAction(
+  input: Omit<CreatePickupSlipInput, "issuedById" | "issuedByName">
+): Promise<
+  ActionResult<{ slipId: string; slipNumber: string; signedUrl: string | null }>
+> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    const me = await getCurrentProfile();
+
+    const { slipId, slipNumber } = await createPickupSlip({
+      ...input,
+      issuedById: me?.id ?? null,
+      issuedByName: me ? profileDisplayName(me) : null,
+    });
+
+    await logActivity("pickup_slip", slipId, "create", {
+      slip_number: { from: null, to: slipNumber },
+      recipient: { from: null, to: `${input.recipientType}:${input.recipientName}` },
+    });
+
+    // Best-effort initial (unsigned) render so the slip is printable immediately.
+    let signedUrl: string | null = null;
+    try {
+      const r = await renderAndStoreSlip(slipId);
+      signedUrl = r.signedUrl;
+    } catch {
+      /* PDF is regenerated on sign / explicit render — non-fatal here. */
+    }
+
+    revalidatePath("/inventory");
+    return { ok: true, data: { slipId, slipNumber, signedUrl } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-3: attach a drawn-signature PNG data URL to a slip and re-render its PDF.
+export async function signPickupSlipAction(
+  slipId: string,
+  signatureDataUrl: string
+): Promise<ActionResult<{ pdfPath: string; signedUrl: string | null }>> {
+  try {
+    const denied = await requireInventoryEdit();
+    if (denied) return { ok: false, error: denied };
+    if (!signatureDataUrl.startsWith("data:image/")) {
+      return { ok: false, error: "Invalid signature image." };
+    }
+    await attachSignatureToPickupSlip({ slipId, signatureDataUrl });
+    await logActivity("pickup_slip", slipId, "update", {
+      signature: { from: null, to: "captured" },
+    });
+    const stored = await renderAndStoreSlip(slipId);
+    revalidatePath("/inventory");
+    return { ok: true, data: stored };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-3: (re)render a slip's PDF and return a signed URL. Gated on view so any
+// inventory-facing role can pull a fresh link.
+export async function renderPickupSlipPdfAction(
+  slipId: string
+): Promise<ActionResult<{ pdfPath: string; signedUrl: string | null }>> {
+  try {
+    const denied = await requireInventoryView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await renderAndStoreSlip(slipId) };
   } catch (e) {
     return fail(e);
   }
