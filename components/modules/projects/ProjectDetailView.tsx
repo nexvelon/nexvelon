@@ -67,7 +67,9 @@ export function ProjectDetailView({
   const { project, client_name, site_name, quotes } = detail;
   const { role } = useRole();
   const router = useRouter();
-  const canEdit = hasPermission(role, "quotes", "convert");
+  // PROJ2-3 — cost-center controls gate on projects:edit (the action's gate),
+  // was quotes:convert.
+  const canEdit = hasPermission(role, "projects", "edit");
   // Invoicing is financial-sensitive — gated separately from project edits.
   const canInvoice = hasPermission(role, "financials", "edit");
 

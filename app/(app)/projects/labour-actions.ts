@@ -66,6 +66,18 @@ async function requireFinancials(): Promise<string | null> {
   return null;
 }
 
+// PROJ2-3 — read gate for the labour LIST/read actions (previously open).
+// Mutations keep the stricter requireFinancials; this only floors the reads at
+// projects:view (every project-facing role has it, so no current viewer loses
+// access — it just formalizes the boundary).
+async function requireProjectsView(): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "projects", "view")) {
+    return "You don't have permission to view projects.";
+  }
+  return null;
+}
+
 export interface ProjectLabour {
   entries: Record<string, LabourEntryView[]>;
   totals: Record<string, number>;
@@ -76,6 +88,8 @@ export async function listLabourForProjectAction(
   projectId: string
 ): Promise<ActionResult<ProjectLabour>> {
   try {
+    const denied = await requireProjectsView();
+    if (denied) return { ok: false, error: denied };
     const [entries, totals] = await Promise.all([
       listLabourEntriesForProject(projectId),
       sumLabourCostByCostCenter(projectId),
@@ -89,6 +103,8 @@ export async function listLabourForProjectAction(
 /** Active techs only, for the Add Labour Select. */
 export async function listActiveTechsAction(): Promise<ActionResult<DbTech[]>> {
   try {
+    const denied = await requireProjectsView();
+    if (denied) return { ok: false, error: denied };
     const all = await listTechs();
     return { ok: true, data: all.filter((t) => t.is_active) };
   } catch (e) {

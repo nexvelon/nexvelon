@@ -61,8 +61,16 @@ export async function getProjectCostRollupAction(
 ): Promise<ActionResult<ProjectRollupResult>> {
   try {
     const me = await getCurrentProfile();
-    const canSeeFinancials = !!(
-      me && hasPermission(adaptRole(me.role), "financials", "edit")
+    // PROJ2-3 — must be a project viewer to read the rollup at all. The
+    // financials redaction below (canSeeFinancials via financials:edit) is a
+    // SECOND gate on top, not a replacement.
+    if (!me || !hasPermission(adaptRole(me.role), "projects", "view")) {
+      return { ok: false, error: "You don't have permission to view projects." };
+    }
+    const canSeeFinancials = hasPermission(
+      adaptRole(me.role),
+      "financials",
+      "edit"
     );
     const rollup = await getProjectCostRollup(projectId);
 

@@ -1,8 +1,11 @@
 "use server";
 
-// PROJ-1 — projects server actions. Reads are RLS-gated (authenticated SELECT);
-// mutations (convert + cost-center edits) require the quotes:convert permission,
-// mirroring the existing quote→project convert gate.
+// PROJ-1 — projects server actions. PROJ2-3: gates now live on the projects:*
+// resource — reads on projects:view, createProjectFromQuote on projects:create,
+// merge + cost-center edits + status + header edits on projects:edit. (They
+// previously shared quotes:convert, a carry-over from when these shipped with
+// quote→project conversion.) The quote-side "Create Project" trigger keeps
+// quotes:convert — that's a quotes permission.
 
 import { revalidatePath } from "next/cache";
 import {
@@ -65,18 +68,32 @@ function adaptRole(r: DbRole): Role {
   }
 }
 
-async function requireConvert(): Promise<string | null> {
+// PROJ2-3 — project mutations now gate on the projects:* resource (was
+// quotes:convert, a historical carry-over from when these actions shipped
+// alongside quote→project conversion). All three helpers share one shape
+// (returning the actor id on success so mutations can stamp updated_by without
+// a second profile fetch). The quote-side "Create Project" trigger keeps
+// quotes:convert — that's a quotes permission (see PROJ2-3b TODO).
+async function requireProjectsView(): Promise<
+  { ok: true; actorId: string } | { ok: false; error: string }
+> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "quotes", "convert")) {
-    return "You don't have permission to manage projects.";
+  if (!me || !hasPermission(adaptRole(me.role), "projects", "view")) {
+    return { ok: false, error: "You don't have permission to view projects." };
   }
-  return null;
+  return { ok: true, actorId: me.id };
 }
 
-// PROJ2-1 — the NEW project-lifecycle gate. Uses the projects:edit permission
-// (the resource already exists). Existing mutations stay on quotes:convert until
-// PROJ2-3 migrates them. Returns the actor id on success so the action can stamp
-// updated_by / actor_id without a second profile fetch.
+async function requireProjectsCreate(): Promise<
+  { ok: true; actorId: string } | { ok: false; error: string }
+> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "projects", "create")) {
+    return { ok: false, error: "You don't have permission to create projects." };
+  }
+  return { ok: true, actorId: me.id };
+}
+
 async function requireProjectsEdit(): Promise<
   { ok: true; actorId: string } | { ok: false; error: string }
 > {
@@ -88,12 +105,16 @@ async function requireProjectsEdit(): Promise<
 }
 
 export async function listProjectsAction(): Promise<ProjectListRow[]> {
+  // PROJ2-3 — reads gate on projects:view. Signature is a bare array, so denial
+  // returns [] (no data leak) rather than an error object.
+  if (!(await requireProjectsView()).ok) return [];
   return listProjects();
 }
 
 export async function getProjectByIdAction(
   id: string
 ): Promise<ProjectDetail | null> {
+  if (!(await requireProjectsView()).ok) return null;
   return getProjectById(id);
 }
 
@@ -101,8 +122,8 @@ export async function createProjectFromQuoteAction(
   quote: Quote
 ): Promise<ActionResult<{ id: string; project_number: string }>> {
   try {
-    const denied = await requireConvert();
-    if (denied) return { ok: false, error: denied };
+    const gate = await requireProjectsCreate();
+    if (!gate.ok) return { ok: false, error: gate.error };
     const project = await createProjectFromQuote(quote);
     // Best-effort audit (§2.8) — never block the mutation.
     try {
@@ -127,6 +148,7 @@ export async function listProjectsForClientAction(
   clientId: string,
   opco: string
 ): Promise<MergeCandidate[]> {
+  if (!(await requireProjectsView()).ok) return [];
   if (!clientId) return [];
   return listProjectsForClient(clientId, opco);
 }
@@ -136,8 +158,8 @@ export async function mergeQuoteIntoProjectAction(
   projectId: string
 ): Promise<ActionResult<{ id: string; project_number: string }>> {
   try {
-    const denied = await requireConvert();
-    if (denied) return { ok: false, error: denied };
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
     const project = await mergeQuoteIntoProject(quote, projectId);
     // Best-effort audit (§2.8).
     try {
@@ -164,8 +186,8 @@ export async function addCostCenterAction(
   name: string
 ): Promise<ActionResult<DbProjectCostCenter>> {
   try {
-    const denied = await requireConvert();
-    if (denied) return { ok: false, error: denied };
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!name.trim()) return { ok: false, error: "Cost center name is required." };
     const cc = await addCostCenter(projectId, name.trim());
     // Best-effort audit (§2.8).
@@ -189,8 +211,8 @@ export async function renameCostCenterAction(
   name: string
 ): Promise<ActionResult<DbProjectCostCenter>> {
   try {
-    const denied = await requireConvert();
-    if (denied) return { ok: false, error: denied };
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!name.trim()) return { ok: false, error: "Cost center name is required." };
     // Capture the prior name BEFORE the rename for the audit diff.
     const before = await getCostCenterById(id).catch(() => null);
@@ -218,8 +240,8 @@ export async function deleteCostCenterAction(
   projectId: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
-    const denied = await requireConvert();
-    if (denied) return { ok: false, error: denied };
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
     // Capture cc details BEFORE the delete for the audit trail.
     const before = await getCostCenterById(id).catch(() => null);
     const ok = await deleteCostCenter(id);
