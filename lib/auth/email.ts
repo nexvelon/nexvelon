@@ -1036,3 +1036,60 @@ export async function sendPurchaseOrderEmail(params: {
     throw new Error(`sendPurchaseOrderEmail: ${result.error.message}`);
   return { id: result.data?.id ?? null };
 }
+
+// INV-4 — email a return authorization (RMA) PDF to the vendor sales rep,
+// mirroring sendPurchaseOrderEmail (same shell/sender contract).
+export async function sendRmaEmail(params: {
+  to: string;
+  from: string;
+  rmaNumber: string;
+  vendorName: string;
+  salesRepName: string | null;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}): Promise<{ id: string | null }> {
+  const greetName = params.salesRepName ?? params.vendorName;
+  const subject = `RMA ${params.rmaNumber} — Return Authorization from Nexvelon`;
+
+  const bodyHtml = letterParagraphs([
+    `Hello ${greetName},`,
+    `Please find attached Return Merchandise Authorization ${params.rmaNumber} from Nexvelon Integrated Solutions Inc.`,
+    `Kindly issue credit or a replacement for the listed items, and reference RMA ${params.rmaNumber} on all correspondence.`,
+    "If you have any questions, please reply to this email.",
+  ]);
+
+  const html = emailShell({
+    eyebrow: "RETURN AUTHORIZATION",
+    headline: `RMA ${params.rmaNumber}`,
+    bodyHtml,
+    signatureItalic: "If you have any questions, please reply to this email.",
+    signatureGroup: "Nexvelon Integrated Solutions",
+    signatureSubline: "RETURN AUTHORIZATION",
+    outerNote: outerNoteFor("This return authorization was sent to", params.to),
+  });
+
+  const text = [
+    `Return Merchandise Authorization ${params.rmaNumber}`,
+    "",
+    `Hello ${greetName},`,
+    "",
+    `Please find attached Return Merchandise Authorization ${params.rmaNumber} from Nexvelon Integrated Solutions Inc.`,
+    `Kindly issue credit or a replacement for the listed items, and reference RMA ${params.rmaNumber} on all correspondence.`,
+    "",
+    "If you have any questions, please reply to this email.",
+    "",
+    "— Nexvelon Integrated Solutions",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: params.from,
+    to: params.to,
+    subject,
+    html,
+    text,
+    attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+  });
+  if (result.error) throw new Error(`sendRmaEmail: ${result.error.message}`);
+  return { id: result.data?.id ?? null };
+}

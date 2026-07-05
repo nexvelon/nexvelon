@@ -621,7 +621,8 @@ export type ActivityEntityType =
   | "vendor"
   | "purchase_order"
   | "attachment"
-  | "pickup_slip";
+  | "pickup_slip"
+  | "rma";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -885,6 +886,10 @@ export interface DbInventoryStock {
   lost_at: string | null;
   custody_proof_attachment_id: string | null;
   last_known_label: string | null;
+  // INV-4 (migration 0079): return-to-vendor state. Set when a unit is on an
+  // RMA; rma_id links back to the authorization. Null for on-hand units.
+  rma_status: string | null; // 'rma_pending' | 'rma_shipped' | 'rma_credited'
+  rma_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1289,6 +1294,108 @@ export type DbPickupSlipLineInsert = {
   quantity: number;
   line_no: number;
   movement_id?: string | null;
+};
+
+// ----------------------------------------------------------------------------
+// RMAs (INV-4, migration 0079) — return merchandise authorization. Header +
+// snapshotted lines. Lifecycle: draft → sent → (approved) → shipped →
+// received_credit → closed, with a cancel escape from draft/sent. Stock units
+// carry rma_status + rma_id while on an RMA.
+// ----------------------------------------------------------------------------
+export type DbRmaStatus =
+  | "draft"
+  | "sent"
+  | "approved"
+  | "shipped"
+  | "received_credit"
+  | "closed"
+  | "cancelled";
+
+export type DbRmaReason =
+  | "defective"
+  | "wrong_part"
+  | "over_shipment"
+  | "warranty"
+  | "other";
+
+export interface DbRma {
+  id: string;
+  rma_number: string; // 'RMA-YYYY-NNNN'
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  vendor_id: string;
+  vendor_name: string;
+  status: string; // DbRmaStatus
+  reason: string; // DbRmaReason
+  reason_detail: string | null;
+  tracking_carrier: string | null;
+  tracking_number: string | null;
+  credit_expected_amount: number | null;
+  credit_received_amount: number | null;
+  credit_received_at: string | null;
+  notes: string | null;
+  pdf_path: string | null;
+  sent_at: string | null;
+  sent_to_email: string | null;
+  approved_at: string | null;
+  shipped_at: string | null;
+  closed_at: string | null;
+  updated_at: string;
+}
+
+export type DbRmaInsert = {
+  rma_number: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  vendor_id: string;
+  vendor_name: string;
+  status?: DbRmaStatus;
+  reason: DbRmaReason;
+  reason_detail?: string | null;
+  tracking_carrier?: string | null;
+  tracking_number?: string | null;
+  credit_expected_amount?: number | null;
+  notes?: string | null;
+};
+
+export type DbRmaUpdate = Partial<Omit<DbRmaInsert, "rma_number">> & {
+  credit_received_amount?: number | null;
+  credit_received_at?: string | null;
+  pdf_path?: string | null;
+  sent_at?: string | null;
+  sent_to_email?: string | null;
+  approved_at?: string | null;
+  shipped_at?: string | null;
+  closed_at?: string | null;
+};
+
+export interface DbRmaLine {
+  id: string;
+  rma_id: string;
+  stock_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  serial_number: string | null;
+  quantity: number;
+  unit_cost: number;
+  line_no: number;
+  line_reason: string | null;
+  created_at: string;
+}
+
+export type DbRmaLineInsert = {
+  rma_id: string;
+  stock_id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  serial_number?: string | null;
+  quantity: number;
+  unit_cost: number;
+  line_no: number;
+  line_reason?: string | null;
 };
 
 // ----------------------------------------------------------------------------
