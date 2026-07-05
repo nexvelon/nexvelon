@@ -8,6 +8,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessProjectNumber, costCenterNumber } from "@/lib/format";
 import { sectionSubtotal, round2 } from "@/lib/quote-helpers";
+import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
 import type {
   DbProject,
   DbProjectCostCenter,
@@ -306,32 +307,74 @@ async function nextCostCenterSlot(
 }
 
 // PROJ2-1 — minimal status read/write for updateProjectStatusAction. The read
-// returns just id + status so the action can validate the transition; the write
-// stamps updated_by (updated_at is maintained by the set_updated_at trigger).
+// returns id + status (+ actual_completion for the PROJ2-2 completion hook) so
+// the action can validate the transition; the write stamps updated_by
+// (updated_at is maintained by the set_updated_at trigger).
 export async function getProjectStatus(
   id: string
-): Promise<{ id: string; status: ProjectStatus } | null> {
+): Promise<{
+  id: string;
+  status: ProjectStatus;
+  actual_completion: string | null;
+} | null> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("projects")
-    .select("id, status")
+    .select("id, status, actual_completion")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getProjectStatus: ${error.message}`);
-  return (data as { id: string; status: ProjectStatus } | null) ?? null;
+  return (
+    (data as {
+      id: string;
+      status: ProjectStatus;
+      actual_completion: string | null;
+    } | null) ?? null
+  );
 }
 
+// PROJ2-2 — the optional `actualCompletion` is folded into the SAME update as
+// the status change (one round-trip). Callers pass it ONLY when transitioning
+// into substantially_complete with a currently-null completion date; otherwise
+// actual_completion is left untouched (§2.2 — never cleared once set).
 export async function setProjectStatus(
   id: string,
   status: ProjectStatus,
+  actorId: string | null,
+  actualCompletion?: string
+): Promise<void> {
+  const supabase = await db();
+  const patch: Record<string, unknown> = { status, updated_by: actorId };
+  if (actualCompletion !== undefined) patch.actual_completion = actualCompletion;
+  const { error } = await supabase.from("projects").update(patch).eq("id", id);
+  if (error) throw new Error(`setProjectStatus: ${error.message}`);
+}
+
+// PROJ2-2 — raw project row for the edit diff.
+export async function getProjectRow(id: string): Promise<DbProject | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getProjectRow: ${error.message}`);
+  return (data as DbProject | null) ?? null;
+}
+
+// PROJ2-2 — apply a validated field patch (already diffed by the action) and
+// stamp updated_by. Only header-editable columns are ever passed in.
+export async function updateProjectFields(
+  id: string,
+  patch: Record<string, unknown>,
   actorId: string | null
 ): Promise<void> {
   const supabase = await db();
   const { error } = await supabase
     .from("projects")
-    .update({ status, updated_by: actorId })
+    .update({ ...patch, updated_by: actorId })
     .eq("id", id);
-  if (error) throw new Error(`setProjectStatus: ${error.message}`);
+  if (error) throw new Error(`updateProjectFields: ${error.message}`);
 }
 
 // PROJ2-1 — lightweight cost-center read used for best-effort audit logging on
@@ -352,6 +395,48 @@ export async function getCostCenterById(
       "id" | "project_id" | "cc_number" | "name"
     > | null) ?? null
   );
+}
+
+// PROJ2-2 — everything the real project header renders. Raw rollup numbers are
+// returned; the caller (ProjectHeader) decides financials visibility per
+// permission (redaction is NOT this helper's job).
+export interface ProjectHeaderData {
+  project: DbProject;
+  client_name: string;
+  site_name: string | null;
+  rollup: {
+    contract: number;
+    billedPct: number;
+    materials: number;
+    labour: number;
+    spent: number;
+    margin: number | null;
+  };
+  change_order_count: number;
+}
+
+export async function getProjectHeaderData(
+  projectId: string
+): Promise<ProjectHeaderData | null> {
+  const detail = await getProjectById(projectId);
+  if (!detail) return null;
+  const rollup = await getProjectCostRollup(projectId);
+  const p = rollup.perProject;
+  return {
+    project: detail.project,
+    client_name: detail.client_name ?? "—",
+    site_name: detail.site_name,
+    rollup: {
+      contract: p.contract,
+      billedPct: p.billed_pct ?? 0,
+      materials: p.materials,
+      labour: p.labour ?? 0,
+      spent: p.spent ?? 0,
+      margin: p.margin,
+    },
+    change_order_count: detail.quotes.filter((q) => q.role === "change_order")
+      .length,
+  };
 }
 
 export async function addCostCenter(
