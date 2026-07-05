@@ -30,13 +30,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ProjectLifecycleBadge } from "@/components/modules/projects/ProjectLifecycleBadge";
+import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-transitions";
 import { listProjectsAction } from "./actions";
 import type { ProjectListRow } from "@/lib/api/projects";
+import type { ProjectStatus } from "@/lib/types/database";
 
 const OPCO_LABEL: Record<string, string> = {
   integrated_solutions: "Integrated",
   guardian: "Guardian",
 };
+
+// PROJ2-1 — all five lifecycle statuses in canonical order for the filter.
+const ALL_STATUSES = Object.keys(PROJECT_STATUS_LABELS) as ProjectStatus[];
 
 export default function ProjectsListPage() {
   const router = useRouter();
@@ -57,12 +63,6 @@ export default function ProjectsListPage() {
       active = false;
     };
   }, []);
-
-  // Status options come from the data (only 'active' exists today).
-  const statuses = useMemo(
-    () => [...new Set(rows.map((r) => r.status))].sort(),
-    [rows]
-  );
 
   // Count-based stats: total + per-status breakdown.
   const byStatus = useMemo(() => {
@@ -116,7 +116,9 @@ export default function ProjectsListPage() {
             key={s}
             className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs shadow-sm"
           >
-            <span className="text-muted-foreground capitalize">{s}</span>
+            <span className="text-muted-foreground">
+              {PROJECT_STATUS_LABELS[s as ProjectStatus] ?? s}
+            </span>
             <span className="text-brand-charcoal font-semibold tabular-nums">
               {n}
             </span>
@@ -151,9 +153,9 @@ export default function ProjectsListPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All statuses</SelectItem>
-            {statuses.map((s) => (
-              <SelectItem key={s} value={s} className="capitalize">
-                {s}
+            {ALL_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {PROJECT_STATUS_LABELS[s]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -231,9 +233,7 @@ export default function ProjectsListPage() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <span className="rounded-full bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--brand-status-green)] capitalize">
-                      {r.status}
-                    </span>
+                    <ProjectLifecycleBadge status={r.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs tabular-nums">
                     {format(parseISO(r.created_at), "MMM d, yyyy")}

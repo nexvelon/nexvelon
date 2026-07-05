@@ -622,7 +622,8 @@ export type ActivityEntityType =
   | "purchase_order"
   | "attachment"
   | "pickup_slip"
-  | "rma";
+  | "rma"
+  | "project";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -1052,6 +1053,17 @@ export type DbVendorUpdate = Partial<DbVendorInsert>;
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.
 // ----------------------------------------------------------------------------
+// PROJ2-1 (migration 0080) — project lifecycle state machine. DB-backed status
+// values (distinct from the legacy mock ProjectStatus in lib/types.ts, which
+// drives the not-yet-wired mock header/tabs). Transitions live in
+// lib/projects/status-transitions.ts.
+export type ProjectStatus =
+  | "active"
+  | "on_hold"
+  | "substantially_complete"
+  | "closed"
+  | "cancelled";
+
 export interface DbProject {
   id: string;
   project_number: string;
@@ -1059,7 +1071,7 @@ export interface DbProject {
   client_id: string;
   site_id: string | null;
   title: string | null;
-  status: string;
+  status: ProjectStatus;
   originating_quote_id: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -1073,7 +1085,7 @@ export type DbProjectInsert = {
   client_id: string;
   site_id?: string | null;
   title?: string | null;
-  status?: string;
+  status?: ProjectStatus;
   originating_quote_id?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
