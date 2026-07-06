@@ -3,6 +3,7 @@
 export const TABS = [
   "Sites",
   "Contacts",
+  "Quotes",
   "Contracts",
   "Service History",
   "Documents",
@@ -15,15 +16,18 @@ export function TabBar({
   onChange,
   sitesCount,
   contactsCount,
+  quotesCount,
 }: {
   tab: TabKey;
   onChange: (next: TabKey) => void;
   sitesCount: number;
   contactsCount: number;
+  quotesCount: number;
 }) {
   const counts: Partial<Record<TabKey, number>> = {
     Sites: sitesCount,
     Contacts: contactsCount,
+    Quotes: quotesCount,
   };
   return (
     <nav

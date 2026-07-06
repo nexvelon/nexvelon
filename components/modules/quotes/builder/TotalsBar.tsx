@@ -14,7 +14,7 @@ import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { GRANT_EDIT_DISCOUNT } from "@/lib/grants";
 import { formatCurrency } from "@/lib/format";
-import { quoteTotals } from "@/lib/quote-helpers";
+import { computeQuoteTotals } from "@/lib/quotes/totals";
 import type { QuoteSection } from "@/lib/types";
 
 interface Props {
@@ -43,7 +43,12 @@ export function TotalsBar({
   const canEditDiscount = role === "Admin" || grants.has(GRANT_EDIT_DISCOUNT);
   const discountDisabled = disabled || !canEditDiscount;
 
-  const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
+  const totals = computeQuoteTotals(
+    sections,
+    taxRatePct / 100,
+    discount,
+    discountType
+  );
 
   return (
     <Card className="bg-card sticky bottom-0 z-10 grid grid-cols-1 items-center gap-x-6 gap-y-3 rounded-lg border border-[var(--border)] p-4 shadow-md md:grid-cols-12">
@@ -94,20 +99,33 @@ export function TotalsBar({
       </div>
 
       <div className="md:col-span-8 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
-        <Stat label="Subtotal" value={formatCurrency(totals.subtotal)} />
+        <Stat label="Subtotal" value={formatCurrency(totals.sellingPriceSubtotal)} />
         <Stat
           label={`Tax (${taxRatePct.toFixed(2)}%)`}
-          value={formatCurrency(totals.tax)}
+          value={formatCurrency(totals.taxAmount)}
         />
         <Stat
           label="Total"
-          value={formatCurrency(totals.total)}
+          value={formatCurrency(totals.sellingPriceTotal)}
           accent="primary"
         />
+        {/* BUGFIX — Cost / Profit / Margin are all margin-sensitive, gated on
+            quotes:viewMargin (the existing quote-margin gate). Selling-price
+            figures above stay visible to everyone. */}
+        {showMargin ? (
+          <Stat label="Cost" value={formatCurrency(totals.costTotal)} />
+        ) : (
+          <Stat label="Cost" value="•••" hint="Hidden for current role" />
+        )}
+        {showMargin ? (
+          <Stat label="Profit" value={formatCurrency(totals.profit)} />
+        ) : (
+          <Stat label="Profit" value="•••" hint="Hidden for current role" />
+        )}
         {showMargin ? (
           <Stat
             label="Margin"
-            value={`${(totals.margin * 100).toFixed(1)}%`}
+            value={totals.marginPct == null ? "—" : `${totals.marginPct.toFixed(1)}%`}
             accent="gold"
           />
         ) : (

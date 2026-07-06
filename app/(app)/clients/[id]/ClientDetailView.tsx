@@ -43,6 +43,8 @@ import { AttachmentsSection } from "@/components/modules/attachments/Attachments
 import { SiteFormDrawer } from "../SiteFormDrawer";
 import { ContactFormDrawer } from "../ContactFormDrawer";
 import { ActivityLog } from "@/components/activity/ActivityLog";
+import { QuotesForEntitySection } from "@/components/modules/quotes/QuotesForEntitySection";
+import type { QuoteListItem } from "@/lib/api/quotes";
 import {
   deleteClientAction,
   deleteContactAction,
@@ -58,6 +60,10 @@ interface ClientDetailViewProps {
   // on this tab — they live in the DB and will render on future
   // /sites/[id] + /contacts/[id] detail pages.
   activityLog: DbActivityLogWithActor[];
+  // BUGFIX (quotes) A4 — this client's quotes (read-only) + a site_id → name map
+  // for the Quotes tab's Site column. Server-fetched in page.tsx.
+  quotes: QuoteListItem[];
+  siteNameById: Record<string, string>;
 }
 
 export function ClientDetailView({
@@ -65,6 +71,8 @@ export function ClientDetailView({
   sites,
   contacts,
   activityLog,
+  quotes,
+  siteNameById,
 }: ClientDetailViewProps) {
   const router = useRouter();
   const { role } = useRole();
@@ -351,6 +359,7 @@ export function ClientDetailView({
         onChange={setTab}
         sitesCount={sites.length}
         contactsCount={contacts.length}
+        quotesCount={quotes.length}
       />
 
       {tab === "Sites" && (
@@ -388,6 +397,13 @@ export function ClientDetailView({
             setContactDrawer({ open: true, mode: "edit", contact: c })
           }
           onDelete={handleDeleteContact}
+        />
+      )}
+      {tab === "Quotes" && (
+        <QuotesForEntitySection
+          quotes={quotes}
+          showSite
+          siteNameById={siteNameById}
         />
       )}
       {tab === "Contracts" && <PlaceholderPane label="Contracts" />}

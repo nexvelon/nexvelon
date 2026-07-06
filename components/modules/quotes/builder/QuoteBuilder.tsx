@@ -44,11 +44,11 @@ import {
   SECTION_PRESETS,
   emptyLineItem,
   newId,
-  quoteTotals,
   readLastUsedThemeSlug,
   round2,
   writeLastUsedThemeSlug,
 } from "@/lib/quote-helpers";
+import { computeQuoteTotals } from "@/lib/quotes/totals";
 import {
   DEFAULT_QUOTE_THEME_SLUG,
   type QuoteThemeSlug,
@@ -697,7 +697,7 @@ export function QuoteBuilder({
     sectionsOverride?: QuoteSection[]
   ): Quote => {
     const secs = sectionsOverride ?? sections;
-    const totals = quoteTotals(secs, taxRatePct / 100, discount, discountType);
+    const totals = computeQuoteTotals(secs, taxRatePct / 100, discount, discountType);
     const out: Quote = {
       id: initial.id,
       number,
@@ -727,9 +727,9 @@ export function QuoteBuilder({
       internalNotes,
       discount,
       discountType,
-      subtotal: totals.subtotal,
-      tax: totals.tax,
-      total: totals.total,
+      subtotal: totals.sellingPriceSubtotal,
+      tax: totals.taxAmount,
+      total: totals.sellingPriceTotal,
       // Chunk F additions — operator-controlled document style + schedules.
       themeSlug,
       templateSlug,
