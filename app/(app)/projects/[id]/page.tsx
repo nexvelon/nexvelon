@@ -8,6 +8,7 @@ import { getProjectById } from "@/lib/api/projects";
 import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailView";
 import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
 import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
+import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrderButton";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -85,7 +86,14 @@ export default async function ProjectDetailPage({
         canEdit={canEdit}
         canViewFinancials={canViewFinancials}
       />
-      {/* PROJ2-4a — read-only Jobs table (Main Job + Change Orders). */}
+      {/* PROJ2-4a — Jobs table (Main Job + Change Orders); rows link to the Job
+          detail page (PROJ2-4d). Add Change Order (manual, no source quote) is
+          canEdit-only and sits above the table. */}
+      {canEdit ? (
+        <div className="flex justify-end">
+          <AddChangeOrderButton projectId={id} />
+        </div>
+      ) : null}
       <ProjectJobsTable projectId={id} canViewFinancials={canViewFinancials} />
       {/* PROJ2-4b — folder tree (Project lens). Needs a site to root the tree. */}
       {detail.project.site_id ? (

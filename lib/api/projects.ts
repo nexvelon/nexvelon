@@ -218,7 +218,9 @@ export async function createMainJob(input: {
 export async function createChangeOrderJob(input: {
   projectId: string;
   title: string;
-  sourceQuoteId: string;
+  // PROJ2-4d — nullable so a C.O can be added manually (scope discovered during
+  // install) without a source quote. Quote-originated C.Os still pass an id.
+  sourceQuoteId: string | null;
   contractValue: number;
   actorId: string | null;
 }): Promise<DbJob> {
@@ -255,6 +257,143 @@ export async function updateCostCenterJob(input: {
     .update({ job_id: input.jobId })
     .eq("id", input.costCenterId);
   if (error) throw new Error(`updateCostCenterJob: ${error.message}`);
+}
+
+// ── Job detail (PROJ2-4d) ────────────────────────────────────────────────────
+
+/** Cost centers attached to a single Job (Job detail Overview tab). */
+export async function listCostCentersForJob(
+  jobId: string
+): Promise<DbProjectCostCenter[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_cost_centers")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(`listCostCentersForJob: ${error.message}`);
+  return (data ?? []) as DbProjectCostCenter[];
+}
+
+/** Patch a Job's editable header fields (title / contract_value). updated_at is
+ *  maintained by the project_jobs_set_updated_at trigger. */
+export async function updateJobFields(
+  jobId: string,
+  fields: { title?: string; contract_value?: number },
+  actorId: string | null
+): Promise<void> {
+  const supabase = await db();
+  const patch: Record<string, string | number> = { updated_by: actorId ?? "" };
+  if (fields.title !== undefined) patch.title = fields.title;
+  if (fields.contract_value !== undefined)
+    patch.contract_value = round2(fields.contract_value);
+  // updated_by is uuid; an empty string would violate. Only stamp when known.
+  if (actorId == null) delete patch.updated_by;
+  const { error } = await supabase
+    .from("project_jobs")
+    .update(patch)
+    .eq("id", jobId);
+  if (error) throw new Error(`updateJobFields: ${error.message}`);
+}
+
+/** Set a Job's lifecycle status (mirrors setProjectStatus for jobs). */
+export async function setJobStatus(
+  jobId: string,
+  status: ProjectStatus,
+  actorId: string | null
+): Promise<void> {
+  const supabase = await db();
+  const patch: Record<string, string> = { status };
+  if (actorId != null) patch.updated_by = actorId;
+  const { error } = await supabase
+    .from("project_jobs")
+    .update(patch)
+    .eq("id", jobId);
+  if (error) throw new Error(`setJobStatus: ${error.message}`);
+}
+
+/**
+ * PROJ2-4d — reassign every financial record attached to a Change Order Job to
+ * the project's Main Job, then recompute the Main Job's contract_value from its
+ * cost centers. Ordered so the deleted Job is fully unreferenced before the
+ * caller deletes it: cost centers (ON DELETE SET NULL) + POs (SET NULL) would
+ * survive a delete, but invoices.job_id is ON DELETE RESTRICT — so reassigning
+ * FIRST is mandatory, not just tidy. Returns the reassignment counts for the
+ * audit log. (Not a single DB transaction — Supabase-js has no cross-statement
+ * transaction; this mirrors the sequential best-effort pattern used by
+ * mergeQuoteIntoProject. The ordering guarantees no financial record is ever
+ * orphaned even on a partial failure.)
+ */
+export async function reassignJobFinancialsToMainJob(
+  deletedJobId: string,
+  projectId: string
+): Promise<{
+  mainJobId: string;
+  reassignedCostCenters: number;
+  reassignedInvoices: number;
+  reassignedPurchaseOrders: number;
+}> {
+  const supabase = await db();
+  const mainJob = await getMainJobForProject(projectId);
+  if (!mainJob) throw new Error("reassignJobFinancials: no main job for project");
+  const mainJobId = mainJob.id;
+
+  const { data: ccs, error: ccErr } = await supabase
+    .from("project_cost_centers")
+    .update({ job_id: mainJobId })
+    .eq("job_id", deletedJobId)
+    .select("id");
+  if (ccErr) throw new Error(`reassignJobFinancials/ccs: ${ccErr.message}`);
+
+  const { data: invs, error: invErr } = await supabase
+    .from("invoices")
+    .update({ job_id: mainJobId })
+    .eq("job_id", deletedJobId)
+    .select("id");
+  if (invErr) throw new Error(`reassignJobFinancials/invoices: ${invErr.message}`);
+
+  const { data: pos, error: poErr } = await supabase
+    .from("purchase_orders")
+    .update({ job_id: mainJobId })
+    .eq("job_id", deletedJobId)
+    .select("id");
+  if (poErr) throw new Error(`reassignJobFinancials/pos: ${poErr.message}`);
+
+  // Recompute the Main Job contract_value = Σ its cost centers' contract_value.
+  const { data: mainCcs, error: sumErr } = await supabase
+    .from("project_cost_centers")
+    .select("contract_value")
+    .eq("job_id", mainJobId);
+  if (sumErr) throw new Error(`reassignJobFinancials/sum: ${sumErr.message}`);
+  const total = round2(
+    (mainCcs ?? []).reduce(
+      (s, r) => s + Number((r as { contract_value: number }).contract_value ?? 0),
+      0
+    )
+  );
+  const { error: upErr } = await supabase
+    .from("project_jobs")
+    .update({ contract_value: total })
+    .eq("id", mainJobId);
+  if (upErr) throw new Error(`reassignJobFinancials/mainContract: ${upErr.message}`);
+
+  return {
+    mainJobId,
+    reassignedCostCenters: ccs?.length ?? 0,
+    reassignedInvoices: invs?.length ?? 0,
+    reassignedPurchaseOrders: pos?.length ?? 0,
+  };
+}
+
+/** Hard-delete a Job row. Caller MUST reassign financials first (invoices.job_id
+ *  is ON DELETE RESTRICT) and guard job_type — Main Jobs are never deletable. */
+export async function deleteJobRow(jobId: string): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("project_jobs")
+    .delete()
+    .eq("id", jobId);
+  if (error) throw new Error(`deleteJobRow: ${error.message}`);
 }
 
 /**
