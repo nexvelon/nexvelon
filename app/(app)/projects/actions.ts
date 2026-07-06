@@ -22,10 +22,12 @@ import {
   getCostCenterById,
   getProjectRow,
   updateProjectFields,
+  listJobsForProject,
   type ProjectListRow,
   type ProjectDetail,
   type MergeCandidate,
 } from "@/lib/api/projects";
+import type { DbJob } from "@/lib/types/database";
 import { logActivity } from "@/lib/api/activity-log";
 import { canTransition } from "@/lib/projects/status-transitions";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -118,18 +120,28 @@ export async function getProjectByIdAction(
   return getProjectById(id);
 }
 
+// PROJ2-4a — jobs for a project (Main Job first, then Change Orders). Bare-array
+// signature → [] on denial.
+export async function listJobsForProjectAction(
+  projectId: string
+): Promise<DbJob[]> {
+  if (!(await requireProjectsView()).ok) return [];
+  return listJobsForProject(projectId);
+}
+
 export async function createProjectFromQuoteAction(
   quote: Quote
 ): Promise<ActionResult<{ id: string; project_number: string }>> {
   try {
     const gate = await requireProjectsCreate();
     if (!gate.ok) return { ok: false, error: gate.error };
-    const project = await createProjectFromQuote(quote);
+    const { project, mainJob } = await createProjectFromQuote(quote);
     // Best-effort audit (§2.8) — never block the mutation.
     try {
       await logActivity("project", project.id, "create", {
         project_number: { from: null, to: project.project_number },
         from_quote: { from: null, to: quote.id },
+        main_job: { from: null, to: mainJob.id },
       });
     } catch (logErr) {
       console.error("[activity_log] project create log failed:", logErr);
@@ -160,11 +172,16 @@ export async function mergeQuoteIntoProjectAction(
   try {
     const gate = await requireProjectsEdit();
     if (!gate.ok) return { ok: false, error: gate.error };
-    const project = await mergeQuoteIntoProject(quote, projectId);
+    const { project, changeOrderJob } = await mergeQuoteIntoProject(
+      quote,
+      projectId
+    );
     // Best-effort audit (§2.8).
     try {
       await logActivity("project", project.id, "update", {
         change_order_quote: { from: null, to: quote.id },
+        change_order_job: { from: null, to: changeOrderJob.id },
+        co_number: { from: null, to: changeOrderJob.co_number },
         cost_centers_added: { from: null, to: quote.sections?.length ?? 0 },
       });
     } catch (logErr) {

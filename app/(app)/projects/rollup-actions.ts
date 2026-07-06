@@ -9,7 +9,9 @@
 import {
   getProjectCostRollup,
   type ProjectCostRollup,
+  type DbJobRollup,
 } from "@/lib/api/project-cost-rollup";
+import { getJobById } from "@/lib/api/projects";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -73,19 +75,61 @@ export async function getProjectCostRollupAction(
       "edit"
     );
     const rollup = await getProjectCostRollup(projectId);
-
-    if (!canSeeFinancials) {
-      rollup.perProject.labour = null;
-      rollup.perProject.spent = null;
-      rollup.perProject.margin = null;
-      for (const k of Object.keys(rollup.perCostCenter)) {
-        rollup.perCostCenter[k].labour = null;
-        rollup.perCostCenter[k].spent = null;
-        rollup.perCostCenter[k].margin = null;
-      }
-    }
+    if (!canSeeFinancials) redactRollup(rollup);
 
     return { ok: true, data: { rollup, canSeeFinancials } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// PROJ2-4a — redact the financial legs (labour/spent/margin) across ALL levels
+// of the rollup (project, each cost center, each job) for non-financials callers.
+function redactRollup(rollup: ProjectCostRollup): void {
+  rollup.perProject.labour = null;
+  rollup.perProject.spent = null;
+  rollup.perProject.margin = null;
+  for (const k of Object.keys(rollup.perCostCenter)) {
+    rollup.perCostCenter[k].labour = null;
+    rollup.perCostCenter[k].spent = null;
+    rollup.perCostCenter[k].margin = null;
+  }
+  for (const j of rollup.byJob) {
+    j.labour = null;
+    j.spent = null;
+    j.margin = null;
+  }
+}
+
+export interface JobRollupResult {
+  rollup: DbJobRollup;
+  canSeeFinancials: boolean;
+}
+
+// PROJ2-4a — the single-job rollup entry for a given job. projects:view gate +
+// identical financials redaction.
+export async function getJobRollupAction(
+  jobId: string
+): Promise<ActionResult<JobRollupResult>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "projects", "view")) {
+      return { ok: false, error: "You don't have permission to view projects." };
+    }
+    const job = await getJobById(jobId);
+    if (!job) return { ok: false, error: "Job not found." };
+
+    const canSeeFinancials = hasPermission(
+      adaptRole(me.role),
+      "financials",
+      "edit"
+    );
+    const full = await getProjectCostRollup(job.project_id);
+    if (!canSeeFinancials) redactRollup(full);
+    const entry = full.byJob.find((j) => j.job_id === jobId);
+    if (!entry) return { ok: false, error: "Job rollup not found." };
+
+    return { ok: true, data: { rollup: entry, canSeeFinancials } };
   } catch (e) {
     return fail(e);
   }

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getProjectById } from "@/lib/api/projects";
 import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailView";
 import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
+import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -83,6 +84,8 @@ export default async function ProjectDetailPage({
         canEdit={canEdit}
         canViewFinancials={canViewFinancials}
       />
+      {/* PROJ2-4a — read-only Jobs table (Main Job + Change Orders). */}
+      <ProjectJobsTable projectId={id} canViewFinancials={canViewFinancials} />
       <ProjectDetailView detail={detail} hideHeader />
     </div>
   );

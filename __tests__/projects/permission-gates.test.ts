@@ -16,8 +16,15 @@ const h = vi.hoisted(() => ({
     role: string;
     status: string;
   } | null,
-  createProjectFromQuote: vi.fn(async () => ({ id: "p1", project_number: "P-1" })),
-  mergeQuoteIntoProject: vi.fn(async () => ({ id: "p1", project_number: "P-1" })),
+  // PROJ2-4a — these now return { project, mainJob } / { project, changeOrderJob }.
+  createProjectFromQuote: vi.fn(async () => ({
+    project: { id: "p1", project_number: "P-1" },
+    mainJob: { id: "main-1" },
+  })),
+  mergeQuoteIntoProject: vi.fn(async () => ({
+    project: { id: "p1", project_number: "P-1" },
+    changeOrderJob: { id: "co-1", co_number: 1 },
+  })),
   addCostCenter: vi.fn(async () => ({ id: "cc1", cc_number: "PJ-1", name: "CC" })),
   renameCostCenter: vi.fn(async () => ({ id: "cc1", cc_number: "PJ-1", name: "New" })),
   deleteCostCenter: vi.fn(async () => true),
@@ -40,6 +47,23 @@ const h = vi.hoisted(() => ({
     perCostCenter: {
       cc1: { contract: 100, materials: 10, labour: 20, spent: 30, margin: 70 },
     },
+    // PROJ2-4a — byJob is now part of the rollup; redactRollup iterates it.
+    byJob: [
+      {
+        job_id: "main-1",
+        job_type: "main_job",
+        co_number: null,
+        title: "Main",
+        status: "active",
+        contract: 100,
+        materials: 10,
+        labour: 20,
+        spent: 30,
+        margin: 70,
+        invoiced: 0,
+        billed_pct: null,
+      },
+    ],
   })),
 }));
 

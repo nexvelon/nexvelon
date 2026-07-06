@@ -1132,6 +1132,9 @@ export interface DbProjectCostCenter {
   // INVOICE-1 (migration 0043) — the section's contracted value, seeded from
   // the originating quote section total. An invoice draw pulls a % of this.
   contract_value: number;
+  // PROJ2-4a (migration 0082) — the Job (main_job / change_order) this cost
+  // center belongs to. Nullable FK → project_jobs (backfilled to the Main Job).
+  job_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1143,6 +1146,36 @@ export type DbProjectCostCenterInsert = {
   sort_order?: number;
   source_quote_id?: string | null;
   contract_value?: number;
+  job_id?: string | null;
+};
+
+// ----------------------------------------------------------------------------
+// Jobs (PROJ2-4a, migration 0082) — the container model. Every Project has
+// exactly one Main Job plus zero or more Change Order Jobs. Each Job is a
+// first-class object; cost centers (and, later, POs/invoices) hang off it, and
+// the Project rolls its Jobs up for total P&L.
+// ----------------------------------------------------------------------------
+export type JobType = "main_job" | "change_order";
+export type JobStatus = ProjectStatus; // same 5 lifecycle values
+
+export interface DbJob {
+  id: string;
+  project_id: string;
+  job_type: JobType;
+  co_number: number | null; // NULL for main_job; 1,2,… for change_order
+  title: string;
+  source_quote_id: string | null;
+  contract_value: number;
+  status: JobStatus;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbJobInsert = Omit<DbJob, "id" | "created_at" | "updated_at"> & {
+  id?: string;
 };
 
 export type DbProjectCostCenterUpdate = Partial<
