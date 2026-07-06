@@ -234,6 +234,31 @@ export async function listInvoicesForProject(
 }
 
 /**
+ * PROJ2-4d — invoices attached to a single Job (invoices.job_id, migration
+ * 0084). Powers the Job detail Financials tab. Mirrors listInvoicesForProject.
+ */
+export async function listInvoicesForJob(
+  jobId: string
+): Promise<InvoiceListRow[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*, client:clients(name,deleted_at), project:projects(project_number)")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`listInvoicesForJob: ${error.message}`);
+  return ((data ?? []) as InvoiceJoinRow[]).map((r) => {
+    const { client, project, ...inv } = r;
+    return {
+      ...(inv as DbInvoice),
+      client_name: client?.name ?? null,
+      client_deleted: !!client?.deleted_at,
+      project_number: project?.project_number ?? null,
+    };
+  });
+}
+
+/**
  * MATERIALS-1 — invoices that bill a given part (have a line with product_id).
  * Powers the part detail's Invoices section.
  */

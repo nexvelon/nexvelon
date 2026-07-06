@@ -8,16 +8,12 @@
 import { Card } from "@/components/ui/card";
 import {
   Table,
-  TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatPercent } from "@/lib/format";
 import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
-import { ProjectLifecycleBadge } from "@/components/modules/projects/ProjectLifecycleBadge";
-import type { ProjectStatus } from "@/lib/types/database";
+import { ProjectJobsRows } from "@/components/modules/projects/ProjectJobsRows";
 
 export async function ProjectJobsTable({
   projectId,
@@ -28,11 +24,6 @@ export async function ProjectJobsTable({
 }) {
   const { byJob } = await getProjectCostRollup(projectId);
   if (byJob.length === 0) return null;
-
-  const money = (n: number | null) =>
-    canViewFinancials && n != null ? formatCurrency(n) : "—";
-  const pct = (n: number | null) =>
-    canViewFinancials && n != null ? formatPercent(n) : "—";
 
   return (
     <Card className="bg-card overflow-hidden p-0 shadow-sm">
@@ -52,33 +43,12 @@ export async function ProjectJobsTable({
               <TableHead className="text-right text-[11px] uppercase">PO Committed</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {byJob.map((j) => (
-              <TableRow key={j.job_id}>
-                <TableCell className="text-brand-navy font-mono text-xs font-semibold">
-                  {j.job_type === "main_job" ? "Main" : `C.O #${j.co_number}`}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {j.job_type === "main_job" ? "Main job" : "Change order"}
-                </TableCell>
-                <TableCell className="text-brand-charcoal max-w-[280px] truncate text-sm">
-                  {j.title}
-                </TableCell>
-                <TableCell>
-                  <ProjectLifecycleBadge status={j.status as ProjectStatus} />
-                </TableCell>
-                <TableCell className="text-brand-charcoal text-right text-xs font-semibold tabular-nums">
-                  {money(j.contract)}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
-                  {pct(j.billed_pct)}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-right text-xs tabular-nums">
-                  {money(j.po_committed)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+          {/* PROJ2-4d — rows are now client-side links to the Job detail page. */}
+          <ProjectJobsRows
+            projectId={projectId}
+            rows={byJob}
+            canViewFinancials={canViewFinancials}
+          />
         </Table>
       </div>
     </Card>

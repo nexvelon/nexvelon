@@ -225,6 +225,63 @@ export async function getPurchaseOrders(): Promise<PurchaseOrderListRow[]> {
   });
 }
 
+/**
+ * PROJ2-4d — POs attached to a single Job (purchase_orders.job_id, migration
+ * 0084). Powers the Job detail Financials tab. Same vendor-name + computed-total
+ * assembly as getPurchaseOrders, filtered to one job.
+ */
+export async function getPurchaseOrdersForJob(
+  jobId: string
+): Promise<PurchaseOrderListRow[]> {
+  const supabase = await db();
+
+  const { data: pos, error: poErr } = await supabase
+    .from("purchase_orders")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+  if (poErr) throw new Error(`getPurchaseOrdersForJob: ${poErr.message}`);
+  const headers = (pos ?? []) as DbPurchaseOrder[];
+  if (headers.length === 0) return [];
+
+  const vendorIds = [...new Set(headers.map((p) => p.vendor_id))];
+  const poIds = headers.map((p) => p.id);
+
+  const [{ data: vendors, error: vErr }, { data: lines, error: lErr }] =
+    await Promise.all([
+      supabase.from("vendors").select("id, name").in("id", vendorIds),
+      supabase
+        .from("purchase_order_lines")
+        .select("purchase_order_id, quantity, unit_cost")
+        .in("purchase_order_id", poIds),
+    ]);
+  if (vErr) throw new Error(`getPurchaseOrdersForJob/vendors: ${vErr.message}`);
+  if (lErr) throw new Error(`getPurchaseOrdersForJob/lines: ${lErr.message}`);
+
+  const vendorName = new Map(
+    (vendors ?? []).map((v) => [v.id as string, v.name as string])
+  );
+  const totals = new Map<string, { total: number; count: number }>();
+  for (const l of lines ?? []) {
+    const key = l.purchase_order_id as string;
+    const prev = totals.get(key) ?? { total: 0, count: 0 };
+    totals.set(key, {
+      total: prev.total + lineTotal(l as { quantity: number; unit_cost: number }),
+      count: prev.count + 1,
+    });
+  }
+
+  return headers.map((h) => {
+    const agg = totals.get(h.id) ?? { total: 0, count: 0 };
+    return {
+      ...h,
+      vendor_name: vendorName.get(h.vendor_id) ?? "—",
+      total: Math.round(agg.total * 100) / 100,
+      line_count: agg.count,
+    };
+  });
+}
+
 /** One PO with its vendor name and ordered, product-enriched lines. */
 export async function getPurchaseOrderById(
   id: string
