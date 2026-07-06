@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/quote-audit";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { getClients, getSitesByClient } from "@/lib/api/clients";
+import { getProjectRow } from "@/lib/api/projects";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { diffQuote } from "@/lib/quote-audit-diff";
 import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
@@ -95,6 +96,29 @@ export async function getQuotePickerDataAction(): Promise<
   }
 }
 
+// PROJ2-5 — validate the quote's intended conversion target BEFORE persisting.
+// Enforces the same shape as the 0086 CHECK plus a cross-reference the DB can't
+// do: a change_order target must be a real project on the quote's OWN site AND
+// client. Returns a typed error string, or null when valid.
+async function validateIntendedTarget(quote: Quote): Promise<string | null> {
+  const kind = quote.intendedTargetKind ?? null;
+  const projectId = quote.intendedTargetProjectId ?? null;
+
+  if (kind === null || kind === "new_project") {
+    // A non-change-order intent never carries a project id.
+    return projectId ? "invalid_convert_target" : null;
+  }
+
+  // kind === "change_order"
+  if (!projectId) return "invalid_convert_target";
+  const project = await getProjectRow(projectId);
+  if (!project) return "invalid_convert_target";
+  // The change order must live on the quote's site and client.
+  if (project.site_id !== (quote.siteId ?? null)) return "invalid_convert_target";
+  if (project.client_id !== (quote.clientId ?? null)) return "invalid_convert_target";
+  return null;
+}
+
 export async function upsertQuoteAction(
   quote: Quote
 ): Promise<ActionResult<Quote>> {
@@ -102,6 +126,10 @@ export async function upsertQuoteAction(
     // AUDIT-1: capture the prior row BEFORE the upsert so we can detect a
     // first-create and status transitions.
     const prior = await getQuoteById(quote.id);
+
+    // PROJ2-5 — reject an inconsistent intended conversion target before write.
+    const targetError = await validateIntendedTarget(quote);
+    if (targetError) return { ok: false, error: targetError };
 
     // QUOTES-5 defense-in-depth: block ANY path that flips a not-yet-Sent quote
     // to Sent without a client + site. sendQuoteAction is the canonical

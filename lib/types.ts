@@ -225,6 +225,13 @@ export interface Quote {
   siteId?: ID;
   projectId?: ID;
   projectType?: QuoteProjectType;
+  // PROJ2-5 — the operator's intended conversion target, chosen at quote
+  // creation and honoured by convert-to-project. "new_project" (default) mints a
+  // fresh Project; "change_order" adds to an existing Project on the same site
+  // (intendedTargetProjectId). Undefined on legacy quotes → user picks at
+  // convert time. Mirrored to quotes.intended_target_* columns (migration 0086).
+  intendedTargetKind?: "new_project" | "change_order";
+  intendedTargetProjectId?: ID;
   status: QuoteStatus;
   createdAt: string;
   expiresAt: string;

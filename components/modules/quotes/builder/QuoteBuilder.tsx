@@ -83,9 +83,11 @@ import { users as MOCK_USERS } from "@/lib/mock-data/users";
 import {
   createProjectFromQuoteAction,
   listProjectsForClientAction,
+  listProjectsForSiteAction,
   mergeQuoteIntoProjectAction,
 } from "@/app/(app)/projects/actions";
 import type { MergeCandidate } from "@/lib/api/projects";
+import { ConversionTargetCard } from "@/components/modules/quotes/builder/ConversionTargetCard";
 import type {
   BuilderLineItem,
   Client,
@@ -262,6 +264,20 @@ export function QuoteBuilder({
   const [name, setName] = useState(initial.name ?? "");
   const [clientId, setClientId] = useState(initial.clientId ?? "");
   const [siteId, setSiteId] = useState(initial.siteId ?? "");
+
+  // PROJ2-5 — intended conversion target, chosen at creation. Defaults to a new
+  // project; "change_order" targets an existing project ON THIS SITE. siteProjects
+  // feeds both the create-time chooser and (filtered) the convert dialog.
+  const [intendedTargetKind, setIntendedTargetKind] = useState<
+    "new_project" | "change_order"
+  >(initial.intendedTargetKind ?? "new_project");
+  const [intendedTargetProjectId, setIntendedTargetProjectId] = useState(
+    initial.intendedTargetProjectId ?? ""
+  );
+  const [siteProjects, setSiteProjects] = useState<MergeCandidate[]>([]);
+  // Skip the target-reset on the first site effect run so an edited quote keeps
+  // its saved target; only a USER site change resets it.
+  const siteInitRef = useRef(true);
   const [validUntil, setValidUntil] = useState(initial.expiresAt);
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>(
     initial.paymentTerms ?? "Net 30"
@@ -427,6 +443,34 @@ export function QuoteBuilder({
     // on the override (not the function ref) avoids infinite re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, siteId, sitesByClientOverride]);
+
+  // PROJ2-5 — load the projects on the current site (for the intended-target
+  // chooser), and reset the target to "new project" whenever the user CHANGES
+  // the site (a change_order target only makes sense on its own site). The first
+  // run is skipped so an edited quote keeps its persisted target on load.
+  useEffect(() => {
+    if (siteInitRef.current) {
+      siteInitRef.current = false;
+    } else {
+      setIntendedTargetKind("new_project");
+      setIntendedTargetProjectId("");
+    }
+    if (!siteId) {
+      setSiteProjects([]);
+      return;
+    }
+    let active = true;
+    listProjectsForSiteAction(siteId)
+      .then((ps) => {
+        if (active) setSiteProjects(ps);
+      })
+      .catch(() => {
+        if (active) setSiteProjects([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [siteId]);
 
   // QD-2 Phase 5c — render any drawings schedule's uploaded PDF to images.
   // Watches `schedules`; renders each pdfPath once (skips cached + in-flight).
@@ -706,6 +750,13 @@ export function QuoteBuilder({
       siteId,
       projectId: initial.projectId,
       projectType,
+      // PROJ2-5 — carry the intended conversion target; only a change_order keeps
+      // a project id (matches the 0086 shape CHECK + saveQuoteAction validation).
+      intendedTargetKind,
+      intendedTargetProjectId:
+        intendedTargetKind === "change_order"
+          ? intendedTargetProjectId || undefined
+          : undefined,
       preparedBy: preparedBy.trim() || undefined,
       status: nextStatus,
       createdAt: initial.createdAt,
@@ -1046,13 +1097,26 @@ export function QuoteBuilder({
   // eligible merge targets (same client + same opco) for Mode B.
   const handleConvert = async () => {
     if (status !== "Approved") return;
-    setConvertMode("new");
-    setMergeProjectId("");
+    // PROJ2-5 — pre-select the dialog from the quote's intended target.
+    const wantExisting =
+      intendedTargetKind === "change_order" && !!intendedTargetProjectId;
+    setConvertMode(wantExisting ? "existing" : "new");
+    setMergeProjectId(wantExisting ? intendedTargetProjectId : "");
     setMergeCandidates([]);
     setConvertOpen(true);
     if (clientId) {
-      const cands = await listProjectsForClientAction(clientId, templateSlug);
-      setMergeCandidates(cands);
+      // PROJ2-5 — a change order belongs on the SAME site as its project. Filter
+      // the client+opco candidates down to those on this quote's site (a
+      // cross-site merge is almost always a mistake). Falls back to client+opco
+      // when the quote has no site yet.
+      const [clientCands, siteCands] = await Promise.all([
+        listProjectsForClientAction(clientId, templateSlug),
+        siteId ? listProjectsForSiteAction(siteId) : Promise.resolve([]),
+      ]);
+      const onSite = new Set(siteCands.map((p) => p.id));
+      setMergeCandidates(
+        siteId ? clientCands.filter((p) => onSite.has(p.id)) : clientCands
+      );
     }
   };
 
@@ -1289,6 +1353,19 @@ export function QuoteBuilder({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {/* PROJ2-5 — reflect the intent captured at creation; the operator
+                can still override below. */}
+            {intendedTargetKind === "change_order" ? (
+              <p className="text-muted-foreground rounded-md bg-muted/50 px-2.5 py-1.5 text-[11px]">
+                This quote was marked as a <strong>change order</strong> to an
+                existing project on this site — pre-selected below.
+              </p>
+            ) : (
+              <p className="text-muted-foreground rounded-md bg-muted/50 px-2.5 py-1.5 text-[11px]">
+                This quote was marked for a <strong>new project</strong> on this
+                site. You can still override.
+              </p>
+            )}
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="radio"
@@ -1413,6 +1490,17 @@ export function QuoteBuilder({
             siteId={siteId}
             onClientChange={setClientId}
             onSiteChange={setSiteId}
+            disabled={ro.readOnly}
+          />
+
+          {/* PROJ2-5 — intended conversion target (after the site is picked). */}
+          <ConversionTargetCard
+            siteSelected={!!siteId}
+            siteProjects={siteProjects}
+            kind={intendedTargetKind}
+            projectId={intendedTargetProjectId}
+            onKindChange={setIntendedTargetKind}
+            onProjectChange={setIntendedTargetProjectId}
             disabled={ro.readOnly}
           />
 

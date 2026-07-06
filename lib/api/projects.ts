@@ -498,6 +498,26 @@ export async function listProjectsForClient(
 }
 
 /**
+ * PROJ2-5 — projects on a given SITE, for the quote "intended conversion target"
+ * chooser (a Change Order belongs on the same site as its Project). Excludes
+ * cancelled projects; ordered oldest-first (created_at ASC) so the original
+ * project reads at the top.
+ */
+export async function listProjectsForSite(
+  siteId: string
+): Promise<MergeCandidate[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, project_number, title, status")
+    .eq("site_id", siteId)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`listProjectsForSite: ${error.message}`);
+  return (data ?? []) as MergeCandidate[];
+}
+
+/**
  * PROJ-2 — merge a quote into an EXISTING project as a change order: link it
  * (role 'change_order') and seed its sections as ADDITIONAL cost centers that
  * CONTINUE the project's PJ sequence (never restart, never reuse). Rejects a
