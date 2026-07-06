@@ -1199,6 +1199,9 @@ export interface DbInvoice {
   invoice_number: string | null;
   opco: string;
   project_id: string | null;
+  // PROJ2-4c (migration 0084) — the Job this invoice bills against (backfilled
+  // to the project's Main Job). RESTRICT: a Job with invoices can't be deleted.
+  job_id: string | null;
   client_id: string;
   site_id: string | null;
   status: string;
@@ -1228,6 +1231,7 @@ export type DbInvoiceInsert = {
   invoice_number?: string | null;
   opco: string;
   project_id?: string | null;
+  job_id?: string | null;
   client_id: string;
   site_id?: string | null;
   status?: string;
@@ -1489,6 +1493,10 @@ export interface DbPurchaseOrder {
   site_id: string | null; // drop-ship destination site; NULL = ship to office
   tax_rate: number | null; // e.g. 0.13
   tax_amount: number | null;
+  // PROJ2-4c (migration 0084) — optional Project/Job attribution (SET NULL).
+  // Historical POs remain unattributed; only new POs get stamped.
+  project_id: string | null;
+  job_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -1506,6 +1514,8 @@ export type DbPurchaseOrderInsert = {
   reference?: string | null;
   ship_to?: string | null;
   notes?: string | null;
+  project_id?: string | null;
+  job_id?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
 };

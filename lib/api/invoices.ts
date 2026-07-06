@@ -452,7 +452,8 @@ export async function listBillableMaterialsForProject(
  * from the project. NO number yet (minted on issue), tax_rate 13, holdback 0.
  */
 export async function createInvoiceForProject(
-  projectId: string
+  projectId: string,
+  jobId?: string
 ): Promise<DbInvoice> {
   const supabase = await db();
   const {
@@ -468,11 +469,37 @@ export async function createInvoiceForProject(
   if (!proj) throw new Error("Project not found.");
   const p = proj as { opco: string; client_id: string; site_id: string | null };
 
+  // PROJ2-4c — resolve the Job. An explicit jobId must belong to this project;
+  // otherwise default to the project's Main Job.
+  let resolvedJobId: string | null = null;
+  if (jobId) {
+    const { data: job, error: jErr } = await supabase
+      .from("project_jobs")
+      .select("id, project_id")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (jErr) throw new Error(`createInvoiceForProject/job: ${jErr.message}`);
+    if (!job || (job as { project_id: string }).project_id !== projectId) {
+      throw new Error("That job doesn't belong to this project.");
+    }
+    resolvedJobId = jobId;
+  } else {
+    const { data: main, error: mErr } = await supabase
+      .from("project_jobs")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("job_type", "main_job")
+      .maybeSingle();
+    if (mErr) throw new Error(`createInvoiceForProject/mainJob: ${mErr.message}`);
+    resolvedJobId = (main as { id: string } | null)?.id ?? null;
+  }
+
   const { data, error } = await supabase
     .from("invoices")
     .insert({
       opco: p.opco,
       project_id: projectId,
+      job_id: resolvedJobId,
       client_id: p.client_id,
       site_id: p.site_id,
       status: "draft",

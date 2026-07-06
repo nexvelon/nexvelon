@@ -119,12 +119,15 @@ export async function listBillableMaterialsForProjectAction(
 // ─── Create ────────────────────────────────────────────────────────────────
 
 export async function createInvoiceForProjectAction(
-  projectId: string
+  projectId: string,
+  jobId?: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const denied = await requireFinancials();
     if (denied) return { ok: false, error: denied };
-    const invoice = await createInvoiceForProject(projectId);
+    // PROJ2-4c — jobId is optional; when omitted the invoice is stamped to the
+    // project's Main Job. An explicit jobId is validated against the project.
+    const invoice = await createInvoiceForProject(projectId, jobId);
     revalidatePath("/invoices");
     revalidatePath(`/projects/${projectId}`);
     return { ok: true, data: { id: invoice.id } };

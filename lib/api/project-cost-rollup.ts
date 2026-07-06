@@ -52,12 +52,15 @@ export interface ProjectRollup {
   spent: number | null;
   margin: number | null;
   billed_pct: number | null;
+  // PROJ2-4c — committed purchase-order spend (issued/partially_received/
+  // received POs attributed to this project). Financials-redactable.
+  po_committed: number | null;
 }
 
-// PROJ2-4a — per-Job rollup. materials/labour/spent/margin are `number | null`
-// so the action can redact them exactly like the project/cost-center rows.
-// invoiced/billed_pct are 0/null until PROJ2-4c attributes invoices to a job
-// (invoices carry project_id only today) — see note in getProjectCostRollup.
+// PROJ2-4a — per-Job rollup. PROJ2-4c completes invoiced / billed_pct /
+// po_committed per Job. materials/labour/spent/margin/invoiced/billed_pct/
+// po_committed are `number | null` so the action can redact the financial legs
+// exactly like the project/cost-center rows.
 export interface DbJobRollup {
   job_id: string;
   job_type: string; // 'main_job' | 'change_order'
@@ -69,8 +72,9 @@ export interface DbJobRollup {
   labour: number | null;
   spent: number | null;
   margin: number | null;
-  invoiced: number;
+  invoiced: number | null;
   billed_pct: number | null;
+  po_committed: number | null;
 }
 
 export interface ProjectCostRollup {
@@ -151,17 +155,69 @@ export async function getProjectCostRollup(
   // Labour per cost-center (JC-1).
   const labourByCc = await sumLabourCostByCostCenter(projectId);
 
-  // Invoiced (issued only) — project-level.
+  // Invoiced (issued only: status IN sent/paid) — project total + per job.
   let invoiced = 0;
+  const invoicedByJob: Record<string, number> = {};
   {
     const { data: invData, error: iErr } = await supabase
       .from("invoices")
-      .select("total, status")
+      .select("total, status, job_id")
       .eq("project_id", projectId)
       .in("status", ["sent", "paid"]);
     if (iErr) throw new Error(`getProjectCostRollup/invoices: ${iErr.message}`);
-    for (const r of (invData ?? []) as { total: number | null }[]) {
-      invoiced = round2(invoiced + Number(r.total ?? 0));
+    for (const r of (invData ?? []) as {
+      total: number | null;
+      job_id: string | null;
+    }[]) {
+      const amt = Number(r.total ?? 0);
+      invoiced = round2(invoiced + amt);
+      if (r.job_id)
+        invoicedByJob[r.job_id] = round2((invoicedByJob[r.job_id] ?? 0) + amt);
+    }
+  }
+
+  // PROJ2-4c — committed PO spend: POs attributed to this project with an
+  // issued/partially_received/received status. POs have no stored total, so we
+  // sum their line (qty × unit_cost). Historical unattributed POs (project_id
+  // NULL) never count.
+  let poCommittedTotal = 0;
+  const poCommittedByJob: Record<string, number> = {};
+  {
+    const { data: poData, error: poErr } = await supabase
+      .from("purchase_orders")
+      .select("id, job_id, status")
+      .eq("project_id", projectId)
+      .in("status", ["issued", "partially_received", "received"]);
+    if (poErr) throw new Error(`getProjectCostRollup/pos: ${poErr.message}`);
+    const pos = (poData ?? []) as { id: string; job_id: string | null }[];
+    if (pos.length > 0) {
+      const { data: lineData, error: lErr } = await supabase
+        .from("purchase_order_lines")
+        .select("purchase_order_id, quantity, unit_cost")
+        .in(
+          "purchase_order_id",
+          pos.map((p) => p.id)
+        );
+      if (lErr) throw new Error(`getProjectCostRollup/poLines: ${lErr.message}`);
+      const totalByPo: Record<string, number> = {};
+      for (const l of (lineData ?? []) as {
+        purchase_order_id: string;
+        quantity: number | null;
+        unit_cost: number | null;
+      }[]) {
+        totalByPo[l.purchase_order_id] = round2(
+          (totalByPo[l.purchase_order_id] ?? 0) +
+            Number(l.quantity ?? 0) * Number(l.unit_cost ?? 0)
+        );
+      }
+      for (const p of pos) {
+        const t = totalByPo[p.id] ?? 0;
+        poCommittedTotal = round2(poCommittedTotal + t);
+        if (p.job_id)
+          poCommittedByJob[p.job_id] = round2(
+            (poCommittedByJob[p.job_id] ?? 0) + t
+          );
+      }
     }
   }
 
@@ -196,11 +252,11 @@ export async function getProjectCostRollup(
     spent: spentTotal,
     margin: round2(contractTotal - spentTotal),
     billed_pct: contractTotal > 0 ? invoiced / contractTotal : null,
+    po_committed: poCommittedTotal,
   };
 
-  // PROJ2-4a — per-Job rollup. Group the already-computed per-cost-center
-  // numbers by job_id. invoiced/billed_pct stay 0/null per job because invoices
-  // aren't job-attributed yet (that's PROJ2-4c); project-level invoiced is exact.
+  // PROJ2-4a — per-Job rollup: group the already-computed per-cost-center
+  // numbers by job_id. PROJ2-4c adds real invoiced / billed_pct / po_committed.
   const jobById = new Map<
     string,
     { contract: number; materials: number; labour: number }
@@ -232,6 +288,7 @@ export async function getProjectCostRollup(
     .map((j) => {
       const agg = jobById.get(j.id) ?? { contract: 0, materials: 0, labour: 0 };
       const spent = round2(agg.materials + agg.labour);
+      const jobInvoiced = round2(invoicedByJob[j.id] ?? 0);
       return {
         job_id: j.id,
         job_type: j.job_type,
@@ -243,8 +300,9 @@ export async function getProjectCostRollup(
         labour: agg.labour,
         spent,
         margin: round2(agg.contract - spent),
-        invoiced: 0, // per-job invoicing arrives in PROJ2-4c
-        billed_pct: null,
+        invoiced: jobInvoiced,
+        billed_pct: agg.contract > 0 ? jobInvoiced / agg.contract : null,
+        po_committed: round2(poCommittedByJob[j.id] ?? 0),
       };
     })
     .sort((a, b) => {
