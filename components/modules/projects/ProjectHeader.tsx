@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import { getProjectHeaderData } from "@/lib/api/projects";
+import { getProjectHeaderData, listJobsForProject } from "@/lib/api/projects";
 import { ProjectStatusControl } from "@/components/modules/projects/ProjectStatusControl";
 import { ProjectEditForm } from "@/components/modules/projects/ProjectEditForm";
 
@@ -38,9 +38,15 @@ export async function ProjectHeader({
   canEdit: boolean;
   canViewFinancials: boolean;
 }) {
-  const data = await getProjectHeaderData(projectId);
+  const [data, jobs] = await Promise.all([
+    getProjectHeaderData(projectId),
+    listJobsForProject(projectId),
+  ]);
   if (!data) return null;
   const { project, client_name, site_name, rollup, change_order_count } = data;
+  // PROJ2-4a — job counts from the real Job rows.
+  const mainCount = jobs.filter((j) => j.job_type === "main_job").length;
+  const coCount = jobs.filter((j) => j.job_type === "change_order").length;
 
   return (
     <Card
@@ -116,6 +122,14 @@ export async function ProjectHeader({
             <DateMeta label="Target" value={fmtDate(project.target_completion)} />
             <DateMeta label="Completed" value={fmtDate(project.actual_completion)} />
           </dl>
+          {/* PROJ2-4a — Jobs summary. */}
+          <p className="text-muted-foreground mt-3 text-[11px]">
+            <span className="uppercase tracking-wider">Jobs</span>{" "}
+            <span className="text-brand-charcoal font-medium">
+              {mainCount} Main Job · {coCount} Change Order
+              {coCount === 1 ? "" : "s"}
+            </span>
+          </p>
         </div>
       </div>
     </Card>

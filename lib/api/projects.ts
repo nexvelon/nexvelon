@@ -12,6 +12,7 @@ import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
 import type {
   DbProject,
   DbProjectCostCenter,
+  DbJob,
   ProjectStatus,
 } from "@/lib/types/database";
 import type { Quote } from "@/lib/types";
@@ -123,12 +124,149 @@ export async function getProjectById(id: string): Promise<ProjectDetail | null> 
   };
 }
 
+// ── Jobs (PROJ2-4a) ──────────────────────────────────────────────────────────
+
+/** All jobs for a project — Main Job first, then Change Orders by co_number. */
+export async function listJobsForProject(projectId: string): Promise<DbJob[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .select("*")
+    .eq("project_id", projectId)
+    // main_job sorts before change_order; then by sort_order, then co_number.
+    .order("job_type", { ascending: true }) // 'change_order' < 'main_job' — reversed below
+    .order("sort_order", { ascending: true })
+    .order("co_number", { ascending: true, nullsFirst: true });
+  if (error) throw new Error(`listJobsForProject: ${error.message}`);
+  const rows = (data ?? []) as DbJob[];
+  // Guarantee Main Job first regardless of text ordering of job_type.
+  return rows.sort((a, b) => {
+    if (a.job_type !== b.job_type) return a.job_type === "main_job" ? -1 : 1;
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    return (a.co_number ?? 0) - (b.co_number ?? 0);
+  });
+}
+
+export async function getJobById(jobId: string): Promise<DbJob | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error) throw new Error(`getJobById: ${error.message}`);
+  return (data as DbJob | null) ?? null;
+}
+
+export async function getMainJobForProject(
+  projectId: string
+): Promise<DbJob | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("job_type", "main_job")
+    .maybeSingle();
+  if (error) throw new Error(`getMainJobForProject: ${error.message}`);
+  return (data as DbJob | null) ?? null;
+}
+
+/** Next co_number for a project's Change Orders — max(co_number)+1, or 1. */
+export async function getNextCoNumber(projectId: string): Promise<number> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .select("co_number")
+    .eq("project_id", projectId)
+    .eq("job_type", "change_order")
+    .order("co_number", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`getNextCoNumber: ${error.message}`);
+  const max = (data ?? [])[0]?.co_number as number | undefined;
+  return (max ?? 0) + 1;
+}
+
+export async function createMainJob(input: {
+  projectId: string;
+  title: string;
+  sourceQuoteId: string | null;
+  contractValue: number;
+  actorId: string | null;
+}): Promise<DbJob> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .insert({
+      project_id: input.projectId,
+      job_type: "main_job",
+      co_number: null,
+      title: input.title,
+      source_quote_id: input.sourceQuoteId,
+      contract_value: round2(input.contractValue),
+      status: "active",
+      sort_order: 0,
+      created_by: input.actorId,
+      updated_by: input.actorId,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(`createMainJob: ${error.message}`);
+  return data as DbJob;
+}
+
+export async function createChangeOrderJob(input: {
+  projectId: string;
+  title: string;
+  sourceQuoteId: string;
+  contractValue: number;
+  actorId: string | null;
+}): Promise<DbJob> {
+  const supabase = await db();
+  const coNumber = await getNextCoNumber(input.projectId);
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .insert({
+      project_id: input.projectId,
+      job_type: "change_order",
+      co_number: coNumber,
+      title: input.title,
+      source_quote_id: input.sourceQuoteId,
+      contract_value: round2(input.contractValue),
+      status: "active",
+      sort_order: coNumber,
+      created_by: input.actorId,
+      updated_by: input.actorId,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(`createChangeOrderJob: ${error.message}`);
+  return data as DbJob;
+}
+
+/** Reassign a cost center to a Job (used when CCs need to move to a C.O Job). */
+export async function updateCostCenterJob(input: {
+  costCenterId: string;
+  jobId: string;
+}): Promise<void> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("project_cost_centers")
+    .update({ job_id: input.jobId })
+    .eq("id", input.costCenterId);
+  if (error) throw new Error(`updateCostCenterJob: ${error.message}`);
+}
+
 /**
  * PROJ-1 — convert a quote into a real project: mint the P-number, insert the
  * project (opco inherited from the quote template), link the originating quote,
- * and seed one cost center per quote section (PJ-numbered). Returns the project.
+ * and seed one cost center per quote section (PJ-numbered).
+ * PROJ2-4a — also creates the Main Job and hangs every cost center off it.
+ * Returns the project + its Main Job.
  */
-export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
+export async function createProjectFromQuote(
+  quote: Quote
+): Promise<{ project: DbProject; mainJob: DbJob }> {
   const supabase = await db();
   const {
     data: { user },
@@ -152,13 +290,27 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
     .single();
   if (error) throw new Error(`createProjectFromQuote: ${error.message}`);
   const project = proj as DbProject;
+  const actorId = user?.id ?? null;
 
   const { error: pqErr } = await supabase
     .from("project_quotes")
     .insert({ project_id: project.id, quote_id: quote.id, role: "original" });
   if (pqErr) throw new Error(`createProjectFromQuote/link: ${pqErr.message}`);
 
+  // PROJ2-4a — the Main Job. contract_value = sum of the quote's section
+  // subtotals (the same values seeded onto the cost centers below).
   const sections = quote.sections ?? [];
+  const contractValue = round2(
+    sections.reduce((sum, s) => sum + sectionSubtotal(s), 0)
+  );
+  const mainJob = await createMainJob({
+    projectId: project.id,
+    title: quote.name?.trim() || project.project_number,
+    sourceQuoteId: quote.id,
+    contractValue,
+    actorId,
+  });
+
   if (sections.length > 0) {
     const ccRows = sections.map((s, i) => ({
       project_id: project.id,
@@ -170,6 +322,8 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
       // INVOICE-1: seed the contracted value from the quote section total; an
       // invoice draw later pulls a full or partial % of this.
       contract_value: round2(sectionSubtotal(s)),
+      // PROJ2-4a — every original cost center hangs off the Main Job.
+      job_id: mainJob.id,
     }));
     const { error: ccErr } = await supabase
       .from("project_cost_centers")
@@ -178,7 +332,7 @@ export async function createProjectFromQuote(quote: Quote): Promise<DbProject> {
       throw new Error(`createProjectFromQuote/costCenters: ${ccErr.message}`);
   }
 
-  return project;
+  return { project, mainJob };
 }
 
 /** PROJ-2 — projects a quote may be merged into: SAME client + SAME opco. */
@@ -213,8 +367,12 @@ export async function listProjectsForClient(
 export async function mergeQuoteIntoProject(
   quote: Quote,
   projectId: string
-): Promise<DbProject> {
+): Promise<{ project: DbProject; changeOrderJob: DbJob }> {
   const supabase = await db();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const actorId = user?.id ?? null;
 
   const { data: proj, error: pErr } = await supabase
     .from("projects")
@@ -250,8 +408,21 @@ export async function mergeQuoteIntoProject(
     throw new Error(`mergeQuoteIntoProject/link: ${linkErr.message}`);
   }
 
-  // Seed cost centers CONTINUING the PJ sequence (after the current max).
+  // PROJ2-4a — the change-order Job. contract_value = sum of the new sections.
   const sections = quote.sections ?? [];
+  const coContractValue = round2(
+    sections.reduce((sum, s) => sum + sectionSubtotal(s), 0)
+  );
+  const changeOrderJob = await createChangeOrderJob({
+    projectId: project.id,
+    title: quote.name?.trim() || `Change Order`,
+    sourceQuoteId: quote.id,
+    contractValue: coContractValue,
+    actorId,
+  });
+
+  // Seed cost centers CONTINUING the PJ sequence (after the current max), each
+  // hanging off the new C.O Job.
   if (sections.length > 0) {
     const { maxPj, maxSort } = await currentCostCenterMax(supabase, project.id);
     const ccRows = sections.map((s, i) => ({
@@ -262,6 +433,8 @@ export async function mergeQuoteIntoProject(
       source_quote_id: quote.id,
       // INVOICE-1: seed the contracted value from the quote section total.
       contract_value: round2(sectionSubtotal(s)),
+      // PROJ2-4a — cost centers from this change order hang off its C.O Job.
+      job_id: changeOrderJob.id,
     }));
     const { error: ccErr } = await supabase
       .from("project_cost_centers")
@@ -270,7 +443,7 @@ export async function mergeQuoteIntoProject(
       throw new Error(`mergeQuoteIntoProject/costCenters: ${ccErr.message}`);
   }
 
-  return project;
+  return { project, changeOrderJob };
 }
 
 // Current highest PJ number + sort_order for a project's cost centers — the
