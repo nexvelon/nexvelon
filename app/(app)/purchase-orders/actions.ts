@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  assertPoJobAttribution,
   buildPurchaseOrderPdfProps,
   createPurchaseOrder,
   deletePurchaseOrder,
@@ -156,9 +157,18 @@ export async function createPurchaseOrderAction(
     if (denied) return denied;
     const invalid = validate(input);
     if (invalid) return invalid;
+    // PROJ2-4c — validate optional Project/Job attribution before writing.
+    await assertPoJobAttribution(input.header);
 
     const po = await createPurchaseOrder(input);
-    await logActivity("purchase_order", po.id, "create", {});
+    await logActivity("purchase_order", po.id, "create", {
+      ...(input.header.project_id
+        ? { project: { from: null, to: input.header.project_id } }
+        : {}),
+      ...(input.header.job_id
+        ? { job: { from: null, to: input.header.job_id } }
+        : {}),
+    });
     revalidatePath("/purchase-orders");
     return { ok: true, data: { id: po.id } };
   } catch (e) {
@@ -175,6 +185,7 @@ export async function updatePurchaseOrderAction(
     if (denied) return denied;
     const invalid = validate(input);
     if (invalid) return invalid;
+    await assertPoJobAttribution(input.header);
 
     const before = await getPurchaseOrderById(id);
     if (!before) return { ok: false, error: "Purchase order not found" };

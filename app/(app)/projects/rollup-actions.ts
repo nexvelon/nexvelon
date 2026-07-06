@@ -89,15 +89,23 @@ function redactRollup(rollup: ProjectCostRollup): void {
   rollup.perProject.labour = null;
   rollup.perProject.spent = null;
   rollup.perProject.margin = null;
+  // PROJ2-4c — po_committed is spend; redact it too. (Project invoiced/
+  // billed_pct stay visible — unchanged pre-4c behavior.)
+  rollup.perProject.po_committed = null;
   for (const k of Object.keys(rollup.perCostCenter)) {
     rollup.perCostCenter[k].labour = null;
     rollup.perCostCenter[k].spent = null;
     rollup.perCostCenter[k].margin = null;
   }
+  // PROJ2-4c — at the Job level, redact the full financial leg (incl. invoiced /
+  // billed_pct / po_committed) per §5a.
   for (const j of rollup.byJob) {
     j.labour = null;
     j.spent = null;
     j.margin = null;
+    j.invoiced = null;
+    j.billed_pct = null;
+    j.po_committed = null;
   }
 }
 

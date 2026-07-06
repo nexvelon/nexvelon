@@ -287,6 +287,32 @@ export async function getPurchaseOrderById(
 }
 
 /** Create a draft PO: header (po_number minted, status defaults 'draft') + lines. */
+/**
+ * PROJ2-4c — validate optional Project/Job attribution on a PO header write.
+ * A job_id requires a project_id (mirrors the DB CHECK) AND the job must belong
+ * to that project (the DB can't cross-reference in a CHECK, so we verify here).
+ * No-op when no job_id is set. Throws on violation.
+ */
+export async function assertPoJobAttribution(
+  header: DbPurchaseOrderInsert | DbPurchaseOrderUpdate
+): Promise<void> {
+  const jobId = header.job_id;
+  if (!jobId) return;
+  if (!header.project_id) {
+    throw new Error("A job attribution requires a project.");
+  }
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_jobs")
+    .select("project_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error) throw new Error(`assertPoJobAttribution: ${error.message}`);
+  if (!data || (data as { project_id: string }).project_id !== header.project_id) {
+    throw new Error("That job doesn't belong to the selected project.");
+  }
+}
+
 export async function createPurchaseOrder(
   input: PurchaseOrderWrite
 ): Promise<DbPurchaseOrder> {
