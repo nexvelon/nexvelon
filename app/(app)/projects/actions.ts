@@ -13,6 +13,7 @@ import {
   getProjectById,
   createProjectFromQuote,
   listProjectsForClient,
+  listProjectsForSite,
   mergeQuoteIntoProject,
   addCostCenter,
   renameCostCenter,
@@ -199,6 +200,15 @@ export async function listProjectsForClientAction(
   if (!(await requireProjectsView()).ok) return [];
   if (!clientId) return [];
   return listProjectsForClient(clientId, opco);
+}
+
+// PROJ2-5 — projects on a site, for the quote intended-conversion-target chooser.
+export async function listProjectsForSiteAction(
+  siteId: string
+): Promise<MergeCandidate[]> {
+  if (!(await requireProjectsView()).ok) return [];
+  if (!siteId) return [];
+  return listProjectsForSite(siteId);
 }
 
 export async function mergeQuoteIntoProjectAction(

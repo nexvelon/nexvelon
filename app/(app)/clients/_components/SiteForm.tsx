@@ -269,8 +269,14 @@ export function SiteForm({
   const [siteCountry, setSiteCountry] = useState(existing?.country ?? "Canada");
 
   // ─── Billing (defaults inherit from client) ───
+  // PROJ2-5 — three sources: client billing (default), the site's own physical
+  // address, or a distinct stored address. The two flags are mutually exclusive
+  // (DB CHECK 0085); "different" = both false.
   const [billSameAsClient, setBillSameAsClient] = useState(
     existing?.billing_same_as_client ?? true
+  );
+  const [billSameAsSite, setBillSameAsSite] = useState(
+    existing?.billing_same_as_site ?? false
   );
   const [billStreet, setBillStreet] = useState(existing?.billing_street ?? "");
   const [billUnit, setBillUnit] = useState(existing?.billing_unit ?? "");
@@ -420,48 +426,70 @@ export function SiteForm({
 
   // ─── Inheritance toggle handlers — one-time copy on toggle OFF ───
 
-  function handleBillingInheritToggle(inherit: boolean) {
-    if (!inherit && parentClient) {
-      // Toggling OFF — pre-fill with client values so operator has a
-      // starting point. Only fires when there's a parent to copy from.
-      setBillStreet(parentClient.billing_street ?? "");
-      setBillUnit(parentClient.billing_unit ?? "");
-      setBillCity(parentClient.billing_city ?? "");
-      setBillProvince(parentClient.billing_province ?? "");
-      setBillPostal(parentClient.billing_postal ?? "");
-      setBillCountry(parentClient.billing_country ?? "Canada");
+  // PROJ2-5 — the effective billing address given the current form state,
+  // mirroring the read-time precedence of resolveBillingAddress (site physical →
+  // client billing → stored billing). Used for the disabled-field preview and as
+  // the copy source when switching to "Different".
+  function effectiveBilling() {
+    if (billSameAsSite) {
+      return {
+        street: address1,
+        unit: address2,
+        city,
+        province,
+        postal,
+        country: siteCountry,
+      };
     }
-    setBillSameAsClient(inherit);
+    if (billSameAsClient) {
+      return {
+        street: parentClient?.billing_street ?? "",
+        unit: parentClient?.billing_unit ?? "",
+        city: parentClient?.billing_city ?? "",
+        province: parentClient?.billing_province ?? "",
+        postal: parentClient?.billing_postal ?? "",
+        country: parentClient?.billing_country ?? "Canada",
+      };
+    }
+    return {
+      street: billStreet,
+      unit: billUnit,
+      city: billCity,
+      province: billProvince,
+      postal: billPostal,
+      country: billCountry,
+    };
+  }
+
+  // PROJ2-5 — three-way billing source. Switching TO "different" does a one-time
+  // copy of the currently-effective address into the editable fields (§2.7), so
+  // the operator starts from what was being inherited. The two flags are kept
+  // mutually exclusive to satisfy the 0085 CHECK.
+  function handleBillingSourceChange(next: "client" | "site" | "different") {
+    if (next === "different") {
+      const eff = effectiveBilling();
+      setBillStreet(eff.street);
+      setBillUnit(eff.unit);
+      setBillCity(eff.city);
+      setBillProvince(eff.province);
+      setBillPostal(eff.postal);
+      setBillCountry(eff.country || "Canada");
+    }
+    setBillSameAsClient(next === "client");
+    setBillSameAsSite(next === "site");
   }
 
   function handleMailingInheritToggle(inherit: boolean) {
     if (!inherit) {
-      // Toggling OFF — pre-fill with whatever the effective billing is
-      // (the site's own billing if overridden, else the client's billing).
-      const effStreet = billSameAsClient
-        ? parentClient?.billing_street ?? ""
-        : billStreet;
-      const effUnit = billSameAsClient
-        ? parentClient?.billing_unit ?? ""
-        : billUnit;
-      const effCity = billSameAsClient
-        ? parentClient?.billing_city ?? ""
-        : billCity;
-      const effProvince = billSameAsClient
-        ? parentClient?.billing_province ?? ""
-        : billProvince;
-      const effPostal = billSameAsClient
-        ? parentClient?.billing_postal ?? ""
-        : billPostal;
-      const effCountry = billSameAsClient
-        ? parentClient?.billing_country ?? "Canada"
-        : billCountry;
-      setMailStreet(effStreet);
-      setMailUnit(effUnit);
-      setMailCity(effCity);
-      setMailProvince(effProvince);
-      setMailPostal(effPostal);
-      setMailCountry(effCountry);
+      // Toggling OFF — pre-fill with whatever the effective billing is (site
+      // physical, client billing, or the site's own stored billing).
+      const eff = effectiveBilling();
+      setMailStreet(eff.street);
+      setMailUnit(eff.unit);
+      setMailCity(eff.city);
+      setMailProvince(eff.province);
+      setMailPostal(eff.postal);
+      setMailCountry(eff.country || "Canada");
     }
     setMailSameAsBilling(inherit);
   }
@@ -811,14 +839,17 @@ export function SiteForm({
       postal_code: postal.trim() || null,
       country: siteCountry.trim() || "Canada",
 
-      // Billing — NULL when inherited per Phase 1 Decision Point 1
+      // Billing — NULL when inherited (from client OR site) per §2.7. The
+      // resolver does read-time lookup; we never copy the inherited address into
+      // billing_* columns. The two flags are mutually exclusive (0085 CHECK).
       billing_same_as_client: billSameAsClient,
-      billing_street: billSameAsClient ? null : billStreet.trim() || null,
-      billing_unit: billSameAsClient ? null : billUnit.trim() || null,
-      billing_city: billSameAsClient ? null : billCity.trim() || null,
-      billing_province: billSameAsClient ? null : billProvince || null,
-      billing_postal: billSameAsClient ? null : billPostal.trim() || null,
-      billing_country: billSameAsClient ? null : billCountry.trim() || null,
+      billing_same_as_site: billSameAsSite,
+      billing_street: billInherited ? null : billStreet.trim() || null,
+      billing_unit: billInherited ? null : billUnit.trim() || null,
+      billing_city: billInherited ? null : billCity.trim() || null,
+      billing_province: billInherited ? null : billProvince || null,
+      billing_postal: billInherited ? null : billPostal.trim() || null,
+      billing_country: billInherited ? null : billCountry.trim() || null,
 
       // Mailing — NULL when "same as billing"
       mailing_same_as_billing: mailSameAsBilling,
@@ -922,30 +953,21 @@ export function SiteForm({
     });
   }
 
-  // Effective values displayed when an inheritance toggle is ON. The
-  // disabled inputs read these so the operator sees what's being
-  // inherited. parentClient is null until the picker fires, so we
-  // fall back to "" to keep the inputs controlled.
-  const effBill = {
-    street: parentClient?.billing_street ?? "",
-    unit: parentClient?.billing_unit ?? "",
-    city: parentClient?.billing_city ?? "",
-    province: parentClient?.billing_province ?? "",
-    postal: parentClient?.billing_postal ?? "",
-    country: parentClient?.billing_country ?? "Canada",
+  // Effective values displayed when an inheritance toggle is ON. The disabled
+  // inputs read these so the operator sees what's being inherited. PROJ2-5 —
+  // billing now resolves via the three-way precedence (site physical → client
+  // billing → stored). effMail follows the effective billing when mailing is
+  // "same as billing".
+  const billInherited = billSameAsClient || billSameAsSite;
+  const effBill = effectiveBilling();
+  const effMail = mailSameAsBilling ? effBill : {
+    street: mailStreet,
+    unit: mailUnit,
+    city: mailCity,
+    province: mailProvince,
+    postal: mailPostal,
+    country: mailCountry,
   };
-  // For mailing-when-same-as-billing display: prefer the site's own
-  // billing (if it's been overridden) else the client's billing.
-  const effMail = billSameAsClient
-    ? effBill
-    : {
-        street: billStreet,
-        unit: billUnit,
-        city: billCity,
-        province: billProvince,
-        postal: billPostal,
-        country: billCountry,
-      };
 
   // ─── JSX ─────────────────────────────────────────────────────────────
 
@@ -1124,30 +1146,28 @@ export function SiteForm({
         </Field>
       </Section>
 
-      {/* SECTION 3 — Billing Address — ADDR-1 multi-country */}
+      {/* SECTION 3 — Billing Address — ADDR-1 multi-country. PROJ2-5: three
+          sources (client billing / the site's own physical address / distinct). */}
       <Section title="Billing Address">
-        <InheritRadio
-          name="billing_same_as_client"
-          inheritedLabel="Same as client billing address"
-          overrideLabel="Different address"
-          value={billSameAsClient}
-          onChange={handleBillingInheritToggle}
+        <BillingSourceRadio
+          value={billSameAsSite ? "site" : billSameAsClient ? "client" : "different"}
+          onChange={handleBillingSourceChange}
           parentClientName={parentClient?.name}
         />
         <AddressSection
-          country={billSameAsClient ? effBill.country : billCountry}
-          province={billSameAsClient ? effBill.province : billProvince}
-          street={billSameAsClient ? effBill.street : billStreet}
-          unit={billSameAsClient ? effBill.unit : billUnit}
-          city={billSameAsClient ? effBill.city : billCity}
-          postal={billSameAsClient ? effBill.postal : billPostal}
+          country={billInherited ? effBill.country : billCountry}
+          province={billInherited ? effBill.province : billProvince}
+          street={billInherited ? effBill.street : billStreet}
+          unit={billInherited ? effBill.unit : billUnit}
+          city={billInherited ? effBill.city : billCity}
+          postal={billInherited ? effBill.postal : billPostal}
           onCountryChange={setBillCountry}
           onProvinceChange={setBillProvince}
           onStreetChange={setBillStreet}
           onUnitChange={setBillUnit}
           onCityChange={setBillCity}
           onPostalChange={setBillPostal}
-          disabled={billSameAsClient}
+          disabled={billInherited}
         />
       </Section>
 
@@ -1728,6 +1748,52 @@ function InheritRadio({
       )}
       {helpText && (
         <p className="text-muted-foreground text-[11px]">{helpText}</p>
+      )}
+    </div>
+  );
+}
+
+// PROJ2-5 — three-way billing source selector (client billing / the site's own
+// physical address / a distinct address). Replaces the two-option InheritRadio
+// for the billing section. The two DB flags derive from this single value.
+function BillingSourceRadio({
+  value,
+  onChange,
+  parentClientName,
+}: {
+  value: "client" | "site" | "different";
+  onChange: (next: "client" | "site" | "different") => void;
+  parentClientName?: string;
+}) {
+  const OPTIONS: { key: "client" | "site" | "different"; label: string }[] = [
+    { key: "client", label: "Same as client billing address" },
+    { key: "site", label: "Same as site address" },
+    { key: "different", label: "Different address" },
+  ];
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-4">
+        {OPTIONS.map((o) => (
+          <label key={o.key} className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="billing_source"
+              checked={value === o.key}
+              onChange={() => onChange(o.key)}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+      {value === "client" && parentClientName && (
+        <p className="text-muted-foreground text-[11px] italic">
+          Currently inheriting from {parentClientName}.
+        </p>
+      )}
+      {value === "site" && (
+        <p className="text-muted-foreground text-[11px] italic">
+          Currently inheriting the site&apos;s physical address.
+        </p>
       )}
     </div>
   );

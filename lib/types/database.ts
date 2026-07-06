@@ -286,6 +286,7 @@ export interface DbSite {
   billing_postal: string | null;
   billing_country: string | null;
   billing_same_as_client: boolean;
+  billing_same_as_site: boolean; // PROJ2-5 (0085) — inherit the site's own physical address
   // mailing address
   mailing_street: string | null;
   mailing_unit: string | null;
@@ -358,6 +359,7 @@ export type DbSiteInsert = {
   billing_postal?: string | null;
   billing_country?: string | null;
   billing_same_as_client?: boolean;
+  billing_same_as_site?: boolean; // PROJ2-5 (0085)
   mailing_street?: string | null;
   mailing_unit?: string | null;
   mailing_city?: string | null;

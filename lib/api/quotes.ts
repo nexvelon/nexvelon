@@ -130,6 +130,15 @@ export async function upsertQuote(quote: Quote): Promise<Quote> {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // PROJ2-5 — mirror the intended conversion target to indexable columns. Keep
+  // them shape-consistent with the 0086 CHECK: change_order requires a project
+  // id; anything else stores NULL project id.
+  const intendedKind = quote.intendedTargetKind ?? null;
+  const intendedProjectId =
+    intendedKind === "change_order"
+      ? asUuidOrNull(quote.intendedTargetProjectId)
+      : null;
+
   const row = {
     id: quote.id,
     number: quote.number ?? null,
@@ -139,6 +148,8 @@ export async function upsertQuote(quote: Quote): Promise<Quote> {
     status: quote.status as QuoteStatus,
     owner_id: user?.id ?? null,
     total: quote.total ?? null,
+    intended_target_kind: intendedKind,
+    intended_target_project_id: intendedProjectId,
     data: quote,
   };
 
