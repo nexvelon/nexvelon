@@ -6,7 +6,6 @@
 // the full client-detail tab machinery.
 
 import Link from "next/link";
-import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { SiteContactsPane } from "@/app/(app)/clients/_components/SiteContactsPane";
 import type { DbContact, DbSiteWithClient } from "@/lib/types/database";
 
@@ -62,14 +61,6 @@ export function SiteDetailView({
       </header>
 
       <SiteContactsPane siteId={site.id} contacts={contacts} />
-
-      <AttachmentsSection
-        entityType="site"
-        entityId={site.id}
-        folders={["Documents"]}
-        allowCustomFolders
-        title="Documents"
-      />
     </div>
   );
 }

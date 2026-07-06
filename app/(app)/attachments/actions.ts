@@ -59,6 +59,8 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   quote: "quotes",
   // CUSTODY-1: delivery-proof attachments land on the project → gate on projects.
   project: "projects",
+  // PROJ2-4b: folder-tree uploads (entity_type='folder') gate on projects.
+  folder: "projects",
 };
 
 function resourceFor(entityType: string): Resource {

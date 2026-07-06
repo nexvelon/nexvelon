@@ -7,8 +7,35 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSiteById, getContactsBySite } from "@/lib/api/clients";
 import { SiteDetailView } from "./SiteDetailView";
+import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission } from "@/lib/permissions";
+import type { DbRole } from "@/lib/types/database";
+import type { Role } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+// DbRole (11) → app Role (7); mirrors the projects/attachments action helpers.
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
 
 export default async function SiteDetailPage({
   params,
@@ -24,8 +51,12 @@ export default async function SiteDetailPage({
   }
 
   // POLISH-50 — site-scoped contacts for the new Contacts section.
-  const contacts = await getContactsBySite(id);
-  console.error("[SITE CONTACTS LOADED]", { siteId: id, count: contacts.length });
+  const [contacts, me] = await Promise.all([
+    getContactsBySite(id),
+    getCurrentProfile(),
+  ]);
+  const canEditFolders =
+    !!me && hasPermission(adaptRole(me.role), "projects", "edit");
 
   return (
     <div className="space-y-4">
@@ -36,6 +67,12 @@ export default async function SiteDetailPage({
         ← Back to Sites
       </Link>
       <SiteDetailView site={site} contacts={contacts} />
+      {/* PROJ2-4b — folder tree (Site lens): all projects' trees for this site. */}
+      <FolderTreeAttachments
+        rootSiteId={site.id}
+        lens="site"
+        canEdit={canEditFolders}
+      />
     </div>
   );
 }
