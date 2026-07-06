@@ -1555,6 +1555,41 @@ export interface DbAttachment {
   content_type: string | null;
   size_bytes: number | null;
   uploaded_by: string | null;
+  // PROJ2-4b (migration 0083) — the folder-tree node this file lives in.
+  // Nullable; when set it is authoritative for the tree UI. The legacy `folder`
+  // text column above is left untouched (§2.1).
+  folder_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ----------------------------------------------------------------------------
+// Attachment folder tree (PROJ2-4b, migration 0083). Site / Project / Job are
+// three lenses on one tree: a folder always belongs to a site; project_id / job_id
+// narrow the lens; parent_id builds the hierarchy.
+// ----------------------------------------------------------------------------
+export type AttachmentFolderKind =
+  | "project_container"
+  | "main_job"
+  | "change_orders"
+  | "change_order"
+  | "default_subfolder"
+  | "user_folder"
+  | "existing_files";
+
+export interface DbAttachmentFolder {
+  id: string;
+  site_id: string;
+  project_id: string | null;
+  job_id: string | null;
+  parent_id: string | null;
+  name: string;
+  slug: string | null;
+  kind: AttachmentFolderKind;
+  is_system: boolean;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 }

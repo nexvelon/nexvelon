@@ -8,6 +8,7 @@ import { getProjectById } from "@/lib/api/projects";
 import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailView";
 import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
 import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
+import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -86,6 +87,15 @@ export default async function ProjectDetailPage({
       />
       {/* PROJ2-4a — read-only Jobs table (Main Job + Change Orders). */}
       <ProjectJobsTable projectId={id} canViewFinancials={canViewFinancials} />
+      {/* PROJ2-4b — folder tree (Project lens). Needs a site to root the tree. */}
+      {detail.project.site_id ? (
+        <FolderTreeAttachments
+          rootSiteId={detail.project.site_id}
+          lens="project"
+          rootProjectId={id}
+          canEdit={canEdit}
+        />
+      ) : null}
       <ProjectDetailView detail={detail} hideHeader />
     </div>
   );

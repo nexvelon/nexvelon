@@ -13,7 +13,7 @@ export type ChainCtx = {
 };
 
 export function makeSupabaseMock(
-  resolve: (ctx: ChainCtx) => { data: unknown; error: unknown },
+  resolve: (ctx: ChainCtx) => { data: unknown; error: unknown; count?: number },
   opts?: { user?: { id: string } | null }
 ) {
   const user = opts?.user === undefined ? { id: "u1" } : opts.user;

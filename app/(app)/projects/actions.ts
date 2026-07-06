@@ -29,6 +29,10 @@ import {
 } from "@/lib/api/projects";
 import type { DbJob } from "@/lib/types/database";
 import { logActivity } from "@/lib/api/activity-log";
+import {
+  scaffoldFoldersForNewProject,
+  scaffoldFoldersForNewChangeOrder,
+} from "@/lib/api/attachment-folders";
 import { canTransition } from "@/lib/projects/status-transitions";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -136,12 +140,37 @@ export async function createProjectFromQuoteAction(
     const gate = await requireProjectsCreate();
     if (!gate.ok) return { ok: false, error: gate.error };
     const { project, mainJob } = await createProjectFromQuote(quote);
+
+    // PROJ2-4b — scaffold the folder tree. Best-effort: a failure must NOT roll
+    // back the conversion (the tree can be re-scaffolded later). Needs a site to
+    // root the tree; skipped for a (rare) siteless project.
+    let folderIds: {
+      projectContainerId: string;
+      mainJobFolderId: string;
+      changeOrdersFolderId: string;
+    } | null = null;
+    if (project.site_id) {
+      try {
+        folderIds = await scaffoldFoldersForNewProject({
+          projectId: project.id,
+          siteId: project.site_id,
+          mainJobId: mainJob.id,
+          actorId: gate.actorId,
+        });
+      } catch (scaffoldErr) {
+        console.error("[folders] project scaffold failed:", scaffoldErr);
+      }
+    }
+
     // Best-effort audit (§2.8) — never block the mutation.
     try {
       await logActivity("project", project.id, "create", {
         project_number: { from: null, to: project.project_number },
         from_quote: { from: null, to: quote.id },
         main_job: { from: null, to: mainJob.id },
+        ...(folderIds
+          ? { folder_root: { from: null, to: folderIds.projectContainerId } }
+          : {}),
       });
     } catch (logErr) {
       console.error("[activity_log] project create log failed:", logErr);
@@ -176,6 +205,24 @@ export async function mergeQuoteIntoProjectAction(
       quote,
       projectId
     );
+
+    // PROJ2-4b — scaffold the C.O folder + its defaults. Best-effort.
+    let coFolderId: string | null = null;
+    if (project.site_id && changeOrderJob.co_number != null) {
+      try {
+        const r = await scaffoldFoldersForNewChangeOrder({
+          projectId: project.id,
+          jobId: changeOrderJob.id,
+          coNumber: changeOrderJob.co_number,
+          siteId: project.site_id,
+          actorId: gate.actorId,
+        });
+        coFolderId = r.changeOrderFolderId;
+      } catch (scaffoldErr) {
+        console.error("[folders] change-order scaffold failed:", scaffoldErr);
+      }
+    }
+
     // Best-effort audit (§2.8).
     try {
       await logActivity("project", project.id, "update", {
@@ -183,6 +230,7 @@ export async function mergeQuoteIntoProjectAction(
         change_order_job: { from: null, to: changeOrderJob.id },
         co_number: { from: null, to: changeOrderJob.co_number },
         cost_centers_added: { from: null, to: quote.sections?.length ?? 0 },
+        ...(coFolderId ? { co_folder: { from: null, to: coFolderId } } : {}),
       });
     } catch (logErr) {
       console.error("[activity_log] project merge log failed:", logErr);
