@@ -37,6 +37,7 @@ import { formatCurrency } from "@/lib/format";
 import {
   lineItemTotal,
   recalcLineItem,
+  recalcMarginFromPrice,
 } from "@/lib/quote-helpers";
 import {
   classificationsFor,
@@ -140,8 +141,12 @@ export function LineItemRow({
   const isLabourLine = !!labour;
   const changeLabourHours = (n: number) =>
     onChange({ ...item, qty: n, labour: { ...labour!, hours: n } });
-  const changeLabourRate = (v: number) =>
-    onChange({ ...item, unitPrice: v, labour: { ...labour!, sellRate: v } });
+  // BUGFIX — editing the labour sell rate now also recomputes margin (holds
+  // cost), so the displayed margin reflects the manually-entered rate.
+  const changeLabourRate = (v: number) => {
+    const next = recalcMarginFromPrice(item, v);
+    onChange({ ...next, labour: { ...labour!, sellRate: next.unitPrice } });
+  };
   // Cost/margin edits recompute unitPrice via recalcLineItem; mirror that back
   // into labour.sellRate so the snapshot stays consistent with the price.
   const changeLabourCostMargin = (next: BuilderLineItem) =>
@@ -257,7 +262,7 @@ export function LineItemRow({
 
       <td className="w-12 px-1.5 text-right">
         <Input
-          inputMode="numeric"
+          inputMode="decimal"
           value={item.qty.toString()}
           onChange={(e) => {
             const n = parseFloat(e.target.value);
@@ -339,8 +344,10 @@ export function LineItemRow({
         <CurrencyInput
           value={item.unitPrice}
           onChange={(v) => {
+            // BUGFIX — editing SP recomputes margin (holds cost), fixing the
+            // prior one-way binding where SP changes left margin stale.
             if (isLabourLine) changeLabourRate(v);
-            else onChange({ ...item, unitPrice: v });
+            else onChange(recalcMarginFromPrice(item, v));
           }}
           disabled={disabled}
           className="text-xs"

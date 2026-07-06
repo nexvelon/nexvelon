@@ -11,7 +11,8 @@ import {
 } from "@react-pdf/renderer";
 import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
-import { quoteTotals, takeoffGroups } from "@/lib/quote-helpers";
+import { takeoffGroups } from "@/lib/quote-helpers";
+import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { monitoringTotals, GUARDIAN_ONLY_KINDS } from "@/lib/quote-schedules";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
@@ -1366,7 +1367,7 @@ function ParticularsPage({
   showName,
   showDescription,
 }: ParticularsPageProps) {
-  const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
+  const totals = computeQuoteTotals(sections, taxRatePct / 100, discount, discountType);
   const subtitleSuffix = schedule.subtitle || "Bill of Materials";
   const renderableSections = sections.filter((s) => s.items.length > 0);
 
@@ -1540,7 +1541,7 @@ function ParticularsPage({
       <View style={styles.partTotalsBlock}>
         <View style={styles.partTotalsRow}>
           <Text style={styles.partTotalsLabel}>Subtotal</Text>
-          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.subtotal)}</Text>
+          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.sellingPriceSubtotal)}</Text>
         </View>
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
@@ -1560,7 +1561,7 @@ function ParticularsPage({
           <View style={styles.partTotalsRow}>
             <Text style={styles.partTotalsLabel}>Adjusted Subtotal</Text>
             <Text style={[styles.partTotalsValue, styles.numText]}>
-              {usd(totals.postDiscount)}
+              {usd(totals.sellingPriceAfterDiscount)}
             </Text>
           </View>
         ) : null}
@@ -1568,11 +1569,11 @@ function ParticularsPage({
           <Text style={styles.partTotalsLabel}>
             HST ({taxRatePct.toFixed(2)}%)
           </Text>
-          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.tax)}</Text>
+          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.taxAmount)}</Text>
         </View>
         <View style={styles.partGrandRow}>
           <Text style={styles.partGrandLabel}>Total, in Canadian Dollars</Text>
-          <Text style={[styles.partGrandValue, styles.numText]}>{usd(totals.total)}</Text>
+          <Text style={[styles.partGrandValue, styles.numText]}>{usd(totals.sellingPriceTotal)}</Text>
         </View>
       </View>
 
@@ -1783,7 +1784,7 @@ function AcceptancePage({
   discount,
   discountType,
 }: AcceptancePagePropsExt) {
-  const totals = quoteTotals(sections, taxRatePct / 100, discount, discountType);
+  const totals = computeQuoteTotals(sections, taxRatePct / 100, discount, discountType);
   return (
     <Page size="A4" style={styles.page} wrap>      <PageHeader
         styles={styles}
@@ -1803,7 +1804,7 @@ function AcceptancePage({
         </View>
         <View style={styles.acceptBoxRight}>
           <Text style={styles.acceptTotalLabel}>Total · CAD</Text>
-          <Text style={[styles.acceptTotalValue, styles.numText]}>{usd(totals.total)}</Text>
+          <Text style={[styles.acceptTotalValue, styles.numText]}>{usd(totals.sellingPriceTotal)}</Text>
         </View>
       </View>
 

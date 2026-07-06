@@ -20,9 +20,11 @@ import {
   deleteAllQuoteAuditForQuote,
 } from "@/lib/api/quote-audit";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { diffQuote } from "@/lib/quote-audit-diff";
-import type { Quote } from "@/lib/types";
+import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
+import type { Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -52,6 +54,42 @@ export async function getQuoteByIdAction(
 ): Promise<ActionResult<Quote | null>> {
   try {
     return { ok: true, data: await getQuoteById(id) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// BUGFIX (quotes) — picker data for the EDIT route. The "new" route fetches +
+// adapts clients/sites in its server component and passes them to QuoteBuilder;
+// the edit route is a client component, so it calls this action instead. Same
+// adapters (lib/quotes/picker-adapters) → identical picker behaviour on both
+// routes. Returns clients + a client_id → sites map matching the override props.
+export interface QuotePickerData {
+  clients: Client[];
+  sitesByClient: Record<string, Site[]>;
+}
+
+export async function getQuotePickerDataAction(): Promise<
+  ActionResult<QuotePickerData>
+> {
+  try {
+    const dbClients = await getClients();
+    const sitesByClient: Record<string, Site[]> = {};
+    if (dbClients.length > 0) {
+      const results = await Promise.all(
+        dbClients.map(async (c) => ({
+          id: c.id,
+          sites: await getSitesByClient(c.id),
+        }))
+      );
+      for (const { id, sites } of results) {
+        sitesByClient[id] = sites.map(adaptSite);
+      }
+    }
+    return {
+      ok: true,
+      data: { clients: dbClients.map(adaptClient), sitesByClient },
+    };
   } catch (e) {
     return fail(e);
   }

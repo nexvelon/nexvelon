@@ -11,10 +11,12 @@ import {
   DEFAULT_TERMS_GUARDIAN,
 } from "@/lib/quote-helpers";
 import type { QuoteTemplateSlug } from "@/lib/company-profile";
+import type { Client, Site } from "@/lib/types";
 import {
   getDefaultTermsAction,
   getDefaultTermsGuardianAction,
 } from "@/app/(app)/settings/company-settings-actions";
+import { getQuotePickerDataAction } from "@/app/(app)/quotes/actions";
 
 export default function QuoteDetailPage({
   params,
@@ -36,6 +38,33 @@ export default function QuoteDetailPage({
     integrated_solutions: DEFAULT_TERMS,
     guardian: DEFAULT_TERMS_GUARDIAN,
   });
+
+  // BUGFIX (quotes) — the edit route must feed the builder's client/site
+  // pickers from real data, exactly like /quotes/new. Without these overrides
+  // QuoteBuilder falls back to empty mock arrays, so the dropdowns are dead and
+  // the Bill-To / Service-Site boxes render blank on open. Fetched client-side
+  // because this is a client component; undefined until loaded (the builder
+  // keeps its mock fallback for that brief window).
+  const [pickerClients, setPickerClients] = useState<Client[] | undefined>();
+  const [pickerSitesByClient, setPickerSitesByClient] = useState<
+    Record<string, Site[]> | undefined
+  >();
+
+  useEffect(() => {
+    let active = true;
+    getQuotePickerDataAction()
+      .then((res) => {
+        if (!active || !res.ok) return;
+        setPickerClients(res.data.clients);
+        setPickerSitesByClient(res.data.sitesByClient);
+      })
+      .catch(() => {
+        // leave undefined — builder falls back to its mock arrays
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -100,6 +129,8 @@ export default function QuoteDetailPage({
       initial={initial}
       isNew={false}
       defaultTermsByTemplate={defaultTermsByTemplate}
+      clientsOverride={pickerClients}
+      sitesByClientOverride={pickerSitesByClient}
     />
   );
 }

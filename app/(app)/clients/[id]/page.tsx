@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClientById } from "@/lib/api/clients";
 import { listActivityFor } from "@/lib/api/activity-log";
+import { listQuotesForClient } from "@/lib/api/quotes";
 import type { DbClientWithCounts } from "@/lib/types/database";
 import { ClientDetailView } from "./ClientDetailView";
 
@@ -45,6 +46,12 @@ export default async function ClientDetailPage({
   // own). Run alongside the existing fetches.
   const activityLog = await listActivityFor("client", id, 100);
 
+  // BUGFIX (quotes) A4 — this client's quotes + a site_id → name map for the
+  // Quotes tab's Site column (a client spans many sites).
+  const quotes = await listQuotesForClient(id);
+  const siteNameById: Record<string, string> = {};
+  for (const s of sites) siteNameById[s.id] = s.name;
+
   // DbClientWithCounts = DbClient + site_count + contact_count. Every other
   // field (lifetime_value / ytd_revenue / nps_score) lives on DbClient itself,
   // so the spread produces a complete view-model.
@@ -60,6 +67,8 @@ export default async function ClientDetailPage({
       sites={sites}
       contacts={contacts}
       activityLog={activityLog}
+      quotes={quotes}
+      siteNameById={siteNameById}
     />
   );
 }

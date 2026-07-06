@@ -391,6 +391,7 @@ export function lineItemCost(li: BuilderLineItem): number {
   return li.qty * li.unitCost;
 }
 
+// cost / margin → unitPrice (holds the margin the user set).
 export function recalcLineItem(li: BuilderLineItem): BuilderLineItem {
   const unitPrice =
     li.margin >= 100
@@ -399,53 +400,29 @@ export function recalcLineItem(li: BuilderLineItem): BuilderLineItem {
   return { ...li, unitPrice };
 }
 
+// BUGFIX — the reverse binding: unitPrice → margin (holds cost). Used when the
+// user edits the selling price directly, so the displayed margin stays truthful
+// instead of showing a stale default. Guarded against div-by-zero.
+export function recalcMarginFromPrice(
+  li: BuilderLineItem,
+  newUnitPrice: number
+): BuilderLineItem {
+  const price = round2(newUnitPrice);
+  const margin = price > 0 ? round2((1 - li.unitCost / price) * 100) : 0;
+  return { ...li, unitPrice: price, margin };
+}
+
 export function sectionSubtotal(s: QuoteSection): number {
   return s.items.reduce((sum, li) => sum + lineItemTotal(li), 0);
 }
 
-export function quoteTotals(
-  sections: QuoteSection[],
-  taxRate: number,
-  discount = 0,
-  discountType: "pct" | "amount" = "pct"
-): {
-  subtotal: number;
-  cost: number;
-  discountAmount: number;
-  postDiscount: number;
-  tax: number;
-  total: number;
-  margin: number;
-} {
-  const subtotal = sections.reduce((s, sec) => s + sectionSubtotal(sec), 0);
-  const cost = sections.reduce(
-    (s, sec) => s + sec.items.reduce((c, li) => c + lineItemCost(li), 0),
-    0
-  );
-  const discountAmount =
-    discountType === "pct" ? round2(subtotal * (discount / 100)) : round2(discount);
-  const postDiscount = Math.max(0, subtotal - discountAmount);
-  const tax = roundCRA(postDiscount * taxRate);
-  const total = round2(postDiscount + tax);
-  // Margin reflects effective revenue after discount, not list subtotal
-  const margin =
-    postDiscount === 0 ? 0 : (postDiscount - cost) / postDiscount;
-  return { subtotal: round2(subtotal), cost, discountAmount, postDiscount, tax, total, margin };
-}
-
-/**
- * CRA-compliant rounding: look at the 3rd decimal digit only.
- * ≥5 rounds up at the 2nd decimal; ≤4 rounds down.
- * Example: 12.345 → 12.35; 12.344 → 12.34
- */
-function roundCRA(n: number): number {
-  const sign = n < 0 ? -1 : 1;
-  const abs = Math.abs(n);
-  const cents = Math.floor(abs * 100);
-  const thirdDecimal = Math.floor(abs * 1000) % 10;
-  const result = thirdDecimal >= 5 ? cents + 1 : cents;
-  return (sign * result) / 100;
-}
+// BUGFIX (quotes) — the former `quoteTotals` here was the second, divergent
+// implementation of quote money math (it exposed margin as a 0–1 ratio and no
+// cost/profit, which is how the margin display drifted). It has been removed;
+// `computeQuoteTotals` in lib/quotes/totals.ts is now the single source of truth
+// for subtotal/discount/tax/total AND cost/profit/margin. `sectionSubtotal`,
+// `lineItemTotal`, `lineItemCost`, and `round2` below remain the shared
+// primitives it builds on.
 
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;

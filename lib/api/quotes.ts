@@ -42,6 +42,72 @@ export async function listQuotes(): Promise<Quote[]> {
   return ((data ?? []) as QuoteRow[]).map(toQuote);
 }
 
+// BUGFIX (quotes) — read-only "Quotes for this site/client" lists on the Site
+// and Client detail pages. Filter on the queryable mirror columns (site_id /
+// client_id), newest-updated first. Returns a lean view-model (not the whole
+// Quote blob) carrying exactly the columns those sections render, plus the row
+// `updated_at` (which the Quote blob doesn't hold).
+export interface QuoteListItem {
+  id: string;
+  number: string | null;
+  name: string | null;
+  status: QuoteStatus;
+  total: number | null;
+  clientId?: string;
+  siteId?: string;
+  updatedAt: string | null;
+}
+
+interface QuoteListRow {
+  id: string;
+  data: Quote;
+  updated_at: string | null;
+}
+
+function toListItem(row: QuoteListRow): QuoteListItem {
+  const q = row.data;
+  return {
+    id: row.id,
+    number: q.number ?? null,
+    name: q.name ?? null,
+    status: q.status,
+    total: q.total ?? null,
+    clientId: q.clientId,
+    siteId: q.siteId,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function listQuotesForSite(
+  siteId: string
+): Promise<QuoteListItem[]> {
+  const id = asUuidOrNull(siteId);
+  if (!id) return [];
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id, data, updated_at")
+    .eq("site_id", id)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(`listQuotesForSite: ${error.message}`);
+  return ((data ?? []) as QuoteListRow[]).map(toListItem);
+}
+
+export async function listQuotesForClient(
+  clientId: string
+): Promise<QuoteListItem[]> {
+  const id = asUuidOrNull(clientId);
+  if (!id) return [];
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id, data, updated_at")
+    .eq("client_id", id)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(`listQuotesForClient: ${error.message}`);
+  return ((data ?? []) as QuoteListRow[]).map(toListItem);
+}
+
 export async function getQuoteById(id: string): Promise<Quote | null> {
   const supabase = await db();
   const { data, error } = await supabase

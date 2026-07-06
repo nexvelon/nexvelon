@@ -6,7 +6,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSiteById, getContactsBySite } from "@/lib/api/clients";
+import { listQuotesForSite } from "@/lib/api/quotes";
 import { SiteDetailView } from "./SiteDetailView";
+import { QuotesForEntitySection } from "@/components/modules/quotes/QuotesForEntitySection";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
@@ -51,9 +53,11 @@ export default async function SiteDetailPage({
   }
 
   // POLISH-50 — site-scoped contacts for the new Contacts section.
-  const [contacts, me] = await Promise.all([
+  // BUGFIX (quotes) A4 — read-only list of this site's quotes.
+  const [contacts, me, quotes] = await Promise.all([
     getContactsBySite(id),
     getCurrentProfile(),
+    listQuotesForSite(id),
   ]);
   const canEditFolders =
     !!me && hasPermission(adaptRole(me.role), "projects", "edit");
@@ -67,6 +71,7 @@ export default async function SiteDetailPage({
         ← Back to Sites
       </Link>
       <SiteDetailView site={site} contacts={contacts} />
+      <QuotesForEntitySection quotes={quotes} />
       {/* PROJ2-4b — folder tree (Site lens): all projects' trees for this site. */}
       <FolderTreeAttachments
         rootSiteId={site.id}

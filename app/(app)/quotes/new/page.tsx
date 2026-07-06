@@ -24,80 +24,22 @@ import {
 import { DEFAULT_TERMS, DEFAULT_TERMS_GUARDIAN } from "@/lib/quote-helpers";
 import type { QuoteTemplateSlug } from "@/lib/company-profile";
 import { hasPermission } from "@/lib/permissions";
-import type {
-  DbClient,
-  DbClientStatus,
-  DbClientType,
-  DbProfile,
-  DbRole,
-  DbSite,
-} from "@/lib/types/database";
-import type {
-  Client,
-  ClientStatus,
-  ClientType,
-  Role,
-  Site,
-  User,
-} from "@/lib/types";
+import {
+  adaptClient,
+  adaptSite,
+} from "@/lib/quotes/picker-adapters";
+import type { DbProfile, DbRole, DbSite } from "@/lib/types/database";
+import type { Client, Role, Site, User } from "@/lib/types";
 
 import { NewQuotePageClient } from "./NewQuotePageClient";
 
 export const dynamic = "force-dynamic";
 
 // ----------------------------------------------------------------------------
-// Adapters — DB shapes (Pass 1 schema) → mock-data shapes that QuoteBuilder /
-// QuoteDocument were built against. Translation only; no inference, no
-// fabrication. Fields the DB doesn't carry (client-level email/phone/
-// address — those live on `contacts` and `sites`) are passed through as
-// empty strings; the PDF renders blank lines for them rather than guessing.
+// Client/site adapters now live in lib/quotes/picker-adapters.ts (shared with
+// the edit route). The owner/role adapters below stay local — they're only used
+// when creating a new quote.
 // ----------------------------------------------------------------------------
-
-function adaptClientType(t: DbClientType | null): ClientType {
-  // DB enum has 7 values; mock enum has 3. Anything outside the mock set
-  // folds to "Commercial" for the cosmetic display only — type is not used
-  // to gate anything in the QuoteBuilder.
-  if (t === "Industrial" || t === "Residential") return t;
-  return "Commercial";
-}
-
-function adaptClientStatus(s: DbClientStatus): ClientStatus {
-  // DB: Active | Inactive | Prospect | Lost. Mock: Active | Prospect | Dormant.
-  if (s === "Prospect") return "Prospect";
-  if (s === "Active") return "Active";
-  return "Dormant";
-}
-
-function adaptClient(c: DbClient): Client {
-  return {
-    id: c.id,
-    name: c.name,
-    type: adaptClientType(c.type),
-    status: adaptClientStatus(c.status),
-    contactName: "", // contacts live on public.contacts; not pulled at v1
-    email: "",
-    phone: "",
-    address: "", // client-level address not stored — site address is the
-    city: "", //    operational address; Bill-To line stays blank.
-    state: "",
-    createdAt: c.created_at,
-    totalRevenue: Number(c.ytd_revenue ?? 0),
-  };
-}
-
-function adaptSite(s: DbSite): Site {
-  const line = [s.address_line1, s.address_line2]
-    .filter((v) => v && v.trim().length > 0)
-    .join(", ");
-  return {
-    id: s.id,
-    clientId: s.client_id,
-    name: s.name,
-    address: line,
-    city: s.city ?? "",
-    state: s.province ?? "",
-  };
-}
 
 // DbRole has 11 values; the mock Role enum has 7. Map values that don't
 // exist in the mock enum to their closest equivalent so the existing
