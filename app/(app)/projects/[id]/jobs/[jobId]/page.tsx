@@ -12,6 +12,7 @@ import {
   listCostCentersForJob,
 } from "@/lib/api/projects";
 import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
+import { listLineItemsForJob } from "@/lib/api/job-line-items";
 import { listInvoicesForJob } from "@/lib/api/invoices";
 import { getPurchaseOrdersForJob } from "@/lib/api/purchase-orders";
 import { getQuoteById } from "@/lib/api/quotes";
@@ -109,10 +110,11 @@ export default async function JobDetailPage({
     };
   const rollup = canViewFinancials ? baseEntry : redactJob(baseEntry);
 
-  const [costCenters, invoices, purchaseOrders] = await Promise.all([
+  const [costCenters, invoices, purchaseOrders, lineItems] = await Promise.all([
     listCostCentersForJob(jobId),
     listInvoicesForJob(jobId),
     getPurchaseOrdersForJob(jobId),
+    listLineItemsForJob(jobId),
   ]);
 
   // Source quote (defensive — manual C.Os legitimately have none).
@@ -162,6 +164,7 @@ export default async function JobDetailPage({
       costCenters={costCenters}
       invoices={invoices}
       purchaseOrders={purchaseOrders}
+      lineItems={lineItems}
       sourceQuote={sourceQuote}
       attachmentsSlot={attachmentsSlot}
     />

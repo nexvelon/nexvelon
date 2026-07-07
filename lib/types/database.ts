@@ -1180,6 +1180,41 @@ export type DbJobInsert = Omit<DbJob, "id" | "created_at" | "updated_at"> & {
   id?: string;
 };
 
+// PROJ2-6a — a Job's line items (parts + labour), unified in one table. Labour
+// lines store hours in `quantity`, cost/hr in `unit_cost`, bill rate/hr in
+// `unit_price`. quoted_* is the immutable snapshot taken at conversion (§2.2);
+// NULL on manually-added lines.
+export type JobLineKind = "part" | "labour";
+
+export interface DbJobLineItem {
+  id: string;
+  job_id: string;
+  cost_center_id: string | null;
+  line_kind: JobLineKind;
+  item_code: string | null;
+  description: string;
+  category: string | null;
+  quantity: number;
+  unit_cost: number;
+  unit_price: number;
+  discount_pct: number;
+  taxable: boolean;
+  quoted_quantity: number | null;
+  quoted_unit_cost: number | null;
+  quoted_unit_price: number | null;
+  quoted_discount_pct: number | null;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbJobLineItemInsert = Omit<
+  DbJobLineItem,
+  "id" | "created_at" | "updated_at"
+> & { id?: string };
+
 export type DbProjectCostCenterUpdate = Partial<
   Omit<DbProjectCostCenterInsert, "project_id">
 >;

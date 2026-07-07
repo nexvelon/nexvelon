@@ -20,11 +20,13 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 import { JobStatusControl } from "@/components/modules/projects/JobStatusControl";
 import { JobEditForm } from "@/components/modules/projects/JobEditForm";
 import { JobDeleteButton } from "@/components/modules/projects/JobDeleteButton";
+import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
 import type {
   DbJob,
+  DbJobLineItem,
   DbProject,
   DbProjectCostCenter,
 } from "@/lib/types/database";
@@ -55,8 +57,8 @@ type TabKey =
 const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "overview", label: "Overview" },
   { key: "financials", label: "Financials" },
+  { key: "line_items", label: "Line Items" }, // PROJ2-6a — unlocked
   { key: "attachments", label: "Attachments" },
-  { key: "line_items", label: "Line Items", soon: "PROJ2-5" },
   { key: "tasks", label: "Tasks", soon: "PROJ2-11" },
   { key: "deficiencies", label: "Deficiencies", soon: "PROJ2-12" },
   { key: "commissioning", label: "Commissioning", soon: "PROJ2-13" },
@@ -80,6 +82,7 @@ export function JobDetailView({
   costCenters,
   invoices,
   purchaseOrders,
+  lineItems,
   sourceQuote,
   attachmentsSlot,
 }: {
@@ -93,6 +96,7 @@ export function JobDetailView({
   costCenters: DbProjectCostCenter[];
   invoices: InvoiceListRow[];
   purchaseOrders: PurchaseOrderListRow[];
+  lineItems: DbJobLineItem[];
   sourceQuote: JobSourceQuote | null;
   attachmentsSlot: React.ReactNode;
 }) {
@@ -243,6 +247,11 @@ export function JobDetailView({
         {TABS.map((t) => {
           const disabled = !!t.soon;
           const active = tab === t.key;
+          // PROJ2-6a — Line Items carries a live count badge.
+          const badge =
+            t.key === "line_items" && lineItems.length > 0
+              ? lineItems.length
+              : null;
           return (
             <button
               key={t.key}
@@ -258,6 +267,11 @@ export function JobDetailView({
               }}
             >
               {t.label}
+              {badge != null && (
+                <span className="bg-muted text-brand-charcoal ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-mono tabular-nums">
+                  {badge}
+                </span>
+              )}
               {active && (
                 <span
                   className="absolute bottom-[-1px] left-2 right-2 h-[2px]"
@@ -292,6 +306,16 @@ export function JobDetailView({
           canViewFinancials={canViewFinancials}
           money={money}
           pctv={pctv}
+        />
+      )}
+
+      {tab === "line_items" && (
+        <JobLineItemsTab
+          jobId={job.id}
+          initialItems={lineItems}
+          costCenters={costCenters}
+          canEdit={canEdit}
+          canViewFinancials={canViewFinancials}
         />
       )}
 
