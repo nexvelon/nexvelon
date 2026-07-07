@@ -34,7 +34,19 @@ import {
   type ProjectDetail,
   type MergeCandidate,
 } from "@/lib/api/projects";
-import type { DbJob } from "@/lib/types/database";
+import type { DbJob, DbJobLineItem } from "@/lib/types/database";
+import {
+  listLineItemsForJob,
+  getLineItemById,
+  createLineItem,
+  updateLineItem,
+  deleteLineItem,
+  reorderLineItems,
+  cloneLineItem,
+  copyQuoteSectionsToJob,
+  type CreateLineItemInput,
+  type UpdateLineItemPatch,
+} from "@/lib/api/job-line-items";
 import { logActivity } from "@/lib/api/activity-log";
 import {
   scaffoldFoldersForNewProject,
@@ -170,12 +182,28 @@ export async function createProjectFromQuoteAction(
       }
     }
 
+    // PROJ2-6a — copy the quote's line items onto the Main Job (quoted snapshot).
+    // Best-effort, same contract as the folder scaffold: a copy failure must NOT
+    // roll back the conversion (lines can be re-copied or added manually).
+    let linesCopied = 0;
+    try {
+      const r = await copyQuoteSectionsToJob({
+        jobId: mainJob.id,
+        quoteId: quote.id,
+        actorId: gate.actorId,
+      });
+      linesCopied = r.inserted;
+    } catch (copyErr) {
+      console.error("[job_line_items] convert copy failed:", copyErr);
+    }
+
     // Best-effort audit (§2.8) — never block the mutation.
     try {
       await logActivity("project", project.id, "create", {
         project_number: { from: null, to: project.project_number },
         from_quote: { from: null, to: quote.id },
         main_job: { from: null, to: mainJob.id },
+        line_items_copied: { from: null, to: linesCopied },
         ...(folderIds
           ? { folder_root: { from: null, to: folderIds.projectContainerId } }
           : {}),
@@ -240,6 +268,20 @@ export async function mergeQuoteIntoProjectAction(
       }
     }
 
+    // PROJ2-6a — copy the quote's line items onto the C.O Job (quoted snapshot).
+    // Best-effort — a copy failure must NOT roll back the merge.
+    let linesCopied = 0;
+    try {
+      const r = await copyQuoteSectionsToJob({
+        jobId: changeOrderJob.id,
+        quoteId: quote.id,
+        actorId: gate.actorId,
+      });
+      linesCopied = r.inserted;
+    } catch (copyErr) {
+      console.error("[job_line_items] merge copy failed:", copyErr);
+    }
+
     // Best-effort audit (§2.8).
     try {
       await logActivity("project", project.id, "update", {
@@ -247,6 +289,7 @@ export async function mergeQuoteIntoProjectAction(
         change_order_job: { from: null, to: changeOrderJob.id },
         co_number: { from: null, to: changeOrderJob.co_number },
         cost_centers_added: { from: null, to: quote.sections?.length ?? 0 },
+        line_items_copied: { from: null, to: linesCopied },
         ...(coFolderId ? { co_folder: { from: null, to: coFolderId } } : {}),
       });
     } catch (logErr) {
@@ -763,5 +806,205 @@ export async function addChangeOrderJobAction(input: {
     return { ok: true, data: { jobId: job.id } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ── Job line items (PROJ2-6a) ────────────────────────────────────────────────
+
+// Resolve a line item → its job + parent project (for validation + revalidate).
+async function jobForLineItem(
+  lineItemId: string
+): Promise<{ jobId: string; projectId: string } | null> {
+  const li = await getLineItemById(lineItemId);
+  if (!li) return null;
+  const job = await getJobById(li.job_id);
+  if (!job) return null;
+  return { jobId: job.id, projectId: job.project_id };
+}
+
+function revalidateJob(projectId: string, jobId: string) {
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/jobs/${jobId}`);
+}
+
+export async function listJobLineItemsAction(
+  jobId: string
+): Promise<ActionResult<DbJobLineItem[]>> {
+  try {
+    if (!(await requireProjectsView()).ok) {
+      return { ok: false, error: "You don't have permission to view projects." };
+    }
+    return { ok: true, data: await listLineItemsForJob(jobId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createJobLineItemAction(input: {
+  jobId: string;
+  costCenterId: string | null;
+  lineKind: CreateLineItemInput["lineKind"];
+  itemCode: string | null;
+  description: string;
+  category: string | null;
+  quantity: number;
+  unitCost: number;
+  unitPrice: number;
+  discountPct: number;
+  taxable: boolean;
+}): Promise<ActionResult<DbJobLineItem>> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const job = await getJobById(input.jobId);
+    if (!job) return { ok: false, error: "not_found" };
+
+    const created = await createLineItem({
+      jobId: input.jobId,
+      costCenterId: input.costCenterId,
+      lineKind: input.lineKind,
+      itemCode: input.itemCode,
+      description: input.description.trim() || "Item",
+      category: input.category,
+      quantity: input.quantity,
+      unitCost: input.unitCost,
+      unitPrice: input.unitPrice,
+      discountPct: input.discountPct,
+      taxable: input.taxable,
+      actorId: gate.actorId,
+    });
+
+    try {
+      await logActivity("project", job.project_id, "update", {
+        job_id: { from: null, to: input.jobId },
+        line_item_id: { from: null, to: created.id },
+        line_kind: { from: null, to: created.line_kind },
+        description: { from: null, to: created.description },
+      });
+    } catch (logErr) {
+      console.error("[activity_log] line item create log failed:", logErr);
+    }
+
+    revalidateJob(job.project_id, input.jobId);
+    return { ok: true, data: created };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateJobLineItemAction(input: {
+  id: string;
+  patch: UpdateLineItemPatch;
+}): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const ctx = await jobForLineItem(input.id);
+    if (!ctx) return { ok: false, error: "not_found" };
+
+    await updateLineItem({ id: input.id, patch: input.patch, actorId: gate.actorId });
+
+    try {
+      await logActivity("project", ctx.projectId, "update", {
+        job_id: { from: null, to: ctx.jobId },
+        line_item_id: { from: null, to: input.id },
+        fields: { from: null, to: Object.keys(input.patch).join(",") },
+      });
+    } catch (logErr) {
+      console.error("[activity_log] line item update log failed:", logErr);
+    }
+
+    revalidateJob(ctx.projectId, ctx.jobId);
+    return { ok: true, data: { id: input.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteJobLineItemAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const ctx = await jobForLineItem(id);
+    if (!ctx) return { ok: false, error: "not_found" };
+
+    await deleteLineItem(id);
+
+    try {
+      await logActivity("project", ctx.projectId, "delete", {
+        job_id: { from: ctx.jobId, to: ctx.jobId },
+        line_item_id: { from: id, to: null },
+      });
+    } catch (logErr) {
+      console.error("[activity_log] line item delete log failed:", logErr);
+    }
+
+    revalidateJob(ctx.projectId, ctx.jobId);
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function reorderJobLineItemsAction(input: {
+  jobId: string;
+  orderedIds: string[];
+}): Promise<ActionResult<{ count: number }>> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const job = await getJobById(input.jobId);
+    if (!job) return { ok: false, error: "not_found" };
+
+    await reorderLineItems({ orderedIds: input.orderedIds, actorId: gate.actorId });
+
+    try {
+      await logActivity("project", job.project_id, "update", {
+        job_id: { from: null, to: input.jobId },
+        reordered_line_items: { from: null, to: input.orderedIds.length },
+      });
+    } catch (logErr) {
+      console.error("[activity_log] line item reorder log failed:", logErr);
+    }
+
+    revalidateJob(job.project_id, input.jobId);
+    return { ok: true, data: { count: input.orderedIds.length } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function cloneJobLineItemAction(
+  id: string
+): Promise<ActionResult<DbJobLineItem>> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const ctx = await jobForLineItem(id);
+    if (!ctx) return { ok: false, error: "not_found" };
+
+    const clone = await cloneLineItem(id, gate.actorId);
+
+    try {
+      await logActivity("project", ctx.projectId, "update", {
+        job_id: { from: null, to: ctx.jobId },
+        cloned_from: { from: null, to: id },
+        line_item_id: { from: null, to: clone.id },
+      });
+    } catch (logErr) {
+      console.error("[activity_log] line item clone log failed:", logErr);
+    }
+
+    revalidateJob(ctx.projectId, ctx.jobId);
+    return { ok: true, data: clone };
+  } catch (e) {
+    return fail(e);
   }
 }
