@@ -658,19 +658,22 @@ function createStyles(theme: QuoteTheme) {
     // legible (~7pt) so the full T&C spans fewer pages. Not used on the
     // Acceptance page, which keeps agreementLine.
     agreementBody: {
-      fontFamily: "Cormorant Garamond",
+      // BUGFIX — the T&C body was Cormorant Garamond, a wide decorative serif
+      // that ran the full terms to ~7 pages. Helvetica (a compact @react-pdf
+      // built-in — no Font.register needed) packs far more text per line, and
+      // justified text tightens the right edge, pulling the T&C to ~3–4 pages.
+      // Content, headings, ordering, and clause numbering are all unchanged.
+      fontFamily: "Helvetica",
       fontSize: 7,
       color: theme.ink,
-      // PDF-FIX-1 #8 — tightened from 1.25 / 2 to pull the Integrated T&C from
-      // 5 pages onto 4 without cutting any clause text.
       lineHeight: 1.2,
       marginBottom: 1.5,
+      textAlign: "justify",
     },
-    // PDF-FIX-1 #16 — leading clause numbers (e.g. "1.", "1.1", "(1)") render
-    // in a plain numeric font (Inter) instead of the decorative Cormorant
-    // oldstyle figures. Numbers only; clause text styling is unchanged.
+    // Leading clause numbers (e.g. "1.", "1.1", "(1)") — kept on the same
+    // compact sans as the body so the numbering matches the Helvetica switch.
     agreementClauseNum: {
-      fontFamily: "Inter",
+      fontFamily: "Helvetica",
       fontSize: 6.5,
     },
 
@@ -849,8 +852,12 @@ function createStyles(theme: QuoteTheme) {
     },
 
     // ----- Custom page (rich text) -----
+    // BUGFIX — the rich-text blocks (Scope of Work + custom pages) render the
+    // content typed in the RichTextEditor. That editor's content font is now
+    // Helvetica/Arial, so these PDF styles use Helvetica too, keeping the
+    // on-screen editor and the printed PDF in sync (was Cormorant Garamond).
     customParagraph: {
-      fontFamily: "Cormorant Garamond",
+      fontFamily: "Helvetica",
       fontSize: 10,
       color: theme.ink,
       lineHeight: 1.5,
@@ -859,7 +866,7 @@ function createStyles(theme: QuoteTheme) {
     // RT-FIX — Sub-body (heading level 3): smaller, muted; a quiet sub-note
     // beneath Body text.
     customSubBody: {
-      fontFamily: "Cormorant Garamond",
+      fontFamily: "Helvetica",
       fontSize: 9,
       color: mutedFor(theme),
       lineHeight: 1.4,
@@ -868,7 +875,7 @@ function createStyles(theme: QuoteTheme) {
     },
     // RT-FIX — Big Heading (heading level 1): largest, bold, accent.
     customHeading1: {
-      fontFamily: "Cormorant Garamond",
+      fontFamily: "Helvetica",
       fontSize: 20,
       fontWeight: "bold",
       color: theme.accent,
@@ -877,7 +884,7 @@ function createStyles(theme: QuoteTheme) {
       marginBottom: 4,
     },
     customHeading2: {
-      fontFamily: "Cormorant Garamond",
+      fontFamily: "Helvetica",
       fontSize: 16,
       fontWeight: "bold",
       color: theme.accent,
@@ -894,7 +901,7 @@ function createStyles(theme: QuoteTheme) {
       marginVertical: 1,
     },
     customListBullet: {
-      fontFamily: "Cormorant Garamond",
+      fontFamily: "Helvetica",
       fontSize: 10,
       color: theme.accent,
       width: 16,

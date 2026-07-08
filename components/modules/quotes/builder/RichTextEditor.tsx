@@ -26,6 +26,10 @@ import {
 // subset of styles the renderer cares about so the editor preview
 // approximates the rendered PDF.
 const EDITOR_CONTENT_CLASS = cn(
+  // BUGFIX — the content font was inherited from a parent `font-serif` (Playfair
+  // Display), the "fancy" font the user flagged. It's forced to Helvetica/Arial
+  // in globals.css (`.nx-rich-text .ProseMirror`) so it matches the PDF's
+  // rich-text render.
   "min-h-32 px-3 py-3 text-sm leading-6 focus:outline-none",
   "[&_p]:my-1",
   // RT-FIX: h1 = Big Heading, h2 = Title, h3 = Sub-body (approximates the PDF).
@@ -39,19 +43,18 @@ const EDITOR_CONTENT_CLASS = cn(
   "[&_em]:italic",
 );
 
-// RT-BULLETS — default + designer bullet glyphs.
+// RT-BULLETS — the three STANDARD bullet styles. BUGFIX: the picker used to
+// offer 10 arbitrary Unicode glyphs (◆ ❖ ➤ ✦ ‣ …) that have no CSS
+// `list-style-type` equivalent, so the editor always fell back to a filled disc
+// regardless of choice. Reduced to Disc / Circle / Square — each glyph maps 1:1
+// to a real list-style-type (disc / circle / square) that renders in every
+// browser (via globals.css `.nx-rich-text ul[data-symbol=…]`) AND is drawn
+// verbatim by the PDF (which reads node.attrs.symbol).
 const DEFAULT_BULLET_SYMBOL = "•";
-const BULLET_SYMBOLS = [
-  "•",
-  "◦",
-  "▪",
-  "◆",
-  "❖",
-  "➤",
-  "✦",
-  "‣",
-  "—",
-  "◉",
+const BULLET_STYLES: { glyph: string; label: string }[] = [
+  { glyph: "•", label: "Disc" },
+  { glyph: "◦", label: "Circle" },
+  { glyph: "▪", label: "Square" },
 ];
 
 // RT-BULLETS — adds a `symbol` attribute to the existing StarterKit bulletList
@@ -199,7 +202,7 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
     : DEFAULT_BULLET_SYMBOL;
 
   return (
-    <div className="bg-background rounded-md border border-[var(--border)] overflow-hidden">
+    <div className="nx-rich-text bg-background rounded-md border border-[var(--border)] overflow-hidden">
       <div className="border-b border-[var(--border)] bg-muted/30 flex items-center gap-0.5 px-2 py-1">
         {/* RT-FIX: named style selector — Big Heading / Title / Body /
             Sub-body, mapped to heading levels 1/2/3 + paragraph. Each SETS the
@@ -292,25 +295,28 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
               />
               <div
                 role="menu"
-                className="bg-background absolute left-0 top-full z-20 mt-1 grid grid-cols-5 gap-0.5 rounded-md border border-[var(--border)] p-1 shadow-md"
+                className="bg-background absolute left-0 top-full z-20 mt-1 flex gap-0.5 rounded-md border border-[var(--border)] p-1 shadow-md"
               >
-                {BULLET_SYMBOLS.map((sym) => (
+                {BULLET_STYLES.map(({ glyph, label }) => (
                   <button
-                    key={sym}
+                    key={glyph}
                     type="button"
                     role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyBulletSymbol(sym)}
-                    title={`Bullet ${sym}`}
-                    aria-label={`Bullet ${sym}`}
+                    onClick={() => applyBulletSymbol(glyph)}
+                    title={label}
+                    aria-label={`${label} bullets`}
                     className={cn(
-                      "hover:bg-muted flex h-7 w-7 items-center justify-center rounded text-sm",
-                      sym === activeBulletSymbol &&
+                      "hover:bg-muted flex h-7 items-center gap-1.5 rounded px-2 text-sm",
+                      glyph === activeBulletSymbol &&
                         editor.isActive("bulletList") &&
                         "bg-muted text-foreground"
                     )}
                   >
-                    {sym}
+                    <span aria-hidden>{glyph}</span>
+                    <span className="text-muted-foreground text-[11px]">
+                      {label}
+                    </span>
                   </button>
                 ))}
               </div>

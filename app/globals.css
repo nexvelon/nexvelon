@@ -466,3 +466,25 @@
     padding: 0 !important;
   }
 }
+
+/* BUGFIX — Scope of Work rich-text editor (Tiptap). Scoped to `.nx-rich-text`
+   so only this editor is affected (ProseMirror sets the `.ProseMirror` class on
+   its editable element). */
+
+/* Content font: was the inherited `font-serif` (Playfair Display) — the "fancy"
+   font the user flagged. Helvetica/Arial matches the PDF's rich-text render. */
+.nx-rich-text .ProseMirror {
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+/* Bullet styles: the picker stores the chosen glyph as `data-symbol` on the
+   <ul>. Disc is the default (Tailwind `list-disc` on the content area); circle
+   and square need explicit `list-style-type` keywords, otherwise the browser
+   falls back to a filled disc for every list — the reported bug. The
+   attribute-selector specificity beats the `list-disc` utility, so it wins. */
+.nx-rich-text ul[data-symbol="◦"] {
+  list-style-type: circle;
+}
+.nx-rich-text ul[data-symbol="▪"] {
+  list-style-type: square;
+}
