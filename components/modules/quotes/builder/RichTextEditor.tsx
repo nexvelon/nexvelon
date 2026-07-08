@@ -39,22 +39,24 @@ const EDITOR_CONTENT_CLASS = cn(
   "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1",
   "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1",
   "[&_li]:my-0.5",
-  "[&_strong]:font-semibold",
+  // BUGFIX — bold was font-semibold (600); against the content's regular weight
+  // it read as barely-different. Full bold (700) makes bold vs regular obvious.
+  // globals.css also pins the regular weight to 400 and strong/b to 700.
+  "[&_strong]:font-bold",
   "[&_em]:italic",
 );
 
-// RT-BULLETS — the three STANDARD bullet styles. BUGFIX: the picker used to
-// offer 10 arbitrary Unicode glyphs (◆ ❖ ➤ ✦ ‣ …) that have no CSS
-// `list-style-type` equivalent, so the editor always fell back to a filled disc
-// regardless of choice. Reduced to Disc / Circle / Square — each glyph maps 1:1
-// to a real list-style-type (disc / circle / square) that renders in every
-// browser (via globals.css `.nx-rich-text ul[data-symbol=…]`) AND is drawn
-// verbatim by the PDF (which reads node.attrs.symbol).
+// RT-BULLETS — three bullet styles. Disc / Circle map to real CSS
+// `list-style-type` keywords; Arrow (→) is rendered via a ::before glyph in
+// globals.css (`.nx-rich-text ul[data-symbol=…]`) since list-style-type has no
+// arrow keyword. The chosen glyph is stored on the bulletList node's `symbol`
+// attribute and drawn verbatim by the PDF (which reads node.attrs.symbol), so
+// editor and PDF stay in sync.
 const DEFAULT_BULLET_SYMBOL = "•";
 const BULLET_STYLES: { glyph: string; label: string }[] = [
   { glyph: "•", label: "Disc" },
   { glyph: "◦", label: "Circle" },
-  { glyph: "▪", label: "Square" },
+  { glyph: "→", label: "Arrow" },
 ];
 
 // RT-BULLETS — adds a `symbol` attribute to the existing StarterKit bulletList
