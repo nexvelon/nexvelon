@@ -40,6 +40,8 @@ interface Props {
   title?: string;
 }
 
+const ACCEPT = "application/pdf,image/png,image/jpeg,image/webp";
+
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -62,8 +64,12 @@ export function AttachmentsSection({
   const [deleting, setDeleting] = useState(false);
   const [newFolder, setNewFolder] = useState("");
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const targetFolder = useRef<string>("");
+  // BUGFIX — one hidden <input> PER folder (keyed by folder name), each rendered
+  // next to its own Upload button. Previously a single shared input was routed
+  // via a mutable `targetFolder` ref; that indirection left the product
+  // Documents Upload buttons opening no picker. Each button now clicks its own
+  // input directly — no shared node, no routing.
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const reload = useCallback(async () => {
     const res = await listAttachments(entityType, entityId);
@@ -109,14 +115,22 @@ export function AttachmentsSection({
     return map;
   }, [rows]);
 
-  const pickFor = (folder: string) => {
-    targetFolder.current = folder;
-    fileRef.current?.click();
+  // §4b — opens the folder's OWN hidden input. The info log is the immediate
+  // signal that the click actually fired; if you click Upload and don't see it,
+  // the wiring is broken.
+  const openPicker = (folder: string) => {
+    console.info(`[attachments] Upload clicked for folder "${folder}"`);
+    inputRefs.current[folder]?.click();
   };
 
-  const handleUpload = async (file?: File) => {
-    const folder = targetFolder.current;
-    if (!file || !folder) return;
+  const handleUpload = async (folder: string, file?: File) => {
+    // §4a — immediate console signal that a file was actually selected.
+    console.info(
+      `[attachments] file selected folder="${folder}" name="${
+        file?.name ?? "(none)"
+      }" size=${file?.size ?? 0}`
+    );
+    if (!file) return;
     setUploadingFolder(folder);
     try {
       const obj = await uploadAttachmentObject(entityType, entityId, file);
@@ -201,19 +215,6 @@ export function AttachmentsSection({
         )}
       </div>
 
-      {/* Single hidden input; targetFolder routes the chosen file. */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/pdf,image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          handleUpload(f);
-        }}
-      />
-
       {loading ? (
         <p className="text-muted-foreground py-4 text-center text-sm">Loading…</p>
       ) : folderList.length === 0 ? (
@@ -231,13 +232,29 @@ export function AttachmentsSection({
                   <h4 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
                     {folder}
                   </h4>
+                  {/* This folder's OWN hidden input, clicked directly by the
+                      button below. §4c resets value so re-picking the same file
+                      still fires onChange. */}
+                  <input
+                    ref={(el) => {
+                      inputRefs.current[folder] = el;
+                    }}
+                    type="file"
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      handleUpload(folder, f);
+                    }}
+                  />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs"
                     disabled={uploading}
-                    onClick={() => pickFor(folder)}
+                    onClick={() => openPicker(folder)}
                   >
                     {uploading ? (
                       <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
