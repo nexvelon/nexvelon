@@ -472,19 +472,37 @@
    its editable element). */
 
 /* Content font: was the inherited `font-serif` (Playfair Display) — the "fancy"
-   font the user flagged. Helvetica/Arial matches the PDF's rich-text render. */
+   font the user flagged. Helvetica/Arial matches the PDF's rich-text render.
+   BUGFIX — regular text was inheriting a heavier weight from an ancestor, so
+   regular and bold looked identical. Pin the regular weight to 400 and bold
+   marks (<strong>/<b>) to 700 so the difference is unmistakable. Arial in the
+   stack guarantees a real bold face on every OS when Helvetica-Bold isn't
+   installed as a separate font. */
 .nx-rich-text .ProseMirror {
   font-family: Helvetica, Arial, sans-serif;
+  font-weight: 400;
+}
+.nx-rich-text .ProseMirror strong,
+.nx-rich-text .ProseMirror b {
+  font-weight: 700;
 }
 
 /* Bullet styles: the picker stores the chosen glyph as `data-symbol` on the
    <ul>. Disc is the default (Tailwind `list-disc` on the content area); circle
-   and square need explicit `list-style-type` keywords, otherwise the browser
-   falls back to a filled disc for every list — the reported bug. The
-   attribute-selector specificity beats the `list-disc` utility, so it wins. */
+   needs the explicit `list-style-type` keyword, otherwise the browser falls
+   back to a filled disc — the reported bug. The attribute-selector specificity
+   beats the `list-disc` utility, so it wins. */
 .nx-rich-text ul[data-symbol="◦"] {
   list-style-type: circle;
 }
-.nx-rich-text ul[data-symbol="▪"] {
-  list-style-type: square;
+/* Arrow has no `list-style-type` keyword, so draw "→" via a ::before glyph. */
+.nx-rich-text ul[data-symbol="→"] {
+  list-style-type: none;
+  padding-left: 1.25em;
+}
+.nx-rich-text ul[data-symbol="→"] > li::before {
+  content: "→ ";
+  display: inline-block;
+  width: 1.25em;
+  margin-left: -1.25em;
 }

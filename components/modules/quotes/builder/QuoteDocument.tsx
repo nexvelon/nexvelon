@@ -658,23 +658,30 @@ function createStyles(theme: QuoteTheme) {
     // legible (~7pt) so the full T&C spans fewer pages. Not used on the
     // Acceptance page, which keeps agreementLine.
     agreementBody: {
-      // BUGFIX — the T&C body was Cormorant Garamond, a wide decorative serif
-      // that ran the full terms to ~7 pages. Helvetica (a compact @react-pdf
-      // built-in — no Font.register needed) packs far more text per line, and
-      // justified text tightens the right edge, pulling the T&C to ~3–4 pages.
-      // Content, headings, ordering, and clause numbering are all unchanged.
+      // BUGFIX — the T&C body is Helvetica (a compact @react-pdf built-in — no
+      // Font.register needed) + justified text. Follow-up to #303: still ran to
+      // ~8 pages at 7pt/1.2, so tightened to 6pt / lineHeight 1.1 / half the
+      // per-clause margin to pull the full terms to ~4 pages. Content, headings,
+      // ordering, and clause numbering are all unchanged.
       fontFamily: "Helvetica",
-      fontSize: 7,
+      fontSize: 6,
       color: theme.ink,
-      lineHeight: 1.2,
-      marginBottom: 1.5,
+      lineHeight: 1.1,
+      marginBottom: 0.75,
       textAlign: "justify",
+    },
+    // Blank lines between clauses render as a compact spacer (not a full 6pt
+    // body line) so paragraph separation is preserved without the page cost.
+    agreementSpacer: {
+      fontSize: 3,
+      lineHeight: 1,
+      marginBottom: 0,
     },
     // Leading clause numbers (e.g. "1.", "1.1", "(1)") — kept on the same
     // compact sans as the body so the numbering matches the Helvetica switch.
     agreementClauseNum: {
       fontFamily: "Helvetica",
-      fontSize: 6.5,
+      fontSize: 5.5,
     },
 
     // ----- Acceptance page -----
@@ -1735,6 +1742,15 @@ function AgreementPage({
       />
 
       {lines.map((line, i) => {
+        // Blank lines between clauses render as a compact spacer rather than a
+        // full body line, so paragraph separation costs far less vertical space.
+        if (!line.trim()) {
+          return (
+            <Text style={styles.agreementSpacer} key={i}>
+              {" "}
+            </Text>
+          );
+        }
         // PDF-FIX-1 #16 — split a leading clause number ("1.", "1.1", "(1)",
         // "(a)") onto a plain Inter run; the rest of the line keeps the body
         // (Cormorant) styling. Same characters — visual only, no text change.
