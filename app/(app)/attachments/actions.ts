@@ -1,10 +1,20 @@
 "use server";
 
 // ATTACH-1 — attachments server actions. Reads open to authenticated callers;
-// writes gated on hasPermission(role, "inventory", create|delete) — the same
-// gate products use (a later chunk may broaden this per entity_type). DB rows
-// are written here; storage objects are uploaded client-side and removed here
-// on delete (server client) so a row never outlives its object.
+// writes gated on hasPermission(role, <entity resource>, "edit"). DB rows are
+// written here; storage objects are uploaded client-side and removed here on
+// delete (server client) so a row never outlives its object.
+//
+// BUGFIX (product attachments never upload): the write gate used to require the
+// entity resource's *create* action. But the modules these attachments hang off
+// gate their own writes on *edit* (inventory:edit, clients:edit, quotes:edit),
+// and NO role except Admin is granted inventory:create / clients:create — so
+// every non-Admin operator who could otherwise edit a product (e.g. a
+// ProjectManager with inventory:edit) was silently denied: the client uploaded
+// the object, this action refused the row, the client rolled the object back,
+// and nothing persisted. Attaching/detaching a file IS an edit of the parent
+// entity, so writes now gate on "edit" — the action every relevant resource
+// grants its editors.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { logActivity } from "@/lib/api/activity-log";
@@ -106,8 +116,16 @@ export async function createAttachment(
   file: { path: string; filename: string; contentType?: string | null; size?: number | null }
 ): Promise<ActionResult<DbAttachment>> {
   try {
-    const denied = await requireEntityPermission(entityType, "create");
-    if (denied) return denied;
+    // A file attach is an EDIT of the parent entity (see header note).
+    const denied = await requireEntityPermission(entityType, "edit");
+    if (denied) {
+      console.error(
+        `[attachments] createAttachment DENIED entity=${entityType}/${entityId} folder="${folder}" file="${file.filename}" resource=${resourceFor(
+          entityType
+        )} action=edit`
+      );
+      return denied;
+    }
 
     const supabase = await createSupabaseServerClient();
     const {
@@ -137,6 +155,11 @@ export async function createAttachment(
     });
     return { ok: true, data: row };
   } catch (e) {
+    // §4c — log the failure path with enough context to reproduce.
+    console.error(
+      `[attachments] createAttachment FAILED entity=${entityType}/${entityId} folder="${folder}" file="${file.filename}" path="${file.path}":`,
+      e
+    );
     return fail(e);
   }
 }
@@ -156,7 +179,8 @@ export async function deleteAttachment(
     const att = row as DbAttachment;
 
     // Gate on the row's own entity resource (loaded above so we know the type).
-    const denied = await requireEntityPermission(att.entity_type, "delete");
+    // Detaching a file is an edit of the parent entity — same gate as attach.
+    const denied = await requireEntityPermission(att.entity_type, "edit");
     if (denied) return denied;
 
     // Remove the storage object first, then the row (best-effort on the object
@@ -187,7 +211,9 @@ export async function deleteAttachmentsForEntity(
   entityId: string
 ): Promise<ActionResult<{ removed: number }>> {
   try {
-    const denied = await requireEntityPermission(entityType, "delete");
+    // Bulk detach (from an entity hard-delete) — gated on entity edit like the
+    // single-file writes; the calling hard-delete flow has its own stricter gate.
+    const denied = await requireEntityPermission(entityType, "edit");
     if (denied) return denied;
 
     const supabase = await createSupabaseServerClient();
