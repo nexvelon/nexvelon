@@ -150,6 +150,8 @@ export async function upsertQuote(quote: Quote): Promise<Quote> {
     total: quote.total ?? null,
     intended_target_kind: intendedKind,
     intended_target_project_id: intendedProjectId,
+    // 0088 — mirror the operator-editable quote date to a queryable column.
+    quote_date: quote.quoteDate ?? null,
     data: quote,
   };
 
@@ -160,6 +162,119 @@ export async function upsertQuote(quote: Quote): Promise<Quote> {
     .single();
   if (error) throw new Error(`upsertQuote: ${error.message}`);
   return toQuote(data as QuoteRow);
+}
+
+// 0089 — mint the next sequential quote number (Q-10000, Q-10001, …) via the
+// plpgsql RPC, which scans the max existing Q-<digits> and returns +1. Used by
+// new-quote creation and duplicateQuoteAction so numbers stay sequential.
+export async function mintQuoteNumber(): Promise<string> {
+  const supabase = await db();
+  const { data, error } = await supabase.rpc("next_sequential_quote_number");
+  if (error) throw new Error(`mintQuoteNumber: ${error.message}`);
+  return String(data);
+}
+
+/** Another quote (≠ excludeId) already using `number`, if any — duplicate check. */
+export async function findQuoteIdByNumber(
+  number: string,
+  excludeId: string
+): Promise<string | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id")
+    .eq("number", number)
+    .neq("id", excludeId)
+    .limit(1);
+  if (error) throw new Error(`findQuoteIdByNumber: ${error.message}`);
+  return (data?.[0]?.id as string | undefined) ?? null;
+}
+
+// Targeted field updates. These patch the jsonb `data` blob (source of truth)
+// AND the mirror column, but DELIBERATELY do not go through upsertQuote — which
+// re-stamps owner_id from the session and would reassign ownership on an edit.
+export async function updateQuoteNumber(
+  id: string,
+  newNumber: string
+): Promise<void> {
+  const supabase = await db();
+  const q = await getQuoteById(id);
+  if (!q) throw new Error("Quote not found");
+  const { error } = await supabase
+    .from("quotes")
+    .update({ number: newNumber, data: { ...q, number: newNumber } })
+    .eq("id", id);
+  if (error) throw new Error(`updateQuoteNumber: ${error.message}`);
+}
+
+export async function updateQuoteDate(
+  id: string,
+  newDate: string
+): Promise<void> {
+  const supabase = await db();
+  const q = await getQuoteById(id);
+  if (!q) throw new Error("Quote not found");
+  const { error } = await supabase
+    .from("quotes")
+    .update({ quote_date: newDate, data: { ...q, quoteDate: newDate } })
+    .eq("id", id);
+  if (error) throw new Error(`updateQuoteDate: ${error.message}`);
+}
+
+// Report — every quote number shared by 2+ quotes, with the clashing quotes.
+export interface DuplicateNumberQuote {
+  id: string;
+  name: string | null;
+  status: string;
+  created_at: string;
+  clientName: string | null;
+  siteName: string | null;
+}
+export interface DuplicateNumberGroup {
+  number: string;
+  quotes: DuplicateNumberQuote[];
+}
+
+export async function listDuplicateNumberGroups(): Promise<
+  DuplicateNumberGroup[]
+> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(
+      "id, number, name, status, created_at, client:clients(name), site:sites(name)"
+    )
+    .not("number", "is", null)
+    .order("number", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`listDuplicateNumberGroups: ${error.message}`);
+
+  type Row = {
+    id: string;
+    number: string;
+    name: string | null;
+    status: string;
+    created_at: string;
+    client: { name: string } | null;
+    site: { name: string } | null;
+  };
+  const byNumber = new Map<string, DuplicateNumberQuote[]>();
+  for (const r of (data ?? []) as unknown as Row[]) {
+    const list = byNumber.get(r.number) ?? [];
+    list.push({
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      created_at: r.created_at,
+      clientName: r.client?.name ?? null,
+      siteName: r.site?.name ?? null,
+    });
+    byNumber.set(r.number, list);
+  }
+  return [...byNumber.entries()]
+    .filter(([, quotes]) => quotes.length > 1)
+    .map(([number, quotes]) => ({ number, quotes }))
+    .sort((a, b) => b.quotes.length - a.quotes.length || a.number.localeCompare(b.number));
 }
 
 export async function deleteQuote(id: string): Promise<boolean> {

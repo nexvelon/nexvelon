@@ -685,9 +685,12 @@ function createStyles(theme: QuoteTheme) {
       // normal, so the terms still fit in ~4 pages. Content/ordering unchanged.
       fontFamily: "Inter",
       fontWeight: 300,
-      fontSize: 6,
+      // BUGFIX (follow-up to #306) — the terms still spilled 5–6 lines onto a
+      // 5th page. Nudged 6→5.5pt and 1.1→1.05 line-height (~10% denser) to pull
+      // them into exactly 4 pages. 5.5pt Inter Light stays legible.
+      fontSize: 5.5,
       color: theme.ink,
-      lineHeight: 1.1,
+      lineHeight: 1.05,
       marginBottom: 0.75,
       textAlign: "justify",
     },

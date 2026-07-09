@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { listClassifications } from "@/lib/api/classifications";
 import { classificationFromDb } from "@/lib/classifications";
+import { mintQuoteNumber } from "@/lib/api/quotes";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import {
   DEFAULT_TERMS_KEY,
@@ -152,6 +153,16 @@ export default async function NewQuotePage() {
     guardian: guardianTerms ?? DEFAULT_TERMS_GUARDIAN,
   };
 
+  // 0089 — mint the next SEQUENTIAL number server-side (Q-10000, Q-10001, …).
+  // Best-effort: if the RPC ever fails, the client falls back to its legacy
+  // timestamp generator so quote creation is never blocked.
+  let initialNumber: string | null = null;
+  try {
+    initialNumber = await mintQuoteNumber();
+  } catch {
+    initialNumber = null;
+  }
+
   return (
     <NewQuotePageClient
       clients={adaptedClients}
@@ -159,6 +170,7 @@ export default async function NewQuotePage() {
       owner={owner}
       classifications={classifications}
       defaultTermsByTemplate={defaultTermsByTemplate}
+      initialNumber={initialNumber}
     />
   );
 }

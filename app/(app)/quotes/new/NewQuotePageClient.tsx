@@ -38,6 +38,12 @@ interface Props {
    * (resolved server-side). A new quote seeds from the default template's entry.
    */
   defaultTermsByTemplate: Record<QuoteTemplateSlug, string>;
+  /**
+   * 0089 — sequential quote number minted server-side (Q-10000, …). Null only
+   * if the RPC failed, in which case we fall back to the legacy timestamp
+   * generator so quote creation is never blocked.
+   */
+  initialNumber: string | null;
 }
 
 export function NewQuotePageClient({
@@ -46,6 +52,7 @@ export function NewQuotePageClient({
   owner,
   classifications,
   defaultTermsByTemplate,
+  initialNumber,
 }: Props) {
   const quotesLoaded = useQuotesLoaded();
 
@@ -54,12 +61,16 @@ export function NewQuotePageClient({
     // toISOString(), which rolls to tomorrow after ~8pm Eastern.
     return {
       id: newId("q"),
-      number: nextQuoteNumber(),
+      // 0089 — prefer the server-minted sequential number; fall back to the
+      // legacy timestamp generator only if the RPC failed.
+      number: initialNumber ?? nextQuoteNumber(),
       name: "",
       clientId: "",
       siteId: "",
       status: "Draft",
       createdAt: businessDateISO(),
+      // 0088 — the editable quote date defaults to today (the creation date).
+      quoteDate: businessDateISO(),
       expiresAt: businessDatePlusDaysISO(30),
       ownerId: owner.id,
       paymentTerms: "Net 30",
@@ -100,7 +111,7 @@ export function NewQuotePageClient({
     // moment hydration completes (the render is gated on it below, so this runs
     // effectively once — when loaded flips true).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [owner.id, quotesLoaded]);
+  }, [owner.id, quotesLoaded, initialNumber]);
 
   // Defer the builder until quotes have loaded — otherwise nextQuoteNumber would
   // mint Q-…-0001 against an empty list and collide with existing quotes.

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { BarChart3, FileBarChart, Mail, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, FileBarChart, Mail, Sparkles, Copy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 
@@ -155,6 +156,34 @@ export default function ReportsPage() {
           </p>
         </div>
       </Card>
+
+      {/* Available now — the operational reports that already ship. */}
+      <div>
+        <p className="nx-eyebrow mb-2">Available now</p>
+        <Link
+          href="/reports/duplicate-quote-numbers"
+          className="bg-card flex items-center gap-3 rounded-lg border border-[var(--border)] px-4 py-3 shadow-sm transition-colors hover:bg-[var(--muted)]/40"
+        >
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: "color-mix(in oklab, var(--brand-accent) 15%, transparent)",
+              color: "var(--brand-accent)",
+            }}
+            aria-hidden
+          >
+            <Copy className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="text-brand-navy block font-serif text-base">
+              Duplicate quote numbers
+            </span>
+            <span className="text-muted-foreground block text-[13px]">
+              Every quote number shared by two or more quotes, for reconciliation.
+            </span>
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }

@@ -84,6 +84,12 @@ function renderHeader(props: { hasClient: boolean; hasSite: boolean; onSend?: ()
       disabled={false}
       hasClient={props.hasClient}
       hasSite={props.hasSite}
+      quoteDate="2026-07-09"
+      onNumberChange={vi.fn()}
+      onDateChange={vi.fn()}
+      isSaved={false}
+      duplicating={false}
+      onDuplicate={vi.fn()}
       onSaveDraft={vi.fn()}
       onSend={onSend}
       onApprove={vi.fn()}

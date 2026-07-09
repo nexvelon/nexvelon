@@ -69,6 +69,9 @@ import { upsertQuote, useQuotes } from "@/lib/quote-store";
 import {
   sendQuoteAction,
   upsertQuoteAction,
+  updateQuoteNumberAction,
+  updateQuoteDateAction,
+  duplicateQuoteAction,
 } from "@/app/(app)/quotes/actions";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { useReadOnly } from "@/lib/use-read-only";
@@ -220,8 +223,24 @@ export function QuoteBuilder({
   const users: User[] = ownerOverride ? [ownerOverride] : MOCK_USERS;
 
   const { user: authUser } = useAuth();
-  const [number] = useState(initial.number);
+  // Editable in the header (admin) — a setter so the number/date edits reflect
+  // immediately and persist through autosave.
+  const [number, setNumber] = useState(initial.number);
+  // 0088 — editable quote date (YYYY-MM-DD); defaults to createdAt for legacy
+  // quotes minted before the field existed.
+  const [quoteDate, setQuoteDate] = useState(
+    initial.quoteDate ?? initial.createdAt
+  );
   const [status, setStatus] = useState<QuoteStatus>(initial.status);
+  // Editable-header + duplicate state.
+  const [duplicating, setDuplicating] = useState(false);
+  const [dupConfirmOpen, setDupConfirmOpen] = useState(false);
+  // Duplicate-NUMBER warning: set when updateQuoteNumberAction reports a clash.
+  const [dupNumberPrompt, setDupNumberPrompt] = useState<{
+    number: string;
+    existingId: string;
+    prev: string;
+  } | null>(null);
   // REJECT — committed revision metadata (jsonb-persisted; banner-displayed
   // when status === "Revision") + the dialog's draft fields. Storage field
   // names stay rejection*/rejected* (stable storage); display says "Revision".
@@ -528,7 +547,10 @@ export function QuoteBuilder({
     () => ({
       number,
       name,
-      createdAt: initial.createdAt,
+      // 0088 — the PDF shows the editable quote date (fallback to createdAt for
+      // legacy quotes). This is the `createdAt` prop the document renders as
+      // "dated …".
+      createdAt: quoteDate || initial.createdAt,
       validUntil,
       paymentTerms,
       projectType,
@@ -556,6 +578,7 @@ export function QuoteBuilder({
     [
       number,
       name,
+      quoteDate,
       initial.createdAt,
       validUntil,
       paymentTerms,
@@ -760,6 +783,7 @@ export function QuoteBuilder({
       preparedBy: preparedBy.trim() || undefined,
       status: nextStatus,
       createdAt: initial.createdAt,
+      quoteDate,
       expiresAt: validUntil,
       ownerId,
       paymentTerms,
@@ -1156,6 +1180,73 @@ export function QuoteBuilder({
     }
   };
 
+  // Editable header — quote number. Persists immediately for saved quotes; a new
+  // (unsaved) quote keeps the change local and lets autosave carry it. Duplicate
+  // numbers surface a confirm dialog before the forced write.
+  const handleNumberChange = async (
+    next: string,
+    force = false,
+    prevOverride?: string
+  ) => {
+    const prev = prevOverride ?? number;
+    setNumber(next); // optimistic
+    if (isNew) return; // no persisted row yet — first save writes it
+    const res = await updateQuoteNumberAction({
+      quoteId: initial.id,
+      newNumber: next,
+      force,
+    });
+    if (res.ok) {
+      setDupNumberPrompt(null);
+      return;
+    }
+    if (res.error === "duplicate_exists" && res.existing_quote_id) {
+      setDupNumberPrompt({ number: next, existingId: res.existing_quote_id, prev });
+      return; // keep the optimistic value; the dialog resolves it
+    }
+    setNumber(prev); // invalid_format / forbidden / other → revert
+    toast.error(
+      res.error === "invalid_format"
+        ? "That quote number format isn't allowed."
+        : `Couldn't update the number: ${res.error}`
+    );
+  };
+  const confirmDuplicateNumber = () => {
+    if (dupNumberPrompt) {
+      void handleNumberChange(dupNumberPrompt.number, true, dupNumberPrompt.prev);
+    }
+  };
+  const cancelDuplicateNumber = () => {
+    if (dupNumberPrompt) setNumber(dupNumberPrompt.prev);
+    setDupNumberPrompt(null);
+  };
+
+  // Editable header — quote date (the date shown on the PDF).
+  const handleDateChange = async (next: string) => {
+    const prev = quoteDate;
+    setQuoteDate(next); // optimistic
+    if (isNew) return;
+    const res = await updateQuoteDateAction({ quoteId: initial.id, newDate: next });
+    if (!res.ok) {
+      setQuoteDate(prev);
+      toast.error(`Couldn't update the date: ${res.error}`);
+    }
+  };
+
+  // Duplicate this quote into a fresh Draft, then open the new quote.
+  const handleDuplicate = async () => {
+    setDuplicating(true);
+    const res = await duplicateQuoteAction(initial.id);
+    setDuplicating(false);
+    setDupConfirmOpen(false);
+    if (!res.ok) {
+      toast.error(`Couldn't duplicate: ${res.error}`);
+      return;
+    }
+    toast.success("Duplicate created");
+    router.push(`/quotes/${res.newQuoteId}`);
+  };
+
   return (
     <CatalogProductsContext.Provider value={catalogProducts}>
     <OfferAddonsContext.Provider value={maybeOfferAddons}>
@@ -1168,6 +1259,12 @@ export function QuoteBuilder({
         savedLabel={savedLabel}
         hasClient={!!clientId}
         hasSite={!!siteId}
+        quoteDate={quoteDate}
+        onNumberChange={(n) => handleNumberChange(n)}
+        onDateChange={handleDateChange}
+        isSaved={!isNew}
+        duplicating={duplicating}
+        onDuplicate={() => setDupConfirmOpen(true)}
         onSaveDraft={handleSaveDraft}
         onSend={handleSend}
         onApprove={handleApprove}
@@ -1711,6 +1808,66 @@ export function QuoteBuilder({
         onOpenChange={setCommitOpen}
         onCommit={(lineIds) => void commitLines(lineIds)}
       />
+
+      {/* Duplicate-quote confirm — always confirm before minting a new record. */}
+      <Dialog open={dupConfirmOpen} onOpenChange={(o) => !duplicating && setDupConfirmOpen(o)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Duplicate this quote?</DialogTitle>
+            <DialogDescription>
+              A new Draft quote will be created with all line items, scope, terms,
+              and formatting copied. It gets its own new quote number and opens
+              ready to edit. Attachments are not copied.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDupConfirmOpen(false)}
+              disabled={duplicating}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleDuplicate} disabled={duplicating}>
+              {duplicating ? "Duplicating…" : "Create duplicate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate-NUMBER warning — the entered number is already in use. */}
+      <Dialog
+        open={dupNumberPrompt !== null}
+        onOpenChange={(o) => !o && cancelDuplicateNumber()}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Duplicate quote number</DialogTitle>
+            <DialogDescription>
+              Quote number{" "}
+              <span className="font-mono font-semibold">
+                {dupNumberPrompt?.number}
+              </span>{" "}
+              already exists on another quote. Duplicate quote numbers make
+              quotes harder to identify. Save this quote with a duplicate number
+              anyway?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={cancelDuplicateNumber}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmDuplicateNumber}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              Save with duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </OfferAddonsContext.Provider>
     </CatalogProductsContext.Provider>

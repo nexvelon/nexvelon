@@ -234,6 +234,10 @@ export interface Quote {
   intendedTargetProjectId?: ID;
   status: QuoteStatus;
   createdAt: string;
+  // Operator-editable date shown on the PDF (YYYY-MM-DD), decoupled from the
+  // row's created_at. Mirrored to quotes.quote_date (migration 0088). Falls back
+  // to createdAt on legacy quotes that predate this field.
+  quoteDate?: string;
   expiresAt: string;
   ownerId: ID;
   // Editable display override for the "Prepared By" line on the document.

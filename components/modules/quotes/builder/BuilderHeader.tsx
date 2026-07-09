@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
   Ban,
   CheckCircle2,
+  Copy,
   Eye,
   Loader2,
   PackageCheck,
@@ -15,6 +17,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { QuoteStatusBadge } from "../QuoteStatusBadge";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
@@ -31,6 +34,14 @@ interface Props {
    *  "Send to Client" gating and the hardened sendQuoteAction). */
   hasClient: boolean;
   hasSite: boolean;
+  // Editable header (admin): quote number + quote date (the date on the PDF).
+  quoteDate: string; // YYYY-MM-DD
+  onNumberChange: (next: string) => void;
+  onDateChange: (next: string) => void;
+  // Duplicate the quote into a fresh Draft (shown once the quote is saved).
+  isSaved: boolean;
+  duplicating: boolean;
+  onDuplicate: () => void;
   onSaveDraft: () => void;
   onSend: () => void;
   onApprove: () => void;
@@ -51,6 +62,12 @@ export function BuilderHeader({
   savedLabel,
   hasClient,
   hasSite,
+  quoteDate,
+  onNumberChange,
+  onDateChange,
+  isSaved,
+  duplicating,
+  onDuplicate,
   onSaveDraft,
   onSend,
   onApprove,
@@ -64,6 +81,19 @@ export function BuilderHeader({
 }: Props) {
   const { role } = useRole();
   const isAdmin = role === "Admin";
+  // Duplicate is offered once the quote is a persisted record and the user can
+  // create quotes (the new copy is a fresh quote).
+  const canDuplicate = isSaved && hasPermission(role, "quotes", "create");
+
+  // Editable number — local draft committed on blur / Enter, re-synced when the
+  // saved number changes (e.g. after a duplicate-number force or server revert).
+  const [numDraft, setNumDraft] = useState(number);
+  useEffect(() => setNumDraft(number), [number]);
+  const commitNumber = () => {
+    const next = numDraft.trim();
+    if (next && next !== number) onNumberChange(next);
+    else setNumDraft(number);
+  };
   const canApprove = hasPermission(role, "quotes", "approve");
   const approveEnabled = canApprove && status === "Sent";
   const canConvert = hasPermission(role, "quotes", "convert");
@@ -97,10 +127,38 @@ export function BuilderHeader({
         </Link>
         <span className="text-muted-foreground/40">/</span>
 
-        <div className="flex items-center gap-3">
-          <span className="text-brand-navy font-mono text-sm font-semibold tracking-wider">
-            {number}
-          </span>
+        <div className="flex items-center gap-2">
+          {isAdmin ? (
+            <>
+              <Input
+                value={numDraft}
+                onChange={(e) => setNumDraft(e.target.value)}
+                onBlur={commitNumber}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                spellCheck={false}
+                aria-label="Quote number"
+                title="Quote number (editable)"
+                className="text-brand-navy h-7 w-32 font-mono text-sm font-semibold tracking-wider"
+              />
+              <Input
+                type="date"
+                value={(quoteDate || "").slice(0, 10)}
+                onChange={(e) => e.target.value && onDateChange(e.target.value)}
+                aria-label="Quote date"
+                title="Quote date (shown on the PDF)"
+                className="h-7 w-36 text-xs"
+              />
+            </>
+          ) : (
+            <span className="text-brand-navy font-mono text-sm font-semibold tracking-wider">
+              {number}
+            </span>
+          )}
           <QuoteStatusBadge status={status} size="md" />
         </div>
 
@@ -134,6 +192,23 @@ export function BuilderHeader({
             )}
             Save Draft
           </Button>
+          {canDuplicate && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={duplicating}
+              onClick={onDuplicate}
+              title="Create a new Draft with everything copied"
+            >
+              {duplicating ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Duplicate
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
