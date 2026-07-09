@@ -15,11 +15,16 @@ export function registerQuoteFonts(basePath: string = "/fonts") {
       { src: `${basePath}/CormorantGaramond-BoldItalic.ttf`, fontWeight: "bold", fontStyle: "italic" },
     ],
   });
+  // BUGFIX — added Light (300) + Bold (700) so the quote PDF can render real
+  // weight distinctions: T&C body in Inter Light (genuine thin strokes, not an
+  // opacity dim), and rich-text bold marks in Inter Bold (vs regular 400).
   Font.register({
     family: "Inter",
     fonts: [
-      { src: `${basePath}/Inter-Regular.ttf` },
-      { src: `${basePath}/Inter-Medium.ttf`, fontWeight: "medium" },
+      { src: `${basePath}/Inter-Light.ttf`, fontWeight: 300 },
+      { src: `${basePath}/Inter-Regular.ttf`, fontWeight: 400 },
+      { src: `${basePath}/Inter-Medium.ttf`, fontWeight: 500 },
+      { src: `${basePath}/Inter-Bold.ttf`, fontWeight: 700 },
     ],
   });
 }
