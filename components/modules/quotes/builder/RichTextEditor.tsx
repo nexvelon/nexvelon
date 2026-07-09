@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { Extension } from "@tiptap/core";
+import { Extension, Mark, mergeAttributes } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import {
   Bold,
@@ -86,6 +86,43 @@ const BulletSymbol = Extension.create({
   },
 });
 
+// RT-FONTSIZE — granular point-size options for the size picker. Stored on a
+// custom `fontSize` mark (below) as a plain number (pt); the PDF reads it in
+// renderRichTextInline and applies it inline, so editor and PDF stay in sync.
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
+
+// A self-contained size mark — no @tiptap/extension-text-style dependency. It
+// wraps the selection in <span style="font-size: Npt"> and round-trips through
+// the stored Tiptap JSON as a `fontSize` mark with a numeric `size` attribute.
+// Applied via the built-in setMark/unsetMark commands (no custom command +
+// module augmentation needed).
+const FontSize = Mark.create({
+  name: "fontSize",
+  addAttributes() {
+    return {
+      size: {
+        default: null as number | null,
+        parseHTML: (element: HTMLElement) => {
+          const raw = element.style.fontSize;
+          if (!raw) return null;
+          const n = parseFloat(raw);
+          return Number.isFinite(n) ? n : null;
+        },
+        renderHTML: (attributes: Record<string, unknown>) => {
+          const size = attributes.size as number | null;
+          return size ? { style: `font-size: ${size}pt` } : {};
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[style*='font-size']" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes), 0];
+  },
+});
+
 interface Props {
   value: string;
   onChange: (next: string) => void;
@@ -105,6 +142,7 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
         strike: false,
       }),
       BulletSymbol,
+      FontSize,
     ],
     content: parseRichTextBody(value),
     editable: !disabled,
@@ -140,6 +178,8 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
 
   // RT-BULLETS — toolbar bullet-symbol picker open state.
   const [symbolOpen, setSymbolOpen] = useState(false);
+  // RT-FONTSIZE — toolbar size picker open state.
+  const [sizeOpen, setSizeOpen] = useState(false);
 
   if (!editor) {
     return (
@@ -203,6 +243,16 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
       DEFAULT_BULLET_SYMBOL
     : DEFAULT_BULLET_SYMBOL;
 
+  // RT-FONTSIZE — apply an explicit pt size (or clear it back to inherited).
+  const applyFontSize = (size: number | null) => {
+    const chain = editor.chain().focus();
+    if (size == null) chain.unsetMark("fontSize").run();
+    else chain.setMark("fontSize", { size }).run();
+    setSizeOpen(false);
+  };
+  const activeFontSize =
+    (editor.getAttributes("fontSize").size as number | null) ?? null;
+
   return (
     <div className="nx-rich-text bg-background rounded-md border border-[var(--border)] overflow-hidden">
       <div className="border-b border-[var(--border)] bg-muted/30 flex items-center gap-0.5 px-2 py-1">
@@ -239,6 +289,75 @@ export function RichTextEditor({ value, onChange, disabled }: Props) {
           active={editor.isActive("heading", { level: 3 })}
           label="Sub-body"
         />
+        <Divider />
+
+        {/* RT-FONTSIZE — granular point-size picker. Sits alongside the named
+            block-style buttons; sets an explicit pt size on the selection. */}
+        <div className="relative">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setSizeOpen((o) => !o)}
+            disabled={disabled}
+            aria-haspopup="menu"
+            aria-expanded={sizeOpen}
+            title="Font size"
+            aria-label="Font size"
+            className="h-7 min-w-[3.25rem] gap-1 px-1.5 text-xs tabular-nums"
+          >
+            {activeFontSize ? `${activeFontSize}pt` : "Size"}
+            <span aria-hidden className="text-muted-foreground text-[9px]">
+              ▾
+            </span>
+          </Button>
+          {sizeOpen && !disabled && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setSizeOpen(false);
+                }}
+                aria-hidden
+              />
+              <div
+                role="menu"
+                className="bg-background absolute left-0 top-full z-20 mt-1 max-h-64 w-24 overflow-y-auto rounded-md border border-[var(--border)] p-1 shadow-md"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyFontSize(null)}
+                  className={cn(
+                    "hover:bg-muted flex h-7 w-full items-center rounded px-2 text-xs",
+                    activeFontSize == null && "bg-muted text-foreground"
+                  )}
+                >
+                  Default
+                </button>
+                {FONT_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    role="menuitem"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyFontSize(size)}
+                    className={cn(
+                      "hover:bg-muted flex h-7 w-full items-center rounded px-2 text-xs tabular-nums",
+                      activeFontSize === size && "bg-muted text-foreground"
+                    )}
+                  >
+                    {size}pt
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         <Divider />
         <ToolbarButton
           icon={Bold}

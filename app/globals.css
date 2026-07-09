@@ -478,8 +478,13 @@
    marks (<strong>/<b>) to 700 so the difference is unmistakable. Arial in the
    stack guarantees a real bold face on every OS when Helvetica-Bold isn't
    installed as a separate font. */
+/* BUGFIX — was `Helvetica, Arial, sans-serif`, but system Helvetica has no
+   separate bold face on some OSes so the browser SYNTHESIZED bold and regular
+   and bold looked identical. Inter is loaded via next/font as a VARIABLE font
+   (all weights 100–900), so `var(--font-inter)` gives a real 400 vs 700 face —
+   an obvious weight difference — and matches the PDF's Inter render. */
 .nx-rich-text .ProseMirror {
-  font-family: Helvetica, Arial, sans-serif;
+  font-family: var(--font-inter), Helvetica, Arial, sans-serif;
   font-weight: 400;
 }
 .nx-rich-text .ProseMirror strong,

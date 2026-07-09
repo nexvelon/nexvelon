@@ -676,20 +676,17 @@ function createStyles(theme: QuoteTheme) {
     // legible (~7pt) so the full T&C spans fewer pages. Not used on the
     // Acceptance page, which keeps agreementLine.
     agreementBody: {
-      // BUGFIX — the T&C body is Helvetica (a compact @react-pdf built-in — no
-      // Font.register needed) + justified text. Follow-up to #303: still ran to
-      // ~8 pages at 7pt/1.2, so tightened to 6pt / lineHeight 1.1 / half the
-      // per-clause margin to pull the full terms to ~4 pages. Content, headings,
-      // ordering, and clause numbering are all unchanged.
-      fontFamily: "Helvetica",
-      // BUGFIX (follow-up to #304) — the terms read "too thick". @react-pdf's
-      // built-in Helvetica has no lighter face (only normal/bold), so: (1) pin
-      // the weight to normal so nothing renders heavier by accident, and (2)
-      // lift the ink to ~80% so the fine print reads lighter/airier against the
-      // dark quote background. Same 8-digit-hex-alpha trick as mutedFor().
-      fontWeight: "normal",
+      // BUGFIX (follow-up to #305) — the terms read "too thick". The prior fix
+      // dimmed the ink to ~80% as a proxy for lighter weight, because the
+      // built-in Helvetica has no light face. Now that Inter LIGHT (300) is
+      // registered (lib/quote-fonts.ts), the body uses a genuinely thinner
+      // weight instead of a faded colour — full-strength ink, real thin strokes.
+      // Inter Light at 6pt/1.1 has near-identical horizontal advance to Helvetica
+      // normal, so the terms still fit in ~4 pages. Content/ordering unchanged.
+      fontFamily: "Inter",
+      fontWeight: 300,
       fontSize: 6,
-      color: `${theme.ink}cc`,
+      color: theme.ink,
       lineHeight: 1.1,
       marginBottom: 0.75,
       textAlign: "justify",
@@ -701,10 +698,11 @@ function createStyles(theme: QuoteTheme) {
       lineHeight: 1,
       marginBottom: 0,
     },
-    // Leading clause numbers (e.g. "1.", "1.1", "(1)") — kept on the same
-    // compact sans as the body so the numbering matches the Helvetica switch.
+    // Leading clause numbers (e.g. "1.", "1.1", "(1)") — Inter Regular (400), a
+    // touch heavier than the Light body so the numbering reads clearly.
     agreementClauseNum: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
+      fontWeight: 400,
       fontSize: 5.5,
     },
 
@@ -888,7 +886,7 @@ function createStyles(theme: QuoteTheme) {
     // Helvetica/Arial, so these PDF styles use Helvetica too, keeping the
     // on-screen editor and the printed PDF in sync (was Cormorant Garamond).
     customParagraph: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
       fontSize: 10,
       color: theme.ink,
       lineHeight: 1.5,
@@ -897,7 +895,7 @@ function createStyles(theme: QuoteTheme) {
     // RT-FIX — Sub-body (heading level 3): smaller, muted; a quiet sub-note
     // beneath Body text.
     customSubBody: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
       fontSize: 9,
       color: mutedFor(theme),
       lineHeight: 1.4,
@@ -906,7 +904,7 @@ function createStyles(theme: QuoteTheme) {
     },
     // RT-FIX — Big Heading (heading level 1): largest, bold, accent.
     customHeading1: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
       fontSize: 20,
       fontWeight: "bold",
       color: theme.accent,
@@ -915,7 +913,7 @@ function createStyles(theme: QuoteTheme) {
       marginBottom: 4,
     },
     customHeading2: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
       fontSize: 16,
       fontWeight: "bold",
       color: theme.accent,
@@ -932,7 +930,7 @@ function createStyles(theme: QuoteTheme) {
       marginVertical: 1,
     },
     customListBullet: {
-      fontFamily: "Helvetica",
+      fontFamily: "Inter",
       fontSize: 10,
       color: theme.accent,
       width: 16,
@@ -1913,9 +1911,17 @@ function renderRichTextInline(
     if (n.type !== "text") return null;
     const text = n.text ?? "";
     const marks = n.marks ?? [];
-    const inline: { fontWeight?: "bold"; fontStyle?: "italic" } = {};
+    const inline: {
+      fontWeight?: "bold";
+      fontStyle?: "italic";
+      fontSize?: number;
+    } = {};
     if (marks.some((m) => m.type === "bold")) inline.fontWeight = "bold";
     if (marks.some((m) => m.type === "italic")) inline.fontStyle = "italic";
+    // RT-FONTSIZE — a `fontSize` mark carries an explicit pt size chosen in the
+    // editor's size picker; apply it inline so the PDF matches the editor.
+    const size = marks.find((m) => m.type === "fontSize")?.attrs?.size;
+    if (typeof size === "number" && size > 0) inline.fontSize = size;
     return (
       <Text key={i} style={inline}>
         {text}
