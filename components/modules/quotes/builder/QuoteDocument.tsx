@@ -144,6 +144,24 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 9,
       color: theme.ink,
     },
+    // BUGFIX (follow-up to #304) — the T&C ran to 4 pages + a half 5th with the
+    // standard 64pt side margins leaving wide unused black space. This T&C-ONLY
+    // page variant narrows the horizontal padding to 32pt so the clause text
+    // spans ~89% of the A4 width (up from ~78%), fitting ~12% more per line and
+    // absorbing the overflow back into 4 pages. Vertical rhythm (top/bottom
+    // padding) is unchanged, and no other page uses this style — every other
+    // section keeps `page` (64pt). The flow header widens with the body (both
+    // sit inside this padding); the footer is absolute at [56, W-56] and stays,
+    // its ornament still centered on the page axis.
+    agreementPage: {
+      fontFamily: "Inter",
+      backgroundColor: theme.ambience,
+      paddingHorizontal: 32,
+      paddingVertical: 64,
+      paddingBottom: 80,
+      fontSize: 9,
+      color: theme.ink,
+    },
 
     // ----- Logo slots -----
     logoCover: {
@@ -664,8 +682,14 @@ function createStyles(theme: QuoteTheme) {
       // per-clause margin to pull the full terms to ~4 pages. Content, headings,
       // ordering, and clause numbering are all unchanged.
       fontFamily: "Helvetica",
+      // BUGFIX (follow-up to #304) — the terms read "too thick". @react-pdf's
+      // built-in Helvetica has no lighter face (only normal/bold), so: (1) pin
+      // the weight to normal so nothing renders heavier by accident, and (2)
+      // lift the ink to ~80% so the fine print reads lighter/airier against the
+      // dark quote background. Same 8-digit-hex-alpha trick as mutedFor().
+      fontWeight: "normal",
       fontSize: 6,
-      color: theme.ink,
+      color: `${theme.ink}cc`,
       lineHeight: 1.1,
       marginBottom: 0.75,
       textAlign: "justify",
@@ -1728,7 +1752,10 @@ function AgreementPage({
   const subtitleSuffix = schedule.subtitle || "Terms & Conditions";
   const lines = terms.split("\n");
   return (
-    <Page size="A4" style={styles.page} wrap>      <PageHeader
+    // BUGFIX — T&C page uses the narrower-margin `agreementPage` (32pt sides)
+    // so the clause text spans wider and the terms fit in 4 pages. Every other
+    // page keeps `styles.page` (64pt).
+    <Page size="A4" style={styles.agreementPage} wrap>      <PageHeader
         styles={styles}
         template={template}
         number={number}
