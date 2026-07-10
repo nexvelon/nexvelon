@@ -642,9 +642,27 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 9,
       color: theme.ink,
     },
+    // BUGFIX — the one-time Particulars totals (subtotal/discount/tax) read too
+    // small next to the grand total. These bump them ~20% (9→11pt). Kept as
+    // Particulars-only keys so the shared partTotals* (reused by the Guardian
+    // "Monthly total" block) stays untouched.
+    partSubLabel: {
+      fontFamily: "Inter",
+      fontSize: 11,
+      color: theme.ink,
+    },
+    partSubValue: {
+      fontFamily: "Inter",
+      fontSize: 11,
+      color: theme.ink,
+    },
+    // BUGFIX — was a horizontal row (caption left / 42pt number right), where the
+    // oversized number overran the 260pt block and clipped the caption. Now a
+    // right-aligned vertical stack: caption on its own line ABOVE the amount, so
+    // nothing overlaps. The amount shrinks 42→20pt — still clearly the biggest
+    // number (~1.8× the 11pt subtotal), no longer overwhelming.
     partGrandRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
+      flexDirection: "column",
       alignItems: "flex-end",
       paddingTop: 8,
       marginTop: 4,
@@ -656,12 +674,14 @@ function createStyles(theme: QuoteTheme) {
       fontStyle: "italic",
       fontSize: 10,
       color: ink70(theme),
-      paddingBottom: 6,
+      textAlign: "right",
+      marginBottom: 2,
     },
     partGrandValue: {
       fontFamily: "Cormorant Garamond",
-      fontSize: 42,
+      fontSize: 20,
       color: theme.accent,
+      textAlign: "right",
     },
 
     // ----- Agreement page -----
@@ -1579,36 +1599,36 @@ function ParticularsPage({
 
       <View style={styles.partTotalsBlock}>
         <View style={styles.partTotalsRow}>
-          <Text style={styles.partTotalsLabel}>Subtotal</Text>
-          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.sellingPriceSubtotal)}</Text>
+          <Text style={styles.partSubLabel}>Subtotal</Text>
+          <Text style={[styles.partSubValue, styles.numText]}>{usd(totals.sellingPriceSubtotal)}</Text>
         </View>
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
             {/* QB-FIX-2: show the discount unit — "Discount (10%)" for a
                 percent, "Discount ($500.00)" for a flat amount. */}
-            <Text style={styles.partTotalsLabel}>
+            <Text style={styles.partSubLabel}>
               {discountType === "amount"
                 ? `Discount (${usd(discount)})`
                 : `Discount (${discount}%)`}
             </Text>
-            <Text style={[styles.partTotalsValue, styles.numText]}>
+            <Text style={[styles.partSubValue, styles.numText]}>
               −{usd(totals.discountAmount)}
             </Text>
           </View>
         ) : null}
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
-            <Text style={styles.partTotalsLabel}>Adjusted Subtotal</Text>
-            <Text style={[styles.partTotalsValue, styles.numText]}>
+            <Text style={styles.partSubLabel}>Adjusted Subtotal</Text>
+            <Text style={[styles.partSubValue, styles.numText]}>
               {usd(totals.sellingPriceAfterDiscount)}
             </Text>
           </View>
         ) : null}
         <View style={styles.partTotalsRow}>
-          <Text style={styles.partTotalsLabel}>
+          <Text style={styles.partSubLabel}>
             HST ({taxRatePct.toFixed(2)}%)
           </Text>
-          <Text style={[styles.partTotalsValue, styles.numText]}>{usd(totals.taxAmount)}</Text>
+          <Text style={[styles.partSubValue, styles.numText]}>{usd(totals.taxAmount)}</Text>
         </View>
         <View style={styles.partGrandRow}>
           <Text style={styles.partGrandLabel}>Total, in Canadian Dollars</Text>
