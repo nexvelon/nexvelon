@@ -11,6 +11,10 @@ import {
   listQuotes,
   listProjectsReferencingQuote,
   upsertQuote,
+  mintQuoteNumber,
+  findQuoteIdByNumber,
+  updateQuoteNumber,
+  updateQuoteDate,
 } from "@/lib/api/quotes";
 import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import {
@@ -23,10 +27,13 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import { getClients, getSitesByClient } from "@/lib/api/clients";
 import { getProjectRow } from "@/lib/api/projects";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasPermission } from "@/lib/permissions";
 import { diffQuote } from "@/lib/quote-audit-diff";
+import { newId } from "@/lib/quote-helpers";
+import { businessDateISO } from "@/lib/format";
 import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
-import type { Client, Quote, Site } from "@/lib/types";
-import type { DbQuoteAuditLog } from "@/lib/types/database";
+import type { Client, Quote, Role, Site } from "@/lib/types";
+import type { DbQuoteAuditLog, DbRole } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -369,6 +376,214 @@ export async function deleteAllQuoteAuditForQuoteAction(
     if (!gate.ok) return gate;
     const deleted = await deleteAllQuoteAuditForQuote(quoteId);
     return { ok: true, data: { deleted } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Editable number/date + duplicate (this chunk) ────────────────────────────
+
+// DbRole (11) → app Role (7) for hasPermission; mirrors the other action files.
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
+
+async function requireQuotesPermission(
+  action: "edit" | "create"
+): Promise<{ ok: true; actorId: string } | { ok: false; error: string }> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "You're not signed in." };
+  if (!hasPermission(adaptRole(me.role), "quotes", action)) {
+    return { ok: false, error: "forbidden" };
+  }
+  return { ok: true, actorId: me.id };
+}
+
+// A quote number is either the sequential Q-<digits> or any short prefixed
+// identifier the admin wants (e.g. INV-2024-1). Deliberately permissive per spec.
+function isValidQuoteNumber(n: string): boolean {
+  return /^Q-\d+$/.test(n) || /^[A-Z]{1,4}-.+$/.test(n);
+}
+
+// Edit a quote's number. Gated on quotes:edit. Duplicate numbers are allowed but
+// require an explicit `force` (after the UI confirms), so a clash is a conscious
+// choice — the /reports/duplicate-quote-numbers page surfaces any that exist.
+export async function updateQuoteNumberAction(input: {
+  quoteId: string;
+  newNumber: string;
+  force?: boolean;
+}): Promise<
+  { ok: true } | { ok: false; error: string; existing_quote_id?: string }
+> {
+  try {
+    const gate = await requireQuotesPermission("edit");
+    if (!gate.ok) return { ok: false, error: "forbidden" };
+
+    const num = input.newNumber.trim();
+    if (!isValidQuoteNumber(num)) {
+      return { ok: false, error: "invalid_format" };
+    }
+
+    if (!input.force) {
+      const existing = await findQuoteIdByNumber(num, input.quoteId);
+      if (existing) {
+        return {
+          ok: false,
+          error: "duplicate_exists",
+          existing_quote_id: existing,
+        };
+      }
+    }
+
+    await updateQuoteNumber(input.quoteId, num);
+
+    // Best-effort audit — never fail the edit on a log error.
+    try {
+      const actor = await resolveAuditActor();
+      await logQuoteAuditEvent({
+        quoteId: input.quoteId,
+        actorId: actor.id,
+        actorName: actor.name,
+        eventType: "updated",
+        changes: { number: { from: null, to: num } },
+      });
+    } catch (logErr) {
+      console.error("[quote_audit] number update log failed:", logErr);
+    }
+
+    revalidatePath("/quotes");
+    revalidatePath(`/quotes/${input.quoteId}`);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// Edit a quote's date (the date shown on the PDF). Gated on quotes:edit.
+export async function updateQuoteDateAction(input: {
+  quoteId: string;
+  newDate: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const gate = await requireQuotesPermission("edit");
+    if (!gate.ok) return { ok: false, error: "forbidden" };
+
+    const date = input.newDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) {
+      return { ok: false, error: "invalid_date" };
+    }
+
+    await updateQuoteDate(input.quoteId, date);
+
+    try {
+      const actor = await resolveAuditActor();
+      await logQuoteAuditEvent({
+        quoteId: input.quoteId,
+        actorId: actor.id,
+        actorName: actor.name,
+        eventType: "updated",
+        changes: { quote_date: { from: null, to: date } },
+      });
+    } catch (logErr) {
+      console.error("[quote_audit] date update log failed:", logErr);
+    }
+
+    revalidatePath("/quotes");
+    revalidatePath(`/quotes/${input.quoteId}`);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// Duplicate a quote (any status) into a fresh Draft. Gated on quotes:create.
+// Deep-clones the data blob, mints a NEW sequential number, resets status/date/
+// conversion-intent, and clears per-line committed-stock markers. Attachments
+// are intentionally NOT copied (a duplicate starts clean — no double-referenced
+// storage objects). The source quote is untouched.
+export async function duplicateQuoteAction(
+  sourceQuoteId: string
+): Promise<
+  { ok: true; newQuoteId: string } | { ok: false; error: string }
+> {
+  try {
+    const gate = await requireQuotesPermission("create");
+    if (!gate.ok) return { ok: false, error: "forbidden" };
+
+    const src = await getQuoteById(sourceQuoteId);
+    if (!src) return { ok: false, error: "Quote not found" };
+
+    const newQuoteId = newId("q");
+    const newNumber = await mintQuoteNumber();
+    const today = businessDateISO();
+
+    // Deep clone (the Quote is pure JSON) so nested sections/items/schedules are
+    // copied by value and the source is never mutated.
+    const dup: Quote = JSON.parse(JSON.stringify(src));
+    dup.id = newQuoteId;
+    dup.number = newNumber;
+    dup.status = "Draft";
+    dup.createdAt = today;
+    dup.quoteDate = today;
+    dup.projectId = undefined;
+    // Fresh conversion intent (0086 shape: both null).
+    dup.intendedTargetKind = undefined;
+    dup.intendedTargetProjectId = undefined;
+    // A fresh Draft carries no revision/closing history.
+    dup.rejectionReason = undefined;
+    dup.rejectionSource = undefined;
+    dup.rejectedAt = undefined;
+    dup.rejectedByUser = undefined;
+    dup.closingReason = undefined;
+    dup.closedAt = undefined;
+    dup.closedByUser = undefined;
+    // Clear committed-stock / serial snapshots so the copy hasn't "consumed" any
+    // inventory (mirrors the list-page duplicate).
+    for (const section of dup.sections ?? []) {
+      for (const item of section.items ?? []) {
+        item.committedStockId = undefined;
+        item.serialNumber = undefined;
+      }
+    }
+
+    const saved = await upsertQuote(dup);
+
+    // Best-effort audit — a "created" event on the new quote noting its source.
+    try {
+      const actor = await resolveAuditActor();
+      await logQuoteAuditEvent({
+        quoteId: saved.id,
+        actorId: actor.id,
+        actorName: actor.name,
+        eventType: "created",
+        changes: {
+          status: { from: null, to: "Draft" },
+          duplicated_from: { from: null, to: sourceQuoteId },
+        },
+      });
+    } catch (logErr) {
+      console.error("[quote_audit] duplicate create log failed:", logErr);
+    }
+
+    revalidatePath("/quotes");
+    return { ok: true, newQuoteId: saved.id };
   } catch (e) {
     return fail(e);
   }
