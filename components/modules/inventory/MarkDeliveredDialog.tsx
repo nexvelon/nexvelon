@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { uploadAttachmentObject } from "@/lib/api/attachments";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
 import { createAttachment } from "@/app/(app)/attachments/actions";
 import {
   getStockProjectAction,
@@ -78,16 +78,27 @@ export function MarkDeliveredDialog({
           setBusy(false);
           return;
         }
-        const uploaded = await uploadAttachmentObject(
-          "project",
-          project.project_id,
-          file
-        );
+        // SAFARI-FIX — signed-URL flow (no supabase-js on the client path).
+        const uploaded = await uploadViaSignedUrl({
+          entityType: "project",
+          entityId: project.project_id,
+          file,
+        });
+        if (!uploaded.ok) {
+          toast.error(uploaded.error);
+          setBusy(false);
+          return;
+        }
         const att = await createAttachment(
           "project",
           project.project_id,
           PROOF_FOLDER,
-          uploaded
+          {
+            path: uploaded.path,
+            filename: file.name,
+            contentType: file.type,
+            size: file.size,
+          }
         );
         if (!att.ok) {
           toast.error(att.error);

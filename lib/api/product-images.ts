@@ -1,13 +1,18 @@
 "use client";
 
 // IMG-1 — client-side helpers for the public "product-images" Storage bucket.
-// Uploads run from the browser (authenticated session → the storage.objects
-// policies in migration 0034 gate write access). Images are compressed to JPEG
-// client-side before upload to keep files small. Path namespace:
-//   products/{productId}/{timestamp}.jpg
+// Images are compressed to JPEG client-side (canvas) before upload. Path
+// namespace: products/{productId}/{timestamp}.jpg (built server-side).
+//
+// SAFARI-FIX — upload/delete now ride the signed-URL flow (entityType
+// 'product_image'): the server action signs/removes with the service role and
+// the bytes go up via plain fetch. supabase-js is OFF this module entirely —
+// its auth lock (navigator.locks) deadlocks in Safari, which froze the old
+// client-side upload at its first await. Signatures are unchanged, so
+// ProductImageField / ProductForm callers didn't move.
 
-import { createClient } from "@/lib/supabase/client";
-import { PRODUCT_IMAGES_BUCKET } from "@/lib/product-image-url";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
+import { deleteUploadedObjectAction } from "@/app/(app)/attachments/actions";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg"];
 const MAX_EDGE = 1200; // px — longest edge after resize
@@ -66,50 +71,33 @@ export async function uploadProductImage(
   if (!ACCEPTED_TYPES.includes(file.type)) {
     throw new Error("Image must be a PNG or JPEG.");
   }
-  // DIAGNOSTIC — "[upload]"-prefixed logs bracket every await in the image
-  // path (compression, auth, storage) so a hang is attributable to one step.
   console.info(
     `[upload] image compress start (product=${productId}, name="${file.name}", size=${file.size})`
   );
   const blob = await compressToJpeg(file);
   console.info(`[upload] image compress done (jpegBytes=${blob.size})`);
 
-  const supabase = createClient();
-  console.info(`[upload] auth check start (product-image ${productId})`);
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    console.error("[upload] auth check failed", authError ?? "no user");
-    throw new Error("Not authenticated.");
-  }
-  console.info(`[upload] auth check ok (user=${user.id})`);
-
-  const path = `products/${productId}/${Date.now()}.jpg`;
-  console.info(
-    `[upload] starting storage upload (bucket=${PRODUCT_IMAGES_BUCKET}, path="${path}")`
-  );
-  const { error } = await supabase.storage
-    .from(PRODUCT_IMAGES_BUCKET)
-    .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-  if (error) {
-    console.error(
-      `[upload] storage upload FAILED (bucket=${PRODUCT_IMAGES_BUCKET}, path="${path}")`,
-      error
-    );
-    throw new Error(`Upload failed: ${error.message}`);
-  }
-  console.info(`[upload] storage upload complete (path="${path}")`);
-  return path;
+  // SAFARI-FIX — signed-URL flow. The server builds the products/{id}/{ts}.jpg
+  // path and signs it; the JPEG goes up with plain fetch (60s abort ceiling).
+  const jpeg = new File([blob], "image.jpg", { type: "image/jpeg" });
+  const up = await uploadViaSignedUrl({
+    entityType: "product_image",
+    entityId: productId,
+    file: jpeg,
+  });
+  if (!up.ok) throw new Error(up.error);
+  return up.path;
 }
 
-/** Remove a product-image object. Best-effort — a missing object is not fatal. */
+/** Remove a product-image object. Best-effort — a missing object is not fatal.
+ *  Server-side removal (path: products/{productId}/{ts}.jpg → id segment). */
 export async function deleteProductImage(path: string): Promise<void> {
   if (!path) return;
-  const supabase = createClient();
-  const { error } = await supabase.storage
-    .from(PRODUCT_IMAGES_BUCKET)
-    .remove([path]);
-  if (error) throw new Error(`Delete failed: ${error.message}`);
+  const productId = path.split("/")[1] ?? "";
+  const res = await deleteUploadedObjectAction({
+    entityType: "product_image",
+    entityId: productId,
+    path,
+  });
+  if (!res.ok) throw new Error(`Delete failed: ${res.error}`);
 }

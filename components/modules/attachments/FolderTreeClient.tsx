@@ -49,10 +49,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import {
-  uploadAttachmentObject,
-  getSignedAttachmentUrl,
-} from "@/lib/api/attachments";
+import { getSignedAttachmentUrl } from "@/lib/api/attachments";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
 import {
   createUserFolderAction,
   renameFolderAction,
@@ -160,8 +158,22 @@ export function FolderTreeClient({
     if (!file || !selectedFolder) return;
     setBusy(true);
     try {
-      const up = await uploadAttachmentObject("folder", selectedFolder.id, file);
-      const res = await createFolderAttachmentAction({ folderId: selectedFolder.id, file: up });
+      // SAFARI-FIX — signed-URL flow (no supabase-js on the client upload path).
+      const up = await uploadViaSignedUrl({
+        entityType: "folder",
+        entityId: selectedFolder.id,
+        file,
+      });
+      if (!up.ok) throw new Error(up.error);
+      const res = await createFolderAttachmentAction({
+        folderId: selectedFolder.id,
+        file: {
+          path: up.path,
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+        },
+      });
       if (!res.ok) throw new Error(res.error);
       toast.success("Uploaded");
       refresh();

@@ -20,14 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  deleteAttachmentObject,
-  getSignedAttachmentUrl,
-  uploadAttachmentObject,
-} from "@/lib/api/attachments";
+import { getSignedAttachmentUrl } from "@/lib/api/attachments";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
 import {
   createAttachment,
   deleteAttachment,
+  deleteUploadedObjectAction,
   listAttachments,
 } from "@/app/(app)/attachments/actions";
 import type { DbAttachment } from "@/lib/types/database";
@@ -143,24 +141,32 @@ export function AttachmentsSection({
     if (!file) return;
     setUploadingFolder(folder);
     try {
-      const obj = await uploadAttachmentObject(entityType, entityId, file);
+      // SAFARI-FIX — signed-URL flow: server signs, plain fetch PUTs. No
+      // supabase-js on the client upload path (its auth lock deadlocks Safari).
+      const up = await uploadViaSignedUrl({ entityType, entityId, file });
+      if (!up.ok) throw new Error(up.error);
       console.info(
-        `[upload] calling createAttachment action (entity=${entityType}/${entityId}, folder="${folder}", path="${obj.path}")`
+        `[upload] calling createAttachment action (entity=${entityType}/${entityId}, folder="${folder}", path="${up.path}")`
       );
       const res = await createAttachment(entityType, entityId, folder, {
-        path: obj.path,
-        filename: obj.filename,
-        contentType: obj.contentType,
-        size: obj.size,
+        path: up.path,
+        filename: file.name,
+        contentType: file.type,
+        size: file.size,
       });
       if (!res.ok) {
         console.error("[upload] createAttachment FAILED", res.error);
-        // Roll back the orphaned object if the DB row failed.
-        await deleteAttachmentObject(obj.path).catch(() => {});
+        // Roll back the orphaned object SERVER-side (the old client-side remove
+        // ran through supabase-js and could hang the error path the same way).
+        await deleteUploadedObjectAction({
+          entityType,
+          entityId,
+          path: up.path,
+        }).catch(() => {});
         throw new Error(res.error);
       }
       console.info("[upload] createAttachment succeeded", res.data);
-      toast.success(`Uploaded ${obj.filename}`);
+      toast.success(`Uploaded ${file.name}`);
       console.info("[upload] refetching attachments");
       await reload();
     } catch (e) {

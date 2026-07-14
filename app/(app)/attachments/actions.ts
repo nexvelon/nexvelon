@@ -17,6 +17,7 @@
 // grants its editors.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
@@ -71,6 +72,9 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   project: "projects",
   // PROJ2-4b: folder-tree uploads (entity_type='folder') gate on projects.
   folder: "projects",
+  // SAFARI-FIX: the product image (product-images bucket) shares the signed-URL
+  // flow; it edits the product, so it gates on inventory like `product`.
+  product_image: "inventory",
 };
 
 function resourceFor(entityType: string): Resource {
@@ -238,6 +242,150 @@ export async function deleteAttachmentsForEntity(
     if (delErr) throw new Error(delErr.message);
 
     return { ok: true, data: { removed: rows.length } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── SAFARI-FIX — signed-URL upload flow ──────────────────────────────────────
+// The old flow uploaded from the browser via supabase-js, whose FIRST await
+// (auth.getUser()) contends on the navigator.locks auth lock — a known Safari
+// deadlock: spinner forever, no network request, no error (diagnosed in the
+// PR #309 investigation). The new flow keeps supabase-js OFF the client upload
+// path entirely: this action (service role) issues a pre-authorized signed
+// upload URL; the client PUTs the bytes with plain fetch; the DB row still goes
+// through createAttachment. Authorization lives HERE (same <resource>:edit gate
+// as createAttachment) — the service role only executes after the gate passes.
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+// The bucket + object path for an upload, per entity type. product_image keeps
+// the product-images bucket + its existing `products/{id}/{ts}.jpg` convention;
+// everything else lands in the attachments bucket at
+// {entityType}/{entityId}/{timestamp}-{safeFilename} (unchanged from the old
+// client-side uploader).
+function uploadDestination(
+  entityType: string,
+  entityId: string,
+  filename: string
+): { bucket: string; path: string; prefix: string } {
+  if (entityType === "product_image") {
+    return {
+      bucket: "product-images",
+      path: `products/${entityId}/${Date.now()}.jpg`,
+      prefix: `products/${entityId}/`,
+    };
+  }
+  return {
+    bucket: "attachments",
+    path: `${entityType}/${entityId}/${Date.now()}-${sanitizeFilename(filename)}`,
+    prefix: `${entityType}/${entityId}/`,
+  };
+}
+
+export async function getSignedUploadUrlAction(input: {
+  entityType: string;
+  entityId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+}): Promise<
+  | { ok: true; path: string; token: string; signedUrl: string; bucket: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const denied = await requireEntityPermission(input.entityType, "edit");
+    if (denied) {
+      console.error(
+        `[upload] signed-url DENIED entity=${input.entityType}/${input.entityId} file="${input.filename}"`
+      );
+      return denied;
+    }
+
+    if (!input.filename.trim()) return { ok: false, error: "Missing filename." };
+    if (!input.contentType) return { ok: false, error: "Missing content type." };
+    if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0) {
+      return { ok: false, error: "Missing file size." };
+    }
+    if (input.sizeBytes > MAX_UPLOAD_BYTES) {
+      return { ok: false, error: "File too large. Max 50 MB." };
+    }
+
+    const { bucket, path } = uploadDestination(
+      input.entityType,
+      input.entityId,
+      input.filename
+    );
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage
+      .from(bucket)
+      .createSignedUploadUrl(path);
+    if (error || !data) {
+      console.error(
+        `[upload] createSignedUploadUrl FAILED (bucket=${bucket}, path="${path}")`,
+        error
+      );
+      return { ok: false, error: error?.message ?? "Could not sign upload." };
+    }
+
+    console.info(
+      `[upload] signed URL issued (bucket=${bucket}, path="${path}", entity=${input.entityType}/${input.entityId})`
+    );
+    return {
+      ok: true,
+      path,
+      token: data.token,
+      signedUrl: data.signedUrl,
+      bucket,
+    };
+  } catch (e) {
+    console.error("[upload] getSignedUploadUrlAction threw:", e);
+    return fail(e);
+  }
+}
+
+// Server-side removal of an uploaded object that never got its DB row (rollback
+// after a failed createAttachment) or a replaced/cleared product image. The old
+// client-side remover ran through supabase-js and could hit the same Safari
+// auth-lock hang ON THE ERROR PATH. Gated like the other writes; the path must
+// sit under the entity type's own namespace so a caller can't gate-shop one
+// resource to delete another's objects.
+export async function deleteUploadedObjectAction(input: {
+  entityType: string;
+  entityId: string;
+  path: string;
+}): Promise<ActionResult<{ removed: boolean }>> {
+  try {
+    const denied = await requireEntityPermission(input.entityType, "edit");
+    if (denied) return denied;
+
+    const { bucket, prefix } = uploadDestination(
+      input.entityType,
+      input.entityId,
+      "x"
+    );
+    if (!input.path.startsWith(prefix)) {
+      return { ok: false, error: "Path does not belong to this entity." };
+    }
+
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from(bucket).remove([input.path]);
+    if (error) {
+      console.error(
+        `[upload] object delete FAILED (bucket=${bucket}, path="${input.path}")`,
+        error
+      );
+      return { ok: false, error: error.message };
+    }
+    console.info(
+      `[upload] object deleted (bucket=${bucket}, path="${input.path}")`
+    );
+    return { ok: true, data: { removed: true } };
   } catch (e) {
     return fail(e);
   }

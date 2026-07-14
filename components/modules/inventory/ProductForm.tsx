@@ -27,11 +27,11 @@ import {
   deleteProductImage,
   uploadProductImage,
 } from "@/lib/api/product-images";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
 import {
-  deleteAttachmentObject,
-  uploadAttachmentObject,
-} from "@/lib/api/attachments";
-import { createAttachment } from "@/app/(app)/attachments/actions";
+  createAttachment,
+  deleteUploadedObjectAction,
+} from "@/app/(app)/attachments/actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -441,19 +441,30 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
             console.info("[upload] image_path persisted");
           }
           for (const pa of pendingAttachments) {
-            const obj = await uploadAttachmentObject("product", newId, pa.file);
+            // SAFARI-FIX — signed-URL flow (no supabase-js on the client path).
+            const up = await uploadViaSignedUrl({
+              entityType: "product",
+              entityId: newId,
+              file: pa.file,
+            });
+            if (!up.ok) throw new Error(up.error);
             console.info(
-              `[upload] calling createAttachment action (product/${newId}, folder="${pa.folder}", path="${obj.path}")`
+              `[upload] calling createAttachment action (product/${newId}, folder="${pa.folder}", path="${up.path}")`
             );
             const attRes = await createAttachment("product", newId, pa.folder, {
-              path: obj.path,
-              filename: obj.filename,
-              contentType: obj.contentType,
-              size: obj.size,
+              path: up.path,
+              filename: pa.file.name,
+              contentType: pa.file.type,
+              size: pa.file.size,
             });
             if (!attRes.ok) {
               console.error("[upload] createAttachment FAILED", attRes.error);
-              await deleteAttachmentObject(obj.path).catch(() => {});
+              // Server-side orphan rollback (client-side remove could hang too).
+              await deleteUploadedObjectAction({
+                entityType: "product",
+                entityId: newId,
+                path: up.path,
+              }).catch(() => {});
               throw new Error(attRes.error);
             }
             console.info("[upload] createAttachment succeeded", attRes.data);
