@@ -66,20 +66,41 @@ export async function uploadProductImage(
   if (!ACCEPTED_TYPES.includes(file.type)) {
     throw new Error("Image must be a PNG or JPEG.");
   }
+  // DIAGNOSTIC — "[upload]"-prefixed logs bracket every await in the image
+  // path (compression, auth, storage) so a hang is attributable to one step.
+  console.info(
+    `[upload] image compress start (product=${productId}, name="${file.name}", size=${file.size})`
+  );
   const blob = await compressToJpeg(file);
+  console.info(`[upload] image compress done (jpegBytes=${blob.size})`);
 
   const supabase = createClient();
+  console.info(`[upload] auth check start (product-image ${productId})`);
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error("Not authenticated.");
+  if (authError || !user) {
+    console.error("[upload] auth check failed", authError ?? "no user");
+    throw new Error("Not authenticated.");
+  }
+  console.info(`[upload] auth check ok (user=${user.id})`);
 
   const path = `products/${productId}/${Date.now()}.jpg`;
+  console.info(
+    `[upload] starting storage upload (bucket=${PRODUCT_IMAGES_BUCKET}, path="${path}")`
+  );
   const { error } = await supabase.storage
     .from(PRODUCT_IMAGES_BUCKET)
     .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
+  if (error) {
+    console.error(
+      `[upload] storage upload FAILED (bucket=${PRODUCT_IMAGES_BUCKET}, path="${path}")`,
+      error
+    );
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+  console.info(`[upload] storage upload complete (path="${path}")`);
   return path;
 }
 
