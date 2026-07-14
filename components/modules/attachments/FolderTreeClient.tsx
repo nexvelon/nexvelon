@@ -49,8 +49,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getSignedAttachmentUrl } from "@/lib/api/attachments";
 import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
+import { downloadAttachment } from "@/lib/attachments/download-client";
 import {
   createUserFolderAction,
   renameFolderAction,
@@ -145,8 +145,10 @@ export function FolderTreeClient({
 
   async function download(a: DbAttachment) {
     try {
-      const url = await getSignedAttachmentUrl(a.path);
-      window.open(url, "_blank");
+      // SAFARI-FIX follow-up — server-signed URL + anchor click; no browser
+      // supabase-js (its auth lock deadlocked Safari, same as uploads in #310).
+      const res = await downloadAttachment({ attachmentId: a.id });
+      if (!res.ok) toast.error(res.error);
     } catch (e) {
       toast.error((e as Error).message);
     }

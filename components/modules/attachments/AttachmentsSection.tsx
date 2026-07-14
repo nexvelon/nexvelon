@@ -20,8 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getSignedAttachmentUrl } from "@/lib/api/attachments";
 import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
+import { downloadAttachment } from "@/lib/attachments/download-client";
 import {
   createAttachment,
   deleteAttachment,
@@ -180,8 +180,10 @@ export function AttachmentsSection({
 
   const handleDownload = async (att: DbAttachment) => {
     try {
-      const url = await getSignedAttachmentUrl(att.path);
-      window.open(url, "_blank", "noopener");
+      // SAFARI-FIX follow-up — server-signed URL + anchor click; no browser
+      // supabase-js (its auth lock deadlocked Safari, same as uploads in #310).
+      const res = await downloadAttachment({ attachmentId: att.id });
+      if (!res.ok) toast.error(res.error);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not open file");
     }

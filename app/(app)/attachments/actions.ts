@@ -390,3 +390,59 @@ export async function deleteUploadedObjectAction(input: {
     return fail(e);
   }
 }
+
+// ── SAFARI-FIX follow-up (#310) — signed DOWNLOAD URLs ───────────────────────
+// Downloads used to sign client-side via browser supabase-js
+// (getSignedAttachmentUrl), which rides the same navigator.locks auth lock that
+// deadlocked uploads in Safari. Same cure: sign server-side (service role),
+// hand the browser a plain URL. Downloads are READS, so the gate is the entity
+// resource's :view (not :edit like the upload/delete writes). The row is loaded
+// first so the gate keys off the attachment's own entity_type, and the signed
+// URL carries `download=<filename>` so the response's Content-Disposition
+// forces a save (cross-origin <a download> attributes are ignored by browsers).
+export async function getSignedDownloadUrlAction(input: {
+  attachmentId: string;
+}): Promise<
+  | { ok: true; signedUrl: string; filename: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: row, error: loadErr } = await supabase
+      .from("attachments")
+      .select("*")
+      .eq("id", input.attachmentId)
+      .maybeSingle();
+    if (loadErr) throw new Error(loadErr.message);
+    if (!row) return { ok: false, error: "not_found" };
+    const att = row as DbAttachment;
+
+    const denied = await requireEntityPermission(att.entity_type, "view");
+    if (denied) {
+      console.error(
+        `[download] signed-url DENIED entity=${att.entity_type}/${att.entity_id} file="${att.filename}"`
+      );
+      return denied;
+    }
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage
+      .from(att.bucket)
+      .createSignedUrl(att.path, 300, { download: att.filename });
+    if (error || !data) {
+      console.error(
+        `[download] createSignedUrl FAILED (bucket=${att.bucket}, path="${att.path}")`,
+        error
+      );
+      return { ok: false, error: error?.message ?? "Could not sign download." };
+    }
+
+    console.info(
+      `[download] signed URL issued (bucket=${att.bucket}, path="${att.path}", entity=${att.entity_type}/${att.entity_id})`
+    );
+    return { ok: true, signedUrl: data.signedUrl, filename: att.filename };
+  } catch (e) {
+    console.error("[download] getSignedDownloadUrlAction threw:", e);
+    return fail(e);
+  }
+}
