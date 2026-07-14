@@ -38,19 +38,40 @@ export async function uploadAttachmentObject(
   }
 
   const supabase = createClient();
+  // DIAGNOSTIC — auth.getUser() is the FIRST await in the upload chain (a
+  // network round-trip that also contends on supabase-js's navigator.locks auth
+  // lock). If the "auth check start" log appears but "auth check ok" never does,
+  // the hang is HERE — before any storage request is even attempted.
+  console.info(
+    `[upload] auth check start (entity=${entityType}/${entityId}, file="${file.name}")`
+  );
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error("Not authenticated.");
+  if (authError || !user) {
+    console.error("[upload] auth check failed", authError ?? "no user");
+    throw new Error("Not authenticated.");
+  }
+  console.info(`[upload] auth check ok (user=${user.id})`);
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${entityType}/${entityId}/${Date.now()}-${safeName}`;
 
+  console.info(
+    `[upload] starting storage upload (bucket=${BUCKET}, path="${path}", size=${file.size})`
+  );
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
+  if (error) {
+    console.error(
+      `[upload] storage upload FAILED (bucket=${BUCKET}, path="${path}")`,
+      error
+    );
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+  console.info(`[upload] storage upload complete (path="${path}")`);
 
   return {
     path,

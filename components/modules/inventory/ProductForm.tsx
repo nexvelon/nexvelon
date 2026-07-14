@@ -419,20 +419,32 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
       // PART-FIX-1: in create mode, persist the pending image + attachments now
       // that we have a part id. An orphaned storage object (whose DB row failed)
       // is rolled back; the part stays created so the user can retry on detail.
+      // DIAGNOSTIC — "[upload]" logs trace the create-mode persist loop.
       if (!isEdit) {
+        console.info(
+          `[upload] part created (id=${newId}); persisting pendingImage=${!!pendingImage}, pendingAttachments=${pendingAttachments.length}`
+        );
         try {
           if (pendingImage) {
             const path = await uploadProductImage(newId, pendingImage);
+            console.info(
+              `[upload] persisting image_path on product (path="${path}")`
+            );
             const imgRes = await updateProductAction(newId, {
               image_path: path,
             });
             if (!imgRes.ok) {
+              console.error("[upload] image_path persist FAILED", imgRes.error);
               await deleteProductImage(path).catch(() => {});
               throw new Error(imgRes.error);
             }
+            console.info("[upload] image_path persisted");
           }
           for (const pa of pendingAttachments) {
             const obj = await uploadAttachmentObject("product", newId, pa.file);
+            console.info(
+              `[upload] calling createAttachment action (product/${newId}, folder="${pa.folder}", path="${obj.path}")`
+            );
             const attRes = await createAttachment("product", newId, pa.folder, {
               path: obj.path,
               filename: obj.filename,
@@ -440,11 +452,15 @@ export function ProductForm({ mode, onSubmitSuccess, onCancel }: ProductFormProp
               size: obj.size,
             });
             if (!attRes.ok) {
+              console.error("[upload] createAttachment FAILED", attRes.error);
               await deleteAttachmentObject(obj.path).catch(() => {});
               throw new Error(attRes.error);
             }
+            console.info("[upload] createAttachment succeeded", attRes.data);
           }
+          console.info("[upload] create-mode file persist complete");
         } catch (e) {
+          console.error("[upload] create-mode file persist failed", e);
           toast.error(
             `Part created, but a file failed to save: ${
               e instanceof Error ? e.message : "upload error"

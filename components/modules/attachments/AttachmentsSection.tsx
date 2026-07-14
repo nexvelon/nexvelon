@@ -115,25 +115,38 @@ export function AttachmentsSection({
     return map;
   }, [rows]);
 
-  // §4b — opens the folder's OWN hidden input. The info log is the immediate
-  // signal that the click actually fired; if you click Upload and don't see it,
-  // the wiring is broken.
+  // DIAGNOSTIC — every step of the upload path logs with the "[upload]" prefix
+  // so a DevTools filter on "[upload]" shows the full sequence. The first log
+  // that DOESN'T appear pinpoints the failing step (see the interpretation
+  // guide in the investigation PR).
   const openPicker = (folder: string) => {
-    console.info(`[attachments] Upload clicked for folder "${folder}"`);
+    const hasRef = !!inputRefs.current[folder];
+    console.info(
+      `[upload] button clicked (folder="${folder}", hasRef=${hasRef})`
+    );
+    if (!hasRef) {
+      console.error(
+        `[upload] NO file input ref for folder "${folder}" — wiring broken`
+      );
+      return;
+    }
+    console.info(`[upload] triggering file input click (folder="${folder}")`);
     inputRefs.current[folder]?.click();
   };
 
   const handleUpload = async (folder: string, file?: File) => {
-    // §4a — immediate console signal that a file was actually selected.
     console.info(
-      `[attachments] file selected folder="${folder}" name="${
+      `[upload] file selected (folder="${folder}", name="${
         file?.name ?? "(none)"
-      }" size=${file?.size ?? 0}`
+      }", size=${file?.size ?? 0}, type="${file?.type ?? ""}")`
     );
     if (!file) return;
     setUploadingFolder(folder);
     try {
       const obj = await uploadAttachmentObject(entityType, entityId, file);
+      console.info(
+        `[upload] calling createAttachment action (entity=${entityType}/${entityId}, folder="${folder}", path="${obj.path}")`
+      );
       const res = await createAttachment(entityType, entityId, folder, {
         path: obj.path,
         filename: obj.filename,
@@ -141,15 +154,20 @@ export function AttachmentsSection({
         size: obj.size,
       });
       if (!res.ok) {
+        console.error("[upload] createAttachment FAILED", res.error);
         // Roll back the orphaned object if the DB row failed.
         await deleteAttachmentObject(obj.path).catch(() => {});
         throw new Error(res.error);
       }
+      console.info("[upload] createAttachment succeeded", res.data);
       toast.success(`Uploaded ${obj.filename}`);
+      console.info("[upload] refetching attachments");
       await reload();
     } catch (e) {
+      console.error("[upload] upload flow failed", e);
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
+      console.info(`[upload] spinner reset (folder="${folder}")`);
       setUploadingFolder(null);
     }
   };
