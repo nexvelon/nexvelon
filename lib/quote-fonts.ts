@@ -27,6 +27,12 @@ export function registerQuoteFonts(basePath: string = "/fonts") {
       { src: `${basePath}/Inter-Bold.ttf`, fontWeight: 700 },
     ],
   });
+
+  // BUGFIX — @react-pdf hyphenates long words by default, which split client
+  // names mid-word on the cover ("Excelligent Consult-ing"). Mid-word breaks
+  // are never wanted in a business quote, so every word is atomic: text wraps
+  // at word boundaries only, document-wide.
+  Font.registerHyphenationCallback((word) => [word]);
 }
 
 if (typeof window !== "undefined") {
