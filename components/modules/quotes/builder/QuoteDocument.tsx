@@ -656,6 +656,18 @@ function createStyles(theme: QuoteTheme) {
       fontSize: 11,
       color: theme.ink,
     },
+    // BUGFIX (rebalance 2) — the pre-tax Subtotal is the number the eye should
+    // land on first: its row renders 1pt over the other totals rows (12 vs 11).
+    partHeadlineLabel: {
+      fontFamily: "Inter",
+      fontSize: 12,
+      color: theme.ink,
+    },
+    partHeadlineValue: {
+      fontFamily: "Inter",
+      fontSize: 12,
+      color: theme.ink,
+    },
     // BUGFIX — was a horizontal row (caption left / 42pt number right), where the
     // oversized number overran the 260pt block and clipped the caption. Now a
     // right-aligned vertical stack: caption on its own line ABOVE the amount, so
@@ -677,10 +689,14 @@ function createStyles(theme: QuoteTheme) {
       textAlign: "right",
       marginBottom: 2,
     },
+    // BUGFIX (rebalance 2) — the after-tax grand total steps back: white (same
+    // ink as the Subtotal/HST lines) at the HST row's size, so the pre-tax
+    // Subtotal reads as the headline. The italic caption above it is unchanged
+    // (the #308 stacked layout stays).
     partGrandValue: {
       fontFamily: "Cormorant Garamond",
-      fontSize: 20,
-      color: theme.accent,
+      fontSize: 11,
+      color: theme.ink,
       textAlign: "right",
     },
 
@@ -765,9 +781,12 @@ function createStyles(theme: QuoteTheme) {
       letterSpacing: 2,
       textTransform: "uppercase",
     },
+    // BUGFIX (rebalance 2) — the boxed acceptance total was oversized; ~27%
+    // smaller (30→22pt). Gold + box layout/padding unchanged, so the FOR
+    // ACCEPTANCE box keeps its height and balance.
     acceptTotalValue: {
       fontFamily: "Cormorant Garamond",
-      fontSize: 30,
+      fontSize: 22,
       color: theme.accent,
       marginTop: 2,
     },
@@ -1599,8 +1618,9 @@ function ParticularsPage({
 
       <View style={styles.partTotalsBlock}>
         <View style={styles.partTotalsRow}>
-          <Text style={styles.partSubLabel}>Subtotal</Text>
-          <Text style={[styles.partSubValue, styles.numText]}>{usd(totals.sellingPriceSubtotal)}</Text>
+          {/* Rebalance 2 — the Subtotal is the headline row (+1pt over the rest). */}
+          <Text style={styles.partHeadlineLabel}>Subtotal</Text>
+          <Text style={[styles.partHeadlineValue, styles.numText]}>{usd(totals.sellingPriceSubtotal)}</Text>
         </View>
         {totals.discountAmount > 0 ? (
           <View style={styles.partTotalsRow}>
