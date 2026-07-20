@@ -1,14 +1,25 @@
 "use client";
 
-// QD-2 Phase 5b — client-side helpers for the quote-drawings Storage bucket.
-// Uploads run from the user's browser (not server-side) so the per-user RLS
-// folder isolation is enforced by the authenticated session. Path namespace:
-//   {user_id}/{timestamp}-{safe-filename}.pdf
+// QD-2 Phase 5b, rewired for SAFARI-FIX (#310/#311 residual) — quote-drawings
+// helpers with ZERO browser supabase-js involvement. The old implementation's
+// first await was supabase.auth.getUser(), which deadlocks on Safari's
+// navigator.locks (PR #309 investigation): spinner forever, no network, no
+// error. Now: the server signs (service role, quotes:edit / quotes:view gates
+// + 20 MB / application/pdf bucket constraints mirrored server-side), the
+// browser moves bytes with plain fetch via the shared uploadViaSignedUrl
+// helper ([upload] logging + 60s abort ceiling come with it).
+//
+// Path namespace is unchanged: {user_id}/{timestamp}-{safe-filename}.pdf —
+// derived SERVER-side from the authenticated profile (the entityId passed
+// below is ignored for this surface).
 
-import { createClient } from "@/lib/supabase/client";
+import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
+import {
+  deleteUploadedObjectAction,
+  getSignedQuoteDrawingUrlAction,
+} from "@/app/(app)/attachments/actions";
 
-const BUCKET = "quote-drawings";
-const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB — mirrors the bucket constraint
 
 export interface UploadedDrawing {
   path: string; // {user_id}/{timestamp}-{filename}.pdf
@@ -18,7 +29,7 @@ export interface UploadedDrawing {
 }
 
 export async function uploadDrawingsPdf(file: File): Promise<UploadedDrawing> {
-  // Client-side validation (defense in depth — server enforces via bucket config).
+  // Client-side validation (defense in depth — the server action re-enforces).
   if (file.type !== "application/pdf") {
     throw new Error("File must be a PDF.");
   }
@@ -26,33 +37,16 @@ export async function uploadDrawingsPdf(file: File): Promise<UploadedDrawing> {
     throw new Error(`File too large. Max ${MAX_BYTES / 1024 / 1024} MB.`);
   }
 
-  const supabase = createClient();
-
-  // Get current user id (path namespace).
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error("Not authenticated.");
-
-  // Build path: {user_id}/{timestamp}-{filename}.pdf
-  const timestamp = Date.now();
-  const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${user.id}/${timestamp}-${safeFilename}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, file, {
-      contentType: "application/pdf",
-      upsert: false,
-    });
-
-  if (uploadError) {
-    throw new Error(`Upload failed: ${uploadError.message}`);
-  }
+  // entityId is server-derived for quote_drawing; "self" is a placeholder.
+  const up = await uploadViaSignedUrl({
+    entityType: "quote_drawing",
+    entityId: "self",
+    file,
+  });
+  if (!up.ok) throw new Error(up.error);
 
   return {
-    path,
+    path: up.path,
     filename: file.name,
     size: file.size,
     uploadedAt: new Date().toISOString(),
@@ -60,22 +54,18 @@ export async function uploadDrawingsPdf(file: File): Promise<UploadedDrawing> {
 }
 
 export async function deleteDrawingsPdf(path: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.storage.from(BUCKET).remove([path]);
-  if (error) throw new Error(`Delete failed: ${error.message}`);
+  const res = await deleteUploadedObjectAction({
+    entityType: "quote_drawing",
+    entityId: "self",
+    path,
+  });
+  if (!res.ok) throw new Error(`Delete failed: ${res.error}`);
 }
 
-export async function getSignedDrawingsUrl(
-  path: string,
-  expiresInSeconds = 3600
-): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(path, expiresInSeconds);
-  if (error || !data)
-    throw new Error(
-      `Failed to create signed URL: ${error?.message ?? "unknown"}`
-    );
-  return data.signedUrl;
+export async function getSignedDrawingsUrl(path: string): Promise<string> {
+  const res = await getSignedQuoteDrawingUrlAction({ path });
+  if (!res.ok) {
+    throw new Error(`Failed to create signed URL: ${res.error}`);
+  }
+  return res.signedUrl;
 }

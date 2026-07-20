@@ -75,6 +75,9 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   // SAFARI-FIX: the product image (product-images bucket) shares the signed-URL
   // flow; it edits the product, so it gates on inventory like `product`.
   product_image: "inventory",
+  // SAFARI-FIX residual (#311): quote drawings (quote-drawings bucket) — the
+  // drawings schedule edits the quote, so uploads/removals gate on quotes.
+  quote_drawing: "quotes",
 };
 
 function resourceFor(entityType: string): Resource {
@@ -258,6 +261,8 @@ export async function deleteAttachmentsForEntity(
 // as createAttachment) — the service role only executes after the gate passes.
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
+// quote-drawings bucket constraint (Dashboard: 20 MB, application/pdf only).
+const QUOTE_DRAWING_MAX_BYTES = 20 * 1024 * 1024;
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -278,6 +283,16 @@ function uploadDestination(
       bucket: "product-images",
       path: `products/${entityId}/${Date.now()}.jpg`,
       prefix: `products/${entityId}/`,
+    };
+  }
+  // Quote drawings keep the QD-2 convention: {user_id}/{ts}-{safeFilename}.
+  // entityId here is the AUTHENTICATED user's id, derived server-side by the
+  // action (never trusted from the client).
+  if (entityType === "quote_drawing") {
+    return {
+      bucket: "quote-drawings",
+      path: `${entityId}/${Date.now()}-${sanitizeFilename(filename)}`,
+      prefix: `${entityId}/`,
     };
   }
   return {
@@ -315,9 +330,25 @@ export async function getSignedUploadUrlAction(input: {
       return { ok: false, error: "File too large. Max 50 MB." };
     }
 
+    // quote_drawing mirrors the quote-drawings bucket constraints (20 MB,
+    // application/pdf) and is namespaced by the AUTHENTICATED user — the
+    // client-supplied entityId is ignored for this surface.
+    let entityId = input.entityId;
+    if (input.entityType === "quote_drawing") {
+      if (input.contentType !== "application/pdf") {
+        return { ok: false, error: "Quote drawings must be a PDF." };
+      }
+      if (input.sizeBytes > QUOTE_DRAWING_MAX_BYTES) {
+        return { ok: false, error: "File too large. Max 20 MB." };
+      }
+      const me = await getCurrentProfile();
+      if (!me) return { ok: false, error: "You're not signed in." };
+      entityId = me.id;
+    }
+
     const { bucket, path } = uploadDestination(
       input.entityType,
-      input.entityId,
+      entityId,
       input.filename
     );
 
@@ -364,13 +395,26 @@ export async function deleteUploadedObjectAction(input: {
     const denied = await requireEntityPermission(input.entityType, "edit");
     if (denied) return denied;
 
-    const { bucket, prefix } = uploadDestination(
-      input.entityType,
-      input.entityId,
-      "x"
-    );
-    if (!input.path.startsWith(prefix)) {
-      return { ok: false, error: "Path does not belong to this entity." };
+    let bucket: string;
+    if (input.entityType === "quote_drawing") {
+      // Drawings are namespaced per UPLOADER ({user_id}/…), but removal is a
+      // quote edit — any quotes:edit holder may remove a drawing regardless of
+      // who uploaded it. The bucket is fixed server-side, so the only checks
+      // needed are path-shape sanity (no traversal, inside a user namespace).
+      bucket = "quote-drawings";
+      if (
+        input.path.includes("..") ||
+        input.path.startsWith("/") ||
+        !/^[^/]+\/.+$/.test(input.path)
+      ) {
+        return { ok: false, error: "Invalid drawings path." };
+      }
+    } else {
+      const dest = uploadDestination(input.entityType, input.entityId, "x");
+      bucket = dest.bucket;
+      if (!input.path.startsWith(dest.prefix)) {
+        return { ok: false, error: "Path does not belong to this entity." };
+      }
     }
 
     const admin = createAdminClient();
@@ -443,6 +487,49 @@ export async function getSignedDownloadUrlAction(input: {
     return { ok: true, signedUrl: data.signedUrl, filename: att.filename };
   } catch (e) {
     console.error("[download] getSignedDownloadUrlAction threw:", e);
+    return fail(e);
+  }
+}
+
+// SAFARI-FIX residual (#311) — quote drawings have no attachments row (the
+// path lives inside the quote's jsonb schedule), so they can't ride
+// getSignedDownloadUrlAction. Same cure, keyed by path: server-side signing
+// (service role) gated on quotes:view; the browser gets a plain URL for the
+// PDF-to-images render. 300s expiry — the render fetches immediately.
+export async function getSignedQuoteDrawingUrlAction(input: {
+  path: string;
+}): Promise<
+  { ok: true; signedUrl: string } | { ok: false; error: string }
+> {
+  try {
+    const denied = await requireEntityPermission("quote_drawing", "view");
+    if (denied) {
+      console.error(`[download] drawings signed-url DENIED path="${input.path}"`);
+      return denied;
+    }
+    if (
+      !input.path.trim() ||
+      input.path.includes("..") ||
+      input.path.startsWith("/")
+    ) {
+      return { ok: false, error: "Invalid drawings path." };
+    }
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage
+      .from("quote-drawings")
+      .createSignedUrl(input.path, 300);
+    if (error || !data) {
+      console.error(
+        `[download] drawings createSignedUrl FAILED (path="${input.path}")`,
+        error
+      );
+      return { ok: false, error: error?.message ?? "Could not sign download." };
+    }
+    console.info(`[download] drawings signed URL issued (path="${input.path}")`);
+    return { ok: true, signedUrl: data.signedUrl };
+  } catch (e) {
+    console.error("[download] getSignedQuoteDrawingUrlAction threw:", e);
     return fail(e);
   }
 }
