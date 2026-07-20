@@ -135,6 +135,57 @@ describe("getSignedUploadUrlAction", () => {
   });
 });
 
+// SAFARI-FIX residual (#311) — the quote-drawings surface.
+describe("getSignedUploadUrlAction — quote_drawing", () => {
+  const DRAWING_INPUT = {
+    entityType: "quote_drawing",
+    entityId: "client-supplied-ignored",
+    filename: "floor plan.pdf",
+    contentType: "application/pdf",
+    sizeBytes: 1234,
+  };
+
+  it("maps to the quote-drawings bucket, gated on quotes:edit (SalesRep passes)", async () => {
+    // SalesRep has quotes:edit but NOT inventory:edit — success proves the
+    // quote_drawing → quotes mapping (the unmapped fallback is inventory).
+    h.profile = { id: "u1", role: "SalesRep", status: "Active" };
+    const res = await getSignedUploadUrlAction(DRAWING_INPUT);
+    expect(res.ok).toBe(true);
+    const signed = h.signedPaths[0];
+    expect(signed.bucket).toBe("quote-drawings");
+    // Namespaced by the AUTHENTICATED user (u1) — client entityId ignored.
+    expect(signed.path).toMatch(/^u1\/\d+-floor_plan\.pdf$/);
+  });
+
+  it("is FORBIDDEN without quotes:edit (Technician)", async () => {
+    h.profile = { id: "u1", role: "Technician", status: "Active" };
+    const res = await getSignedUploadUrlAction(DRAWING_INPUT);
+    expect(res.ok).toBe(false);
+    expect(h.signedPaths).toHaveLength(0);
+  });
+
+  it("rejects a non-PDF contentType", async () => {
+    const res = await getSignedUploadUrlAction({
+      ...DRAWING_INPUT,
+      contentType: "image/png",
+      filename: "plan.png",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/pdf/i);
+    expect(h.signedPaths).toHaveLength(0);
+  });
+
+  it("rejects sizeBytes > 20MB (bucket constraint, below the general 50MB)", async () => {
+    const res = await getSignedUploadUrlAction({
+      ...DRAWING_INPUT,
+      sizeBytes: 20 * 1024 * 1024 + 1,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/20 MB/);
+    expect(h.signedPaths).toHaveLength(0);
+  });
+});
+
 describe("deleteUploadedObjectAction", () => {
   it("removes an object under the entity's own namespace", async () => {
     const res = await deleteUploadedObjectAction({
@@ -156,6 +207,32 @@ describe("deleteUploadedObjectAction", () => {
       path: "quote/q-9/123-x.pdf",
     });
     expect(res.ok).toBe(false);
+    expect(h.removed).toHaveLength(0);
+  });
+
+  it("quote_drawing: removes ANY user's drawing for a quotes editor", async () => {
+    h.profile = { id: "u1", role: "SalesRep", status: "Active" };
+    const res = await deleteUploadedObjectAction({
+      entityType: "quote_drawing",
+      entityId: "self",
+      path: "other-user/1234-plan.pdf",
+    });
+    expect(res.ok).toBe(true);
+    expect(h.removed[0]).toEqual({
+      bucket: "quote-drawings",
+      paths: ["other-user/1234-plan.pdf"],
+    });
+  });
+
+  it("quote_drawing: rejects traversal and shapeless paths", async () => {
+    for (const path of ["../secrets.pdf", "/abs.pdf", "noslash.pdf"]) {
+      const res = await deleteUploadedObjectAction({
+        entityType: "quote_drawing",
+        entityId: "self",
+        path,
+      });
+      expect(res.ok).toBe(false);
+    }
     expect(h.removed).toHaveLength(0);
   });
 });
