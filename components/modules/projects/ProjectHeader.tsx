@@ -10,6 +10,7 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 import { getProjectHeaderData, listJobsForProject } from "@/lib/api/projects";
 import { ProjectStatusControl } from "@/components/modules/projects/ProjectStatusControl";
 import { ProjectEditForm } from "@/components/modules/projects/ProjectEditForm";
+import { MoveProjectButton } from "@/components/modules/projects/MoveProjectButton";
 
 const OPCO_LABEL: Record<string, string> = {
   integrated_solutions: "Integrated",
@@ -106,7 +107,14 @@ export async function ProjectHeader({
 
         {/* Right — stats + edit */}
         <div className="lg:col-span-5">
-          <div className="flex items-start justify-end">
+          <div className="flex items-start justify-end gap-2">
+            {canEdit ? (
+              <MoveProjectButton
+                projectId={project.id}
+                clientId={project.client_id}
+                currentSiteId={project.site_id}
+              />
+            ) : null}
             {canEdit ? <ProjectEditForm project={project} /> : null}
           </div>
           <div className="mt-2 grid grid-cols-3 gap-3">

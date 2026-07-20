@@ -26,6 +26,8 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   getJobById: async () => h.job,
   updateJobFields: h.updateJobFields,
   listProjects: vi.fn(),

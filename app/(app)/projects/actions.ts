@@ -48,6 +48,16 @@ import {
   type CreateLineItemInput,
   type UpdateLineItemPatch,
 } from "@/lib/api/job-line-items";
+import {
+  moveChangeOrderToProject,
+  promoteChangeOrderToProject,
+  moveProjectToSite,
+  getSiteForMove,
+  listMoveTargetsForJob,
+  listSitesForProjectMove,
+  type JobMoveTarget,
+  type MoveTargetSite,
+} from "@/lib/api/job-move";
 import { logActivity } from "@/lib/api/activity-log";
 import {
   scaffoldFoldersForNewProject,
@@ -1019,6 +1029,138 @@ export async function cloneJobLineItemAction(
 
     revalidateJob(ctx.projectId, ctx.jobId);
     return { ok: true, data: clone };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── Move / reparent (PROJ2-8) ────────────────────────────────────────────────
+
+function revalidateMove(sourceProjectId: string, targetProjectId: string) {
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${sourceProjectId}`);
+  revalidatePath(`/projects/${targetProjectId}`);
+}
+
+export async function moveChangeOrderAction(input: {
+  jobId: string;
+  targetProjectId: string;
+}): Promise<
+  | { ok: true; data: { newCoNumber: number; targetProjectId: string } }
+  | { ok: false; error: string }
+> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const res = await moveChangeOrderToProject({
+      jobId: input.jobId,
+      targetProjectId: input.targetProjectId,
+      actorId: gate.actorId,
+    });
+    if (!res.ok) return res;
+
+    revalidateMove(res.sourceProjectId, input.targetProjectId);
+    revalidatePath(`/projects/${input.targetProjectId}/jobs/${input.jobId}`);
+    return {
+      ok: true,
+      data: {
+        newCoNumber: res.newCoNumber,
+        targetProjectId: input.targetProjectId,
+      },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function promoteChangeOrderAction(input: {
+  jobId: string;
+}): Promise<
+  { ok: true; data: { newProjectId: string } } | { ok: false; error: string }
+> {
+  try {
+    // It creates a project — gate on projects:create, not just :edit.
+    const gate = await requireProjectsCreate();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const res = await promoteChangeOrderToProject({
+      jobId: input.jobId,
+      actorId: gate.actorId,
+    });
+    if (!res.ok) return res;
+
+    revalidateMove(res.sourceProjectId, res.newProjectId);
+    return { ok: true, data: { newProjectId: res.newProjectId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function moveProjectToSiteAction(input: {
+  projectId: string;
+  targetSiteId: string;
+  confirmCrossClient?: boolean;
+}): Promise<
+  | { ok: true }
+  | { ok: false; error: string; target_client_name?: string }
+> {
+  try {
+    const gate = await requireProjectsEdit();
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const [project, site] = await Promise.all([
+      getProjectRow(input.projectId),
+      getSiteForMove(input.targetSiteId),
+    ]);
+    if (!project || !site) return { ok: false, error: "not_found" };
+
+    // Cross-client moves are allowed but only behind an explicit confirm.
+    if (site.client_id !== project.client_id && input.confirmCrossClient !== true) {
+      return {
+        ok: false,
+        error: "cross_client_confirm_required",
+        target_client_name: site.client_name ?? "another client",
+      };
+    }
+
+    const res = await moveProjectToSite({
+      projectId: input.projectId,
+      targetSiteId: input.targetSiteId,
+      actorId: gate.actorId,
+    });
+    if (!res.ok) return res;
+
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${input.projectId}`);
+    revalidatePath("/sites");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listJobMoveTargetsAction(
+  jobId: string
+): Promise<ActionResult<JobMoveTarget[]>> {
+  try {
+    if (!(await requireProjectsView()).ok) {
+      return { ok: false, error: "You don't have permission to view projects." };
+    }
+    return { ok: true, data: await listMoveTargetsForJob(jobId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listSitesForProjectMoveAction(): Promise<
+  ActionResult<MoveTargetSite[]>
+> {
+  try {
+    if (!(await requireProjectsView()).ok) {
+      return { ok: false, error: "You don't have permission to view projects." };
+    }
+    return { ok: true, data: await listSitesForProjectMove() };
   } catch (e) {
     return fail(e);
   }

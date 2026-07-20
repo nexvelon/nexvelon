@@ -37,6 +37,8 @@ vi.mock("@/lib/api/job-line-items", () => ({
   syncCostCenterAndJobTotals: vi.fn(),
 }));
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   getJobById: async () => h.job,
   // stubs for the rest of actions.ts's projects imports (unused here)
   listProjects: vi.fn(),

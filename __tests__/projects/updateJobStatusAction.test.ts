@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   getJobById: async () => h.job,
   setJobStatus: h.setJobStatus,
   // other named exports actions.ts imports (unused in these tests)

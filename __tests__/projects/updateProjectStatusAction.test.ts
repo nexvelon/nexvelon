@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   // used by updateProjectStatusAction
   getProjectStatus: async (id: string) =>
     h.currentStatus === null

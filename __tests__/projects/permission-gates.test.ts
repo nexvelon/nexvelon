@@ -68,6 +68,8 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   createProjectFromQuote: h.createProjectFromQuote,
   mergeQuoteIntoProject: h.mergeQuoteIntoProject,
   addCostCenter: h.addCostCenter,
