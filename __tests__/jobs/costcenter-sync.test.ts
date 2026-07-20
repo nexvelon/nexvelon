@@ -100,6 +100,8 @@ const h = vi.hoisted(() => ({
   } as Record<string, unknown> | null,
 }));
 vi.mock("@/lib/api/projects", () => ({
+  getNextCoNumber: vi.fn(),
+  getMainJobForProject: vi.fn(),
   getCostCenterById: async () => h.costCenter,
   deleteCostCenter: async () => true,
   // stubs for the rest of actions.ts's projects imports (unused here)

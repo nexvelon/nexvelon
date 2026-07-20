@@ -20,6 +20,7 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 import { JobStatusControl } from "@/components/modules/projects/JobStatusControl";
 import { JobEditForm } from "@/components/modules/projects/JobEditForm";
 import { JobDeleteButton } from "@/components/modules/projects/JobDeleteButton";
+import { JobMoveMenu } from "@/components/modules/projects/JobMoveMenu";
 import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
@@ -217,6 +218,13 @@ export function JobDetailView({
             {canEdit ? (
               <div className="flex items-start justify-end gap-2">
                 <JobEditForm job={job} />
+                {isChangeOrder ? (
+                  <JobMoveMenu
+                    jobId={job.id}
+                    coNumber={job.co_number}
+                    siteName={siteName}
+                  />
+                ) : null}
                 {isChangeOrder ? (
                   <JobDeleteButton
                     jobId={job.id}
