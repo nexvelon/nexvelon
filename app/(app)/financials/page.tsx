@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+// FIN-1 — /financials over real data. Five tabs (Overview / Invoices /
+// Receivables / Projects / Tax), all fed by the financials:view-gated server
+// actions. The range selector drives { from, to } bounds on issue_date;
+// "Custom" exposes two date inputs. The old mock shell's QuickBooks/Xero/
+// Board-pack buttons and sync footer are gone — no accounting integration
+// exists yet, so nothing pretends otherwise.
+
+import { useMemo, useState } from "react";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Select,
@@ -13,32 +21,25 @@ import {
 } from "@/components/ui/select";
 import {
   OverviewTab,
-  PLTab,
-  BalanceSheetTab,
-  CashFlowTab,
   InvoicesTab,
-  BillsTab,
   ReceivablesTab,
-  PayablesTab,
+  ProjectsFinTab,
   TaxTab,
-  ReportsTab,
-  SyncFooter,
 } from "@/components/modules/financials/Tabs";
-import { FIN_RANGE_LABEL, type FinRange } from "@/lib/financials-data";
+import {
+  FIN_RANGE_LABEL,
+  rangeBounds,
+  type FinRange,
+} from "@/lib/financials-range";
 import { Can } from "@/lib/role-context";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { key: "overview", label: "Overview" },
-  { key: "pl", label: "Profit & Loss" },
-  { key: "bs", label: "Balance Sheet" },
-  { key: "cf", label: "Cash Flow" },
   { key: "invoices", label: "Invoices" },
-  { key: "bills", label: "Bills" },
   { key: "ar", label: "Receivables" },
-  { key: "ap", label: "Payables" },
+  { key: "projects", label: "Projects" },
   { key: "tax", label: "Tax (GST/HST)" },
-  { key: "reports", label: "Reports" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -46,18 +47,29 @@ type TabKey = (typeof TABS)[number]["key"];
 export default function FinancialsPage() {
   const [tab, setTab] = useState<TabKey>("overview");
   const [range, setRange] = useState<FinRange>("ytd");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+
+  const { from, to } = useMemo(() => {
+    if (range === "custom") {
+      return { from: customFrom || null, to: customTo || null };
+    }
+    return rangeBounds(range);
+  }, [range, customFrom, customTo]);
+
+  const now = new Date();
 
   return (
     <Can resource="financials" action="view" fallback={<RestrictedCard />}>
       <div className="space-y-6">
         <PageHeader
-          eyebrow={`Fiscal Q${Math.floor(new Date().getMonth() / 3) + 1} · ${new Date().toLocaleString("en", { month: "short" })} 2026`}
+          eyebrow={`Fiscal Q${Math.floor(now.getMonth() / 3) + 1} · ${now.toLocaleString("en", { month: "short" })} ${now.getFullYear()}`}
           title="Financial Operations"
-          description="P&L · cash flow · receivables · indirect tax"
+          description="Revenue · receivables · project financials · HST"
           actions={
             <>
               <Select value={range} onValueChange={(v) => setRange((v ?? "ytd") as FinRange)}>
-                <SelectTrigger className="w-32 h-9">
+                <SelectTrigger className="h-9 w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -68,27 +80,24 @@ export default function FinancialsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
-                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
-              >
-                QuickBooks
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3.5 py-2 text-[12px] font-medium tracking-wide hover:bg-muted/40"
-                style={{ borderColor: "var(--brand-border)", color: "var(--brand-text)" }}
-              >
-                Xero
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[12px] font-medium tracking-wide text-white"
-                style={{ background: "var(--brand-primary)" }}
-              >
-                Board pack
-              </button>
+              {range === "custom" && (
+                <>
+                  <Input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-9 w-36"
+                    aria-label="From date"
+                  />
+                  <Input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-9 w-36"
+                    aria-label="To date"
+                  />
+                </>
+              )}
             </>
           }
         />
@@ -117,18 +126,11 @@ export default function FinancialsPage() {
           </ul>
         </nav>
 
-        {tab === "overview" && <OverviewTab range={range} />}
-        {tab === "pl" && <PLTab range={range} />}
-        {tab === "bs" && <BalanceSheetTab />}
-        {tab === "cf" && <CashFlowTab range={range} />}
-        {tab === "invoices" && <InvoicesTab />}
-        {tab === "bills" && <BillsTab />}
+        {tab === "overview" && <OverviewTab from={from} to={to} />}
+        {tab === "invoices" && <InvoicesTab from={from} to={to} />}
         {tab === "ar" && <ReceivablesTab />}
-        {tab === "ap" && <PayablesTab />}
-        {tab === "tax" && <TaxTab range={range} />}
-        {tab === "reports" && <ReportsTab />}
-
-        <SyncFooter />
+        {tab === "projects" && <ProjectsFinTab />}
+        {tab === "tax" && <TaxTab from={from} to={to} />}
       </div>
     </Can>
   );
