@@ -7,11 +7,117 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getQuoteById } from "@/lib/api/quotes";
+import { round2 } from "@/lib/quote-helpers";
+import { lineSellTotal } from "@/lib/jobs/totals";
 import type { DbJobLineItem, JobLineKind } from "@/lib/types/database";
 import type { BuilderLineItem } from "@/lib/types";
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+// ── PROJ2-6b — cost-center + job contract_value sync ─────────────────────────
+//
+// Line items are the source of truth: a cost center's contract_value = Σ of its
+// lines' sell totals (qty × unit_price × (1 − discount_pct/100)), and a Job's
+// contract_value = Σ of its cost centers' values + Σ sell totals of the job's
+// UNATTRIBUTED lines (cost_center_id NULL). Runs after every line-item mutation;
+// always best-effort at the call sites (§2.8) — a sync failure logs a warning
+// and never fails the mutation itself.
+
+type SellRow = {
+  quantity: number | null;
+  unit_price: number | null;
+  discount_pct: number | null;
+};
+
+function sumSell(rows: SellRow[]): number {
+  return round2(
+    rows.reduce(
+      (s, r) =>
+        s +
+        lineSellTotal(
+          Number(r.quantity ?? 0),
+          Number(r.unit_price ?? 0),
+          Number(r.discount_pct ?? 0)
+        ),
+      0
+    )
+  );
+}
+
+export async function syncCostCenterAndJobTotals(input: {
+  jobId: string;
+  costCenterIds: (string | null)[]; // the CCs affected by the mutation
+  actorId: string | null;
+}): Promise<void> {
+  const supabase = await db();
+  const ccIds = [
+    ...new Set(input.costCenterIds.filter((id): id is string => !!id)),
+  ];
+
+  // 1. Recompute each affected cost center from its line items.
+  for (const ccId of ccIds) {
+    const { data, error } = await supabase
+      .from("job_line_items")
+      .select("quantity, unit_price, discount_pct")
+      .eq("cost_center_id", ccId);
+    if (error)
+      throw new Error(`syncCostCenterAndJobTotals/ccLines: ${error.message}`);
+    const { error: upErr } = await supabase
+      .from("project_cost_centers")
+      .update({ contract_value: sumSell((data ?? []) as SellRow[]) })
+      .eq("id", ccId);
+    if (upErr)
+      throw new Error(`syncCostCenterAndJobTotals/cc: ${upErr.message}`);
+  }
+
+  // 2. Recompute the Job: Σ its CCs' contract_value + Σ unattributed line sells.
+  const { data: ccRows, error: ccErr } = await supabase
+    .from("project_cost_centers")
+    .select("contract_value")
+    .eq("job_id", input.jobId);
+  if (ccErr)
+    throw new Error(`syncCostCenterAndJobTotals/jobCcs: ${ccErr.message}`);
+  const ccSum = round2(
+    ((ccRows ?? []) as { contract_value: number | null }[]).reduce(
+      (s, r) => s + Number(r.contract_value ?? 0),
+      0
+    )
+  );
+
+  const { data: freeRows, error: freeErr } = await supabase
+    .from("job_line_items")
+    .select("quantity, unit_price, discount_pct")
+    .eq("job_id", input.jobId)
+    .is("cost_center_id", null);
+  if (freeErr)
+    throw new Error(`syncCostCenterAndJobTotals/freeLines: ${freeErr.message}`);
+
+  const patch: Record<string, unknown> = {
+    contract_value: round2(ccSum + sumSell((freeRows ?? []) as SellRow[])),
+  };
+  if (input.actorId != null) patch.updated_by = input.actorId;
+  const { error: jobErr } = await supabase
+    .from("project_jobs")
+    .update(patch)
+    .eq("id", input.jobId);
+  if (jobErr)
+    throw new Error(`syncCostCenterAndJobTotals/job: ${jobErr.message}`);
+}
+
+// Best-effort wrapper (§2.8) — every mutation below calls this, never the raw
+// sync, so a sync failure can never fail the line-item write that triggered it.
+async function syncBestEffort(input: {
+  jobId: string;
+  costCenterIds: (string | null)[];
+  actorId: string | null;
+}): Promise<void> {
+  try {
+    await syncCostCenterAndJobTotals(input);
+  } catch (e) {
+    console.warn("[job-line-items] contract_value sync failed:", e);
+  }
 }
 
 // ── Reads ────────────────────────────────────────────────────────────────────
@@ -119,6 +225,11 @@ export async function createLineItem(
     .select("*")
     .single();
   if (error) throw new Error(`createLineItem: ${error.message}`);
+  await syncBestEffort({
+    jobId: input.jobId,
+    costCenterIds: [input.costCenterId],
+    actorId: input.actorId,
+  });
   return data as DbJobLineItem;
 }
 
@@ -150,6 +261,15 @@ const PATCH_COLUMN: Record<keyof UpdateLineItemPatch, string> = {
   costCenterId: "cost_center_id",
 };
 
+// Patch keys whose change moves a sell total — the only ones that require a
+// contract_value re-sync (unit_cost never affects sell).
+const SYNC_KEYS: ReadonlyArray<keyof UpdateLineItemPatch> = [
+  "quantity",
+  "unitPrice",
+  "discountPct",
+  "costCenterId",
+];
+
 export async function updateLineItem(input: {
   id: string;
   patch: UpdateLineItemPatch;
@@ -164,18 +284,45 @@ export async function updateLineItem(input: {
   if (Object.keys(row).length === 0) return;
   row.updated_by = input.actorId;
 
+  // Sell-affecting change → capture the row BEFORE the write so a cost_center
+  // move re-syncs the OLD cost center as well as the new one.
+  const needsSync = SYNC_KEYS.some((k) => input.patch[k] !== undefined);
+  const before = needsSync ? await getLineItemById(input.id) : null;
+
   const supabase = await db();
   const { error } = await supabase
     .from("job_line_items")
     .update(row)
     .eq("id", input.id);
   if (error) throw new Error(`updateLineItem: ${error.message}`);
+
+  if (needsSync && before) {
+    await syncBestEffort({
+      jobId: before.job_id,
+      costCenterIds: [
+        before.cost_center_id,
+        input.patch.costCenterId !== undefined
+          ? input.patch.costCenterId
+          : before.cost_center_id,
+      ],
+      actorId: input.actorId,
+    });
+  }
 }
 
 export async function deleteLineItem(id: string): Promise<void> {
+  // Capture job + CC before the row disappears (needed for the re-sync).
+  const before = await getLineItemById(id);
   const supabase = await db();
   const { error } = await supabase.from("job_line_items").delete().eq("id", id);
   if (error) throw new Error(`deleteLineItem: ${error.message}`);
+  if (before) {
+    await syncBestEffort({
+      jobId: before.job_id,
+      costCenterIds: [before.cost_center_id],
+      actorId: null,
+    });
+  }
 }
 
 // Batch sort_order by index in orderedIds.
@@ -290,6 +437,11 @@ export async function copyQuoteSectionsToJob(input: {
   if (rows.length === 0) return { inserted: 0 };
   const { error } = await supabase.from("job_line_items").insert(rows);
   if (error) throw new Error(`copyQuoteSectionsToJob/insert: ${error.message}`);
+  await syncBestEffort({
+    jobId: input.jobId,
+    costCenterIds: rows.map((r) => (r.cost_center_id as string | null) ?? null),
+    actorId: input.actorId,
+  });
   return { inserted: rows.length };
 }
 

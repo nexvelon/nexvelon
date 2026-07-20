@@ -43,7 +43,10 @@ import {
 import { CurrencyInput } from "@/components/modules/quotes/builder/CurrencyInput";
 import { formatCurrency } from "@/lib/format";
 import { round2 } from "@/lib/quote-helpers";
-import { computeJobLineItemTotals } from "@/lib/jobs/totals";
+import {
+  computeJobLineItemTotals,
+  computeQuotedEstimatedLegs,
+} from "@/lib/jobs/totals";
 import { cn } from "@/lib/utils";
 import {
   createJobLineItemAction,
@@ -100,6 +103,9 @@ export function JobLineItemsTab({
     filter === "all" ? true : li.line_kind === filter
   );
   const totals = computeJobLineItemTotals(items);
+  // PROJ2-6b — quoted contract (Σ quoted sell totals) vs the current live sell.
+  const { quoted, hasQuotedBaseline } = computeQuotedEstimatedLegs(items);
+  const quotedDrift = round2(totals.sellAfterDiscount - quoted.revenue);
   const money = (n: number | null) =>
     canViewFinancials && n != null ? formatCurrency(n) : "—";
 
@@ -362,6 +368,36 @@ export function JobLineItemsTab({
               accent
             />
           </div>
+
+          {/* PROJ2-6b — quoted-vs-current summary; only when a quoted baseline
+              exists. Financials-gated. */}
+          {hasQuotedBaseline && canViewFinancials && (
+            <div className="border-t border-[var(--border)] px-4 py-2">
+              <p className="text-muted-foreground text-xs tabular-nums">
+                Quoted contract:{" "}
+                <span className="text-brand-charcoal font-medium">
+                  {formatCurrency(quoted.revenue)}
+                </span>{" "}
+                · Current:{" "}
+                <span className="text-brand-charcoal font-medium">
+                  {formatCurrency(totals.sellAfterDiscount)}
+                </span>{" "}
+                <span
+                  className={cn(
+                    "font-medium",
+                    Math.abs(quotedDrift) < 0.005
+                      ? "text-muted-foreground"
+                      : quotedDrift > 0
+                        ? "text-[var(--brand-status-green)]"
+                        : "text-destructive"
+                  )}
+                >
+                  ({quotedDrift > 0 ? "+" : quotedDrift < 0 ? "−" : ""}
+                  {formatCurrency(Math.abs(quotedDrift))})
+                </span>
+              </p>
+            </div>
+          )}
         </Card>
       )}
 

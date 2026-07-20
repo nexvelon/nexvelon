@@ -44,6 +44,7 @@ import {
   reorderLineItems,
   cloneLineItem,
   copyQuoteSectionsToJob,
+  syncCostCenterAndJobTotals,
   type CreateLineItemInput,
   type UpdateLineItemPatch,
 } from "@/lib/api/job-line-items";
@@ -371,6 +372,20 @@ export async function deleteCostCenterAction(
     const before = await getCostCenterById(id).catch(() => null);
     const ok = await deleteCostCenter(id);
     if (!ok) return { ok: false, error: "Cost center not found." };
+    // PROJ2-6b — the CC's line items just went cost_center_id = NULL (SET NULL
+    // FK), so they now count toward the job total as unattributed lines.
+    // Re-sync the job so its contract_value stays correct. Best-effort (§2.8).
+    if (before?.job_id) {
+      try {
+        await syncCostCenterAndJobTotals({
+          jobId: before.job_id,
+          costCenterIds: [],
+          actorId: gate.actorId,
+        });
+      } catch (syncErr) {
+        console.warn("[projects] job total re-sync after CC delete failed:", syncErr);
+      }
+    }
     // Best-effort audit (§2.8).
     if (before) {
       try {

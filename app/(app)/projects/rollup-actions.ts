@@ -92,6 +92,8 @@ function redactRollup(rollup: ProjectCostRollup): void {
   // PROJ2-4c — po_committed is spend; redact it too. (Project invoiced/
   // billed_pct stay visible — unchanged pre-4c behavior.)
   rollup.perProject.po_committed = null;
+  // PROJ2-6b — the entire variance block is financial; dash it whole.
+  rollup.perProject.variance = null;
   for (const k of Object.keys(rollup.perCostCenter)) {
     rollup.perCostCenter[k].labour = null;
     rollup.perCostCenter[k].spent = null;
@@ -106,6 +108,7 @@ function redactRollup(rollup: ProjectCostRollup): void {
     j.invoiced = null;
     j.billed_pct = null;
     j.po_committed = null;
+    j.variance = null;
   }
 }
 

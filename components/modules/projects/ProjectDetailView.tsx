@@ -36,6 +36,7 @@ import {
   ProjectRollupCard,
   CostCenterRollupChips,
 } from "@/components/modules/projects/ProjectRollup";
+import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
@@ -281,6 +282,26 @@ export function ProjectDetailView({
           rollup={rollup.perProject}
           canSeeFinancials={canSeeFinancials}
         />
+      )}
+
+      {/* PROJ2-6b — project-level Quoted/Estimated/Actual/Variance, collapsed
+          by default. The block arrives null (redacted) without financials:edit;
+          the table then renders dashes. */}
+      {rollup && (
+        <details className="group">
+          <summary className="text-brand-navy cursor-pointer select-none font-serif text-sm font-semibold">
+            Performance vs Quote
+            <span className="text-muted-foreground ml-1.5 text-[11px] font-normal group-open:hidden">
+              · expand
+            </span>
+          </summary>
+          <Card className="bg-card mt-2 p-4 shadow-sm">
+            <PerformanceTable
+              block={rollup.perProject.variance}
+              canViewFinancials={canSeeFinancials}
+            />
+          </Card>
+        </details>
       )}
 
       {/* Cost Centers */}

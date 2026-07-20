@@ -62,6 +62,7 @@ function redactJob(entry: DbJobRollup): DbJobRollup {
     invoiced: null,
     billed_pct: null,
     po_committed: null,
+    variance: null,
   };
 }
 
@@ -107,6 +108,7 @@ export default async function JobDetailPage({
       invoiced: 0,
       billed_pct: 0,
       po_committed: 0,
+      variance: null,
     };
   const rollup = canViewFinancials ? baseEntry : redactJob(baseEntry);
 

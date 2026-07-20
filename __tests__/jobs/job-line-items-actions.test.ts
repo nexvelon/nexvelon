@@ -34,6 +34,7 @@ vi.mock("@/lib/api/job-line-items", () => ({
   reorderLineItems: h.reorderLineItems,
   cloneLineItem: h.cloneLineItem,
   copyQuoteSectionsToJob: vi.fn(),
+  syncCostCenterAndJobTotals: vi.fn(),
 }));
 vi.mock("@/lib/api/projects", () => ({
   getJobById: async () => h.job,

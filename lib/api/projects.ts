@@ -713,18 +713,21 @@ export async function updateProjectFields(
 // rename/delete (captures the cc_number + prior name).
 export async function getCostCenterById(
   id: string
-): Promise<Pick<DbProjectCostCenter, "id" | "project_id" | "cc_number" | "name"> | null> {
+): Promise<Pick<
+  DbProjectCostCenter,
+  "id" | "project_id" | "cc_number" | "name" | "job_id"
+> | null> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("project_cost_centers")
-    .select("id, project_id, cc_number, name")
+    .select("id, project_id, cc_number, name, job_id")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getCostCenterById: ${error.message}`);
   return (
     (data as Pick<
       DbProjectCostCenter,
-      "id" | "project_id" | "cc_number" | "name"
+      "id" | "project_id" | "cc_number" | "name" | "job_id"
     > | null) ?? null
   );
 }
