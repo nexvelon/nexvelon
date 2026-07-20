@@ -10,6 +10,10 @@ export type ChainCtx = {
   op: "select" | "insert" | "update" | "delete";
   terminal: "await" | "single" | "maybeSingle";
   payload?: unknown;
+  // Every chained filter/modifier call (eq/in/is/order/limit/…) with its args,
+  // in call order — lets resolve() distinguish otherwise-identical queries
+  // (added for the PROJ2-6b sync tests; earlier tests ignore it).
+  filters: Array<{ method: string; args: unknown[] }>;
 };
 
 export function makeSupabaseMock(
@@ -20,7 +24,7 @@ export function makeSupabaseMock(
   return {
     auth: { getUser: vi.fn(async () => ({ data: { user } })) },
     from(table: string) {
-      const ctx: ChainCtx = { table, op: "select", terminal: "await" };
+      const ctx: ChainCtx = { table, op: "select", terminal: "await", filters: [] };
       const target: Record<string, unknown> = {
         insert: (p: unknown) => {
           ctx.op = "insert";
@@ -50,7 +54,11 @@ export function makeSupabaseMock(
       const proxy: Record<string, unknown> = new Proxy(target, {
         get(t, prop: string) {
           if (prop in t) return t[prop];
-          return () => proxy; // any filter method (eq/in/order/limit/is/like…)
+          // any filter method (eq/in/order/limit/is/like…) — recorded on ctx
+          return (...args: unknown[]) => {
+            ctx.filters.push({ method: prop, args });
+            return proxy;
+          };
         },
       });
       return proxy;

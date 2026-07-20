@@ -21,6 +21,7 @@ import { JobStatusControl } from "@/components/modules/projects/JobStatusControl
 import { JobEditForm } from "@/components/modules/projects/JobEditForm";
 import { JobDeleteButton } from "@/components/modules/projects/JobDeleteButton";
 import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
+import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -475,6 +476,14 @@ function FinancialsTab({
 }) {
   return (
     <div className="space-y-4">
+      {/* PROJ2-6b — Quoted vs Estimated vs Actual with variance. */}
+      <Panel title="Performance">
+        <PerformanceTable
+          block={rollup.variance}
+          canViewFinancials={canViewFinancials}
+        />
+      </Panel>
+
       <Panel title="Financial summary">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Contract value" value={money(job.contract_value)} />

@@ -25,6 +25,11 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { round2 } from "@/lib/quote-helpers";
 import { sumLabourCostByCostCenter } from "@/lib/api/labour";
+import {
+  computeQuotedEstimatedLegs,
+  type JobLineVarianceInput,
+  type VarianceLeg,
+} from "@/lib/jobs/totals";
 
 async function db() {
   return createSupabaseServerClient();
@@ -44,6 +49,26 @@ export interface CostCenterRollup {
   margin: number | null;
 }
 
+// PROJ2-6b — the Quoted/Estimated/Actual/Variance block. Quoted reads the §2.2
+// quoted_* snapshots only; Estimated reads the live line-item values; Actual
+// derives from real transactions (invoiced / stock cost / labour entries).
+// Variance baselines: revenue + margin vs Quoted (falling back to Estimated
+// when the Job has no quoted snapshot); the cost legs vs Estimated. The whole
+// block is redacted to null for callers without financials:edit.
+export interface JobVarianceBlock {
+  has_quoted_baseline: boolean;
+  quoted: VarianceLeg;
+  estimated: VarianceLeg;
+  actual: VarianceLeg;
+  variance: {
+    revenue: number;
+    materials: number;
+    labour: number;
+    cost: number;
+    margin_pts: number | null;
+  };
+}
+
 export interface ProjectRollup {
   contract: number;
   invoiced: number;
@@ -55,6 +80,9 @@ export interface ProjectRollup {
   // PROJ2-4c — committed purchase-order spend (issued/partially_received/
   // received POs attributed to this project). Financials-redactable.
   po_committed: number | null;
+  // PROJ2-6b — project-level Quoted/Estimated/Actual/Variance (aggregated over
+  // all the project's line items + actuals). null only post-redaction.
+  variance: JobVarianceBlock | null;
 }
 
 // PROJ2-4a — per-Job rollup. PROJ2-4c completes invoiced / billed_pct /
@@ -75,6 +103,9 @@ export interface DbJobRollup {
   invoiced: number | null;
   billed_pct: number | null;
   po_committed: number | null;
+  // PROJ2-6b — per-Job Quoted/Estimated/Actual/Variance. null only
+  // post-redaction (financials gate), mirroring the other legs.
+  variance: JobVarianceBlock | null;
 }
 
 export interface ProjectCostRollup {
@@ -244,16 +275,6 @@ export async function getProjectCostRollup(
   }
 
   const spentTotal = round2(materialsTotal + labourTotal);
-  const perProject: ProjectRollup = {
-    contract: contractTotal,
-    invoiced,
-    materials: materialsTotal,
-    labour: labourTotal,
-    spent: spentTotal,
-    margin: round2(contractTotal - spentTotal),
-    billed_pct: contractTotal > 0 ? invoiced / contractTotal : null,
-    po_committed: poCommittedTotal,
-  };
 
   // PROJ2-4a — per-Job rollup: group the already-computed per-cost-center
   // numbers by job_id. PROJ2-4c adds real invoiced / billed_pct / po_committed.
@@ -276,6 +297,45 @@ export async function getProjectCostRollup(
     .select("id, job_type, co_number, title, status, contract_value")
     .eq("project_id", projectId);
   if (jErr) throw new Error(`getProjectCostRollup/jobs: ${jErr.message}`);
+  const jobIds = ((jobData ?? []) as { id: string }[]).map((j) => j.id);
+
+  // PROJ2-6b — the Quoted/Estimated legs come from job_line_items (quoted_*
+  // snapshots + live values); one query for all the project's jobs.
+  const linesByJob = new Map<string, JobLineVarianceInput[]>();
+  const allLines: JobLineVarianceInput[] = [];
+  if (jobIds.length > 0) {
+    const { data: liData, error: liErr } = await supabase
+      .from("job_line_items")
+      .select(
+        "job_id, line_kind, quantity, unit_cost, unit_price, discount_pct, quoted_quantity, quoted_unit_cost, quoted_unit_price, quoted_discount_pct"
+      )
+      .in("job_id", jobIds);
+    if (liErr) throw new Error(`getProjectCostRollup/lineItems: ${liErr.message}`);
+    for (const raw of (liData ?? []) as Array<
+      JobLineVarianceInput & { job_id: string }
+    >) {
+      const list = linesByJob.get(raw.job_id) ?? [];
+      list.push(raw);
+      linesByJob.set(raw.job_id, list);
+      allLines.push(raw);
+    }
+  }
+
+  const perProject: ProjectRollup = {
+    contract: contractTotal,
+    invoiced,
+    materials: materialsTotal,
+    labour: labourTotal,
+    spent: spentTotal,
+    margin: round2(contractTotal - spentTotal),
+    billed_pct: contractTotal > 0 ? invoiced / contractTotal : null,
+    po_committed: poCommittedTotal,
+    variance: buildVarianceBlock(allLines, {
+      revenue: invoiced,
+      materials: materialsTotal,
+      labour: labourTotal,
+    }),
+  };
 
   const byJob: DbJobRollup[] = ((jobData ?? []) as {
     id: string;
@@ -303,6 +363,11 @@ export async function getProjectCostRollup(
         invoiced: jobInvoiced,
         billed_pct: agg.contract > 0 ? jobInvoiced / agg.contract : null,
         po_committed: round2(poCommittedByJob[j.id] ?? 0),
+        variance: buildVarianceBlock(linesByJob.get(j.id) ?? [], {
+          revenue: jobInvoiced,
+          materials: agg.materials,
+          labour: agg.labour,
+        }),
       };
     })
     .sort((a, b) => {
@@ -311,4 +376,51 @@ export async function getProjectCostRollup(
     });
 
   return { perProject, perCostCenter, byJob };
+}
+
+// PROJ2-6b — assemble a Quoted/Estimated/Actual/Variance block from the line
+// items (Quoted + Estimated legs) and the already-computed actuals. Variance
+// baselines per the locked definitions: revenue + margin vs Quoted (Estimated
+// stands in when there is no quoted snapshot — a fully manual Job); the cost
+// legs vs Estimated.
+function buildVarianceBlock(
+  lines: JobLineVarianceInput[],
+  actuals: { revenue: number; materials: number; labour: number }
+): JobVarianceBlock {
+  const { quoted, estimated, hasQuotedBaseline } =
+    computeQuotedEstimatedLegs(lines);
+
+  const actualRevenue = round2(actuals.revenue);
+  const actualMaterials = round2(actuals.materials);
+  const actualLabour = round2(actuals.labour);
+  const actualCost = round2(actualMaterials + actualLabour);
+  const actual: VarianceLeg = {
+    revenue: actualRevenue,
+    materials: actualMaterials,
+    labour: actualLabour,
+    cost: actualCost,
+    margin_pct:
+      actualRevenue > 0
+        ? round2(((actualRevenue - actualCost) / actualRevenue) * 100)
+        : null,
+  };
+
+  const revenueBaseline = hasQuotedBaseline ? quoted : estimated;
+  const marginBaseline = revenueBaseline.margin_pct;
+  return {
+    has_quoted_baseline: hasQuotedBaseline,
+    quoted,
+    estimated,
+    actual,
+    variance: {
+      revenue: round2(actual.revenue - revenueBaseline.revenue),
+      materials: round2(actual.materials - estimated.materials),
+      labour: round2(actual.labour - estimated.labour),
+      cost: round2(actual.cost - estimated.cost),
+      margin_pts:
+        actual.margin_pct != null && marginBaseline != null
+          ? round2(actual.margin_pct - marginBaseline)
+          : null,
+    },
+  };
 }
