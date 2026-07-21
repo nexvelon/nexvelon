@@ -22,6 +22,13 @@ export const INVOICE_STATUS_LABEL: Record<string, string> = {
   void: "Void",
 };
 
+/**
+ * User-selectable payment methods — CASH ONLY, deliberately. FIN-4 added
+ * 'deposit_applied' to the DB CHECK and the TS union, but it is a settlement
+ * the system writes when a deposit is applied, never something an operator
+ * picks. Keeping it out of this list is what stops it appearing in the
+ * record-payment and record-deposit dialogs.
+ */
 export const INVOICE_PAYMENT_METHODS = [
   "cheque",
   "eft",
@@ -38,6 +45,8 @@ export const INVOICE_PAYMENT_METHOD_LABEL: Record<string, string> = {
   credit_card: "Credit card",
   cash: "Cash",
   other: "Other",
+  // FIN-4 — display-only; never offered as a choice (see above).
+  deposit_applied: "Deposit applied",
 };
 
 /** An invoice carries a live balance only while sent or partially paid. */

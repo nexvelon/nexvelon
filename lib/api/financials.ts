@@ -63,17 +63,82 @@ export async function sumPaymentsByInvoice(
   return out;
 }
 
+// ─── Cash collected (FIN-4) ──────────────────────────────────────────────────
+
+export interface CashCollected {
+  /** Cash settlements on invoices — excludes non-cash deposit applications. */
+  invoicePayments: number;
+  /** Deposits received in the range (cash in the door, pre-invoice). */
+  deposits: number;
+  total: number;
+}
+
+/**
+ * FIN-4 — real cash received in a range, on a CASH-DATE basis (payment
+ * paid_at / deposit received_at), not the invoice's issue date.
+ *
+ * The double-count trap this avoids: a deposit is cash when it arrives, and
+ * applying it later writes a `deposit_applied` settlement onto an invoice.
+ * Counting both would book the same dollar twice — so deposit applications are
+ * excluded here and the deposit receipt is counted instead.
+ */
+export async function getCashCollected(
+  range: FinDateRange = {}
+): Promise<CashCollected> {
+  const supabase = await db();
+
+  let pq = supabase
+    .from("invoice_payments")
+    .select("amount, method, paid_at")
+    .neq("method", "deposit_applied");
+  if (range.from) pq = pq.gte("paid_at", range.from);
+  if (range.to) pq = pq.lte("paid_at", range.to);
+
+  let dq = supabase
+    .from("project_deposits")
+    .select("amount, received_at");
+  if (range.from) dq = dq.gte("received_at", range.from);
+  if (range.to) dq = dq.lte("received_at", range.to);
+
+  const [{ data: pays, error: pErr }, { data: deps, error: dErr }] =
+    await Promise.all([pq, dq]);
+  if (pErr) throw new Error(`getCashCollected/payments: ${pErr.message}`);
+  if (dErr) throw new Error(`getCashCollected/deposits: ${dErr.message}`);
+
+  let invoicePayments = 0;
+  for (const p of (pays ?? []) as { amount: number | null }[]) {
+    invoicePayments = round2(invoicePayments + Number(p.amount ?? 0));
+  }
+  let deposits = 0;
+  for (const d of (deps ?? []) as { amount: number | null }[]) {
+    deposits = round2(deposits + Number(d.amount ?? 0));
+  }
+  return {
+    invoicePayments,
+    deposits,
+    total: round2(invoicePayments + deposits),
+  };
+}
+
 // ─── Revenue summary ─────────────────────────────────────────────────────────
 
 export interface RevenueSummary {
-  /** Σ invoices.total, status IN ('sent','paid'), issue_date within range. */
+  /** Σ invoices.total over issued statuses, issue_date within range. */
   total: number;
   byOpco: { opco: string; total: number; count: number }[];
-  /** Σ invoices.total, status = 'paid' only. */
-  paidTotal: number;
-  /** Σ invoices.amount_due, status = 'sent' (issued, not yet paid). */
+  /**
+   * FIN-4 — real cash received in the range (invoice payments excluding
+   * deposit applications, plus deposits received). Ranged by cash date, not
+   * issue date. Replaces the pre-FIN-4 "Σ total of invoices whose status is
+   * paid", which both mis-dated the cash and would have double-counted every
+   * applied deposit.
+   */
+  cashCollected: number;
+  /** The split behind `cashCollected`, so the UI can explain the number. */
+  cashBreakdown: CashCollected;
+  /** Σ (amount_due − payments) over open invoices. */
   outstandingTotal: number;
-  /** Σ invoices.holdback_amount, status IN ('sent','paid'). */
+  /** Σ invoices.holdback_amount over issued statuses. */
   holdbackRetained: number;
   invoiceCount: number;
 }
@@ -99,16 +164,16 @@ export async function getRevenueSummary(
   // Outstanding is amount_due net of payments, over open invoices only.
   const openIds = rows.filter((r) => isOpenStatus(r.status)).map((r) => r.id);
   const paidByInvoice = await sumPaymentsByInvoice(supabase, openIds);
+  // FIN-4 — cash is its own question, on its own date basis.
+  const cashBreakdown = await getCashCollected(range);
 
   let total = 0;
-  let paidTotal = 0;
   let outstandingTotal = 0;
   let holdbackRetained = 0;
   const opcoAgg = new Map<string, { total: number; count: number }>();
   for (const r of rows) {
     const amt = Number(r.total ?? 0);
     total = round2(total + amt);
-    if (r.status === "paid") paidTotal = round2(paidTotal + amt);
     if (isOpenStatus(r.status)) {
       const balance = round2(
         Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)
@@ -127,7 +192,8 @@ export async function getRevenueSummary(
     byOpco: [...opcoAgg.entries()]
       .map(([opco, v]) => ({ opco, ...v }))
       .sort((a, b) => b.total - a.total),
-    paidTotal,
+    cashCollected: cashBreakdown.total,
+    cashBreakdown,
     outstandingTotal,
     holdbackRetained,
     invoiceCount: rows.length,
@@ -137,12 +203,17 @@ export async function getRevenueSummary(
 // ─── Monthly revenue (trailing N months) ─────────────────────────────────────
 
 export interface MonthlyRevenuePoint {
-  /** "YYYY-MM" — the issue_date month. */
+  /** "YYYY-MM". */
   month: string;
-  /** Σ total of invoices issued that month (sent + paid). */
+  /** Σ total of invoices ISSUED that month (issue_date basis). */
   invoiced: number;
-  /** The paid subset of the same. */
-  paid: number;
+  /**
+   * FIN-4 — cash RECEIVED that month (payment paid_at / deposit received_at),
+   * excluding non-cash deposit applications. Moved onto the same cash basis as
+   * the Collected KPI; leaving it on the old "paid invoices by issue month"
+   * basis would have printed two different Collected numbers on one screen.
+   */
+  collected: number;
 }
 
 export async function getMonthlyRevenue(
@@ -154,29 +225,59 @@ export async function getMonthlyRevenue(
   const startIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;
 
   const supabase = await db();
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("issue_date, total, status")
-    .in("status", ISSUED_STATUSES)
-    .gte("issue_date", startIso);
+  const [
+    { data, error },
+    { data: pays, error: pErr },
+    { data: deps, error: dErr },
+  ] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("issue_date, total, status")
+      .in("status", ISSUED_STATUSES)
+      .gte("issue_date", startIso),
+    supabase
+      .from("invoice_payments")
+      .select("amount, method, paid_at")
+      .neq("method", "deposit_applied")
+      .gte("paid_at", startIso),
+    supabase
+      .from("project_deposits")
+      .select("amount, received_at")
+      .gte("received_at", startIso),
+  ]);
   if (error) throw new Error(`getMonthlyRevenue: ${error.message}`);
+  if (pErr) throw new Error(`getMonthlyRevenue/payments: ${pErr.message}`);
+  if (dErr) throw new Error(`getMonthlyRevenue/deposits: ${dErr.message}`);
 
-  const byMonth = new Map<string, { invoiced: number; paid: number }>();
+  const byMonth = new Map<string, { invoiced: number; collected: number }>();
   for (let i = 0; i < months; i++) {
     const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
     byMonth.set(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      { invoiced: 0, paid: 0 }
+      { invoiced: 0, collected: 0 }
     );
   }
   for (const r of (data ?? []) as Pick<DbInvoice, "issue_date" | "total" | "status">[]) {
     if (!r.issue_date) continue;
-    const key = r.issue_date.slice(0, 7);
-    const bucket = byMonth.get(key);
+    const bucket = byMonth.get(r.issue_date.slice(0, 7));
     if (!bucket) continue;
-    const amt = Number(r.total ?? 0);
-    bucket.invoiced = round2(bucket.invoiced + amt);
-    if (r.status === "paid") bucket.paid = round2(bucket.paid + amt);
+    bucket.invoiced = round2(bucket.invoiced + Number(r.total ?? 0));
+  }
+  // Cash, on its own date basis.
+  for (const p of (pays ?? []) as { amount: number | null; paid_at: string | null }[]) {
+    if (!p.paid_at) continue;
+    const bucket = byMonth.get(p.paid_at.slice(0, 7));
+    if (!bucket) continue;
+    bucket.collected = round2(bucket.collected + Number(p.amount ?? 0));
+  }
+  for (const d of (deps ?? []) as {
+    amount: number | null;
+    received_at: string | null;
+  }[]) {
+    if (!d.received_at) continue;
+    const bucket = byMonth.get(d.received_at.slice(0, 7));
+    if (!bucket) continue;
+    bucket.collected = round2(bucket.collected + Number(d.amount ?? 0));
   }
 
   return [...byMonth.entries()].map(([month, v]) => ({ month, ...v }));

@@ -10,8 +10,8 @@ const h = vi.hoisted(() => ({
     role: string;
     status: string;
   } | null,
-  getRevenueSummary: vi.fn(async () => ({ total: 1, byOpco: [], paidTotal: 0, outstandingTotal: 0, holdbackRetained: 0, invoiceCount: 1 })),
-  getMonthlyRevenue: vi.fn(async () => [{ month: "2026-07", invoiced: 1, paid: 0 }]),
+  getRevenueSummary: vi.fn(async () => ({ total: 1, byOpco: [], cashCollected: 0, cashBreakdown: { invoicePayments: 0, deposits: 0, total: 0 }, outstandingTotal: 0, holdbackRetained: 0, invoiceCount: 1 })),
+  getMonthlyRevenue: vi.fn(async () => [{ month: "2026-07", invoiced: 1, collected: 0 }]),
   listInvoicesReal: vi.fn(async () => [{ id: "i1" }]),
   getProjectFinancialSummaries: vi.fn(async () => [{ project_id: "p1" }]),
   getTaxCollectedSummary: vi.fn(async () => ({ byOpco: [], total: 0 })),

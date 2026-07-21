@@ -1240,13 +1240,71 @@ export type DbInvoiceStatus =
   | "void";
 
 // FIN-2 (migration 0090): payment methods, locked by a DB CHECK.
+// FIN-4 (migration 0091) widened it with 'deposit_applied' — a NON-CASH
+// settlement written when a project deposit is applied to an invoice. It
+// settles the invoice like any other payment (so FIN-2's balance + status
+// derivation work unchanged) but must never be counted as cash received: the
+// cash arrived earlier, as the deposit itself.
 export type DbInvoicePaymentMethod =
   | "cheque"
   | "eft"
   | "e_transfer"
   | "credit_card"
   | "cash"
-  | "other";
+  | "other"
+  | "deposit_applied";
+
+/** Cash methods only — the set a deposit receipt may use. */
+export type DbCashPaymentMethod = Exclude<
+  DbInvoicePaymentMethod,
+  "deposit_applied"
+>;
+
+// FIN-4 (migration 0091) — a deposit / retainer collected against a project and
+// held until applied to that project's invoices. Remaining balance is DERIVED
+// (amount − Σ applications), never stored.
+export interface DbProjectDeposit {
+  id: string;
+  project_id: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  received_at: string; // date
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DbProjectDepositInsert = {
+  project_id: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  received_at: string;
+  reference?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+};
+
+// FIN-4 (migration 0091) — how much of which deposit was applied to which
+// invoice. Paired 1:1 with an invoice_payments row carrying
+// method='deposit_applied' (deleting the application CASCADEs that row away).
+export interface DbDepositApplication {
+  id: string;
+  deposit_id: string;
+  invoice_id: string;
+  amount: number;
+  applied_at: string; // date
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DbDepositApplicationInsert = {
+  deposit_id: string;
+  invoice_id: string;
+  amount: number;
+  applied_at: string;
+  created_by?: string | null;
+};
 
 // FIN-2 (migration 0090): the invoice payment ledger. Immutable-by-convention —
 // a mis-entry is deleted, never edited (§2.2). The invoice's running balance is
@@ -1261,6 +1319,12 @@ export interface DbInvoicePayment {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  /**
+   * FIN-4 (migration 0091) — set only on method='deposit_applied' rows, linking
+   * the settlement back to the deposit_applications row that created it.
+   * Deleting that application CASCADEs this row away.
+   */
+  deposit_application_id: string | null;
 }
 
 export type DbInvoicePaymentInsert = {
