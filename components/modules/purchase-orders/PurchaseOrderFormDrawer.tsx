@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
 import { useRole } from "@/lib/role-context";
+import { PoBilledPanel } from "./PoBilledPanel";
 import {
   cancelPurchaseOrderAction,
   closePurchaseOrderAction,
@@ -390,6 +391,14 @@ export function PurchaseOrderFormDrawer({
           </div>
 
           {/* Line editor */}
+          {/* FIN-5 — how much of this PO the vendor has actually billed. */}
+          {isEdit && mode.kind === "edit" ? (
+            <PoBilledPanel
+              purchaseOrderId={mode.detail.header.id}
+              orderedTotal={total}
+            />
+          ) : null}
+
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-medium uppercase tracking-wide">

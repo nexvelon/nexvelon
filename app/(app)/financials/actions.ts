@@ -40,9 +40,34 @@ import {
   type ProjectDepositBalance,
   type ApplyDepositResult,
 } from "@/lib/api/deposits";
+import {
+  listBills,
+  getBillById,
+  listBillsForPurchaseOrder,
+  getApSummary,
+  getBillFormOptions,
+  createBill,
+  updateBill,
+  voidBill,
+  recordBillPayment,
+  deleteBillPayment,
+  type BillListRow,
+  type BillDetail,
+  type BillFilters,
+  type ApSummary,
+  type BillFormOptions,
+  type CreateBillInput,
+  type UpdateBillPatch,
+  type BillPaymentResult,
+} from "@/lib/api/vendor-bills";
 import { revalidatePath } from "next/cache";
 import { businessDateISO } from "@/lib/format";
-import type { DbCashPaymentMethod, DbInvoice, DbProjectDeposit } from "@/lib/types/database";
+import type {
+  DbCashPaymentMethod,
+  DbInvoice,
+  DbProjectDeposit,
+  DbVendorBill,
+} from "@/lib/types/database";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -352,6 +377,153 @@ export async function unapplyDepositAction(
     const invoice = await unapplyDeposit(applicationId);
     revalidateDeposit(projectId, invoiceId);
     return { ok: true, data: invoice };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Vendor bills / AP (FIN-5) ───────────────────────────────────────────────
+// Reads at financials:view (AP balances are money-owed reporting); every
+// mutation moves real money, so financials:edit — the same split FIN-2/FIN-4
+// use for invoice payments and deposits.
+
+function revalidateBill(projectId?: string | null, purchaseOrderId?: string | null) {
+  revalidatePath("/financials");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+  if (purchaseOrderId) revalidatePath("/purchase-orders");
+}
+
+export async function listBillsAction(
+  filters: BillFilters = {}
+): Promise<ActionResult<BillListRow[]>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await listBills(filters) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getBillByIdAction(
+  id: string
+): Promise<ActionResult<BillDetail | null>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!id) return { ok: false, error: "No bill specified." };
+    return { ok: true, data: await getBillById(id) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listBillsForPurchaseOrderAction(
+  purchaseOrderId: string
+): Promise<ActionResult<BillListRow[]>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!purchaseOrderId) return { ok: true, data: [] };
+    return { ok: true, data: await listBillsForPurchaseOrder(purchaseOrderId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getApSummaryAction(): Promise<ActionResult<ApSummary>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getApSummary(businessDateISO()) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getBillFormOptionsAction(): Promise<
+  ActionResult<BillFormOptions>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getBillFormOptions() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createBillAction(
+  input: Omit<CreateBillInput, "actorId">
+): Promise<ActionResult<DbVendorBill>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const bill = await createBill({ ...input, actorId: gate.actorId });
+    revalidateBill(bill.project_id, bill.purchase_order_id);
+    return { ok: true, data: bill };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateBillAction(
+  id: string,
+  patch: UpdateBillPatch
+): Promise<ActionResult<DbVendorBill>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const bill = await updateBill(id, patch, gate.actorId);
+    revalidateBill(bill.project_id, bill.purchase_order_id);
+    return { ok: true, data: bill };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function voidBillAction(
+  id: string
+): Promise<ActionResult<DbVendorBill>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const bill = await voidBill(id);
+    revalidateBill(bill.project_id, bill.purchase_order_id);
+    return { ok: true, data: bill };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function recordBillPaymentAction(input: {
+  billId: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  paidAt: string;
+  reference?: string | null;
+  notes?: string | null;
+}): Promise<ActionResult<BillPaymentResult>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const res = await recordBillPayment({ ...input, actorId: gate.actorId });
+    revalidateBill(res.bill.project_id, res.bill.purchase_order_id);
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteBillPaymentAction(
+  paymentId: string
+): Promise<ActionResult<BillPaymentResult>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const res = await deleteBillPayment(paymentId);
+    revalidateBill(res.bill.project_id, res.bill.purchase_order_id);
+    return { ok: true, data: res };
   } catch (e) {
     return fail(e);
   }

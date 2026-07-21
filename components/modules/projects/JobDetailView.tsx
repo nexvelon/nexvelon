@@ -502,6 +502,11 @@ function FinancialsTab({
           <Stat label="Invoiced" value={money(rollup.invoiced)} />
           <Stat label="Billed" value={pctv(rollup.billed_pct)} />
           <Stat label="PO committed" value={money(rollup.po_committed)} />
+          {/* FIN-5 — vendor-billed cost (bill subtotals, tax excluded). Shown
+              ALONGSIDE spent, not inside it: PO receipts already put material
+              cost into `spent` via inventory, so adding bills would double
+              count. See the rollup header note. */}
+          <Stat label="Vendor billed" value={money(rollup.billed_cost)} />
         </div>
       </Panel>
 

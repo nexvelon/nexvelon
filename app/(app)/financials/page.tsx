@@ -26,6 +26,7 @@ import {
   ProjectsFinTab,
   TaxTab,
 } from "@/components/modules/financials/Tabs";
+import { BillsTabPane } from "@/components/modules/financials/BillsTabPane";
 import {
   FIN_RANGE_LABEL,
   rangeBounds,
@@ -38,6 +39,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "invoices", label: "Invoices" },
   { key: "ar", label: "Receivables" },
+  { key: "bills", label: "Bills (AP)" },
   { key: "projects", label: "Projects" },
   { key: "tax", label: "Tax (GST/HST)" },
 ] as const;
@@ -129,6 +131,7 @@ export default function FinancialsPage() {
         {tab === "overview" && <OverviewTab from={from} to={to} />}
         {tab === "invoices" && <InvoicesTab from={from} to={to} />}
         {tab === "ar" && <ReceivablesTab />}
+        {tab === "bills" && <BillsTabPane from={from} to={to} />}
         {tab === "projects" && <ProjectsFinTab />}
         {tab === "tax" && <TaxTab from={from} to={to} />}
       </div>

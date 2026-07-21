@@ -14,6 +14,15 @@ import "server-only";
 //               when a row has no unit_cost.
 //   labour    — sum(labour_entries.amount) per cost-center (reuses JC-1).
 //
+//   billed_cost — FIN-5: Σ vendor_bills.subtotal attributed to the Job (tax
+//               excluded — tax is a pass-through, mirroring how `invoiced`
+//               stays out of the margin legs). This is a SUPPLEMENTARY leg: it
+//               is deliberately NOT added to `spent`, because receiving a PO
+//               already writes its line unit_cost onto inventory_stock, which
+//               `materials` sums. Adding bills on top would count the same
+//               physical goods twice. Choosing bills-vs-inventory as the single
+//               canonical actual is a real decision, left open on purpose.
+//
 //   spent = materials + labour ;  margin = contract − spent ;
 //   billed_pct = invoiced / contract (project-level; null when contract is 0).
 //
@@ -81,6 +90,9 @@ export interface ProjectRollup {
   // PROJ2-4c — committed purchase-order spend (issued/partially_received/
   // received POs attributed to this project). Financials-redactable.
   po_committed: number | null;
+  // FIN-5 — Σ vendor-bill subtotals attributed here (tax excluded). Sits
+  // ALONGSIDE spent/po_committed, never inside them. Financials-redactable.
+  billed_cost: number | null;
   // PROJ2-6b — project-level Quoted/Estimated/Actual/Variance (aggregated over
   // all the project's line items + actuals). null only post-redaction.
   variance: JobVarianceBlock | null;
@@ -104,6 +116,8 @@ export interface DbJobRollup {
   invoiced: number | null;
   billed_pct: number | null;
   po_committed: number | null;
+  // FIN-5 — Σ vendor-bill subtotals for this Job (tax excluded).
+  billed_cost: number | null;
   // PROJ2-6b — per-Job Quoted/Estimated/Actual/Variance. null only
   // post-redaction (financials gate), mirroring the other legs.
   variance: JobVarianceBlock | null;
@@ -255,6 +269,31 @@ export async function getProjectCostRollup(
     }
   }
 
+  // FIN-5 — billed cost: Σ vendor_bill.subtotal attributed to this project /
+  // Job. Subtotal, not total: tax is a pass-through, so it stays out of cost
+  // exactly as it stays out of the margin legs. Void bills never count.
+  // NOTE: this is reported alongside spent, never folded into it — see the
+  // double-count note in the file header.
+  let billedTotal = 0;
+  const billedByJob: Record<string, number> = {};
+  {
+    const { data: billData, error: bErr } = await supabase
+      .from("vendor_bills")
+      .select("subtotal, job_id, status")
+      .eq("project_id", projectId)
+      .neq("status", "void");
+    if (bErr) throw new Error(`getProjectCostRollup/bills: ${bErr.message}`);
+    for (const b of (billData ?? []) as {
+      subtotal: number | null;
+      job_id: string | null;
+    }[]) {
+      const amt = Number(b.subtotal ?? 0);
+      billedTotal = round2(billedTotal + amt);
+      if (b.job_id)
+        billedByJob[b.job_id] = round2((billedByJob[b.job_id] ?? 0) + amt);
+    }
+  }
+
   // Assemble per cost-center + project totals.
   const perCostCenter: Record<string, CostCenterRollup> = {};
   let contractTotal = 0;
@@ -333,6 +372,7 @@ export async function getProjectCostRollup(
     margin: round2(contractTotal - spentTotal),
     billed_pct: contractTotal > 0 ? invoiced / contractTotal : null,
     po_committed: poCommittedTotal,
+    billed_cost: billedTotal,
     variance: buildVarianceBlock(allLines, {
       revenue: invoiced,
       materials: materialsTotal,
@@ -366,6 +406,7 @@ export async function getProjectCostRollup(
         invoiced: jobInvoiced,
         billed_pct: agg.contract > 0 ? jobInvoiced / agg.contract : null,
         po_committed: round2(poCommittedByJob[j.id] ?? 0),
+        billed_cost: round2(billedByJob[j.id] ?? 0),
         variance: buildVarianceBlock(linesByJob.get(j.id) ?? [], {
           revenue: jobInvoiced,
           materials: agg.materials,
