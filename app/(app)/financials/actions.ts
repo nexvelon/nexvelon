@@ -28,7 +28,21 @@ import {
   type ArAgingClientRow,
   type ClientStatement,
 } from "@/lib/api/ar-aging";
+import {
+  listDepositsForProject,
+  getProjectDepositBalance,
+  getDepositsHeldTotal,
+  recordDeposit,
+  deleteDeposit,
+  applyDepositToInvoice,
+  unapplyDeposit,
+  type DepositWithRemaining,
+  type ProjectDepositBalance,
+  type ApplyDepositResult,
+} from "@/lib/api/deposits";
+import { revalidatePath } from "next/cache";
 import { businessDateISO } from "@/lib/format";
+import type { DbCashPaymentMethod, DbInvoice, DbProjectDeposit } from "@/lib/types/database";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -215,6 +229,129 @@ export async function exportArAgingCsvAction(): Promise<
       ok: true,
       data: { csv, filename: `nexvelon-ar-aging-${businessDateISO()}.csv` },
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Deposits & retainers (FIN-4) ────────────────────────────────────────────
+// Reads sit at financials:view (deposits are AR-side money). Mutations move
+// real money onto invoices, so they require financials:edit — same tier as
+// recording a payment in FIN-2.
+
+async function requireFinancialsEdit(): Promise<
+  { ok: true; actorId: string } | { ok: false; error: string }
+> {
+  const me = await getCurrentProfile();
+  if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+    return { ok: false, error: "You don't have permission to manage deposits." };
+  }
+  return { ok: true, actorId: me.id };
+}
+
+function revalidateDeposit(projectId?: string | null, invoiceId?: string | null) {
+  revalidatePath("/financials");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+  if (invoiceId) {
+    revalidatePath("/invoices");
+    revalidatePath(`/invoices/${invoiceId}`);
+  }
+}
+
+export async function listProjectDepositsAction(
+  projectId: string
+): Promise<ActionResult<{ deposits: DepositWithRemaining[]; balance: ProjectDepositBalance }>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!projectId) return { ok: false, error: "No project specified." };
+    const [deposits, balance] = await Promise.all([
+      listDepositsForProject(projectId),
+      getProjectDepositBalance(projectId),
+    ]);
+    return { ok: true, data: { deposits, balance } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getDepositsHeldTotalAction(): Promise<ActionResult<number>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getDepositsHeldTotal() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function recordDepositAction(input: {
+  projectId: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  receivedAt: string;
+  reference?: string | null;
+  notes?: string | null;
+}): Promise<ActionResult<DbProjectDeposit>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const deposit = await recordDeposit({ ...input, actorId: gate.actorId });
+    revalidateDeposit(input.projectId);
+    return { ok: true, data: deposit };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteDepositAction(
+  depositId: string,
+  projectId?: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    await deleteDeposit(depositId);
+    revalidateDeposit(projectId);
+    return { ok: true, data: { id: depositId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function applyDepositToInvoiceAction(input: {
+  depositId: string;
+  invoiceId: string;
+  amount: number;
+  projectId?: string;
+}): Promise<ActionResult<ApplyDepositResult>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const res = await applyDepositToInvoice({
+      depositId: input.depositId,
+      invoiceId: input.invoiceId,
+      amount: input.amount,
+      actorId: gate.actorId,
+    });
+    revalidateDeposit(input.projectId, input.invoiceId);
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function unapplyDepositAction(
+  applicationId: string,
+  invoiceId?: string,
+  projectId?: string
+): Promise<ActionResult<DbInvoice>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const invoice = await unapplyDeposit(applicationId);
+    revalidateDeposit(projectId, invoiceId);
+    return { ok: true, data: invoice };
   } catch (e) {
     return fail(e);
   }

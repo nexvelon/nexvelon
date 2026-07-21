@@ -8,6 +8,7 @@ import { getProjectById } from "@/lib/api/projects";
 import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailView";
 import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
 import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
+import { ProjectDeposits } from "@/components/modules/projects/ProjectDeposits";
 import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrderButton";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -53,6 +54,9 @@ export default async function ProjectDetailPage({
   const canEdit = !!role && hasPermission(role, "projects", "edit");
   // Mirror the rollup's financials gate (financials:edit).
   const canViewFinancials = !!role && hasPermission(role, "financials", "edit");
+  // FIN-4 — the deposits card is AR-side money: visible at financials:view,
+  // mutable only at financials:edit (same split the actions enforce).
+  const canSeeDeposits = !!role && hasPermission(role, "financials", "view");
 
   if (!detail) {
     return (
@@ -95,6 +99,10 @@ export default async function ProjectDetailPage({
         </div>
       ) : null}
       <ProjectJobsTable projectId={id} canViewFinancials={canViewFinancials} />
+      {/* FIN-4 — deposits held against this project + their draw-down. */}
+      {canSeeDeposits ? (
+        <ProjectDeposits projectId={id} canEdit={canViewFinancials} />
+      ) : null}
       {/* PROJ2-4b — folder tree (Project lens). Needs a site to root the tree. */}
       {detail.project.site_id ? (
         <FolderTreeAttachments

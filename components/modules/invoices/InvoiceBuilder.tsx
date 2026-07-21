@@ -49,7 +49,14 @@ import {
   setInvoiceStatusAction,
   recordInvoicePaymentAction,
   deleteInvoicePaymentAction,
+  listInvoicePaymentsAction,
 } from "@/app/(app)/invoices/actions";
+import {
+  listProjectDepositsAction,
+  applyDepositToInvoiceAction,
+  unapplyDepositAction,
+} from "@/app/(app)/financials/actions";
+import type { DepositWithRemaining } from "@/lib/api/deposits";
 import type {
   InvoiceDetail,
   BillableMaterialGroup,
@@ -89,6 +96,10 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
   const [payments, setPayments] = useState<DbInvoicePayment[]>(detail.payments);
   const [showPdf, setShowPdf] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  // FIN-4 — deposits held on this invoice's project, available to apply.
+  const [deposits, setDeposits] = useState<DepositWithRemaining[]>([]);
+  const [depositAvailable, setDepositAvailable] = useState(0);
+  const [applyOpen, setApplyOpen] = useState(false);
   const [confirmDeletePayment, setConfirmDeletePayment] = useState<string | null>(
     null
   );
@@ -119,6 +130,66 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
     setInvoice(res.invoice);
     setPayments(res.payments);
   };
+
+  // FIN-4 — the project's deposit credit. Reloaded after every apply/unapply so
+  // "available" and the payments ledger never disagree.
+  const reloadDeposits = () => {
+    if (!invoice.project_id) return;
+    listProjectDepositsAction(invoice.project_id).then((res) => {
+      if (!res.ok) return;
+      setDeposits(res.data.deposits);
+      setDepositAvailable(res.data.balance.available);
+    });
+  };
+  useEffect(() => {
+    if (!invoice.project_id) return;
+    listProjectDepositsAction(invoice.project_id).then((res) => {
+      if (!res.ok) return;
+      setDeposits(res.data.deposits);
+      setDepositAvailable(res.data.balance.available);
+    });
+  }, [invoice.project_id]);
+
+  const canApplyDeposit =
+    canTakePayment && depositAvailable > 0 && balance > 0;
+
+  const handleApplyDeposit = (depositId: string, amount: number) =>
+    startTransition(async () => {
+      const res = await applyDepositToInvoiceAction({
+        depositId,
+        invoiceId: invoice.id,
+        amount,
+        projectId: invoice.project_id ?? undefined,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setInvoice(res.data.invoice);
+      const fresh = await listInvoicePaymentsAction(invoice.id);
+      setPayments(fresh);
+      reloadDeposits();
+      setApplyOpen(false);
+      toast.success("Deposit applied");
+    });
+
+  const handleUnapplyDeposit = (applicationId: string) =>
+    startTransition(async () => {
+      const res = await unapplyDepositAction(
+        applicationId,
+        invoice.id,
+        invoice.project_id ?? undefined
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setInvoice(res.data);
+      const fresh = await listInvoicePaymentsAction(invoice.id);
+      setPayments(fresh);
+      reloadDeposits();
+      toast.success("Deposit returned to available credit");
+    });
 
   // MATERIALS-1: a project's billable parts (grouped by part × cost-center),
   // reloaded after each bill so already-billed groups grey out.
@@ -633,17 +704,31 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
             <Card className="bg-card space-y-3 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <p className="nx-eyebrow-soft">Payments</p>
-                {canTakePayment && (
-                  <Button
-                    type="button"
-                    size="xs"
-                    onClick={() => setPayOpen(true)}
-                    disabled={pending}
-                  >
-                    <Plus className="mr-1 h-3.5 w-3.5" />
-                    Record payment
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {/* FIN-4 — only when the project actually holds credit. */}
+                  {canApplyDeposit && (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setApplyOpen(true)}
+                      disabled={pending}
+                    >
+                      Apply deposit
+                    </Button>
+                  )}
+                  {canTakePayment && (
+                    <Button
+                      type="button"
+                      size="xs"
+                      onClick={() => setPayOpen(true)}
+                      disabled={pending}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Record payment
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {payments.length === 0 ? (
@@ -652,38 +737,68 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
                 </p>
               ) : (
                 <ul className="divide-y divide-[var(--border)]">
-                  {payments.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex items-center gap-2 py-2 text-xs"
-                    >
-                      <span className="text-muted-foreground w-20 shrink-0 tabular-nums">
-                        {p.paid_at}
-                      </span>
-                      <span className="text-brand-charcoal min-w-0 flex-1 truncate">
-                        {INVOICE_PAYMENT_METHOD_LABEL[p.method] ?? p.method}
-                        {p.reference && (
-                          <span className="text-muted-foreground ml-1 font-mono text-[10px]">
-                            {p.reference}
-                          </span>
+                  {payments.map((p) => {
+                    // FIN-4 — a deposit application is a NON-CASH settlement:
+                    // shown as credit, and reversed by un-applying (which
+                    // returns it to the project's available balance) rather
+                    // than deleted like a cash payment.
+                    const isDeposit = p.method === "deposit_applied";
+                    return (
+                      <li
+                        key={p.id}
+                        className="flex items-center gap-2 py-2 text-xs"
+                      >
+                        <span className="text-muted-foreground w-20 shrink-0 tabular-nums">
+                          {p.paid_at}
+                        </span>
+                        <span className="text-brand-charcoal min-w-0 flex-1 truncate">
+                          {isDeposit ? (
+                            <span className="text-brand-navy rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                              Deposit applied
+                            </span>
+                          ) : (
+                            <>
+                              {INVOICE_PAYMENT_METHOD_LABEL[p.method] ?? p.method}
+                              {p.reference && (
+                                <span className="text-muted-foreground ml-1 font-mono text-[10px]">
+                                  {p.reference}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                        <span className="text-brand-charcoal shrink-0 font-semibold tabular-nums">
+                          {formatCurrency(Number(p.amount))}
+                        </span>
+                        {canEdit && invoice.status !== "void" && (
+                          isDeposit ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                p.deposit_application_id &&
+                                handleUnapplyDeposit(p.deposit_application_id)
+                              }
+                              disabled={pending || !p.deposit_application_id}
+                              className="text-muted-foreground shrink-0 text-[10px] hover:text-brand-charcoal"
+                              title="Return this credit to the project's available deposit balance"
+                            >
+                              Un-apply
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeletePayment(p.id)}
+                              disabled={pending}
+                              className="text-muted-foreground shrink-0 hover:text-red-600"
+                              aria-label="Remove payment"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )
                         )}
-                      </span>
-                      <span className="text-brand-charcoal shrink-0 font-semibold tabular-nums">
-                        {formatCurrency(Number(p.amount))}
-                      </span>
-                      {canEdit && invoice.status !== "void" && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeletePayment(p.id)}
-                          disabled={pending}
-                          className="text-muted-foreground shrink-0 hover:text-red-600"
-                          aria-label="Remove payment"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Card>
@@ -761,6 +876,16 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
         amountDue={amountDue}
         pending={pending}
         onSubmit={handleRecordPayment}
+      />
+
+      {/* FIN-4 — apply-deposit dialog */}
+      <ApplyDepositDialog
+        open={applyOpen}
+        onOpenChange={setApplyOpen}
+        deposits={deposits.filter((d) => d.remaining > 0)}
+        balance={balance}
+        pending={pending}
+        onSubmit={handleApplyDeposit}
       />
 
       {/* FIN-2 — remove-payment confirm */}
@@ -1361,5 +1486,125 @@ function MaterialRow({
         </>
       )}
     </div>
+  );
+}
+
+// FIN-4 — apply a held deposit to this invoice. Amount pre-fills to
+// min(deposit remaining, invoice balance) so the common "use it all" case is
+// one click, and both server-side caps are mirrored client-side.
+function ApplyDepositDialog({
+  open,
+  onOpenChange,
+  deposits,
+  balance,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  deposits: DepositWithRemaining[];
+  balance: number;
+  pending: boolean;
+  onSubmit: (depositId: string, amount: number) => void;
+}) {
+  const [depositId, setDepositId] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const selected = deposits.find((d) => d.id === depositId) ?? deposits[0];
+  const cap = selected ? Math.min(selected.remaining, balance) : 0;
+
+  useEffect(() => {
+    if (open) {
+      const first = deposits[0];
+      setDepositId(first?.id ?? "");
+      setAmount(
+        first ? String(Math.min(first.remaining, balance)) : ""
+      );
+    }
+  }, [open, deposits, balance]);
+
+  const parsed = toNum(amount);
+  const invalid = !selected || !(parsed > 0) || parsed > cap + 0.005;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Apply deposit</DialogTitle>
+          <DialogDescription>
+            Draw against credit already collected on this project. This settles
+            the invoice without a new cash payment.
+          </DialogDescription>
+        </DialogHeader>
+
+        {deposits.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            This project has no unapplied deposit credit.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <label className="block space-y-1">
+              <span className="text-muted-foreground text-[11px]">Deposit</span>
+              <Select
+                value={selected?.id ?? ""}
+                onValueChange={(v) => {
+                  const id = v ?? "";
+                  setDepositId(id);
+                  const d = deposits.find((x) => x.id === id);
+                  if (d) setAmount(String(Math.min(d.remaining, balance)));
+                }}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {deposits.map((d) => (
+                    <SelectItem key={d.id} value={d.id} className="text-xs">
+                      {d.received_at} · {formatCurrency(d.remaining)} available
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-muted-foreground text-[11px]">Amount</span>
+              <Input
+                value={amount}
+                inputMode="decimal"
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-8 text-sm tabular-nums"
+              />
+            </label>
+            <p className="text-muted-foreground text-[11px]">
+              Up to {formatCurrency(cap)} — the lesser of this deposit&rsquo;s
+              remaining credit and the invoice balance.
+            </p>
+            {parsed > cap + 0.005 && (
+              <p className="text-destructive text-[11px]">
+                That&rsquo;s more than {formatCurrency(cap)}.
+              </p>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => selected && onSubmit(selected.id, parsed)}
+            disabled={pending || invalid}
+          >
+            Apply deposit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

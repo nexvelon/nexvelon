@@ -52,6 +52,7 @@ import {
 import {
   getArAgingByClientAction,
   getArAgingSummaryAction,
+  getDepositsHeldTotalAction,
   getMonthlyRevenueAction,
   getProjectFinancialSummariesAction,
   getRevenueSummaryAction,
@@ -124,6 +125,8 @@ export function OverviewTab({ from, to }: TabProps) {
   const [projects, setProjects] = useState<ProjectFinancialSummary[]>([]);
   // FIN-3 — past-due total for the Overdue AR KPI.
   const [aging, setAging] = useState<ArAgingSummary | null>(null);
+  // FIN-4 — unapplied deposit credit across all projects.
+  const [depositsHeld, setDepositsHeld] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -135,7 +138,8 @@ export function OverviewTab({ from, to }: TabProps) {
       getMonthlyRevenueAction({ months: 12 }),
       getProjectFinancialSummariesAction(),
       getArAgingSummaryAction(),
-    ]).then(([ranged, pit, months, projs, ar]) => {
+      getDepositsHeldTotalAction(),
+    ]).then(([ranged, pit, months, projs, ar, held]) => {
       if (!active) return;
       if (!ranged.ok) return setError(ranged.error);
       if (!pit.ok) return setError(pit.error);
@@ -146,6 +150,7 @@ export function OverviewTab({ from, to }: TabProps) {
       // blended-margin KPI below resolves to "—" for them.
       if (projs.ok) setProjects(projs.data.summaries);
       if (ar.ok) setAging(ar.data);
+      if (held.ok) setDepositsHeld(held.data);
     });
     return () => {
       active = false;
@@ -172,9 +177,19 @@ export function OverviewTab({ from, to }: TabProps) {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-7">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-8">
         <KpiCard label="Invoiced (range)" value={rangeSummary?.total ?? null} sub={`${rangeSummary?.invoiceCount ?? 0} invoices`} />
-        <KpiCard label="Collected (range)" value={rangeSummary?.paidTotal ?? null} />
+        {/* FIN-4 — real cash received in the range (payments excluding deposit
+            applications + deposits received), on a cash-date basis. */}
+        <KpiCard
+          label="Collected (range)"
+          value={rangeSummary?.cashCollected ?? null}
+          sub={
+            rangeSummary && rangeSummary.cashBreakdown.deposits > 0
+              ? `incl. ${formatCurrency(rangeSummary.cashBreakdown.deposits)} deposits`
+              : "Cash received"
+          }
+        />
         <KpiCard label="Outstanding AR" value={allTime?.outstandingTotal ?? null} sub="All open invoices" />
         {/* FIN-3 — past due (every bucket except current). Red when non-zero. */}
         <KpiCard
@@ -184,6 +199,8 @@ export function OverviewTab({ from, to }: TabProps) {
           tone={aging && aging.overdueTotal > 0 ? "text-red-600" : undefined}
         />
         <KpiCard label="Holdback retained" value={allTime?.holdbackRetained ?? null} sub="All issued invoices" />
+        {/* FIN-4 — cash held that hasn't been applied to an invoice yet. */}
+        <KpiCard label="Deposits held" value={depositsHeld} sub="Unapplied credit" />
         <KpiCard label="Open project contracts" value={contractTotal} sub={`${projects.length} projects`} />
         <KpiCard
           label="Blended margin"
@@ -212,7 +229,7 @@ export function OverviewTab({ from, to }: TabProps) {
                 />
                 <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
                 <Bar dataKey="invoiced" name="Invoiced" fill={t.primary} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="paid" name="Collected" fill={t.accent} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="collected" name="Collected" fill={t.accent} radius={[3, 3, 0, 0]} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

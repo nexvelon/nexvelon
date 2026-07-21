@@ -9,6 +9,8 @@ const s = vi.hoisted(() => ({
   invoices: [] as Record<string, unknown>[],
   // FIN-2 — the payment ledger balances now net against amount_due.
   payments: [] as Record<string, unknown>[],
+  // FIN-4 — deposits received (cash) feed cashCollected.
+  deposits: [] as Record<string, unknown>[],
 }));
 
 // Apply the recorded eq/in/gte/lte filters against the seeded rows so the
@@ -33,6 +35,9 @@ function applyFilters(
       case "lte":
         out = out.filter((r) => r[col] != null && (r[col] as string) <= (val as string));
         break;
+      case "neq":
+        out = out.filter((r) => r[col] !== val);
+        break;
       default:
         break; // order/select/etc — no row effect
     }
@@ -47,6 +52,13 @@ function resolve(ctx: ChainCtx): { data: unknown; error: unknown } {
   if (ctx.table === "invoice_payments") {
     return { data: applyFilters(s.payments, ctx.filters), error: null };
   }
+  // FIN-4 — deposits feed the cash-collected metric.
+  if (ctx.table === "project_deposits") {
+    return { data: applyFilters(s.deposits, ctx.filters), error: null };
+  }
+  if (ctx.table === "deposit_applications") {
+    return { data: [], error: null };
+  }
   return { data: [], error: null };
 }
 
@@ -59,6 +71,7 @@ vi.mock("@/lib/api/project-cost-rollup", () => ({
 }));
 
 import {
+  getCashCollected,
   getRevenueSummary,
   getMonthlyRevenue,
   getTaxCollectedSummary,
@@ -73,6 +86,7 @@ function monthKey(offset: number): string {
 beforeEach(() => {
   s.invoices = [];
   s.payments = [];
+  s.deposits = [];
 });
 
 describe("getRevenueSummary", () => {
@@ -86,7 +100,10 @@ describe("getRevenueSummary", () => {
     const sum = await getRevenueSummary();
     expect(sum.total).toBe(300);
     expect(sum.invoiceCount).toBe(2);
-    expect(sum.paidTotal).toBe(200);
+    // FIN-4 — cashCollected is now cash-ledger based, not "Σ total of paid
+    // invoices": with no payment or deposit rows seeded it is zero even though
+    // an invoice carries status 'paid'.
+    expect(sum.cashCollected).toBe(0);
     expect(sum.outstandingTotal).toBe(90);
     expect(sum.holdbackRetained).toBe(10);
     expect(sum.byOpco).toEqual([
@@ -127,23 +144,34 @@ describe("getRevenueSummary", () => {
 });
 
 describe("getMonthlyRevenue", () => {
-  it("buckets sent+paid by issue_date month; paid subset tracked", async () => {
+  // FIN-4 — `invoiced` stays on the issue_date basis; `collected` moved to the
+  // cash basis (payment paid_at / deposit received_at), matching the Collected
+  // KPI. The two can legitimately land in different months — that's the point.
+  it("buckets invoiced by issue month and cash by the month it arrived", async () => {
     const thisMonth = monthKey(0);
     const lastMonth = monthKey(-1);
     s.invoices = [
-      { opco: "guardian", status: "paid", total: 300, issue_date: `${thisMonth}-15` },
+      { opco: "guardian", status: "paid", total: 300, issue_date: `${lastMonth}-15` },
       { opco: "guardian", status: "sent", total: 100, issue_date: `${thisMonth}-20` },
-      { opco: "integrated_solutions", status: "sent", total: 40, issue_date: `${lastMonth}-10` },
       { opco: "guardian", status: "draft", total: 999, issue_date: null },
     ];
+    s.payments = [
+      // the last-month invoice was actually paid THIS month
+      { invoice_id: "i1", amount: 300, method: "cheque", paid_at: `${thisMonth}-05` },
+      // a non-cash deposit application must never show up as collected
+      { invoice_id: "i2", amount: 500, method: "deposit_applied", paid_at: `${thisMonth}-06` },
+    ];
+    s.deposits = [{ amount: 50, received_at: `${lastMonth}-02` }];
+
     const points = await getMonthlyRevenue({ months: 12 });
     expect(points).toHaveLength(12);
     const cur = points.find((p) => p.month === thisMonth);
     const prev = points.find((p) => p.month === lastMonth);
-    expect(cur).toEqual({ month: thisMonth, invoiced: 400, paid: 300 });
-    expect(prev).toEqual({ month: lastMonth, invoiced: 40, paid: 0 });
-    // Untouched months stay zero.
-    expect(points.filter((p) => p.invoiced === 0)).toHaveLength(10);
+    // invoiced follows issue_date; collected follows the cash date
+    expect(cur).toEqual({ month: thisMonth, invoiced: 100, collected: 300 });
+    expect(prev).toEqual({ month: lastMonth, invoiced: 300, collected: 50 });
+    // Untouched months stay zero on both series.
+    expect(points.filter((p) => p.invoiced === 0 && p.collected === 0)).toHaveLength(10);
   });
 });
 
@@ -162,5 +190,56 @@ describe("getTaxCollectedSummary", () => {
       { opco: "integrated_solutions", taxCollected: 39 },
       { opco: "guardian", taxCollected: 6.5 },
     ]);
+  });
+});
+
+// FIN-4 — the double-count guard. A deposit is cash when RECEIVED; applying it
+// later writes a non-cash `deposit_applied` settlement onto an invoice.
+// Counting both would book the same dollar twice.
+describe("getCashCollected", () => {
+  it("counts cash payments + deposits, and never the deposit application", async () => {
+    s.payments = [
+      { invoice_id: "i1", amount: 100, method: "cheque", paid_at: "2026-07-05" },
+      { invoice_id: "i1", amount: 250, method: "deposit_applied", paid_at: "2026-07-06" },
+    ];
+    s.deposits = [{ amount: 250, received_at: "2026-07-01" }];
+
+    const cash = await getCashCollected();
+    expect(cash.invoicePayments).toBe(100); // the deposit_applied row is excluded
+    expect(cash.deposits).toBe(250);
+    // 350, not 600 — the 250 is counted once, at receipt.
+    expect(cash.total).toBe(350);
+  });
+
+  it("ranges payments by paid_at and deposits by received_at", async () => {
+    s.payments = [
+      { invoice_id: "i1", amount: 10, method: "cash", paid_at: "2026-06-30" },
+      { invoice_id: "i1", amount: 20, method: "cash", paid_at: "2026-07-15" },
+    ];
+    s.deposits = [
+      { amount: 100, received_at: "2026-06-30" },
+      { amount: 200, received_at: "2026-07-10" },
+    ];
+    const cash = await getCashCollected({ from: "2026-07-01", to: "2026-07-31" });
+    expect(cash.invoicePayments).toBe(20);
+    expect(cash.deposits).toBe(200);
+    expect(cash.total).toBe(220);
+  });
+
+  it("feeds getRevenueSummary.cashCollected", async () => {
+    s.invoices = [
+      { id: "i1", opco: "guardian", status: "paid", total: 500, amount_due: 500, holdback_amount: 0, issue_date: "2026-07-02" },
+    ];
+    s.payments = [
+      { invoice_id: "i1", amount: 500, method: "eft", paid_at: "2026-07-20" },
+    ];
+    const sum = await getRevenueSummary();
+    expect(sum.total).toBe(500); // invoiced
+    expect(sum.cashCollected).toBe(500);
+    expect(sum.cashBreakdown).toEqual({
+      invoicePayments: 500,
+      deposits: 0,
+      total: 500,
+    });
   });
 });
