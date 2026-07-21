@@ -18,6 +18,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { round2 } from "@/lib/quote-helpers";
 import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
+import { isOpenStatus, isOverdue } from "@/lib/invoice-status";
 import type { DbInvoice } from "@/lib/types/database";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 
@@ -25,9 +26,38 @@ async function db() {
   return createSupabaseServerClient();
 }
 
+// FIN-2 — "issued" revenue = anything past draft that isn't void: sent,
+// partially_paid, and paid. "Open" (still owed) = sent + partially_paid. These
+// replace the old ['sent','paid'] pairs now that partially_paid exists, so
+// partly-paid invoices don't vanish from revenue / tax / receivables.
+const ISSUED_STATUSES = ["sent", "partially_paid", "paid"] as const;
+const OPEN_STATUSES = ["sent", "partially_paid"] as const;
+
 export interface FinDateRange {
   from?: string | null;
   to?: string | null;
+}
+
+// FIN-2 — Σ recorded payments per invoice, for the given invoice ids. The
+// balance of an open invoice is amount_due − this sum (no stored amount_paid).
+async function sumPaymentsByInvoice(
+  supabase: Awaited<ReturnType<typeof db>>,
+  invoiceIds: string[]
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (invoiceIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from("invoice_payments")
+    .select("invoice_id, amount")
+    .in("invoice_id", invoiceIds);
+  if (error) throw new Error(`sumPaymentsByInvoice: ${error.message}`);
+  for (const p of (data ?? []) as { invoice_id: string; amount: number | null }[]) {
+    out.set(
+      p.invoice_id,
+      round2((out.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0))
+    );
+  }
+  return out;
 }
 
 // ─── Revenue summary ─────────────────────────────────────────────────────────
@@ -51,8 +81,8 @@ export async function getRevenueSummary(
   const supabase = await db();
   let q = supabase
     .from("invoices")
-    .select("opco, status, total, amount_due, holdback_amount, issue_date")
-    .in("status", ["sent", "paid"]);
+    .select("id, opco, status, total, amount_due, holdback_amount, issue_date")
+    .in("status", ISSUED_STATUSES);
   if (range.from) q = q.gte("issue_date", range.from);
   if (range.to) q = q.lte("issue_date", range.to);
   const { data, error } = await q;
@@ -60,8 +90,12 @@ export async function getRevenueSummary(
 
   const rows = (data ?? []) as Pick<
     DbInvoice,
-    "opco" | "status" | "total" | "amount_due" | "holdback_amount"
+    "id" | "opco" | "status" | "total" | "amount_due" | "holdback_amount"
   >[];
+
+  // Outstanding is amount_due net of payments, over open invoices only.
+  const openIds = rows.filter((r) => isOpenStatus(r.status)).map((r) => r.id);
+  const paidByInvoice = await sumPaymentsByInvoice(supabase, openIds);
 
   let total = 0;
   let paidTotal = 0;
@@ -72,8 +106,12 @@ export async function getRevenueSummary(
     const amt = Number(r.total ?? 0);
     total = round2(total + amt);
     if (r.status === "paid") paidTotal = round2(paidTotal + amt);
-    if (r.status === "sent")
-      outstandingTotal = round2(outstandingTotal + Number(r.amount_due ?? 0));
+    if (isOpenStatus(r.status)) {
+      const balance = round2(
+        Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)
+      );
+      outstandingTotal = round2(outstandingTotal + Math.max(0, balance));
+    }
     holdbackRetained = round2(holdbackRetained + Number(r.holdback_amount ?? 0));
     const agg = opcoAgg.get(r.opco) ?? { total: 0, count: 0 };
     agg.total = round2(agg.total + amt);
@@ -116,7 +154,7 @@ export async function getMonthlyRevenue(
   const { data, error } = await supabase
     .from("invoices")
     .select("issue_date, total, status")
-    .in("status", ["sent", "paid"])
+    .in("status", ISSUED_STATUSES)
     .gte("issue_date", startIso);
   if (error) throw new Error(`getMonthlyRevenue: ${error.message}`);
 
@@ -149,15 +187,22 @@ export interface FinInvoiceFilters extends FinDateRange {
   clientId?: string;
 }
 
+// FIN-2 — a list row enriched with the derived balance (amount_due − payments)
+// and the derived overdue flag, so the UI never needs to fetch payments itself.
+export interface FinInvoiceListRow extends InvoiceListRow {
+  balance: number;
+  is_overdue: boolean;
+}
+
 /**
  * The /financials Invoices tab list. Same join shape as lib/api/invoices'
- * listInvoices. Drafts have no issue_date, so the date-range filter is applied
- * in JS to ISSUED rows only — drafts stay visible under every range (they are
- * work-in-progress, not history).
+ * listInvoices, plus a derived balance + is_overdue per row (FIN-2). Drafts
+ * have no issue_date, so the date-range filter is applied in JS to ISSUED rows
+ * only — drafts stay visible under every range (work-in-progress, not history).
  */
 export async function listInvoicesReal(
   filters: FinInvoiceFilters = {}
-): Promise<InvoiceListRow[]> {
+): Promise<FinInvoiceListRow[]> {
   const supabase = await db();
   let q = supabase
     .from("invoices")
@@ -174,22 +219,33 @@ export async function listInvoicesReal(
     client: { name: string; deleted_at: string | null } | null;
     project: { project_number: string } | null;
   };
-  const rows = ((data ?? []) as JoinRow[]).map((r) => {
-    const { client, project, ...inv } = r;
-    return {
-      ...(inv as DbInvoice),
-      client_name: client?.name ?? null,
-      client_deleted: !!client?.deleted_at,
-      project_number: project?.project_number ?? null,
-    };
-  });
+  const base = ((data ?? []) as JoinRow[])
+    .map((r) => {
+      const { client, project, ...inv } = r;
+      return {
+        ...(inv as DbInvoice),
+        client_name: client?.name ?? null,
+        client_deleted: !!client?.deleted_at,
+        project_number: project?.project_number ?? null,
+      };
+    })
+    .filter((r) => {
+      if (!r.issue_date) return true; // draft — always visible
+      if (filters.from && r.issue_date < filters.from) return false;
+      if (filters.to && r.issue_date > filters.to) return false;
+      return true;
+    });
 
-  return rows.filter((r) => {
-    if (!r.issue_date) return true; // draft — always visible
-    if (filters.from && r.issue_date < filters.from) return false;
-    if (filters.to && r.issue_date > filters.to) return false;
-    return true;
-  });
+  const paidByInvoice = await sumPaymentsByInvoice(
+    supabase,
+    base.map((r) => r.id)
+  );
+
+  return base.map((r) => ({
+    ...r,
+    balance: round2(Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)),
+    is_overdue: isOverdue(r),
+  }));
 }
 
 // ─── Receivables by client ───────────────────────────────────────────────────
@@ -197,7 +253,7 @@ export async function listInvoicesReal(
 export interface ReceivableClientRow {
   client_id: string;
   client_name: string;
-  /** Σ amount_due over the client's 'sent' invoices. */
+  /** Σ balance (amount_due − payments) over the client's open invoices. */
   open_total: number;
   invoice_count: number;
   /** issue_date of the client's oldest open invoice (null if none dated). */
@@ -205,26 +261,38 @@ export interface ReceivableClientRow {
 }
 
 /**
- * Open balance per client. True aging buckets (current/30/60/90+) need
- * due-date discipline + payment records — that's FIN-3, after FIN-2 ships
- * payments. Until then this is the honest version: open balance + the age of
- * the oldest open invoice since ISSUE.
+ * Open balance per client, net of recorded payments (FIN-2). A partially-paid
+ * invoice contributes only its remaining balance. True aging buckets
+ * (current/30/60/90+) still want due-date discipline — that's FIN-3; until then
+ * this is the honest version: open balance + the age of the oldest open invoice
+ * since ISSUE. Invoices fully covered by payments (balance 0) are dropped.
  */
 export async function getReceivablesByClient(): Promise<ReceivableClientRow[]> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("invoices")
-    .select("client_id, amount_due, issue_date, client:clients(name)")
-    .eq("status", "sent");
+    .select("id, client_id, amount_due, issue_date, client:clients(name)")
+    .in("status", OPEN_STATUSES);
   if (error) throw new Error(`getReceivablesByClient: ${error.message}`);
 
-  const byClient = new Map<string, ReceivableClientRow>();
-  for (const r of (data ?? []) as unknown as {
+  const rows = (data ?? []) as unknown as {
+    id: string;
     client_id: string;
     amount_due: number | null;
     issue_date: string | null;
     client: { name: string } | null;
-  }[]) {
+  }[];
+  const paidByInvoice = await sumPaymentsByInvoice(
+    supabase,
+    rows.map((r) => r.id)
+  );
+
+  const byClient = new Map<string, ReceivableClientRow>();
+  for (const r of rows) {
+    const balance = round2(
+      Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)
+    );
+    if (balance <= 0) continue; // fully covered — nothing outstanding
     const row = byClient.get(r.client_id) ?? {
       client_id: r.client_id,
       client_name: r.client?.name ?? "—",
@@ -232,7 +300,7 @@ export async function getReceivablesByClient(): Promise<ReceivableClientRow[]> {
       invoice_count: 0,
       oldest_issue_date: null as string | null,
     };
-    row.open_total = round2(row.open_total + Number(r.amount_due ?? 0));
+    row.open_total = round2(row.open_total + balance);
     row.invoice_count += 1;
     if (r.issue_date && (!row.oldest_issue_date || r.issue_date < row.oldest_issue_date)) {
       row.oldest_issue_date = r.issue_date;
@@ -308,9 +376,9 @@ export interface TaxCollectedSummary {
 }
 
 /**
- * Σ invoices.tax_amount (sent + paid) by opco for the range. Collected side
- * only — input tax credits (ITCs) need vendor bills (FIN-7); the mock's
- * "ITC estimate" ratio is deliberately gone.
+ * Σ invoices.tax_amount (issued: sent + partially_paid + paid) by opco for the
+ * range. Collected side only — input tax credits (ITCs) need vendor bills
+ * (FIN-7); the mock's "ITC estimate" ratio is deliberately gone.
  */
 export async function getTaxCollectedSummary(
   range: FinDateRange = {}
@@ -319,7 +387,7 @@ export async function getTaxCollectedSummary(
   let q = supabase
     .from("invoices")
     .select("opco, tax_amount, issue_date")
-    .in("status", ["sent", "paid"]);
+    .in("status", ISSUED_STATUSES);
   if (range.from) q = q.gte("issue_date", range.from);
   if (range.to) q = q.lte("issue_date", range.to);
   const { data, error } = await q;

@@ -5,8 +5,9 @@ import "server-only";
 //
 //   contract  — project_cost_centers.contract_value (the contracted value).
 //   invoiced  — sum of ISSUED invoice totals (post-tax) for the project. Issued
-//               means status IN ('sent','paid'); drafts (not issued) and voids
-//               (cancelled) never count. Project-level only — not split per CC.
+//               means status IN ('sent','partially_paid','paid') (FIN-2 added
+//               partially_paid); drafts (not issued) and voids never count.
+//               Project-level only — not split per CC.
 //   materials — actual stock cost sitting on the project's cost-centers:
 //               sum(inventory_stock.unit_cost · quantity), with
 //               inventory_products.default_unit_cost as the catalog fallback
@@ -194,7 +195,9 @@ export async function getProjectCostRollup(
       .from("invoices")
       .select("total, status, job_id")
       .eq("project_id", projectId)
-      .in("status", ["sent", "paid"]);
+      // FIN-2 — 'partially_paid' is an issued state; count it as invoiced
+      // revenue alongside sent/paid (else partly-paid invoices disappear).
+      .in("status", ["sent", "partially_paid", "paid"]);
     if (iErr) throw new Error(`getProjectCostRollup/invoices: ${iErr.message}`);
     for (const r of (invData ?? []) as {
       total: number | null;

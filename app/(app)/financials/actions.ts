@@ -14,13 +14,13 @@ import {
   getTaxCollectedSummary,
   type FinDateRange,
   type FinInvoiceFilters,
+  type FinInvoiceListRow,
   type RevenueSummary,
   type MonthlyRevenuePoint,
   type ReceivableClientRow,
   type ProjectFinancialSummary,
   type TaxCollectedSummary,
 } from "@/lib/api/financials";
-import type { InvoiceListRow } from "@/lib/api/invoices";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -91,7 +91,7 @@ export async function getMonthlyRevenueAction(
 
 export async function listFinancialInvoicesAction(
   filters: FinInvoiceFilters = {}
-): Promise<ActionResult<InvoiceListRow[]>> {
+): Promise<ActionResult<FinInvoiceListRow[]>> {
   try {
     const denied = await requireFinancialsView();
     if (denied) return { ok: false, error: denied };
@@ -113,13 +113,37 @@ export async function getReceivablesByClientAction(): Promise<
   }
 }
 
+// FIN-2 — the cost/margin legs (spent, margin, po_committed) are redacted to
+// null for financials:view-only holders (e.g. PM, ViewOnly), matching the
+// project cost-rollup action's gate. Contract / invoiced / billed% stay visible
+// at financials:view. `canSeeFinancials` lets the tab lay out accordingly.
+export interface ProjectSummariesResult {
+  summaries: ProjectFinancialSummary[];
+  canSeeFinancials: boolean;
+}
+
 export async function getProjectFinancialSummariesAction(): Promise<
-  ActionResult<ProjectFinancialSummary[]>
+  ActionResult<ProjectSummariesResult>
 > {
   try {
-    const denied = await requireFinancialsView();
-    if (denied) return { ok: false, error: denied };
-    return { ok: true, data: await getProjectFinancialSummaries() };
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "financials", "view")) {
+      return { ok: false, error: "You don't have permission to view financial data." };
+    }
+    const canSeeFinancials = hasPermission(
+      adaptRole(me.role),
+      "financials",
+      "edit"
+    );
+    const summaries = await getProjectFinancialSummaries();
+    if (!canSeeFinancials) {
+      for (const s of summaries) {
+        s.spent = null;
+        s.margin = null;
+        s.po_committed = null;
+      }
+    }
+    return { ok: true, data: { summaries, canSeeFinancials } };
   } catch (e) {
     return fail(e);
   }

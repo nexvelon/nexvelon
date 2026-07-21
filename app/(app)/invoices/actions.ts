@@ -28,6 +28,9 @@ import {
   setLineIdentifierFields,
   issueInvoice,
   setInvoiceStatus,
+  listPaymentsForInvoice,
+  recordPayment,
+  deletePayment,
   type InvoiceListRow,
   type InvoiceDetail,
   type InvoiceMutationResult,
@@ -35,10 +38,16 @@ import {
   type MaterialLineInput,
   type LineUpdateInput,
   type BillableMaterialGroup,
+  type PaymentResult,
 } from "@/lib/api/invoices";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbInvoice, DbRole } from "@/lib/types/database";
+import type {
+  DbInvoice,
+  DbInvoicePayment,
+  DbInvoicePaymentMethod,
+  DbRole,
+} from "@/lib/types/database";
 import type { Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
@@ -343,9 +352,11 @@ export async function issueInvoiceAction(
   }
 }
 
+// FIN-2 — 'paid' / 'partially_paid' are derived from the payments ledger; this
+// flip only handles void and re-open (void → sent).
 export async function setInvoiceStatusAction(
   id: string,
-  status: "sent" | "paid" | "void"
+  status: "sent" | "void"
 ): Promise<ActionResult<DbInvoice>> {
   try {
     const denied = await requireFinancials();
@@ -353,6 +364,59 @@ export async function setInvoiceStatusAction(
     const invoice = await setInvoiceStatus(id, status);
     revalidateInvoice(id);
     return { ok: true, data: invoice };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Payments (FIN-2) ────────────────────────────────────────────────────────
+
+export async function listInvoicePaymentsAction(
+  invoiceId: string
+): Promise<DbInvoicePayment[]> {
+  if (!invoiceId) return [];
+  return listPaymentsForInvoice(invoiceId);
+}
+
+export interface RecordPaymentActionInput {
+  invoiceId: string;
+  amount: number;
+  method: DbInvoicePaymentMethod;
+  paidAt: string;
+  reference?: string | null;
+  notes?: string | null;
+}
+
+export async function recordInvoicePaymentAction(
+  input: RecordPaymentActionInput
+): Promise<ActionResult<PaymentResult>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+      return { ok: false, error: "You don't have permission to record payments." };
+    }
+    const res = await recordPayment({ ...input, actorId: me.id });
+    revalidateInvoice(input.invoiceId);
+    revalidatePath("/financials");
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteInvoicePaymentAction(
+  paymentId: string,
+  invoiceId: string
+): Promise<ActionResult<PaymentResult>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+      return { ok: false, error: "You don't have permission to remove payments." };
+    }
+    const res = await deletePayment(paymentId);
+    if (invoiceId) revalidateInvoice(invoiceId);
+    revalidatePath("/financials");
+    return { ok: true, data: res };
   } catch (e) {
     return fail(e);
   }

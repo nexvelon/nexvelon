@@ -15,6 +15,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -36,20 +44,34 @@ import {
   setTaxRateAction,
   setTaxExemptAction,
   setHoldbackRateAction,
+  setDueDateAction,
   issueInvoiceAction,
   setInvoiceStatusAction,
+  recordInvoicePaymentAction,
+  deleteInvoicePaymentAction,
 } from "@/app/(app)/invoices/actions";
 import type {
   InvoiceDetail,
   BillableMaterialGroup,
 } from "@/lib/api/invoices";
-import type { DbInvoice, DbInvoiceLine } from "@/lib/types/database";
+import type {
+  DbInvoice,
+  DbInvoiceLine,
+  DbInvoicePayment,
+  DbInvoicePaymentMethod,
+} from "@/lib/types/database";
+import {
+  INVOICE_PAYMENT_METHODS,
+  INVOICE_PAYMENT_METHOD_LABEL,
+  isOpenStatus,
+  isOverdue,
+} from "@/lib/invoice-status";
 import {
   INVOICE_IDENTIFIER_FIELDS,
   composeIdentifier,
 } from "@/lib/invoice-identifiers";
 import { cn } from "@/lib/utils";
-import { OPCO_LABEL, STATUS_TONE } from "./shared";
+import { OPCO_LABEL, STATUS_LABEL, STATUS_TONE } from "./shared";
 import { InvoicePdfPane } from "./InvoicePdfPane";
 
 function toNum(s: string): number {
@@ -63,16 +85,39 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
 
   const [invoice, setInvoice] = useState<DbInvoice>(detail.invoice);
   const [lines, setLines] = useState<DbInvoiceLine[]>(detail.lines);
+  // FIN-2 — the payment ledger; the balance below is derived from it.
+  const [payments, setPayments] = useState<DbInvoicePayment[]>(detail.payments);
   const [showPdf, setShowPdf] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [confirmDeletePayment, setConfirmDeletePayment] = useState<string | null>(
+    null
+  );
   const [pending, startTransition] = useTransition();
 
   const isDraft = invoice.status === "draft";
   const editable = canEdit && isDraft;
 
+  // FIN-2 — derived money: nothing about payments is stored on the invoice.
+  const amountDue = Number(invoice.amount_due);
+  const paidTotal =
+    Math.round(payments.reduce((s, p) => s + Number(p.amount), 0) * 100) / 100;
+  const balance = Math.round((amountDue - paidTotal) * 100) / 100;
+  const canTakePayment = canEdit && isOpenStatus(invoice.status);
+  const overdue = isOverdue(invoice);
+
   // Apply a mutation result (fresh header + lines) to local state.
   const apply = (res: { invoice: DbInvoice; lines: DbInvoiceLine[] }) => {
     setInvoice(res.invoice);
     setLines(res.lines);
+  };
+
+  // FIN-2 — apply a payment mutation result (fresh header + ledger).
+  const applyPayment = (res: {
+    invoice: DbInvoice;
+    payments: DbInvoicePayment[];
+  }) => {
+    setInvoice(res.invoice);
+    setPayments(res.payments);
   };
 
   // MATERIALS-1: a project's billable parts (grouped by part × cost-center),
@@ -231,7 +276,9 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
       toast.success(`Issued ${res.data.invoice_number}`);
     });
 
-  const handleStatus = (status: "sent" | "paid" | "void") =>
+  // FIN-2 — only void / re-open remain a bare flip; paid + partially_paid are
+  // derived from the payment ledger.
+  const handleStatus = (status: "sent" | "void") =>
     startTransition(async () => {
       const res = await setInvoiceStatusAction(invoice.id, status);
       if (!res.ok) {
@@ -239,7 +286,59 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
         return;
       }
       setInvoice(res.data);
-      toast.success(`Marked ${status}`);
+      toast.success(status === "void" ? "Invoice voided" : "Re-opened as sent");
+    });
+
+  const handleDueDate = (value: string) =>
+    startTransition(async () => {
+      const res = await setDueDateAction(invoice.id, value || null);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      apply(res.data);
+    });
+
+  // ── Payments (FIN-2) ───────────────────────────────────────────────────
+  const handleRecordPayment = (input: {
+    amount: number;
+    method: DbInvoicePaymentMethod;
+    paidAt: string;
+    reference: string;
+    notes: string;
+  }) =>
+    startTransition(async () => {
+      const res = await recordInvoicePaymentAction({
+        invoiceId: invoice.id,
+        amount: input.amount,
+        method: input.method,
+        paidAt: input.paidAt,
+        reference: input.reference || null,
+        notes: input.notes || null,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      applyPayment(res.data);
+      setPayOpen(false);
+      toast.success(
+        res.data.invoice.status === "paid"
+          ? "Payment recorded — invoice paid in full"
+          : "Payment recorded"
+      );
+    });
+
+  const handleDeletePayment = (paymentId: string) =>
+    startTransition(async () => {
+      const res = await deleteInvoicePaymentAction(paymentId, invoice.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      applyPayment(res.data);
+      setConfirmDeletePayment(null);
+      toast.success("Payment removed");
     });
 
   return (
@@ -285,10 +384,49 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
               {OPCO_LABEL[invoice.opco] ?? invoice.opco}
             </span>
             <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide capitalize ${STATUS_TONE[invoice.status] ?? STATUS_TONE.draft}`}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_TONE[invoice.status] ?? STATUS_TONE.draft}`}
             >
-              {invoice.status}
+              {STATUS_LABEL[invoice.status] ?? invoice.status}
             </span>
+            {overdue && (
+              <span className="rounded-full bg-[color-mix(in_oklab,var(--destructive)_15%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                Overdue
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* FIN-2 — issue + due dates. Due date is editable for any
+            financials:edit holder (not just drafts) since terms are often set
+            or adjusted after issuing. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[var(--border)] pt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-[11px]">Issued</span>
+            <span className="text-brand-charcoal text-xs tabular-nums">
+              {invoice.issue_date ?? "—"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label
+              className="text-muted-foreground text-[11px]"
+              htmlFor="invoice-due-date"
+            >
+              Due
+            </label>
+            {canEdit ? (
+              <Input
+                id="invoice-due-date"
+                type="date"
+                defaultValue={invoice.due_date ?? ""}
+                disabled={pending}
+                onChange={(e) => handleDueDate(e.target.value)}
+                className="h-7 w-40 text-xs tabular-nums"
+              />
+            ) : (
+              <span className="text-brand-charcoal text-xs tabular-nums">
+                {invoice.due_date ?? "—"}
+              </span>
+            )}
           </div>
         </div>
       </Card>
@@ -473,11 +611,83 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
               <Row label="Total" value={formatCurrency(Number(invoice.total))} />
               <Row
                 label="Amount due now"
-                value={formatCurrency(Number(invoice.amount_due))}
+                value={formatCurrency(amountDue)}
                 strong
               />
+              {/* FIN-2 — derived from the ledger, shown once anything is paid. */}
+              {paidTotal > 0 && (
+                <>
+                  <Row label="Paid" value={`− ${formatCurrency(paidTotal)}`} />
+                  <Row
+                    label="Balance due"
+                    value={`${formatCurrency(balance)} of ${formatCurrency(amountDue)}`}
+                    strong
+                  />
+                </>
+              )}
             </div>
           </Card>
+
+          {/* FIN-2 — payments ledger */}
+          {!isDraft && (
+            <Card className="bg-card space-y-3 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <p className="nx-eyebrow-soft">Payments</p>
+                {canTakePayment && (
+                  <Button
+                    type="button"
+                    size="xs"
+                    onClick={() => setPayOpen(true)}
+                    disabled={pending}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Record payment
+                  </Button>
+                )}
+              </div>
+
+              {payments.length === 0 ? (
+                <p className="text-muted-foreground text-[11px]">
+                  No payments recorded yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--border)]">
+                  {payments.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center gap-2 py-2 text-xs"
+                    >
+                      <span className="text-muted-foreground w-20 shrink-0 tabular-nums">
+                        {p.paid_at}
+                      </span>
+                      <span className="text-brand-charcoal min-w-0 flex-1 truncate">
+                        {INVOICE_PAYMENT_METHOD_LABEL[p.method] ?? p.method}
+                        {p.reference && (
+                          <span className="text-muted-foreground ml-1 font-mono text-[10px]">
+                            {p.reference}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-brand-charcoal shrink-0 font-semibold tabular-nums">
+                        {formatCurrency(Number(p.amount))}
+                      </span>
+                      {canEdit && invoice.status !== "void" && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeletePayment(p.id)}
+                          disabled={pending}
+                          className="text-muted-foreground shrink-0 hover:text-red-600"
+                          aria-label="Remove payment"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
           {/* Issue + status controls */}
           {canEdit && (
@@ -493,12 +703,15 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
                 </Button>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {invoice.status !== "paid" && (
+                  {/* FIN-2 — "Mark paid" is now a payment: it opens the dialog
+                      pre-filled with the full remaining balance. Paying in full
+                      is just recording one payment. */}
+                  {canTakePayment && (
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => handleStatus("paid")}
+                      onClick={() => setPayOpen(true)}
                       disabled={pending}
                     >
                       Mark paid
@@ -515,7 +728,9 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
                       Void
                     </Button>
                   )}
-                  {invoice.status !== "sent" && invoice.status !== "draft" && (
+                  {/* Re-open applies to VOID only — a paid invoice is re-opened
+                      by removing a payment, which re-derives its status. */}
+                  {invoice.status === "void" && (
                     <Button
                       type="button"
                       size="sm"
@@ -537,7 +752,197 @@ export function InvoiceBuilder({ detail }: { detail: InvoiceDetail }) {
           )}
         </div>
       </div>
+
+      {/* FIN-2 — record-payment dialog */}
+      <RecordPaymentDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        balance={balance}
+        amountDue={amountDue}
+        pending={pending}
+        onSubmit={handleRecordPayment}
+      />
+
+      {/* FIN-2 — remove-payment confirm */}
+      <Dialog
+        open={confirmDeletePayment !== null}
+        onOpenChange={(o) => !o && setConfirmDeletePayment(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove payment?</DialogTitle>
+            <DialogDescription>
+              The payment is deleted from the ledger and the invoice status is
+              re-derived from what remains.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDeletePayment(null)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() =>
+                confirmDeletePayment && handleDeletePayment(confirmDeletePayment)
+              }
+              disabled={pending}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// FIN-2 — the record-payment form. Amount pre-fills with the full remaining
+// balance (so "Mark paid" is one click through), date defaults to today, and
+// the amount is capped client-side at the balance to match the server guard
+// (no overpayment in v1).
+function RecordPaymentDialog({
+  open,
+  onOpenChange,
+  balance,
+  amountDue,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  balance: number;
+  amountDue: number;
+  pending: boolean;
+  onSubmit: (input: {
+    amount: number;
+    method: DbInvoicePaymentMethod;
+    paidAt: string;
+    reference: string;
+    notes: string;
+  }) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [amount, setAmount] = useState(String(balance));
+  const [method, setMethod] = useState<DbInvoicePaymentMethod>("cheque");
+  const [paidAt, setPaidAt] = useState(today);
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // Re-prime the form each time the dialog opens.
+  useEffect(() => {
+    if (open) {
+      setAmount(String(balance));
+      setPaidAt(new Date().toISOString().slice(0, 10));
+      setReference("");
+      setNotes("");
+    }
+  }, [open, balance]);
+
+  const parsed = toNum(amount);
+  const invalid = !(parsed > 0) || parsed > balance + 0.005;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Record payment</DialogTitle>
+          <DialogDescription>
+            Balance due {formatCurrency(balance)} of {formatCurrency(amountDue)}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">Amount</span>
+            <Input
+              value={amount}
+              inputMode="decimal"
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-8 text-sm tabular-nums"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">Method</span>
+            <Select
+              value={method}
+              onValueChange={(v) =>
+                setMethod((v ?? "cheque") as DbInvoicePaymentMethod)
+              }
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INVOICE_PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m} className="text-xs">
+                    {INVOICE_PAYMENT_METHOD_LABEL[m]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">Date</span>
+            <Input
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              className="h-8 text-sm tabular-nums"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">
+              Reference (cheque #, EFT ref)
+            </span>
+            <Input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">Notes</span>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </label>
+          {parsed > balance + 0.005 && (
+            <p className="text-destructive text-[11px]">
+              Payment can&rsquo;t exceed the remaining balance of{" "}
+              {formatCurrency(balance)}.
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() =>
+              onSubmit({ amount: parsed, method, paidAt, reference, notes })
+            }
+            disabled={pending || invalid || !paidAt}
+          >
+            Record payment
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
