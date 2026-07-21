@@ -1229,7 +1229,49 @@ export type DbProjectCostCenterUpdate = Partial<
 //                    full/partial % (progress/deposit). Sourced lines stay
 //                    editable; unlinking flips source_type back to 'manual'.
 // ----------------------------------------------------------------------------
-export type DbInvoiceStatus = "draft" | "sent" | "paid" | "void";
+// FIN-2 (migration 0090): 'partially_paid' is the intermediate state between
+// 'sent' and 'paid', derived from the invoice_payments ledger (Σ payments vs
+// amount_due). The status column now carries a DB CHECK for exactly this set.
+export type DbInvoiceStatus =
+  | "draft"
+  | "sent"
+  | "partially_paid"
+  | "paid"
+  | "void";
+
+// FIN-2 (migration 0090): payment methods, locked by a DB CHECK.
+export type DbInvoicePaymentMethod =
+  | "cheque"
+  | "eft"
+  | "e_transfer"
+  | "credit_card"
+  | "cash"
+  | "other";
+
+// FIN-2 (migration 0090): the invoice payment ledger. Immutable-by-convention —
+// a mis-entry is deleted, never edited (§2.2). The invoice's running balance is
+// derived (amount_due − Σ payments), never stored.
+export interface DbInvoicePayment {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  method: DbInvoicePaymentMethod;
+  paid_at: string; // date
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DbInvoicePaymentInsert = {
+  invoice_id: string;
+  amount: number;
+  method: DbInvoicePaymentMethod;
+  paid_at: string;
+  reference?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+};
 
 export interface DbInvoice {
   id: string;
@@ -1290,7 +1332,9 @@ export type DbInvoiceInsert = {
 
 export type DbInvoiceUpdate = Partial<DbInvoiceInsert>;
 
-export type DbInvoiceLineSourceType = "manual" | "cost_center";
+// FIN-2 (migration 0090): source_type is now locked by a DB CHECK to exactly
+// this set (MATERIALS-1's 'material' is now first-class in the type).
+export type DbInvoiceLineSourceType = "manual" | "cost_center" | "material";
 
 export interface DbInvoiceLine {
   id: string;

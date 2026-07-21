@@ -32,7 +32,12 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { listInvoicesAction } from "./actions";
 import type { InvoiceListRow } from "@/lib/api/invoices";
-import { OPCO_LABEL, STATUS_TONE } from "@/components/modules/invoices/shared";
+import {
+  OPCO_LABEL,
+  STATUS_LABEL,
+  STATUS_TONE,
+} from "@/components/modules/invoices/shared";
+import { isOverdue } from "@/lib/invoice-status";
 
 export default function InvoicesListPage() {
   const router = useRouter();
@@ -109,8 +114,8 @@ export default function InvoicesListPage() {
           <SelectContent>
             <SelectItem value="All">All statuses</SelectItem>
             {statuses.map((s) => (
-              <SelectItem key={s} value={s} className="capitalize">
-                {s}
+              <SelectItem key={s} value={s}>
+                {STATUS_LABEL[s] ?? s}
               </SelectItem>
             ))}
           </SelectContent>
@@ -192,10 +197,21 @@ export default function InvoicesListPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide capitalize ${STATUS_TONE[r.status] ?? STATUS_TONE.draft}`}
-                    >
-                      {r.status}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_TONE[r.status] ?? STATUS_TONE.draft}`}
+                      >
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
+                      {/* FIN-2 — derived overdue marker on open, past-due rows. */}
+                      {isOverdue(r) && (
+                        <span
+                          className="text-destructive text-[10px] font-semibold uppercase tracking-wide"
+                          title={`Due ${r.due_date}`}
+                        >
+                          • Overdue
+                        </span>
+                      )}
                     </span>
                   </TableCell>
                   <TableCell className="text-brand-charcoal text-right text-xs font-semibold tabular-nums">

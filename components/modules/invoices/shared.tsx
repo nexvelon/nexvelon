@@ -12,6 +12,18 @@ export const STATUS_TONE: Record<string, string> = {
   draft:
     "bg-muted text-muted-foreground",
   sent: "bg-[color-mix(in_oklab,var(--brand-navy)_15%,transparent)] text-brand-navy",
+  // FIN-2 — partially_paid: amber, between sent and paid.
+  partially_paid:
+    "bg-[color-mix(in_oklab,#C9A24B_22%,transparent)] text-[#8a6d1f]",
   paid: "bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] text-[var(--brand-status-green)]",
   void: "bg-[color-mix(in_oklab,var(--destructive)_15%,transparent)] text-destructive",
+};
+
+/** FIN-2 — human label for a status value (handles the underscore form). */
+export const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  partially_paid: "Partially paid",
+  paid: "Paid",
+  void: "Void",
 };

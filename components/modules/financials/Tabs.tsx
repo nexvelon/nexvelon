@@ -36,7 +36,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnimatedNumber } from "@/components/modules/dashboard/AnimatedNumber";
-import { OPCO_LABEL, STATUS_TONE } from "@/components/modules/invoices/shared";
+import {
+  OPCO_LABEL,
+  STATUS_LABEL,
+  STATUS_TONE,
+} from "@/components/modules/invoices/shared";
 import {
   getMonthlyRevenueAction,
   getProjectFinancialSummariesAction,
@@ -46,13 +50,13 @@ import {
   listFinancialInvoicesAction,
 } from "@/app/(app)/financials/actions";
 import type {
+  FinInvoiceListRow,
   MonthlyRevenuePoint,
   ProjectFinancialSummary,
   ReceivableClientRow,
   RevenueSummary,
   TaxCollectedSummary,
 } from "@/lib/api/financials";
-import type { InvoiceListRow } from "@/lib/api/invoices";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
 import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
@@ -123,7 +127,9 @@ export function OverviewTab({ from, to }: TabProps) {
       setRangeSummary(ranged.data);
       setAllTime(pit.data);
       if (months.ok) setMonthly(months.data);
-      if (projs.ok) setProjects(projs.data);
+      // FIN-2 — cost legs arrive null for financials:view-only holders, so the
+      // blended-margin KPI below resolves to "—" for them.
+      if (projs.ok) setProjects(projs.data.summaries);
     });
     return () => {
       active = false;
@@ -221,12 +227,18 @@ export function OverviewTab({ from, to }: TabProps) {
 // INVOICES
 // ────────────────────────────────────────────────────────────────────────────
 
-const INVOICE_STATUSES = ["draft", "sent", "paid", "void"] as const;
+const INVOICE_STATUSES = [
+  "draft",
+  "sent",
+  "partially_paid",
+  "paid",
+  "void",
+] as const;
 const OPCOS = ["integrated_solutions", "guardian"] as const;
 
 export function InvoicesTab({ from, to }: TabProps) {
   const router = useRouter();
-  const [rows, setRows] = useState<InvoiceListRow[]>([]);
+  const [rows, setRows] = useState<FinInvoiceListRow[]>([]);
   const [status, setStatus] = useState<string>("all");
   const [opco, setOpco] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +274,7 @@ export function InvoicesTab({ from, to }: TabProps) {
             <SelectItem value="all">All statuses</SelectItem>
             {INVOICE_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STATUS_LABEL[s] ?? s}
               </SelectItem>
             ))}
           </SelectContent>
@@ -294,7 +306,7 @@ export function InvoicesTab({ from, to }: TabProps) {
             <TableHead className="text-[11px] uppercase">Issued</TableHead>
             <TableHead className="text-[11px] uppercase">Status</TableHead>
             <TableHead className="text-right text-[11px] uppercase">Total</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Amount due</TableHead>
+            <TableHead className="text-right text-[11px] uppercase">Balance</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -319,20 +331,31 @@ export function InvoicesTab({ from, to }: TabProps) {
                 {r.issue_date ? format(parseISO(r.issue_date), "MMM d, yyyy") : "—"}
               </TableCell>
               <TableCell>
-                <span
-                  className={cn(
-                    "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                    STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground"
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      STATUS_TONE[r.status] ?? "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {STATUS_LABEL[r.status] ?? r.status}
+                  </span>
+                  {/* FIN-2 — derived overdue marker (open + past due_date). */}
+                  {r.is_overdue && (
+                    <span
+                      className="text-destructive text-[10px] font-semibold uppercase"
+                      title={`Due ${r.due_date}`}
+                    >
+                      • Overdue
+                    </span>
                   )}
-                >
-                  {r.status}
                 </span>
               </TableCell>
               <TableCell className="text-right text-xs font-semibold tabular-nums">
                 {formatCurrency(Number(r.total))}
               </TableCell>
               <TableCell className="text-right text-xs tabular-nums">
-                {formatCurrency(Number(r.amount_due))}
+                {formatCurrency(r.balance)}
               </TableCell>
             </TableRow>
           ))}
@@ -432,6 +455,8 @@ export function ReceivablesTab() {
 export function ProjectsFinTab() {
   const router = useRouter();
   const [rows, setRows] = useState<ProjectFinancialSummary[]>([]);
+  // FIN-2 — false for financials:view-only holders; the cost legs arrive null.
+  const [canSeeFinancials, setCanSeeFinancials] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -439,7 +464,8 @@ export function ProjectsFinTab() {
     getProjectFinancialSummariesAction().then((res) => {
       if (!active) return;
       if (!res.ok) return setError(res.error);
-      setRows(res.data);
+      setRows(res.data.summaries);
+      setCanSeeFinancials(res.data.canSeeFinancials);
     });
     return () => {
       active = false;
@@ -453,7 +479,9 @@ export function ProjectsFinTab() {
       <div className="mb-3 flex items-baseline justify-between">
         <h3 className="text-brand-navy font-serif text-lg">Open projects</h3>
         <p className="text-muted-foreground text-[11px]">
-          Contract, billed, spent and margin from the live cost rollup.
+          {canSeeFinancials
+            ? "Contract, billed, spent and margin from the live cost rollup."
+            : "Cost and margin need financials:edit — contract and billing shown."}
         </p>
       </div>
       <Table>

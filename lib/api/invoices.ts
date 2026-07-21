@@ -20,7 +20,13 @@ import { formatInvoiceNumber, businessDateISO } from "@/lib/format";
 import { round2 } from "@/lib/quote-helpers";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 import { composeIdentifier } from "@/lib/invoice-identifiers";
-import type { DbInvoice, DbInvoiceLine } from "@/lib/types/database";
+import { deriveStatusFromPayments, isOpenStatus } from "@/lib/invoice-status";
+import type {
+  DbInvoice,
+  DbInvoiceLine,
+  DbInvoicePayment,
+  DbInvoicePaymentMethod,
+} from "@/lib/types/database";
 
 async function db() {
   return createSupabaseServerClient();
@@ -67,6 +73,8 @@ export interface InvoiceDetail {
   serviceLocation: InvoiceParty | null;
   /** The project's cost centers, available to pull as lines. */
   costCenters: InvoiceCostCenterOption[];
+  /** FIN-2 — the recorded payments (the ledger behind the derived balance). */
+  payments: DbInvoicePayment[];
 }
 
 /** Returned by every line/setting mutation: fresh header totals + lines. */
@@ -172,6 +180,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceDetail | null> 
   }
 
   const lines = await fetchLines(supabase, id);
+  const payments = await listPaymentsForInvoice(id);
 
   const billTo: InvoiceParty | null = client
     ? {
@@ -209,6 +218,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceDetail | null> 
     billTo,
     serviceLocation,
     costCenters,
+    payments,
   };
 }
 
@@ -1008,9 +1018,13 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
   return data as DbInvoice;
 }
 
+// FIN-2 — narrowed to the lifecycle flips the ledger does NOT own: void (a hard
+// stop) and re-open (void → sent). 'paid' / 'partially_paid' are now derived
+// from the invoice_payments ledger by recordPayment / deletePayment and must
+// not be set by a bare flip, which would desync status from the payments.
 export async function setInvoiceStatus(
   id: string,
-  status: "sent" | "paid" | "void"
+  status: "sent" | "void"
 ): Promise<DbInvoice> {
   const supabase = await db();
   const { data, error } = await supabase
@@ -1021,4 +1035,184 @@ export async function setInvoiceStatus(
     .single();
   if (error) throw new Error(`setInvoiceStatus: ${error.message}`);
   return data as DbInvoice;
+}
+
+// ─── Payments (FIN-2) ────────────────────────────────────────────────────────
+
+// Typed failures the action layer maps to friendly messages and tests assert on.
+export type InvoicePaymentErrorCode =
+  | "invalid_status"
+  | "invalid_amount"
+  | "exceeds_balance"
+  | "not_found";
+
+export class InvoicePaymentError extends Error {
+  code: InvoicePaymentErrorCode;
+  constructor(code: InvoicePaymentErrorCode, message: string) {
+    super(message);
+    this.name = "InvoicePaymentError";
+    this.code = code;
+  }
+}
+
+export interface PaymentResult {
+  invoice: DbInvoice;
+  payments: DbInvoicePayment[];
+}
+
+export async function listPaymentsForInvoice(
+  invoiceId: string
+): Promise<DbInvoicePayment[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("invoice_payments")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .order("paid_at", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`listPaymentsForInvoice: ${error.message}`);
+  return (data ?? []) as DbInvoicePayment[];
+}
+
+export interface RecordPaymentInput {
+  invoiceId: string;
+  amount: number;
+  method: DbInvoicePaymentMethod;
+  paidAt: string; // yyyy-mm-dd
+  reference?: string | null;
+  notes?: string | null;
+  actorId?: string | null;
+}
+
+/**
+ * Record a payment against an invoice and re-derive its status from the ledger.
+ * Guards: invoice must be open (sent / partially_paid); amount > 0 and within
+ * the remaining balance (amount_due − Σ existing payments). No overpayment in
+ * v1 — a credit-balance / overpayment model is deferred (flagged in the PR).
+ */
+export async function recordPayment(
+  input: RecordPaymentInput
+): Promise<PaymentResult> {
+  const supabase = await db();
+
+  const { data: inv, error: iErr } = await supabase
+    .from("invoices")
+    .select("id, status, amount_due")
+    .eq("id", input.invoiceId)
+    .maybeSingle();
+  if (iErr) throw new Error(`recordPayment/load: ${iErr.message}`);
+  if (!inv) throw new InvoicePaymentError("not_found", "Invoice not found.");
+  const invoice = inv as { id: string; status: string; amount_due: number };
+
+  if (!isOpenStatus(invoice.status)) {
+    throw new InvoicePaymentError(
+      "invalid_status",
+      "Only a sent or partially-paid invoice can take a payment."
+    );
+  }
+
+  const amount = round2(input.amount);
+  if (!(amount > 0)) {
+    throw new InvoicePaymentError(
+      "invalid_amount",
+      "Payment amount must be greater than zero."
+    );
+  }
+
+  const existing = await listPaymentsForInvoice(input.invoiceId);
+  const paidSoFar = round2(existing.reduce((s, p) => s + Number(p.amount), 0));
+  const amountDue = round2(Number(invoice.amount_due));
+  const balance = round2(amountDue - paidSoFar);
+  if (amount > balance + 0.005) {
+    throw new InvoicePaymentError(
+      "exceeds_balance",
+      `Payment exceeds the remaining balance of ${balance.toFixed(2)}.`
+    );
+  }
+
+  const { error: insErr } = await supabase.from("invoice_payments").insert({
+    invoice_id: input.invoiceId,
+    amount,
+    method: input.method,
+    paid_at: input.paidAt,
+    reference: input.reference ?? null,
+    notes: input.notes ?? null,
+    created_by: input.actorId ?? null,
+  });
+  if (insErr) throw new Error(`recordPayment/insert: ${insErr.message}`);
+
+  const newTotal = round2(paidSoFar + amount);
+  const status = deriveStatusFromPayments(amountDue, newTotal);
+  const { data: updated, error: upErr } = await supabase
+    .from("invoices")
+    .update({ status })
+    .eq("id", input.invoiceId)
+    .select("*")
+    .single();
+  if (upErr) throw new Error(`recordPayment/status: ${upErr.message}`);
+
+  // NOTE(audit): invoices carry no audit trail today — issue/void/status flips
+  // write no log, and activity_log's entity_type CHECK doesn't include
+  // 'invoice'. There is therefore no existing mechanism to mirror best-effort;
+  // wiring invoice auditing (its own migration) is tracked as deferred.
+
+  const payments = await listPaymentsForInvoice(input.invoiceId);
+  return { invoice: updated as DbInvoice, payments };
+}
+
+/**
+ * Remove a recorded payment and re-derive the invoice status from what's left
+ * (paid → partially_paid when a payment is pulled; last one removed → sent).
+ * Blocked once the invoice is void.
+ *
+ * NOTE(audit): deleting a payment currently leaves no trace of who removed it —
+ * there is no invoice audit sink to write to (see recordPayment). No actorId
+ * parameter is carried here rather than accepting one and dropping it on the
+ * floor; it lands when invoice auditing does.
+ */
+export async function deletePayment(paymentId: string): Promise<PaymentResult> {
+  const supabase = await db();
+
+  const { data: pay, error: pErr } = await supabase
+    .from("invoice_payments")
+    .select("id, invoice_id")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (pErr) throw new Error(`deletePayment/load: ${pErr.message}`);
+  if (!pay) throw new InvoicePaymentError("not_found", "Payment not found.");
+  const invoiceId = (pay as { invoice_id: string }).invoice_id;
+
+  const { data: inv, error: iErr } = await supabase
+    .from("invoices")
+    .select("status, amount_due")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (iErr) throw new Error(`deletePayment/invoice: ${iErr.message}`);
+  if (!inv) throw new InvoicePaymentError("not_found", "Invoice not found.");
+  const invoice = inv as { status: string; amount_due: number };
+  if (invoice.status === "void") {
+    throw new InvoicePaymentError(
+      "invalid_status",
+      "Can't change payments on a void invoice."
+    );
+  }
+
+  const { error: delErr } = await supabase
+    .from("invoice_payments")
+    .delete()
+    .eq("id", paymentId);
+  if (delErr) throw new Error(`deletePayment/delete: ${delErr.message}`);
+
+  const remaining = await listPaymentsForInvoice(invoiceId);
+  const total = round2(remaining.reduce((s, p) => s + Number(p.amount), 0));
+  const status = deriveStatusFromPayments(round2(Number(invoice.amount_due)), total);
+  const { data: updated, error: upErr } = await supabase
+    .from("invoices")
+    .update({ status })
+    .eq("id", invoiceId)
+    .select("*")
+    .single();
+  if (upErr) throw new Error(`deletePayment/status: ${upErr.message}`);
+
+  return { invoice: updated as DbInvoice, payments: remaining };
 }
