@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
   getRevenueSummary: vi.fn(async () => ({ total: 1, byOpco: [], paidTotal: 0, outstandingTotal: 0, holdbackRetained: 0, invoiceCount: 1 })),
   getMonthlyRevenue: vi.fn(async () => [{ month: "2026-07", invoiced: 1, paid: 0 }]),
   listInvoicesReal: vi.fn(async () => [{ id: "i1" }]),
-  getReceivablesByClient: vi.fn(async () => [{ client_id: "c1" }]),
   getProjectFinancialSummaries: vi.fn(async () => [{ project_id: "p1" }]),
   getTaxCollectedSummary: vi.fn(async () => ({ byOpco: [], total: 0 })),
 }));
@@ -22,7 +21,6 @@ vi.mock("@/lib/api/financials", () => ({
   getRevenueSummary: h.getRevenueSummary,
   getMonthlyRevenue: h.getMonthlyRevenue,
   listInvoicesReal: h.listInvoicesReal,
-  getReceivablesByClient: h.getReceivablesByClient,
   getProjectFinancialSummaries: h.getProjectFinancialSummaries,
   getTaxCollectedSummary: h.getTaxCollectedSummary,
 }));
@@ -32,7 +30,6 @@ import {
   getRevenueSummaryAction,
   getMonthlyRevenueAction,
   listFinancialInvoicesAction,
-  getReceivablesByClientAction,
   getProjectFinancialSummariesAction,
   getTaxCollectedSummaryAction,
 } from "@/app/(app)/financials/actions";
@@ -41,7 +38,6 @@ const ALL_ACTIONS = [
   () => getRevenueSummaryAction({}),
   () => getMonthlyRevenueAction({}),
   () => listFinancialInvoicesAction({}),
-  () => getReceivablesByClientAction(),
   () => getProjectFinancialSummariesAction(),
   () => getTaxCollectedSummaryAction({}),
 ];
@@ -50,7 +46,6 @@ const LIB_FNS = [
   h.getRevenueSummary,
   h.getMonthlyRevenue,
   h.listInvoicesReal,
-  h.getReceivablesByClient,
   h.getProjectFinancialSummaries,
   h.getTaxCollectedSummary,
 ];

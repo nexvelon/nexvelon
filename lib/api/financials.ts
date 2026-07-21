@@ -30,8 +30,10 @@ async function db() {
 // partially_paid, and paid. "Open" (still owed) = sent + partially_paid. These
 // replace the old ['sent','paid'] pairs now that partially_paid exists, so
 // partly-paid invoices don't vanish from revenue / tax / receivables.
-const ISSUED_STATUSES = ["sent", "partially_paid", "paid"] as const;
-const OPEN_STATUSES = ["sent", "partially_paid"] as const;
+// Exported for FIN-3's aging engine, which must scope to exactly the same
+// "open" set rather than re-deriving one.
+export const ISSUED_STATUSES = ["sent", "partially_paid", "paid"] as const;
+export const OPEN_STATUSES = ["sent", "partially_paid"] as const;
 
 export interface FinDateRange {
   from?: string | null;
@@ -40,7 +42,8 @@ export interface FinDateRange {
 
 // FIN-2 — Σ recorded payments per invoice, for the given invoice ids. The
 // balance of an open invoice is amount_due − this sum (no stored amount_paid).
-async function sumPaymentsByInvoice(
+// Exported so FIN-3's aging engine computes balances the same single way.
+export async function sumPaymentsByInvoice(
   supabase: Awaited<ReturnType<typeof db>>,
   invoiceIds: string[]
 ): Promise<Map<string, number>> {
@@ -246,69 +249,6 @@ export async function listInvoicesReal(
     balance: round2(Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)),
     is_overdue: isOverdue(r),
   }));
-}
-
-// ─── Receivables by client ───────────────────────────────────────────────────
-
-export interface ReceivableClientRow {
-  client_id: string;
-  client_name: string;
-  /** Σ balance (amount_due − payments) over the client's open invoices. */
-  open_total: number;
-  invoice_count: number;
-  /** issue_date of the client's oldest open invoice (null if none dated). */
-  oldest_issue_date: string | null;
-}
-
-/**
- * Open balance per client, net of recorded payments (FIN-2). A partially-paid
- * invoice contributes only its remaining balance. True aging buckets
- * (current/30/60/90+) still want due-date discipline — that's FIN-3; until then
- * this is the honest version: open balance + the age of the oldest open invoice
- * since ISSUE. Invoices fully covered by payments (balance 0) are dropped.
- */
-export async function getReceivablesByClient(): Promise<ReceivableClientRow[]> {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("id, client_id, amount_due, issue_date, client:clients(name)")
-    .in("status", OPEN_STATUSES);
-  if (error) throw new Error(`getReceivablesByClient: ${error.message}`);
-
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    client_id: string;
-    amount_due: number | null;
-    issue_date: string | null;
-    client: { name: string } | null;
-  }[];
-  const paidByInvoice = await sumPaymentsByInvoice(
-    supabase,
-    rows.map((r) => r.id)
-  );
-
-  const byClient = new Map<string, ReceivableClientRow>();
-  for (const r of rows) {
-    const balance = round2(
-      Number(r.amount_due ?? 0) - (paidByInvoice.get(r.id) ?? 0)
-    );
-    if (balance <= 0) continue; // fully covered — nothing outstanding
-    const row = byClient.get(r.client_id) ?? {
-      client_id: r.client_id,
-      client_name: r.client?.name ?? "—",
-      open_total: 0,
-      invoice_count: 0,
-      oldest_issue_date: null as string | null,
-    };
-    row.open_total = round2(row.open_total + balance);
-    row.invoice_count += 1;
-    if (r.issue_date && (!row.oldest_issue_date || r.issue_date < row.oldest_issue_date)) {
-      row.oldest_issue_date = r.issue_date;
-    }
-    byClient.set(r.client_id, row);
-  }
-
-  return [...byClient.values()].sort((a, b) => b.open_total - a.open_total);
 }
 
 // ─── Per-project financial summaries (the 6b rollup surface) ────────────────

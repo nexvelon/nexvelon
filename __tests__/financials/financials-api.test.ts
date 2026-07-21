@@ -61,7 +61,6 @@ vi.mock("@/lib/api/project-cost-rollup", () => ({
 import {
   getRevenueSummary,
   getMonthlyRevenue,
-  getReceivablesByClient,
   getTaxCollectedSummary,
 } from "@/lib/api/financials";
 
@@ -145,47 +144,6 @@ describe("getMonthlyRevenue", () => {
     expect(prev).toEqual({ month: lastMonth, invoiced: 40, paid: 0 });
     // Untouched months stay zero.
     expect(points.filter((p) => p.invoiced === 0)).toHaveLength(10);
-  });
-});
-
-describe("getReceivablesByClient", () => {
-  it("groups open invoices by client with oldest issue date, sorted by balance", async () => {
-    s.invoices = [
-      { id: "i1", client_id: "c1", status: "sent", amount_due: 100, issue_date: "2026-05-01", client: { name: "Acme" } },
-      { id: "i2", client_id: "c1", status: "sent", amount_due: 50, issue_date: "2026-07-01", client: { name: "Acme" } },
-      { id: "i3", client_id: "c2", status: "sent", amount_due: 60, issue_date: "2026-06-15", client: { name: "Beta" } },
-      { id: "i4", client_id: "c1", status: "paid", amount_due: 0, issue_date: "2026-04-01", client: { name: "Acme" } },
-      { id: "i5", client_id: "c3", status: "draft", amount_due: 999, issue_date: null, client: { name: "Gamma" } },
-    ];
-    const rows = await getReceivablesByClient();
-    expect(rows).toEqual([
-      { client_id: "c1", client_name: "Acme", open_total: 150, invoice_count: 2, oldest_issue_date: "2026-05-01" },
-      { client_id: "c2", client_name: "Beta", open_total: 60, invoice_count: 1, oldest_issue_date: "2026-06-15" },
-    ]);
-  });
-
-  // FIN-2 — balances, not raw amount_due: partially-paid invoices contribute
-  // only what's left, and a fully-covered invoice drops out entirely.
-  it("nets balances against payments and drops fully-covered invoices", async () => {
-    s.invoices = [
-      { id: "i1", client_id: "c1", status: "partially_paid", amount_due: 100, issue_date: "2026-05-01", client: { name: "Acme" } },
-      { id: "i2", client_id: "c1", status: "sent", amount_due: 50, issue_date: "2026-06-01", client: { name: "Acme" } },
-      { id: "i3", client_id: "c2", status: "sent", amount_due: 80, issue_date: "2026-06-15", client: { name: "Beta" } },
-    ];
-    s.payments = [
-      { invoice_id: "i1", amount: 70 }, // 30 left
-      { invoice_id: "i3", amount: 80 }, // fully covered → excluded
-    ];
-    const rows = await getReceivablesByClient();
-    expect(rows).toEqual([
-      {
-        client_id: "c1",
-        client_name: "Acme",
-        open_total: 80, // 30 + 50
-        invoice_count: 2,
-        oldest_issue_date: "2026-05-01",
-      },
-    ]);
   });
 });
 

@@ -33,7 +33,6 @@ vi.mock("@/lib/api/financials", () => ({
   getRevenueSummary: vi.fn(),
   getMonthlyRevenue: vi.fn(),
   listInvoicesReal: vi.fn(),
-  getReceivablesByClient: vi.fn(),
   getProjectFinancialSummaries: h.getProjectFinancialSummaries,
   getTaxCollectedSummary: vi.fn(),
 }));

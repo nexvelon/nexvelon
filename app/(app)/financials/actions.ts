@@ -9,7 +9,6 @@ import {
   getRevenueSummary,
   getMonthlyRevenue,
   listInvoicesReal,
-  getReceivablesByClient,
   getProjectFinancialSummaries,
   getTaxCollectedSummary,
   type FinDateRange,
@@ -17,10 +16,19 @@ import {
   type FinInvoiceListRow,
   type RevenueSummary,
   type MonthlyRevenuePoint,
-  type ReceivableClientRow,
   type ProjectFinancialSummary,
   type TaxCollectedSummary,
 } from "@/lib/api/financials";
+import {
+  getArAgingSummary,
+  getArAgingByClient,
+  getClientStatement,
+  buildArAgingCsv,
+  type ArAgingSummary,
+  type ArAgingClientRow,
+  type ClientStatement,
+} from "@/lib/api/ar-aging";
+import { businessDateISO } from "@/lib/format";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -101,18 +109,6 @@ export async function listFinancialInvoicesAction(
   }
 }
 
-export async function getReceivablesByClientAction(): Promise<
-  ActionResult<ReceivableClientRow[]>
-> {
-  try {
-    const denied = await requireFinancialsView();
-    if (denied) return { ok: false, error: denied };
-    return { ok: true, data: await getReceivablesByClient() };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
 // FIN-2 — the cost/margin legs (spent, margin, po_committed) are redacted to
 // null for financials:view-only holders (e.g. PM, ViewOnly), matching the
 // project cost-rollup action's gate. Contract / invoiced / billed% stay visible
@@ -156,6 +152,69 @@ export async function getTaxCollectedSummaryAction(
     const denied = await requireFinancialsView();
     if (denied) return { ok: false, error: denied };
     return { ok: true, data: await getTaxCollectedSummary(range) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── AR aging (FIN-3) ────────────────────────────────────────────────────────
+// AR balances are revenue-side, so these sit at financials:view like the rest
+// of FIN-1's reads — unlike the cost/margin legs, which need financials:edit.
+
+export async function getArAgingSummaryAction(): Promise<
+  ActionResult<ArAgingSummary>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getArAgingSummary() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getArAgingByClientAction(): Promise<
+  ActionResult<ArAgingClientRow[]>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getArAgingByClient() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getClientStatementAction(
+  clientId: string,
+  range: FinDateRange = {}
+): Promise<ActionResult<ClientStatement | null>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!clientId) return { ok: false, error: "No client specified." };
+    return { ok: true, data: await getClientStatement(clientId, range) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * The accountant CSV. Returned as a string the client turns into a Blob and
+ * saves via a synthetic anchor click (the #310/#311 pattern) — no supabase-js
+ * in the browser and no server round-trip for the file itself.
+ */
+export async function exportArAgingCsvAction(): Promise<
+  ActionResult<{ csv: string; filename: string }>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    const csv = await buildArAgingCsv();
+    return {
+      ok: true,
+      data: { csv, filename: `nexvelon-ar-aging-${businessDateISO()}.csv` },
+    };
   } catch (e) {
     return fail(e);
   }
