@@ -1763,3 +1763,85 @@ export type DbAttachmentInsert = {
 };
 
 export type DbAttachmentUpdate = Partial<DbAttachmentInsert>;
+
+// ----------------------------------------------------------------------------
+// FIN-5 — vendor bills (AP), migration 0092. The AP mirror of the AR stack:
+//   vendor_bills   — the analog of invoices (header-level in v1; no bill lines)
+//   bill_payments  — the analog of invoice_payments
+// A bill's balance is total − Σ bill_payments (derived, never stored), and its
+// status derives from that ledger exactly as an invoice's does.
+//
+// Bills deliberately do NOT feed the cost rollup's `spent` leg: receiving a PO
+// already writes its line unit_cost onto inventory_stock, which `spent` sums.
+// See billed_cost on the rollup for the supplementary leg.
+// ----------------------------------------------------------------------------
+export type DbVendorBillStatus =
+  | "received"
+  | "partially_paid"
+  | "paid"
+  | "void";
+
+export interface DbVendorBill {
+  id: string;
+  vendor_id: string;
+  /** Null for a standalone bill (freight, one-off supply) with no PO. */
+  purchase_order_id: string | null;
+  project_id: string | null;
+  job_id: string | null;
+  /** The VENDOR's own invoice number, not ours. */
+  bill_number: string;
+  bill_date: string; // date
+  due_date: string | null;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  status: DbVendorBillStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbVendorBillInsert = {
+  vendor_id: string;
+  purchase_order_id?: string | null;
+  project_id?: string | null;
+  job_id?: string | null;
+  bill_number: string;
+  bill_date: string;
+  due_date?: string | null;
+  subtotal?: number;
+  tax_amount?: number;
+  total?: number;
+  status?: DbVendorBillStatus;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbVendorBillUpdate = Partial<
+  Omit<DbVendorBillInsert, "vendor_id">
+>;
+
+export interface DbBillPayment {
+  id: string;
+  bill_id: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  paid_at: string; // date
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DbBillPaymentInsert = {
+  bill_id: string;
+  amount: number;
+  method: DbCashPaymentMethod;
+  paid_at: string;
+  reference?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+};

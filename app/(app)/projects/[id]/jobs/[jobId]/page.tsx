@@ -62,6 +62,8 @@ function redactJob(entry: DbJobRollup): DbJobRollup {
     invoiced: null,
     billed_pct: null,
     po_committed: null,
+    // FIN-5 — billed cost is spend; redact with the other cost legs.
+    billed_cost: null,
     variance: null,
   };
 }
@@ -108,6 +110,7 @@ export default async function JobDetailPage({
       invoiced: 0,
       billed_pct: 0,
       po_committed: 0,
+      billed_cost: 0,
       variance: null,
     };
   const rollup = canViewFinancials ? baseEntry : redactJob(baseEntry);

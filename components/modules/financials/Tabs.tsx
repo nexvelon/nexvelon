@@ -53,6 +53,7 @@ import {
   getArAgingByClientAction,
   getArAgingSummaryAction,
   getDepositsHeldTotalAction,
+  getApSummaryAction,
   getMonthlyRevenueAction,
   getProjectFinancialSummariesAction,
   getRevenueSummaryAction,
@@ -68,6 +69,7 @@ import type {
   TaxCollectedSummary,
 } from "@/lib/api/financials";
 import type { ArAgingClientRow, ArAgingSummary } from "@/lib/api/ar-aging";
+import type { ApSummary } from "@/lib/api/vendor-bills";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
 import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
@@ -127,6 +129,8 @@ export function OverviewTab({ from, to }: TabProps) {
   const [aging, setAging] = useState<ArAgingSummary | null>(null);
   // FIN-4 — unapplied deposit credit across all projects.
   const [depositsHeld, setDepositsHeld] = useState<number | null>(null);
+  // FIN-5 — what we owe vendors, and how much of it is late.
+  const [ap, setAp] = useState<ApSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,7 +143,8 @@ export function OverviewTab({ from, to }: TabProps) {
       getProjectFinancialSummariesAction(),
       getArAgingSummaryAction(),
       getDepositsHeldTotalAction(),
-    ]).then(([ranged, pit, months, projs, ar, held]) => {
+      getApSummaryAction(),
+    ]).then(([ranged, pit, months, projs, ar, held, apRes]) => {
       if (!active) return;
       if (!ranged.ok) return setError(ranged.error);
       if (!pit.ok) return setError(pit.error);
@@ -151,6 +156,7 @@ export function OverviewTab({ from, to }: TabProps) {
       if (projs.ok) setProjects(projs.data.summaries);
       if (ar.ok) setAging(ar.data);
       if (held.ok) setDepositsHeld(held.data);
+      if (apRes.ok) setAp(apRes.data);
     });
     return () => {
       active = false;
@@ -177,7 +183,7 @@ export function OverviewTab({ from, to }: TabProps) {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-5">
         <KpiCard label="Invoiced (range)" value={rangeSummary?.total ?? null} sub={`${rangeSummary?.invoiceCount ?? 0} invoices`} />
         {/* FIN-4 — real cash received in the range (payments excluding deposit
             applications + deposits received), on a cash-date basis. */}
@@ -201,6 +207,18 @@ export function OverviewTab({ from, to }: TabProps) {
         <KpiCard label="Holdback retained" value={allTime?.holdbackRetained ?? null} sub="All issued invoices" />
         {/* FIN-4 — cash held that hasn't been applied to an invoice yet. */}
         <KpiCard label="Deposits held" value={depositsHeld} sub="Unapplied credit" />
+        {/* FIN-5 — the AP side: what we owe, and the late slice of it. */}
+        <KpiCard
+          label="AP outstanding"
+          value={ap?.outstanding ?? null}
+          sub={ap ? `${ap.billCount} open bill${ap.billCount === 1 ? "" : "s"}` : "Owed to vendors"}
+        />
+        <KpiCard
+          label="Overdue AP"
+          value={ap?.overdue ?? null}
+          sub="Past due"
+          tone={ap && ap.overdue > 0 ? "text-red-600" : undefined}
+        />
         <KpiCard label="Open project contracts" value={contractTotal} sub={`${projects.length} projects`} />
         <KpiCard
           label="Blended margin"
