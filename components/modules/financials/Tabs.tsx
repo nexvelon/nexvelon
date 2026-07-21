@@ -5,11 +5,19 @@
 // the honest-data principle: a number renders only when it's a real
 // transaction figure). The old ten-tab mock (ratio P&L, hardcoded balance
 // sheet, fake bills, toast-only sync/report buttons) is gone; P&L returns for
-// real as FIN-8, aging buckets as FIN-3, payables as FIN-7.
+// real as FIN-8, payables as FIN-7.
+//
+// FIN-3 — Receivables is now real aging (5 buckets by days past due) with a
+// CSV export and per-client statements, replacing FIN-1's days-since-issue
+// placeholder.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { format, parseISO } from "date-fns";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Bar,
   CartesianGrid,
@@ -42,21 +50,23 @@ import {
   STATUS_TONE,
 } from "@/components/modules/invoices/shared";
 import {
+  getArAgingByClientAction,
+  getArAgingSummaryAction,
   getMonthlyRevenueAction,
   getProjectFinancialSummariesAction,
-  getReceivablesByClientAction,
   getRevenueSummaryAction,
   getTaxCollectedSummaryAction,
+  exportArAgingCsvAction,
   listFinancialInvoicesAction,
 } from "@/app/(app)/financials/actions";
 import type {
   FinInvoiceListRow,
   MonthlyRevenuePoint,
   ProjectFinancialSummary,
-  ReceivableClientRow,
   RevenueSummary,
   TaxCollectedSummary,
 } from "@/lib/api/financials";
+import type { ArAgingClientRow, ArAgingSummary } from "@/lib/api/ar-aging";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
 import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
@@ -75,16 +85,18 @@ function monthLabel(key: string): string {
   return format(parseISO(`${key}-01`), "MMM");
 }
 
-function KpiCard({ label, value, sub, format: fmt }: {
+function KpiCard({ label, value, sub, format: fmt, tone }: {
   label: string;
   value: number | null;
   sub?: string;
   format?: (n: number) => string;
+  /** Optional text-colour override — e.g. red for a non-zero overdue total. */
+  tone?: string;
 }) {
   return (
     <Card className="border-t-2 border-t-[#C9A24B] p-4 shadow-sm transition-shadow hover:shadow-md">
       <p className="text-muted-foreground font-serif text-[11px] tracking-wide">{label}</p>
-      <p className="text-brand-navy text-xl font-semibold tabular-nums">
+      <p className={cn("text-xl font-semibold tabular-nums", tone ?? "text-brand-navy")}>
         {value == null ? "—" : <AnimatedNumber value={value} format={fmt ?? formatCurrency} />}
       </p>
       {sub && <p className="text-muted-foreground text-[11px]">{sub}</p>}
@@ -110,6 +122,8 @@ export function OverviewTab({ from, to }: TabProps) {
   const [allTime, setAllTime] = useState<RevenueSummary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyRevenuePoint[]>([]);
   const [projects, setProjects] = useState<ProjectFinancialSummary[]>([]);
+  // FIN-3 — past-due total for the Overdue AR KPI.
+  const [aging, setAging] = useState<ArAgingSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -120,7 +134,8 @@ export function OverviewTab({ from, to }: TabProps) {
       getRevenueSummaryAction({}),
       getMonthlyRevenueAction({ months: 12 }),
       getProjectFinancialSummariesAction(),
-    ]).then(([ranged, pit, months, projs]) => {
+      getArAgingSummaryAction(),
+    ]).then(([ranged, pit, months, projs, ar]) => {
       if (!active) return;
       if (!ranged.ok) return setError(ranged.error);
       if (!pit.ok) return setError(pit.error);
@@ -130,6 +145,7 @@ export function OverviewTab({ from, to }: TabProps) {
       // FIN-2 — cost legs arrive null for financials:view-only holders, so the
       // blended-margin KPI below resolves to "—" for them.
       if (projs.ok) setProjects(projs.data.summaries);
+      if (ar.ok) setAging(ar.data);
     });
     return () => {
       active = false;
@@ -156,10 +172,17 @@ export function OverviewTab({ from, to }: TabProps) {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-7">
         <KpiCard label="Invoiced (range)" value={rangeSummary?.total ?? null} sub={`${rangeSummary?.invoiceCount ?? 0} invoices`} />
         <KpiCard label="Collected (range)" value={rangeSummary?.paidTotal ?? null} />
         <KpiCard label="Outstanding AR" value={allTime?.outstandingTotal ?? null} sub="All open invoices" />
+        {/* FIN-3 — past due (every bucket except current). Red when non-zero. */}
+        <KpiCard
+          label="Overdue AR"
+          value={aging?.overdueTotal ?? null}
+          sub="Past due"
+          tone={aging && aging.overdueTotal > 0 ? "text-red-600" : undefined}
+        />
         <KpiCard label="Holdback retained" value={allTime?.holdbackRetained ?? null} sub="All issued invoices" />
         <KpiCard label="Open project contracts" value={contractTotal} sub={`${projects.length} projects`} />
         <KpiCard
@@ -369,81 +392,198 @@ export function InvoicesTab({ from, to }: TabProps) {
 // RECEIVABLES
 // ────────────────────────────────────────────────────────────────────────────
 
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  const days = Math.floor((Date.now() - parseISO(iso).getTime()) / 86_400_000);
-  return days < 0 ? 0 : days;
-}
+// FIN-3 — bucket presentation. Escalating tone: current is calm, 90+ is loud.
+const BUCKET_CARDS = [
+  { key: "current" as const, label: "Current", tone: "text-[var(--brand-status-green)]" },
+  { key: "d1_30" as const, label: "1–30 days", tone: "text-brand-navy" },
+  { key: "d31_60" as const, label: "31–60 days", tone: "text-[#8a6d1f]" },
+  { key: "d61_90" as const, label: "61–90 days", tone: "text-orange-600" },
+  { key: "d90_plus" as const, label: "90+ days", tone: "text-red-600" },
+];
 
 // Point-in-time surface — open balances don't range-filter, so no TabProps.
 export function ReceivablesTab() {
-  const [rows, setRows] = useState<ReceivableClientRow[]>([]);
+  const [summary, setSummary] = useState<ArAgingSummary | null>(null);
+  const [rows, setRows] = useState<ArAgingClientRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let active = true;
-    getReceivablesByClientAction().then((res) => {
-      if (!active) return;
-      if (!res.ok) return setError(res.error);
-      setRows(res.data);
-    });
+    Promise.all([getArAgingSummaryAction(), getArAgingByClientAction()]).then(
+      ([sum, byClient]) => {
+        if (!active) return;
+        if (!sum.ok) return setError(sum.error);
+        setSummary(sum.data);
+        if (byClient.ok) setRows(byClient.data);
+      }
+    );
     return () => {
       active = false;
     };
   }, []);
 
+  // FIN-3 — the accountant hand-off. The action returns the CSV text; the
+  // browser saves it via a synthetic anchor click (the #310/#311 pattern).
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await exportArAgingCsvAction();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("AR aging exported");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (error) return <ErrorCard message={error} />;
 
   return (
-    <Card className="p-4 shadow-sm">
-      <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-brand-navy font-serif text-lg">Open balances by client</h3>
-        <p className="text-muted-foreground text-[11px]">
-          Aging buckets arrive with payment tracking (FIN-2/3).
-        </p>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-[11px] uppercase">Client</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Open balance</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Open invoices</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">
-              Days outstanding (since issue)
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={4} className="text-muted-foreground py-6 text-center text-xs">
-                No open invoices — nothing is owed right now.
-              </TableCell>
-            </TableRow>
-          )}
-          {rows.map((r) => {
-            const days = daysSince(r.oldest_issue_date);
-            return (
-              <TableRow key={r.client_id}>
-                <TableCell className="text-brand-charcoal text-xs">{r.client_name}</TableCell>
-                <TableCell className="text-brand-navy text-right text-sm font-semibold tabular-nums">
-                  {formatCurrency(r.open_total)}
-                </TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{r.invoice_count}</TableCell>
-                <TableCell
-                  className={cn(
-                    "text-right text-xs tabular-nums",
-                    days != null && days > 60 && "font-semibold text-red-600"
-                  )}
-                >
-                  {days == null ? "—" : days}
-                </TableCell>
+    <div className="space-y-6">
+      {/* Aging summary strip */}
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        {BUCKET_CARDS.map((b) => (
+          <Card
+            key={b.key}
+            className="border-t-2 border-t-[#C9A24B] p-4 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <p className="text-muted-foreground font-serif text-[11px] tracking-wide">
+              {b.label}
+            </p>
+            <p className={cn("text-xl font-semibold tabular-nums", b.tone)}>
+              {summary ? formatCurrency(summary.buckets[b.key]) : "—"}
+            </p>
+          </Card>
+        ))}
+        <Card className="border-t-2 border-t-brand-navy p-4 shadow-sm">
+          <p className="text-muted-foreground font-serif text-[11px] tracking-wide">
+            Total AR
+          </p>
+          <p className="text-brand-navy text-xl font-semibold tabular-nums">
+            {summary ? formatCurrency(summary.total) : "—"}
+          </p>
+          <p className="text-muted-foreground text-[11px]">
+            As of {summary?.asOf ?? "—"}
+          </p>
+        </Card>
+      </section>
+
+      {/* Aged receivables by client */}
+      <Card className="p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-brand-navy font-serif text-lg">
+            Aged receivables by client
+          </h3>
+          <div className="flex items-center gap-3">
+            <p className="text-muted-foreground text-[11px]">
+              Aged by days past due (falling back to issue date when no due date
+              is set).
+            </p>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              Export AR aging (CSV)
+            </Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-[11px] uppercase">Client</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">Current</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">1–30</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">31–60</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">61–90</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">90+</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">Total</TableHead>
+                <TableHead className="text-right text-[11px] uppercase">Oldest</TableHead>
+                <TableHead className="text-[11px] uppercase" />
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={9}
+                    className="text-muted-foreground py-6 text-center text-xs"
+                  >
+                    No open invoices — nothing is owed right now.
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((r) => {
+                // Anything in 31+ marks the client as a collection concern.
+                const seriouslyLate = r.d31_60 + r.d61_90 + r.d90_plus > 0;
+                return (
+                  <TableRow
+                    key={r.client_id}
+                    className={cn(
+                      seriouslyLate && "border-l-2 border-l-red-500/70"
+                    )}
+                  >
+                    <TableCell className="text-brand-charcoal text-xs">
+                      {r.client_name}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {r.current ? formatCurrency(r.current) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {r.d1_30 ? formatCurrency(r.d1_30) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums text-[#8a6d1f]">
+                      {r.d31_60 ? formatCurrency(r.d31_60) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums text-orange-600">
+                      {r.d61_90 ? formatCurrency(r.d61_90) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-semibold tabular-nums text-red-600">
+                      {r.d90_plus ? formatCurrency(r.d90_plus) : "—"}
+                    </TableCell>
+                    <TableCell className="text-brand-navy text-right text-sm font-semibold tabular-nums">
+                      {formatCurrency(r.total)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right text-xs tabular-nums",
+                        r.oldest_days > 60 && "font-semibold text-red-600"
+                      )}
+                    >
+                      {r.oldest_days > 0 ? `${r.oldest_days}d` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link
+                        href={`/financials/statement/${r.client_id}`}
+                        className="text-brand-navy text-[11px] hover:underline"
+                      >
+                        Statement
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+    </div>
   );
 }
 
