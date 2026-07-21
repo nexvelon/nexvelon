@@ -23,25 +23,30 @@ import {
   sumPaymentsByInvoice,
   type FinDateRange,
 } from "@/lib/api/financials";
+// FIN-6 — the bucket vocabulary moved to a shared module when AP aging landed,
+// so AR and AP can never disagree about what "31–60" means. Re-exported here to
+// keep this file's public surface unchanged for existing callers.
+import {
+  AGING_BUCKET_LABEL,
+  addToBucket,
+  agingBucket,
+  daysBetween,
+  emptyBuckets,
+  overdueOf,
+  csvField,
+  type AgingBucket,
+  type AgingBuckets,
+} from "@/lib/aging-buckets";
+
+export {
+  AGING_BUCKET_LABEL,
+  agingBucket,
+  type AgingBucket,
+  type AgingBuckets,
+};
 
 async function db() {
   return createSupabaseServerClient();
-}
-
-export type AgingBucket = "current" | "1_30" | "31_60" | "61_90" | "90_plus";
-
-export const AGING_BUCKET_LABEL: Record<AgingBucket, string> = {
-  current: "Current",
-  "1_30": "1–30",
-  "31_60": "31–60",
-  "61_90": "61–90",
-  "90_plus": "90+",
-};
-
-/** Parse a yyyy-mm-dd date column into a UTC epoch (DST-proof day math). */
-function isoToUtc(iso: string): number {
-  const [y, m, d] = iso.split("-").map(Number);
-  return Date.UTC(y, (m ?? 1) - 1, d ?? 1);
 }
 
 /**
@@ -55,44 +60,7 @@ export function agingDays(
 ): number {
   const ref = inv.due_date ?? inv.issue_date;
   if (!ref) return 0;
-  return Math.floor((isoToUtc(today) - isoToUtc(ref)) / 86_400_000);
-}
-
-/**
- * Bucket by days past due. `current` covers everything not yet due (days <= 0);
- * the rest are inclusive day ranges: 1–30, 31–60, 61–90, then 90+.
- */
-export function agingBucket(days: number): AgingBucket {
-  if (days <= 0) return "current";
-  if (days <= 30) return "1_30";
-  if (days <= 60) return "31_60";
-  if (days <= 90) return "61_90";
-  return "90_plus";
-}
-
-export interface AgingBuckets {
-  current: number;
-  d1_30: number;
-  d31_60: number;
-  d61_90: number;
-  d90_plus: number;
-}
-
-function emptyBuckets(): AgingBuckets {
-  return { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
-}
-
-const BUCKET_FIELD: Record<AgingBucket, keyof AgingBuckets> = {
-  current: "current",
-  "1_30": "d1_30",
-  "31_60": "d31_60",
-  "61_90": "d61_90",
-  "90_plus": "d90_plus",
-};
-
-function addToBucket(b: AgingBuckets, bucket: AgingBucket, amount: number): void {
-  const field = BUCKET_FIELD[bucket];
-  b[field] = round2(b[field] + amount);
+  return daysBetween(ref, today);
 }
 
 /** An open invoice with its derived balance + aging, the unit everything sums. */
@@ -170,9 +138,7 @@ export async function getArAgingSummary(): Promise<ArAgingSummary> {
     addToBucket(buckets, r.bucket, r.balance);
     total = round2(total + r.balance);
   }
-  const overdueTotal = round2(
-    buckets.d1_30 + buckets.d31_60 + buckets.d61_90 + buckets.d90_plus
-  );
+  const overdueTotal = overdueOf(buckets);
   return { buckets, total, overdueTotal, asOf };
 }
 
@@ -337,14 +303,6 @@ export async function getClientStatement(
 }
 
 // ─── CSV export ──────────────────────────────────────────────────────────────
-
-/** RFC-4180 field: quote when it contains a comma, quote, CR or LF. */
-function csvField(value: string | number | null): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
 
 export const AR_AGING_CSV_HEADER = [
   "Client",
