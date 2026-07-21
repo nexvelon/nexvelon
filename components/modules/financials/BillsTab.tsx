@@ -34,6 +34,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Link from "next/link";
+import { Download } from "lucide-react";
 import {
   listBillsAction,
   getBillByIdAction,
@@ -41,7 +43,11 @@ import {
   voidBillAction,
   recordBillPaymentAction,
   deleteBillPaymentAction,
+  getApAgingSummaryAction,
+  getApAgingByVendorAction,
+  exportApAgingCsvAction,
 } from "@/app/(app)/financials/actions";
+import type { ApAgingSummary, ApAgingVendorRow } from "@/lib/api/ap-aging";
 import type { BillDetail, BillListRow } from "@/lib/api/vendor-bills";
 import type { DbCashPaymentMethod } from "@/lib/types/database";
 import {
@@ -99,6 +105,11 @@ export function BillsTab({
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
+  // FIN-6 — AP aging strip + by-vendor breakdown over the same open bills.
+  const [aging, setAging] = useState<ApAgingSummary | null>(null);
+  const [byVendor, setByVendor] = useState<ApAgingVendorRow[]>([]);
+  const [showByVendor, setShowByVendor] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const load = () => {
@@ -114,6 +125,41 @@ export function BillsTab({
     });
   };
   useEffect(load, [status, vendorId, from, to]);
+
+  // Aging is point-in-time over ALL open bills — it deliberately ignores the
+  // list filters, which are a browsing tool, not an AP position.
+  const loadAging = () => {
+    Promise.all([getApAgingSummaryAction(), getApAgingByVendorAction()]).then(
+      ([sum, vend]) => {
+        if (sum.ok) setAging(sum.data);
+        if (vend.ok) setByVendor(vend.data);
+      }
+    );
+  };
+  useEffect(loadAging, []);
+
+  const handleExportAging = async () => {
+    setExporting(true);
+    try {
+      const res = await exportApAgingCsvAction();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("AP aging exported");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleCreate = (input: {
     vendorId: string;
@@ -144,6 +190,7 @@ export function BillsTab({
       }
       setCreateOpen(false);
       load();
+      loadAging();
       toast.success("Bill recorded");
     });
 
@@ -159,8 +206,153 @@ export function BillsTab({
     .filter((r) => r.status === "received" || r.status === "partially_paid")
     .reduce((sum, r) => sum + r.balance, 0);
 
+  const AP_BUCKET_CARDS = [
+    { key: "current" as const, label: "Current", tone: "text-[var(--brand-status-green)]" },
+    { key: "d1_30" as const, label: "1–30 days", tone: "text-brand-navy" },
+    { key: "d31_60" as const, label: "31–60 days", tone: "text-[#8a6d1f]" },
+    { key: "d61_90" as const, label: "61–90 days", tone: "text-orange-600" },
+    { key: "d90_plus" as const, label: "90+ days", tone: "text-red-600" },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* FIN-6 — AP aging strip: what we owe, by how late it is. */}
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        {AP_BUCKET_CARDS.map((b) => (
+          <Card
+            key={b.key}
+            className="border-t-2 border-t-[#C9A24B] p-4 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <p className="text-muted-foreground font-serif text-[11px] tracking-wide">
+              {b.label}
+            </p>
+            <p className={cn("text-xl font-semibold tabular-nums", b.tone)}>
+              {aging ? formatCurrency(aging.buckets[b.key]) : "—"}
+            </p>
+          </Card>
+        ))}
+        <Card className="border-t-2 border-t-brand-navy p-4 shadow-sm">
+          <p className="text-muted-foreground font-serif text-[11px] tracking-wide">
+            Total AP
+          </p>
+          <p className="text-brand-navy text-xl font-semibold tabular-nums">
+            {aging ? formatCurrency(aging.total) : "—"}
+          </p>
+          <p className="text-muted-foreground text-[11px]">
+            As of {aging?.asOf ?? "—"}
+          </p>
+        </Card>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="xs"
+          variant={showByVendor ? "secondary" : "outline"}
+          onClick={() => setShowByVendor((v) => !v)}
+        >
+          {showByVendor ? "Hide by-vendor aging" : "Show by-vendor aging"}
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={handleExportAging}
+          disabled={exporting}
+        >
+          <Download className="mr-1 h-3.5 w-3.5" />
+          Export AP aging (CSV)
+        </Button>
+        <p className="text-muted-foreground ml-auto text-[11px]">
+          Aged by days past due (falling back to the bill date when no due date
+          is set).
+        </p>
+      </div>
+
+      {showByVendor && (
+        <Card className="p-4 shadow-sm">
+          <h3 className="text-brand-navy mb-3 font-serif text-lg">
+            Aged payables by vendor
+          </h3>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[11px] uppercase">Vendor</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">Current</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">1–30</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">31–60</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">61–90</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">90+</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">Total</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase">Oldest</TableHead>
+                  <TableHead className="text-[11px] uppercase" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {byVendor.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="text-muted-foreground py-6 text-center text-xs"
+                    >
+                      No open bills — nothing owed right now.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {byVendor.map((v) => {
+                  const seriouslyLate = v.d31_60 + v.d61_90 + v.d90_plus > 0;
+                  return (
+                    <TableRow
+                      key={v.vendor_id}
+                      className={cn(seriouslyLate && "border-l-2 border-l-red-500/70")}
+                    >
+                      <TableCell className="text-brand-charcoal text-xs">
+                        {v.vendor_name}
+                      </TableCell>
+                      <TableCell className="text-right text-xs tabular-nums">
+                        {v.current ? formatCurrency(v.current) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs tabular-nums">
+                        {v.d1_30 ? formatCurrency(v.d1_30) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs tabular-nums text-[#8a6d1f]">
+                        {v.d31_60 ? formatCurrency(v.d31_60) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs tabular-nums text-orange-600">
+                        {v.d61_90 ? formatCurrency(v.d61_90) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-semibold tabular-nums text-red-600">
+                        {v.d90_plus ? formatCurrency(v.d90_plus) : "—"}
+                      </TableCell>
+                      <TableCell className="text-brand-navy text-right text-sm font-semibold tabular-nums">
+                        {formatCurrency(v.total)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right text-xs tabular-nums",
+                          v.oldest_days > 60 && "font-semibold text-red-600"
+                        )}
+                      >
+                        {v.oldest_days > 0 ? `${v.oldest_days}d` : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          href={`/financials/vendor-statement/${v.vendor_id}`}
+                          className="text-brand-navy text-[11px] hover:underline"
+                        >
+                          Statement
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Select value={status} onValueChange={(v) => setStatus(v ?? "all")}>
@@ -299,7 +491,10 @@ export function BillsTab({
         billId={openBillId}
         onClose={() => setOpenBillId(null)}
         canEdit={canEdit}
-        onChanged={load}
+        onChanged={() => {
+          load();
+          loadAging();
+        }}
       />
     </div>
   );

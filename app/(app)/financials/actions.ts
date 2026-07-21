@@ -60,6 +60,15 @@ import {
   type UpdateBillPatch,
   type BillPaymentResult,
 } from "@/lib/api/vendor-bills";
+import {
+  getApAgingSummary,
+  getApAgingByVendor,
+  getVendorStatement,
+  buildApAgingCsv,
+  type ApAgingSummary,
+  type ApAgingVendorRow,
+  type VendorStatement,
+} from "@/lib/api/ap-aging";
 import { revalidatePath } from "next/cache";
 import { businessDateISO } from "@/lib/format";
 import type {
@@ -524,6 +533,75 @@ export async function deleteBillPaymentAction(
     const res = await deleteBillPayment(paymentId);
     revalidateBill(res.bill.project_id, res.bill.purchase_order_id);
     return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── AP aging (FIN-6) ────────────────────────────────────────────────────────
+// GATING NOTE — these sit at financials:view, NOT financials:edit.
+//
+// The FIN-6 spec proposed edit-tier on the grounds that AP is cost-side. But
+// FIN-5 already shipped every AP read at view: listBillsAction returns every
+// bill with its vendor, total and balance, and getApSummaryAction feeds the
+// Overview AP KPIs — both view-gated, with a test asserting ProjectManager
+// access. Gating the aging SUMMARY tighter than the rows it summarises would
+// protect nothing: the same caller can already read every underlying bill
+// one-by-one in the Bills tab. So AP aging matches its own source data (and
+// mirrors FIN-3's AR aging). The genuinely sensitive AP number — billed_cost as
+// a per-job cost leg feeding margin — stays redacted at financials:edit in the
+// cost rollup, which is where the FIN-2 rule actually applies.
+
+export async function getApAgingSummaryAction(): Promise<
+  ActionResult<ApAgingSummary>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getApAgingSummary() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getApAgingByVendorAction(): Promise<
+  ActionResult<ApAgingVendorRow[]>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getApAgingByVendor() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getVendorStatementAction(
+  vendorId: string,
+  range: BillFilters = {}
+): Promise<ActionResult<VendorStatement | null>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!vendorId) return { ok: false, error: "No vendor specified." };
+    return { ok: true, data: await getVendorStatement(vendorId, range) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** AP twin of exportArAgingCsvAction — same signed-anchor download pattern. */
+export async function exportApAgingCsvAction(): Promise<
+  ActionResult<{ csv: string; filename: string }>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    const csv = await buildApAgingCsv();
+    return {
+      ok: true,
+      data: { csv, filename: `nexvelon-ap-aging-${businessDateISO()}.csv` },
+    };
   } catch (e) {
     return fail(e);
   }

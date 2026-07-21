@@ -17,6 +17,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { round2 } from "@/lib/quote-helpers";
 import { logActivity } from "@/lib/api/activity-log";
+import { daysBetween } from "@/lib/aging-buckets";
 import type {
   DbBillPayment,
   DbCashPaymentMethod,
@@ -243,13 +244,14 @@ export async function getApSummary(today: string): Promise<ApSummary> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("vendor_bills")
-    .select("id, total, due_date, status")
+    .select("id, total, bill_date, due_date, status")
     .in("status", OPEN_BILL_STATUSES);
   if (error) throw new Error(`getApSummary: ${error.message}`);
 
   const rows = (data ?? []) as {
     id: string;
     total: number | null;
+    bill_date: string | null;
     due_date: string | null;
   }[];
   const paidByBill = await sumPaymentsByBill(supabase, rows.map((r) => r.id));
@@ -262,7 +264,12 @@ export async function getApSummary(today: string): Promise<ApSummary> {
     if (balance <= 0) continue;
     outstanding = round2(outstanding + balance);
     billCount += 1;
-    if (r.due_date && r.due_date < today) overdue = round2(overdue + balance);
+    // FIN-6 — same reference the AP aging engine uses: due_date when set, else
+    // bill_date. Before this the KPI treated a bill with no due date as never
+    // overdue, while the aging buckets aged it from bill_date — two different
+    // overdue totals on one screen.
+    const ref = r.due_date ?? r.bill_date;
+    if (ref && daysBetween(ref, today) > 0) overdue = round2(overdue + balance);
   }
   return { outstanding, overdue, billCount };
 }
