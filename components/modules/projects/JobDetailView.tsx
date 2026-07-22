@@ -482,6 +482,19 @@ function FinancialsTab({
   money: (n: number | null | undefined) => string;
   pctv: (n: number | null | undefined) => string;
 }) {
+  // FIN-8 — Job gross profit on the project-P&L basis: pre-tax invoiced
+  // revenue (issued invoices' subtotal) − (vendor-billed materials + labour).
+  // Null when the cost legs are redacted, so `money()` dashes it for view-only.
+  const jobRevenuePretax = invoices
+    .filter((i) => ["sent", "partially_paid", "paid"].includes(i.status))
+    .reduce((sum, i) => sum + Number(i.subtotal ?? 0), 0);
+  const jobGrossProfit =
+    rollup.billed_cost == null || rollup.labour == null
+      ? null
+      : Math.round(
+          (jobRevenuePretax - Number(rollup.billed_cost) - Number(rollup.labour)) * 100
+        ) / 100;
+
   return (
     <div className="space-y-4">
       {/* PROJ2-6b — Quoted vs Estimated vs Actual with variance. */}
@@ -507,6 +520,10 @@ function FinancialsTab({
               cost into `spent` via inventory, so adding bills would double
               count. See the rollup header note. */}
           <Stat label="Vendor billed" value={money(rollup.billed_cost)} />
+          {/* FIN-8 — Job gross profit on the SAME basis as the project P&L:
+              pre-tax invoiced revenue − (vendor-billed materials + labour).
+              null (dashed) whenever the cost legs are redacted. */}
+          <Stat label="Job gross profit" value={money(jobGrossProfit)} />
         </div>
       </Panel>
 

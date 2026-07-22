@@ -9,6 +9,7 @@ import { ProjectDetailView } from "@/components/modules/projects/ProjectDetailVi
 import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
 import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
 import { ProjectDeposits } from "@/components/modules/projects/ProjectDeposits";
+import { ProjectPnl } from "@/components/modules/projects/ProjectPnl";
 import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrderButton";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -103,6 +104,10 @@ export default async function ProjectDetailPage({
       {canSeeDeposits ? (
         <ProjectDeposits projectId={id} canEdit={canViewFinancials} />
       ) : null}
+      {/* FIN-8 — per-project P&L. Reachable at financials:view; the component's
+          own action redacts cost/GP/margin unless the caller has
+          financials:edit. */}
+      {canSeeDeposits ? <ProjectPnl projectId={id} /> : null}
       {/* PROJ2-4b — folder tree (Project lens). Needs a site to root the tree. */}
       {detail.project.site_id ? (
         <FolderTreeAttachments
