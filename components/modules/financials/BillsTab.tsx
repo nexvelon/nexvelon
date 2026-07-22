@@ -49,7 +49,7 @@ import {
 } from "@/app/(app)/financials/actions";
 import type { ApAgingSummary, ApAgingVendorRow } from "@/lib/api/ap-aging";
 import type { BillDetail, BillListRow } from "@/lib/api/vendor-bills";
-import type { DbCashPaymentMethod } from "@/lib/types/database";
+import type { DbCashPaymentMethod, DbClientOpco } from "@/lib/types/database";
 import {
   INVOICE_PAYMENT_METHODS,
   INVOICE_PAYMENT_METHOD_LABEL,
@@ -170,6 +170,8 @@ export function BillsTab({
     subtotal: number;
     taxAmount: number;
     total: number;
+    claimableTaxAmount: number;
+    opco: DbClientOpco | null;
     notes: string;
   }) =>
     startTransition(async () => {
@@ -182,6 +184,8 @@ export function BillsTab({
         subtotal: input.subtotal,
         taxAmount: input.taxAmount,
         total: input.total,
+        claimableTaxAmount: input.claimableTaxAmount,
+        opco: input.opco,
         notes: input.notes || null,
       });
       if (!res.ok) {
@@ -524,6 +528,8 @@ function CreateBillDialog({
     subtotal: number;
     taxAmount: number;
     total: number;
+    claimableTaxAmount: number;
+    opco: DbClientOpco | null;
     notes: string;
   }) => void;
 }) {
@@ -537,6 +543,9 @@ function CreateBillDialog({
   // Total auto-sums subtotal + tax until the operator overrides it — vendor
   // bills occasionally carry rounding the components don't reproduce.
   const [totalOverride, setTotalOverride] = useState<string | null>(null);
+  // FIN-7 — claimable ITC tracks the tax field until the operator overrides it.
+  const [claimableOverride, setClaimableOverride] = useState<string | null>(null);
+  const [opco, setOpco] = useState<DbClientOpco>("integrated_solutions");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -549,6 +558,8 @@ function CreateBillDialog({
       setSubtotal("");
       setTax("");
       setTotalOverride(null);
+      setClaimableOverride(null);
+      setOpco("integrated_solutions");
       setNotes("");
     }
   }, [open, vendors]);
@@ -562,7 +573,15 @@ function CreateBillDialog({
   const autoTotal = Math.round((toNum(subtotal) + toNum(tax)) * 100) / 100;
   const total = totalOverride === null ? autoTotal : toNum(totalOverride);
   const mismatch = Math.abs(toNum(subtotal) + toNum(tax) - total) > 0.005;
-  const invalid = !vendorId || !billNumber.trim() || !billDate || mismatch;
+  // Claimable defaults to the full tax; it can only be adjusted DOWN.
+  const claimable =
+    claimableOverride === null ? toNum(tax) : toNum(claimableOverride);
+  const claimableTooHigh = claimable > toNum(tax) + 0.005;
+  // A bill with no PO has no project to inherit an entity from, so it must
+  // carry its own — otherwise its ITC can't be claimed on any return.
+  const standalone = poId === "none";
+  const invalid =
+    !vendorId || !billNumber.trim() || !billDate || mismatch || claimableTooHigh;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -689,6 +708,58 @@ function CreateBillDialog({
             Cost reporting uses the subtotal — tax is a pass-through.
           </p>
 
+          {/* FIN-7 — the ITC actually claimable from this bill. */}
+          <label className="block space-y-1">
+            <span className="text-muted-foreground text-[11px]">
+              Claimable HST (ITC)
+            </span>
+            <Input
+              value={claimableOverride === null ? String(toNum(tax)) : claimableOverride}
+              inputMode="decimal"
+              onChange={(e) => setClaimableOverride(e.target.value)}
+              className="h-8 text-sm tabular-nums"
+            />
+            <span className="text-muted-foreground block text-[11px]">
+              Usually equals HST paid; reduce for partial-ITC items (meals are
+              50%, anything with personal use is pro-rated).
+            </span>
+            {claimableTooHigh && (
+              <span className="text-destructive block text-[11px]">
+                Can&rsquo;t claim more than the HST charged.
+              </span>
+            )}
+          </label>
+
+          {/* Only a standalone bill needs an entity — a PO-linked one inherits
+              it from the project. */}
+          {standalone && (
+            <label className="block space-y-1">
+              <span className="text-muted-foreground text-[11px]">Entity</span>
+              <Select
+                value={opco}
+                onValueChange={(v) =>
+                  setOpco((v ?? "integrated_solutions") as DbClientOpco)
+                }
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="integrated_solutions" className="text-xs">
+                    Integrated Solutions
+                  </SelectItem>
+                  <SelectItem value="guardian" className="text-xs">
+                    Guardian
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-muted-foreground block text-[11px]">
+                Which corporation incurred this cost — the two file separate HST
+                returns.
+              </span>
+            </label>
+          )}
+
           <label className="block space-y-1">
             <span className="text-muted-foreground text-[11px]">Notes</span>
             <Input
@@ -720,6 +791,8 @@ function CreateBillDialog({
                 subtotal: toNum(subtotal),
                 taxAmount: toNum(tax),
                 total,
+                claimableTaxAmount: claimable,
+                opco: standalone ? opco : null,
                 notes,
               })
             }

@@ -19,6 +19,7 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import { round2 } from "@/lib/quote-helpers";
 import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
 import { isOpenStatus, isOverdue } from "@/lib/invoice-status";
+import { csvField } from "@/lib/aging-buckets";
 import type { DbInvoice } from "@/lib/types/database";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 
@@ -448,3 +449,214 @@ export async function getTaxCollectedSummary(
     total,
   };
 }
+
+// ─── HST net position (FIN-7) ────────────────────────────────────────────────
+//
+// The remittance question: HST collected on sales, minus input tax credits on
+// purchases, per operating company.
+//
+// PER-OPCO IS STRUCTURAL, NOT COSMETIC. Integrated Solutions and Guardian are
+// separate corporations with separate HST numbers that file separate returns.
+// A blended net figure would be meaningless at best and a mis-filing at worst,
+// so nothing here ever sums the two into a single remittance — the combined
+// total exists only as an at-a-glance figure and is labelled as such.
+//
+// ITC BASIS: accrual, not cash. A bill is ITC-eligible once you hold the
+// vendor's invoice, regardless of whether you've paid it — so the ITC set is
+// received / partially_paid / paid (void excluded), ranged on bill_date. This
+// mirrors the collected side, which counts issued invoices rather than
+// collected cash.
+//
+// NOT TAX ADVICE — this is a bookkeeping aid. The claimable figure is whatever
+// the operator recorded; the app makes no judgement about eligibility.
+
+/** The opco a bill's tax belongs to: via its project, else its own column. */
+export function resolveBillOpco(bill: {
+  project_id: string | null;
+  opco: string | null;
+  project?: { opco: string } | null;
+}): string | null {
+  if (bill.project_id && bill.project?.opco) return bill.project.opco;
+  return bill.opco ?? null;
+}
+
+/** Bills whose tax counts toward ITCs — anything received and not voided. */
+const ITC_BILL_STATUSES = ["received", "partially_paid", "paid"] as const;
+
+/** Bucket key for bills whose opco can't be resolved, so they stay visible. */
+export const UNASSIGNED_OPCO = "unassigned";
+
+export interface ItcSummary {
+  byOpco: { opco: string; itc: number }[];
+  total: number;
+  /** Σ claimable on bills with no resolvable opco — needs operator attention. */
+  unassigned: number;
+}
+
+export async function getItcSummary(
+  range: FinDateRange = {}
+): Promise<ItcSummary> {
+  const supabase = await db();
+  let q = supabase
+    .from("vendor_bills")
+    .select(
+      "id, project_id, opco, tax_amount, claimable_tax_amount, bill_date, status, project:projects(opco)"
+    )
+    .in("status", ITC_BILL_STATUSES);
+  if (range.from) q = q.gte("bill_date", range.from);
+  if (range.to) q = q.lte("bill_date", range.to);
+  const { data, error } = await q;
+  if (error) throw new Error(`getItcSummary: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as {
+    project_id: string | null;
+    opco: string | null;
+    tax_amount: number | null;
+    claimable_tax_amount: number | null;
+    project: { opco: string } | null;
+  }[];
+
+  let total = 0;
+  let unassigned = 0;
+  const byOpco = new Map<string, number>();
+  for (const r of rows) {
+    // Pre-0093 rows can still be NULL; fall back to the full tax, which is what
+    // the backfill sets and what "fully claimable" means.
+    const claimable = round2(
+      Number(r.claimable_tax_amount ?? r.tax_amount ?? 0)
+    );
+    if (claimable === 0) continue;
+    total = round2(total + claimable);
+    const opco = resolveBillOpco(r);
+    if (!opco) {
+      unassigned = round2(unassigned + claimable);
+      byOpco.set(
+        UNASSIGNED_OPCO,
+        round2((byOpco.get(UNASSIGNED_OPCO) ?? 0) + claimable)
+      );
+      continue;
+    }
+    byOpco.set(opco, round2((byOpco.get(opco) ?? 0) + claimable));
+  }
+
+  return {
+    byOpco: [...byOpco.entries()]
+      .map(([opco, itc]) => ({ opco, itc }))
+      .sort((a, b) => b.itc - a.itc),
+    total,
+    unassigned,
+  };
+}
+
+export interface HstOpcoPosition {
+  opco: string;
+  collected: number;
+  itc: number;
+  /** collected − itc. Positive = owed to CRA; negative = refund due. */
+  net: number;
+}
+
+export interface HstNetPosition {
+  byOpco: HstOpcoPosition[];
+  /** At-a-glance only — the two corporations file separately. */
+  totals: { collected: number; itc: number; net: number };
+  /** ITCs on bills with no resolvable opco (excluded from every opco row). */
+  unassignedItc: number;
+  from: string | null;
+  to: string | null;
+}
+
+export async function getHstNetPosition(
+  range: FinDateRange = {}
+): Promise<HstNetPosition> {
+  const [collected, itc] = await Promise.all([
+    getTaxCollectedSummary(range),
+    getItcSummary(range),
+  ]);
+
+  const collectedByOpco = new Map(
+    collected.byOpco.map((c) => [c.opco, c.taxCollected])
+  );
+  const itcByOpco = new Map(itc.byOpco.map((i) => [i.opco, i.itc]));
+
+  // Every opco that appears on either side gets a row — an opco with ITCs but
+  // no sales still has a return to file (a refund).
+  const opcos = new Set<string>([
+    ...collectedByOpco.keys(),
+    ...[...itcByOpco.keys()].filter((k) => k !== UNASSIGNED_OPCO),
+  ]);
+
+  const byOpco: HstOpcoPosition[] = [...opcos]
+    .map((opco) => {
+      const c = round2(collectedByOpco.get(opco) ?? 0);
+      const i = round2(itcByOpco.get(opco) ?? 0);
+      return { opco, collected: c, itc: i, net: round2(c - i) };
+    })
+    .sort((a, b) => b.net - a.net);
+
+  return {
+    byOpco,
+    totals: {
+      collected: collected.total,
+      // Unassigned ITCs are deliberately OUT of the combined total: they can't
+      // be claimed on any return until the operator attributes them.
+      itc: round2(itc.total - itc.unassigned),
+      net: round2(collected.total - (itc.total - itc.unassigned)),
+    },
+    unassignedItc: itc.unassigned,
+    from: range.from ?? null,
+    to: range.to ?? null,
+  };
+}
+
+/** The per-opco lines a bookkeeper transcribes onto the HST return. */
+export const HST_RETURN_CSV_HEADER = [
+  "Entity",
+  "Period from",
+  "Period to",
+  "HST collected",
+  "Input tax credits",
+  "Net owing",
+];
+
+export async function buildHstReturnCsv(
+  range: FinDateRange = {}
+): Promise<string> {
+  const position = await getHstNetPosition(range);
+  const from = position.from ?? "";
+  const to = position.to ?? "";
+
+  const lines: string[] = [HST_RETURN_CSV_HEADER.map(csvField).join(",")];
+  for (const row of position.byOpco) {
+    lines.push(
+      [
+        csvField(OPCO_CSV_LABEL[row.opco] ?? row.opco),
+        csvField(from),
+        csvField(to),
+        csvField(row.collected.toFixed(2)),
+        csvField(row.itc.toFixed(2)),
+        csvField(row.net.toFixed(2)),
+      ].join(",")
+    );
+  }
+  // Surfaced as its own line rather than folded in — an unattributed ITC is a
+  // to-do, not a claim.
+  if (position.unassignedItc > 0) {
+    lines.push(
+      [
+        csvField("UNASSIGNED (attribute before filing)"),
+        csvField(from),
+        csvField(to),
+        csvField("0.00"),
+        csvField(position.unassignedItc.toFixed(2)),
+        csvField("0.00"),
+      ].join(",")
+    );
+  }
+  return lines.join("\r\n");
+}
+
+const OPCO_CSV_LABEL: Record<string, string> = {
+  integrated_solutions: "Nexvelon Integrated Solutions",
+  guardian: "Nexvelon Guardian",
+};

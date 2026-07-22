@@ -1795,6 +1795,18 @@ export interface DbVendorBill {
   subtotal: number;
   tax_amount: number;
   total: number;
+  /**
+   * FIN-7 (migration 0093) — the portion of tax_amount claimable as an input
+   * tax credit. Defaults to the full tax (the normal business purchase);
+   * adjusted DOWN for partial-ITC items (meals 50%, personal-use pro-rating).
+   * Never exceeds tax_amount — enforced by a DB CHECK.
+   */
+  claimable_tax_amount: number | null;
+  /**
+   * FIN-7 (migration 0093) — opco for a STANDALONE bill. Project-linked bills
+   * resolve their opco through the project instead; see resolveBillOpco.
+   */
+  opco: DbClientOpco | null;
   status: DbVendorBillStatus;
   notes: string | null;
   created_by: string | null;
@@ -1814,6 +1826,8 @@ export type DbVendorBillInsert = {
   subtotal?: number;
   tax_amount?: number;
   total?: number;
+  claimable_tax_amount?: number | null;
+  opco?: DbClientOpco | null;
   status?: DbVendorBillStatus;
   notes?: string | null;
   created_by?: string | null;

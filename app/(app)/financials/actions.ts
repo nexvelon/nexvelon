@@ -11,6 +11,11 @@ import {
   listInvoicesReal,
   getProjectFinancialSummaries,
   getTaxCollectedSummary,
+  getItcSummary,
+  getHstNetPosition,
+  buildHstReturnCsv,
+  type ItcSummary,
+  type HstNetPosition,
   type FinDateRange,
   type FinInvoiceFilters,
   type FinInvoiceListRow,
@@ -602,6 +607,58 @@ export async function exportApAgingCsvAction(): Promise<
       ok: true,
       data: { csv, filename: `nexvelon-ap-aging-${businessDateISO()}.csv` },
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── HST net position (FIN-7) ────────────────────────────────────────────────
+// GATING: financials:edit, unlike FIN-1's collected-only getTaxCollectedSummary
+// which stays at view. The net position combines revenue with cost-side ITCs
+// into the company's CRA liability — the FIN-2 cost-leg rule applies.
+//
+// HONEST LIMIT, so the gate isn't over-trusted: the INPUTS remain readable at
+// view tier. FIN-5's listBillsAction returns every bill row (including
+// tax_amount and now claimable_tax_amount), and FIN-1's collected summary is at
+// view, so a determined view-tier caller could still add the two sides up. This
+// gate controls the surface, not the underlying information. Making it a hard
+// barrier means restricting the tax fields on the bill list too — flagged
+// rather than half-done.
+
+export async function getItcSummaryAction(
+  range: FinDateRange = {}
+): Promise<ActionResult<ItcSummary>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getItcSummary(range) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getHstNetPositionAction(
+  range: FinDateRange = {}
+): Promise<ActionResult<HstNetPosition>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getHstNetPosition(range) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The per-opco lines a bookkeeper transcribes onto each HST return. */
+export async function exportHstReturnCsvAction(
+  range: FinDateRange = {}
+): Promise<ActionResult<{ csv: string; filename: string }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const csv = await buildHstReturnCsv(range);
+    const period = range.from && range.to ? `${range.from}_${range.to}` : businessDateISO();
+    return { ok: true, data: { csv, filename: `nexvelon-hst-return-${period}.csv` } };
   } catch (e) {
     return fail(e);
   }
