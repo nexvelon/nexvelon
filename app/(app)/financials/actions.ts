@@ -82,6 +82,16 @@ import type {
   DbProjectDeposit,
   DbVendorBill,
 } from "@/lib/types/database";
+import {
+  getProjectPnl,
+  getOpcoPnl,
+  getPnlPortfolio,
+  buildProjectPnlCsv,
+  buildOpcoPnlCsv,
+  type ProjectPnl,
+  type OpcoPnl,
+  type PnlPortfolioRow,
+} from "@/lib/api/project-pnl";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -659,6 +669,117 @@ export async function exportHstReturnCsvAction(
     const csv = await buildHstReturnCsv(range);
     const period = range.from && range.to ? `${range.from}_${range.to}` : businessDateISO();
     return { ok: true, data: { csv, filename: `nexvelon-hst-return-${period}.csv` } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Project & opco P&L (FIN-8) ──────────────────────────────────────────────
+// The per-project statement is reachable at financials:view, but the cost /
+// gross-profit / margin legs are redacted unless the caller has financials:edit
+// — the same rule the project cost rollup uses (revenue + AR + billed% stay
+// visible; cost-side numbers dash). The opco P&L and the portfolio ARE cost/
+// margin aggregates, so they require financials:edit outright.
+
+export interface ProjectPnlResult {
+  pnl: ProjectPnl;
+  canSeeCost: boolean;
+}
+
+/** Null the cost + margin legs for a view-tier caller (revenue/AR/memo kept). */
+function redactPnl(pnl: ProjectPnl): ProjectPnl {
+  return {
+    ...pnl,
+    cost: { materials_billed: null, labour: null, canonical_direct: null },
+    gross_profit: null,
+    gross_margin_pct: null,
+    memo: {
+      ...pnl.memo,
+      variance_vs_quoted: null,
+      po_committed_open: null,
+      inventory_drawn_memo: null,
+      ap_balance: null,
+    },
+  };
+}
+
+export async function getProjectPnlAction(
+  projectId: string
+): Promise<ActionResult<ProjectPnlResult | null>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !hasPermission(adaptRole(me.role), "financials", "view")) {
+      return { ok: false, error: "You don't have permission to view financial data." };
+    }
+    if (!projectId) return { ok: false, error: "No project specified." };
+    const pnl = await getProjectPnl(projectId);
+    if (!pnl) return { ok: true, data: null };
+    const canSeeCost = hasPermission(adaptRole(me.role), "financials", "edit");
+    return {
+      ok: true,
+      data: { pnl: canSeeCost ? pnl : redactPnl(pnl), canSeeCost },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getOpcoPnlAction(
+  opts: { opco?: string } = {}
+): Promise<ActionResult<OpcoPnl[]>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getOpcoPnl(opts) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getPnlPortfolioAction(): Promise<
+  ActionResult<PnlPortfolioRow[]>
+> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getPnlPortfolio() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function exportProjectPnlCsvAction(
+  projectId: string
+): Promise<ActionResult<{ csv: string; filename: string }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const pnl = await getProjectPnl(projectId);
+    if (!pnl) return { ok: false, error: "Project not found." };
+    const num = pnl.project.number ?? projectId;
+    return {
+      ok: true,
+      data: { csv: buildProjectPnlCsv(pnl), filename: `nexvelon-pnl-${num}.csv` },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function exportOpcoPnlCsvAction(
+  opts: { opco?: string } = {}
+): Promise<ActionResult<{ csv: string; filename: string }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const rows = await getOpcoPnl(opts);
+    return {
+      ok: true,
+      data: {
+        csv: buildOpcoPnlCsv(rows),
+        filename: `nexvelon-opco-pnl-${businessDateISO()}.csv`,
+      },
+    };
   } catch (e) {
     return fail(e);
   }

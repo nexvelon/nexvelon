@@ -116,4 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
-_(none yet — the next user-facing chunk adds the first live entry.)_
+### Financials — P&L (FIN-8)
+
+- Users can view a per-project profit & loss statement (revenue, costs, gross
+  profit and margin, with contract variance, deposits, holdback, and AR/AP
+  context) on the project page.
+- Users can view a per-company (opco) P&L and a project portfolio ranked by
+  margin under Financials → P&L, and export P&L to CSV.
+- Each Job's Financial summary now shows a "Job gross profit" line on the same
+  cost basis as the project P&L.
