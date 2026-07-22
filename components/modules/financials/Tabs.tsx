@@ -54,6 +54,8 @@ import {
   getArAgingSummaryAction,
   getDepositsHeldTotalAction,
   getApSummaryAction,
+  getHstNetPositionAction,
+  exportHstReturnCsvAction,
   getMonthlyRevenueAction,
   getProjectFinancialSummariesAction,
   getRevenueSummaryAction,
@@ -67,9 +69,12 @@ import type {
   ProjectFinancialSummary,
   RevenueSummary,
   TaxCollectedSummary,
+  HstNetPosition,
 } from "@/lib/api/financials";
 import type { ArAgingClientRow, ArAgingSummary } from "@/lib/api/ar-aging";
 import type { ApSummary } from "@/lib/api/vendor-bills";
+import { useRole } from "@/lib/role-context";
+import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
 import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
@@ -725,39 +730,176 @@ export function ProjectsFinTab() {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function TaxTab({ from, to }: TabProps) {
-  const [summary, setSummary] = useState<TaxCollectedSummary | null>(null);
+  const { role } = useRole();
+  const canSeeNet = hasPermission(role, "financials", "edit");
+
+  const [collected, setCollected] = useState<TaxCollectedSummary | null>(null);
+  const [position, setPosition] = useState<HstNetPosition | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let active = true;
     setError(null);
+    // Collected-only stays view-tier (FIN-1); the net position is edit-tier.
     getTaxCollectedSummaryAction({ from, to }).then((res) => {
       if (!active) return;
       if (!res.ok) return setError(res.error);
-      setSummary(res.data);
+      setCollected(res.data);
     });
+    if (canSeeNet) {
+      getHstNetPositionAction({ from, to }).then((res) => {
+        if (active && res.ok) setPosition(res.data);
+      });
+    }
     return () => {
       active = false;
     };
-  }, [from, to]);
+  }, [from, to, canSeeNet]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await exportHstReturnCsvAction({ from, to });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("HST return exported");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (error) return <ErrorCard message={error} />;
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <KpiCard label="HST collected (range)" value={summary?.total ?? null} sub="Σ tax on issued invoices" />
-        {summary?.byOpco.map((o) => (
-          <KpiCard key={o.opco} label={`${opcoLabel(o.opco)} — HST collected`} value={o.taxCollected} />
-        ))}
-      </section>
-      <Card className="p-4 shadow-sm">
-        <p className="text-muted-foreground text-xs">
-          Collected side only — input tax credits (HST paid on purchases) arrive
-          with vendor bills (FIN-7). Ontario HST 13% is set per invoice; the
-          rate and amount above are the real values stored on each invoice.
-        </p>
-      </Card>
+      {/* FIN-7 — per-opco net position. Integrated Solutions and Guardian are
+          separate corporations with separate HST numbers filing separate
+          returns, so each gets its own card and the two are never blended into
+          one remittance figure. */}
+      {canSeeNet && position ? (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-brand-navy font-serif text-lg">
+              Net HST position by entity
+            </h3>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              Export HST return (CSV)
+            </Button>
+          </div>
+
+          {position.byOpco.length === 0 ? (
+            <Card className="p-6 text-center shadow-sm">
+              <p className="text-muted-foreground text-sm">
+                No HST activity in the selected period.
+              </p>
+            </Card>
+          ) : (
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {position.byOpco.map((o) => {
+                const refund = o.net < 0;
+                return (
+                  <Card
+                    key={o.opco}
+                    className="border-t-2 border-t-[#C9A24B] p-4 shadow-sm"
+                  >
+                    <p className="text-brand-navy font-serif text-base">
+                      {opcoLabel(o.opco)}
+                    </p>
+                    <div className="mt-3 space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">HST collected</span>
+                        <span className="tabular-nums">
+                          {formatCurrency(o.collected)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Input tax credits
+                        </span>
+                        <span className="tabular-nums">
+                          − {formatCurrency(o.itc)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-[var(--border)] pt-1.5 text-sm font-semibold">
+                        <span>{refund ? "Refund due" : "Net owing"}</span>
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            refund ? "text-[var(--brand-status-green)]" : "text-brand-navy"
+                          )}
+                        >
+                          {formatCurrency(Math.abs(o.net))}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </section>
+          )}
+
+          <Card className="p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="text-muted-foreground">
+                Combined (at a glance only — each entity files its own return)
+              </span>
+              <span className="text-brand-charcoal tabular-nums">
+                Collected {formatCurrency(position.totals.collected)} · ITCs{" "}
+                {formatCurrency(position.totals.itc)} ·{" "}
+                <span className="font-semibold">
+                  Net {formatCurrency(position.totals.net)}
+                </span>
+              </span>
+            </div>
+            {position.unassignedItc > 0 && (
+              <p className="mt-2 text-[11px] text-red-600">
+                {formatCurrency(position.unassignedItc)} of input tax credits sit
+                on bills with no entity assigned — set an entity on those bills
+                before filing, or they can&rsquo;t be claimed.
+              </p>
+            )}
+            <p className="text-muted-foreground mt-2 text-[11px]">
+              ITCs are counted on an accrual basis (a bill counts once received,
+              whether or not it&rsquo;s been paid). Bookkeeping aid only — not
+              tax advice.
+            </p>
+          </Card>
+        </>
+      ) : (
+        <>
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <KpiCard label="HST collected (range)" value={collected?.total ?? null} sub="Σ tax on issued invoices" />
+            {collected?.byOpco.map((o) => (
+              <KpiCard key={o.opco} label={`${opcoLabel(o.opco)} — HST collected`} value={o.taxCollected} />
+            ))}
+          </section>
+          <Card className="p-4 shadow-sm">
+            <p className="text-muted-foreground text-xs">
+              Collected side only. The net position (collected less input tax
+              credits) needs the financials edit permission.
+            </p>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

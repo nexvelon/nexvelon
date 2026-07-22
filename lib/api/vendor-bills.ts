@@ -21,6 +21,7 @@ import { daysBetween } from "@/lib/aging-buckets";
 import type {
   DbBillPayment,
   DbCashPaymentMethod,
+  DbClientOpco,
   DbVendorBill,
   DbVendorBillStatus,
 } from "@/lib/types/database";
@@ -117,6 +118,21 @@ export function deriveBillStatus(
   if (paidTotal >= total - 0.005) return "paid";
   if (paidTotal > 0) return "partially_paid";
   return "received";
+}
+
+/**
+ * FIN-7 — the claimable ITC for a bill: defaults to the full tax when not
+ * specified, never negative, never more than the tax actually charged.
+ */
+function clampClaimable(
+  requested: number | null | undefined,
+  taxAmount: number
+): number {
+  if (requested === null || requested === undefined) return taxAmount;
+  const v = round2(requested);
+  if (v < 0) return 0;
+  if (v > taxAmount) return taxAmount;
+  return v;
 }
 
 // ─── Reads ───────────────────────────────────────────────────────────────────
@@ -287,6 +303,10 @@ export interface CreateBillInput {
   subtotal: number;
   taxAmount: number;
   total: number;
+  /** FIN-7 — defaults to the full tax when omitted (fully claimable). */
+  claimableTaxAmount?: number | null;
+  /** FIN-7 — only meaningful for a standalone bill (no project). */
+  opco?: DbClientOpco | null;
   notes?: string | null;
   actorId?: string | null;
 }
@@ -349,6 +369,11 @@ export async function createBill(
     );
   }
 
+  // FIN-7 — claimable ITC defaults to the full tax (the normal business
+  // purchase) and can only be adjusted DOWN. Clamping here mirrors the DB
+  // CHECK so an over-claim surfaces as a friendly error, not a 23514.
+  const claimable = clampClaimable(input.claimableTaxAmount, taxAmount);
+
   const { data, error } = await supabase
     .from("vendor_bills")
     .insert({
@@ -362,6 +387,10 @@ export async function createBill(
       subtotal,
       tax_amount: taxAmount,
       total,
+      claimable_tax_amount: claimable,
+      // Only a standalone bill carries its own opco; a project-linked bill
+      // resolves through the project (see resolveBillOpco).
+      opco: projectId ? null : (input.opco ?? null),
       status: "received",
       notes: input.notes ?? null,
       created_by: input.actorId ?? null,
@@ -387,6 +416,8 @@ export interface UpdateBillPatch {
   subtotal?: number;
   taxAmount?: number;
   total?: number;
+  claimableTaxAmount?: number | null;
+  opco?: DbClientOpco | null;
   projectId?: string | null;
   jobId?: string | null;
   notes?: string | null;
@@ -425,6 +456,17 @@ export async function updateBill(
   if (patch.subtotal !== undefined) update.subtotal = subtotal;
   if (patch.taxAmount !== undefined) update.tax_amount = taxAmount;
   if (patch.total !== undefined) update.total = total;
+  // FIN-7 — keep claimable within the (possibly new) tax amount. Lowering tax
+  // without touching claimable must not leave an over-claim behind.
+  if (patch.claimableTaxAmount !== undefined || patch.taxAmount !== undefined) {
+    update.claimable_tax_amount = clampClaimable(
+      patch.claimableTaxAmount !== undefined
+        ? patch.claimableTaxAmount
+        : Number(bill.claimable_tax_amount ?? taxAmount),
+      taxAmount
+    );
+  }
+  if (patch.opco !== undefined) update.opco = patch.opco;
   if (patch.projectId !== undefined) update.project_id = patch.projectId;
   if (patch.jobId !== undefined) update.job_id = patch.jobId;
   if (patch.notes !== undefined) update.notes = patch.notes;

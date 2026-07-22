@@ -294,3 +294,36 @@ describe("deriveBillStatus", () => {
     expect(deriveBillStatus(100, 99.9)).toBe("partially_paid");
   });
 });
+
+// FIN-7 — claimable ITC + standalone opco on bill creation.
+describe("createBill — claimable ITC (FIN-7)", () => {
+  it("defaults claimable to the full tax when not specified", async () => {
+    await createBill({ ...BASE });
+    expect(s.inserted[0]).toMatchObject({ tax_amount: 13, claimable_tax_amount: 13 });
+  });
+
+  it("accepts a reduced claimable for a partial-ITC bill", async () => {
+    await createBill({ ...BASE, claimableTaxAmount: 6.5 });
+    expect(s.inserted[0]).toMatchObject({ claimable_tax_amount: 6.5 });
+  });
+
+  it("clamps a claimable above the tax charged (can't over-claim)", async () => {
+    await createBill({ ...BASE, claimableTaxAmount: 99 });
+    expect(s.inserted[0]).toMatchObject({ claimable_tax_amount: 13 });
+  });
+
+  it("clamps a negative claimable to zero", async () => {
+    await createBill({ ...BASE, claimableTaxAmount: -5 });
+    expect(s.inserted[0]).toMatchObject({ claimable_tax_amount: 0 });
+  });
+
+  it("stores opco on a standalone bill", async () => {
+    await createBill({ ...BASE, opco: "guardian" });
+    expect(s.inserted[0]).toMatchObject({ project_id: null, opco: "guardian" });
+  });
+
+  it("leaves opco NULL on a project-linked bill — the project owns it", async () => {
+    await createBill({ ...BASE, purchaseOrderId: "po1", opco: "guardian" });
+    expect(s.inserted[0]).toMatchObject({ project_id: "proj1", opco: null });
+  });
+});
