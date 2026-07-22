@@ -370,3 +370,44 @@ of the suite is also half-done; we don't ship that signal.
 - **Guided creation, never lazy creation.** Every lookup-table "+ Add" flow uses a multi-section wizard that walks the operator through identity → smart defaults inherited from the closest existing row → behavior bindings → workflow rule inheritance → preview → save. New rows are fully operational at save time — never label-only stubs requiring follow-up configuration. The wizard's smart-defaults inheritance reduces the cost of adding a new row (e.g. Diamond tier inherits Platinum's values, operator adjusts up).
 
 - **Versioned clauses, templates, and SLA language.** When an operator edits an onboarding-gate T&C clause, a quote template, or SLA template language, the system snapshots the previous version. Already-sent quotes / invoices / signed SLAs retain the version they were dispatched with. Only new dispatches use the edited version. This ensures contractual integrity — a customer who signed under v1 language can't be retroactively bound to v2.
+
+---
+
+## 8. Documentation currency
+
+**Every chunk that adds or changes user-facing behavior leaves a
+one-line user-facing note, so the eventual training materials stay
+accurate.** The end-of-build training package (registered in
+`NEXVELON_ROADMAP.md` under *Post-Build Deliverable — Training
+Materials*) is only as good as the record of what the product actually
+lets a user do. That record is a running log, not an archaeology dig
+through diffs at the end.
+
+**The rule.** Each PR that introduces, removes, or alters a
+user-visible task appends a one-line entry to
+`docs/USER_FACING_CHANGELOG.md`. The entry describes the task from the
+**user's** point of view — what the operator can now do, or can no
+longer do, or does differently — **not** the implementation:
+
+- ✅ *"Users can now record a partial payment on an invoice from the
+  invoice builder."*
+- ✅ *"Vendor bills can be recorded against a purchase order, and the
+  bill's HST feeds the net remittance position."*
+- ❌ *"Added `recordPayment()` with a typed error union and a derived
+  status."* (implementation — belongs in the PR body, not here.)
+
+A chunk with no user-facing change (a refactor, a test-only PR, an
+internal migration) adds nothing — the log tracks the *product
+surface*, not commit volume.
+
+**Why it's a principle, not a nicety.** When Jay triggers the training
+materials, they are generated from — and reconciled against — this
+changelog plus the live UI. If the log has fallen behind, the training
+package silently omits whatever wasn't recorded, and a non-technical
+operator or new employee never learns a task exists. The cost of a
+missed line isn't cosmetic; it's an untrained user.
+
+**Future sessions: keep appending; never let it fall behind the
+product.** The changelog is append-only in spirit — correct an entry
+if a later chunk changes the same task, but don't rewrite history to
+tidy it. It is the spec the training package is built from.

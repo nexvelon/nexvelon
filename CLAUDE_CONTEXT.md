@@ -16,6 +16,25 @@
 
 ---
 
+## Standing pointers (every session)
+
+- **User-facing changelog — append on any user-facing change.** Every
+  chunk that adds, removes, or alters a user-visible task appends a
+  one-line, user-POV entry to `docs/USER_FACING_CHANGELOG.md`. This is
+  a launch-gate rule, not a nicety — see `NEXVELON_PRINCIPLES.md` §8
+  (*Documentation currency*). Refactors and test-only PRs add nothing.
+- **Training materials are a registered, Jay-triggered deliverable.**
+  A full step-by-step training package (written guide under
+  `/docs/user-guide/` + video scripts, organized by role) is due
+  **after** the core ERP is functionally complete, **on Jay's
+  signal** — do NOT start it early. It is spec'd in
+  `NEXVELON_ROADMAP.md` under *Post-Build Deliverable — Training
+  Materials*, and it is generated from the changelog above reconciled
+  against the live UI. Keeping the changelog current IS the work of
+  keeping this deliverable cheap.
+
+---
+
 ## Current Session State
 
 **As of 2026-06-25. Session AE CLOSED. POLISH-N polish arc wrapped (PRs #252–#273). Repo docs refreshed to current reality — no chat handover required for future sessions.**
