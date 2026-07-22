@@ -445,6 +445,46 @@ reports — margin, payroll — hidden from non-managers).
 
 ---
 
+## Post-Build Deliverable — Training Materials (Jay-triggered)
+
+**After the core ERP is functionally complete, Jay will request a
+full training package.** It must cover **every user-facing task** in
+the ERP — not just the headline features — at a step-by-step,
+click-by-click level, written for a non-technical operator and future
+employees who have never seen the system.
+
+**Scope:**
+
+- **A written step-by-step guide (per module, per task).** How to
+  create a client, a site, a quote; convert a quote to a project; add
+  a change order; record a payment, a deposit, a vendor bill; read the
+  P&L; run the HST net position; manage attachments and folder trees;
+  every permission and admin action; and so on — down to the smallest
+  routine task. Nothing is "too obvious to document"; the audience is
+  someone on their first day.
+- **Learning videos / screen-capture walkthroughs** (or fully scripted
+  storyboards + narration that Jay can record himself) mirroring the
+  written guide task-for-task, so a user can watch or read.
+- **Organized by role** (Admin, ProjectManager, SalesRep, Technician,
+  Accountant, ViewOnly) so each user sees only the tasks their role
+  actually performs.
+- **Delivered as maintainable source** — a Markdown guide in the repo
+  under `/docs/user-guide/`, plus a video-script index — so it updates
+  alongside the product instead of rotting as a separate artifact.
+
+**Trigger + discipline.** This is triggered **on Jay's signal**, not
+automatically. **Do NOT start it early.** Keep it registered here, and
+keep its source of truth — `docs/USER_FACING_CHANGELOG.md` — current
+on every chunk that touches user-facing behavior (see
+`NEXVELON_PRINCIPLES.md` §8, *Documentation currency*). When the
+trigger comes, the package is generated from that changelog reconciled
+against the live UI, then organized by role. Because this is a
+post-build deliverable and not a module in the sequence above, it does
+**not** move into a session handoff when "shipped" — it stays here
+until Jay triggers it and the guide lands under `/docs/user-guide/`.
+
+---
+
 ## Open architectural decisions awaiting design
 
 These decisions get resolved in the design passes for items 2 + 4
