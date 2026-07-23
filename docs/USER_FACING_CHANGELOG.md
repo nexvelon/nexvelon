@@ -116,6 +116,14 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — Job assignment (SUB-6)
+
+- Users can assign subcontractors to a job or project with a role and dates, and
+  see who is assigned from the job, project and subcontractor pages.
+- Subcontractors with missing or expired WSIB clearance or liability insurance
+  cannot be assigned to work; if compliance lapses during a job, the assignment
+  is flagged rather than silently removed.
+
 ### Subcontractors — Work orders (SUB-5)
 
 - Users can create and issue work orders to subcontractors for a specific

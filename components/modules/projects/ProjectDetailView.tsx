@@ -37,6 +37,7 @@ import {
   CostCenterRollupChips,
 } from "@/components/modules/projects/ProjectRollup";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
+import { ProjectAssignmentsSummary } from "@/components/modules/subcontractors/ProjectAssignmentsSummary";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
@@ -490,6 +491,9 @@ export function ProjectDetailView({
           )}
         </Card>
       </div>
+
+      {/* SUB-6 — who's assigned across this project's jobs (self-hides when none). */}
+      <ProjectAssignmentsSummary projectId={project.id} />
 
       {/* Linked Quotes */}
       <div>

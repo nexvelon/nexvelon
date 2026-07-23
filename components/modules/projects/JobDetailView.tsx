@@ -24,6 +24,7 @@ import { JobMoveMenu } from "@/components/modules/projects/JobMoveMenu";
 import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
+import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -313,6 +314,7 @@ export function JobDetailView({
           rollup={rollup}
           invoices={invoices}
           purchaseOrders={purchaseOrders}
+          canEdit={canEdit}
           canViewFinancials={canViewFinancials}
           money={money}
           pctv={pctv}
@@ -471,6 +473,7 @@ function FinancialsTab({
   rollup,
   invoices,
   purchaseOrders,
+  canEdit,
   canViewFinancials,
   money,
   pctv,
@@ -479,6 +482,7 @@ function FinancialsTab({
   rollup: DbJobRollup;
   invoices: InvoiceListRow[];
   purchaseOrders: PurchaseOrderListRow[];
+  canEdit: boolean;
   canViewFinancials: boolean;
   money: (n: number | null | undefined) => string;
   pctv: (n: number | null | undefined) => string;
@@ -534,6 +538,9 @@ function FinancialsTab({
           <Stat label="Job gross profit" value={money(jobGrossProfit)} />
         </div>
       </Panel>
+
+      {/* SUB-6 — who is assigned to this job (subs now, in-house techs later). */}
+      <JobAssignments jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
 
       {/* SUB-5 — subcontractor work orders attached to this job (self-hides when none). */}
       <JobWorkOrders jobId={job.id} />

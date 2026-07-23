@@ -42,11 +42,14 @@ export interface EligibilitySubject {
 }
 
 /**
- * Can a work order be ISSUED to this subcontractor right now? Returns the
+ * Is this subcontractor eligible to be engaged right now (issued a work order,
+ * OR assigned to a job)? The SINGLE source of truth for the compliance
+ * hard-block: SUB-5 (issue) and SUB-6 (assign) apply the SAME conditions, so
+ * they call this one function through thin named aliases below. Returns the
  * human-readable blocking reasons when not. `today` is passed in (business date)
  * so the verdict is deterministic and testable.
  */
-export function canIssueWorkOrder(
+export function isSubcontractorEligible(
   sub: EligibilitySubject,
   complianceDocs: EligibilityDoc[],
   today: string
@@ -85,3 +88,14 @@ export function canIssueWorkOrder(
 
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
 }
+
+/** SUB-5 — can a work order be ISSUED to this sub? (alias, single source above) */
+export const canIssueWorkOrder = isSubcontractorEligible;
+
+/**
+ * SUB-6 — can this sub be ASSIGNED to a job/project right now? Same conditions
+ * as issuing a work order. NOTE: this gates CREATING a new active assignment.
+ * It does NOT retroactively remove an existing assignment when a doc lapses
+ * mid-job — that case is surfaced as at-risk (a flag), never auto-unassigned.
+ */
+export const canAssignSubcontractor = isSubcontractorEligible;

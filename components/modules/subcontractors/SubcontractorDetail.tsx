@@ -39,6 +39,7 @@ import { SubcontractorFormDrawer } from "./SubcontractorFormDrawer";
 import { ComplianceDocsCard } from "./ComplianceDocsCard";
 import { SubcontractorBillsCard } from "./SubcontractorBillsCard";
 import { WorkOrdersCard } from "./WorkOrdersCard";
+import { SubcontractorAssignmentsCard } from "./SubcontractorAssignmentsCard";
 import type { SubcontractorDetail as SubDetail } from "@/lib/api/subcontractors";
 import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
 import { DOC_TYPE_LABEL } from "@/lib/subcontractors/compliance-status";
@@ -251,13 +252,11 @@ export function SubcontractorDetail({ id }: { id: string }) {
       {/* SUB-5 — real work-orders surface (replaces the placeholder). */}
       <WorkOrdersCard subcontractorId={id} subEmail={sub.email} canEdit={canEdit} />
 
+      {/* SUB-6 — real assignments surface (replaces the placeholder). */}
+      <SubcontractorAssignmentsCard subcontractorId={id} complianceWorst={compliance?.worst ?? null} />
+
       {/* SUB-4 — real bills surface (replaces the placeholder). */}
       <SubcontractorBillsCard subcontractorId={id} />
-
-      {/* Inert placeholders — the page shape later chunks slot into. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Placeholder title="Assignments" chunk="SUB-6" note="Jobs this subcontractor is assigned to." />
-      </div>
 
       {editing && (
         <SubcontractorFormDrawer
@@ -309,19 +308,5 @@ function Row({ label, value }: { label: string; value: string | null | undefined
       <span className="text-muted-foreground">{label}</span>
       <span className="text-brand-charcoal text-right">{value || "—"}</span>
     </div>
-  );
-}
-
-function Placeholder({ title, chunk, note }: { title: string; chunk: string; note: string }) {
-  return (
-    <Card className="border-dashed p-4 opacity-70 shadow-none">
-      <div className="flex items-center justify-between">
-        <h3 className="text-muted-foreground font-serif text-base">{title}</h3>
-        <span className="text-muted-foreground rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
-          {chunk}
-        </span>
-      </div>
-      <p className="text-muted-foreground mt-1 text-[11px]">{note}</p>
-    </Card>
   );
 }

@@ -137,6 +137,12 @@ export function ComplianceRiskPanel() {
                   {row.subcontractor_name}
                 </span>
                 {row.trade && <span className="text-muted-foreground text-xs">{row.trade}</span>}
+                {/* SUB-6 — a lapsed sub currently ON a job is the urgent case. */}
+                {row.active_assignments > 0 && (
+                  <span className="text-destructive inline-flex shrink-0 items-center rounded-full border border-destructive/40 px-1.5 py-0.5 text-[10px] font-medium">
+                    On {row.active_assignments} job{row.active_assignments === 1 ? "" : "s"}
+                  </span>
+                )}
                 <span className="text-muted-foreground w-full text-xs sm:ml-auto sm:w-auto sm:text-right">
                   {problems(row, asOf).join(" · ")}
                 </span>
