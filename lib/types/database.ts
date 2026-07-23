@@ -1222,6 +1222,52 @@ export type DbSubAgreementUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Job assignments (SUB-6, migration 0099) — who is assigned to a job/project.
+// An OPERATIONAL fact, distinct from a work order. The assignee is one-of-N
+// kinds (subcontractor_id XOR tech_id — CHECK num_nonnulls = 1) so PROJ2-15 can
+// add in-house techs without a rewrite. job_id NULL = project-wide.
+// ----------------------------------------------------------------------------
+export type DbAssignmentRole = "lead" | "crew" | "supervisor" | "specialist" | "other";
+export type DbAssignmentStatus = "active" | "completed" | "removed";
+
+export interface DbJobAssignment {
+  id: string;
+  project_id: string;
+  job_id: string | null;
+  subcontractor_id: string | null;
+  tech_id: string | null;
+  agreement_id: string | null;
+  role: DbAssignmentRole;
+  start_date: string | null;
+  end_date: string | null;
+  status: DbAssignmentStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbJobAssignmentInsert = {
+  project_id: string;
+  job_id?: string | null;
+  subcontractor_id?: string | null;
+  tech_id?: string | null;
+  agreement_id?: string | null;
+  role?: DbAssignmentRole;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: DbAssignmentStatus;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbJobAssignmentUpdate = Partial<
+  Omit<DbJobAssignmentInsert, "project_id" | "subcontractor_id" | "tech_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.

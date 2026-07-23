@@ -154,6 +154,13 @@ export interface ComplianceRiskRow {
   expiring_docs: ComplianceRiskExpiringDoc[];
   missing_required: DbComplianceDocType[];
   soonest_expiry: string | null;
+  /**
+   * SUB-6 — how many jobs this sub is ACTIVELY assigned to right now. A lapsed
+   * sub who is currently on a job is more urgent than one who isn't, so these
+   * sort first within the same severity. Populated by getComplianceRisk; the
+   * pure builder leaves it 0 (it has no assignment data).
+   */
+  active_assignments: number;
 }
 
 export interface ComplianceRisk {
@@ -236,6 +243,7 @@ export function buildComplianceRiskRow(
     expiring_docs,
     missing_required,
     soonest_expiry: soonest,
+    active_assignments: 0, // filled by getComplianceRisk (SUB-6)
   };
 }
 
@@ -293,9 +301,29 @@ export async function getComplianceRisk(): Promise<ComplianceRisk> {
     if (row.worst !== "ok") rows.push(row);
   }
 
+  // SUB-6 — annotate at-risk rows with their active-assignment count. Queried
+  // inline (not via lib/api/job-assignments) to avoid a circular import. A
+  // lapsed sub currently ON a job is the urgent case.
+  if (rows.length > 0) {
+    const { data: asgData, error: asgErr } = await supabase
+      .from("job_assignments")
+      .select("subcontractor_id, status")
+      .in("subcontractor_id", rows.map((r) => r.subcontractor_id))
+      .eq("status", "active");
+    if (asgErr) throw new Error(`getComplianceRisk/assignments: ${asgErr.message}`);
+    const activeBySub = new Map<string, number>();
+    for (const a of (asgData ?? []) as { subcontractor_id: string | null }[]) {
+      if (!a.subcontractor_id) continue;
+      activeBySub.set(a.subcontractor_id, (activeBySub.get(a.subcontractor_id) ?? 0) + 1);
+    }
+    for (const r of rows) r.active_assignments = activeBySub.get(r.subcontractor_id) ?? 0;
+  }
+
   rows.sort(
     (a, b) =>
       RISK_RANK[a.worst] - RISK_RANK[b.worst] ||
+      // within a severity, subs currently ON a job come first (more urgent)
+      (b.active_assignments > 0 ? 1 : 0) - (a.active_assignments > 0 ? 1 : 0) ||
       compareSoonest(a.soonest_expiry, b.soonest_expiry) ||
       a.subcontractor_name.localeCompare(b.subcontractor_name)
   );
