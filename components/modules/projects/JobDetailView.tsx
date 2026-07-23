@@ -12,7 +12,7 @@
 // Tasks / Deficiencies / Commissioning / Team are visible-but-disabled stubs
 // that light up in PROJ2-5+.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -25,6 +25,9 @@ import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
+import { JobTasksTab } from "@/components/modules/projects/tabs/JobTasksTab";
+import { listTasksForJobAction } from "@/app/(app)/projects/task-actions";
+import { isOpen } from "@/lib/tasks/task-status";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -63,7 +66,7 @@ const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "financials", label: "Financials" },
   { key: "line_items", label: "Line Items" }, // PROJ2-6a — unlocked
   { key: "attachments", label: "Attachments" },
-  { key: "tasks", label: "Tasks", soon: "PROJ2-11" },
+  { key: "tasks", label: "Tasks" }, // PROJ2-11 — unlocked
   { key: "deficiencies", label: "Deficiencies", soon: "PROJ2-12" },
   { key: "commissioning", label: "Commissioning", soon: "PROJ2-13" },
   { key: "team", label: "Team", soon: "PROJ2-15" },
@@ -105,6 +108,15 @@ export function JobDetailView({
   attachmentsSlot: React.ReactNode;
 }) {
   const [tab, setTab] = useState<TabKey>("overview");
+  // PROJ2-11 — open-task count for the Tasks tab badge. Loaded once here so the
+  // badge is right before the tab is ever opened; the tab itself owns the
+  // full task state.
+  const [openTaskCount, setOpenTaskCount] = useState(0);
+  useEffect(() => {
+    listTasksForJobAction(job.id).then((res) => {
+      if (res.ok) setOpenTaskCount(res.data.filter(isOpen).length);
+    });
+  }, [job.id, tab]);
 
   // Financials gate: redacted (null) rollup legs already read as "—"; contract
   // is NOT redacted server-side, so gate it here too (matches project header).
@@ -259,10 +271,13 @@ export function JobDetailView({
           const disabled = !!t.soon;
           const active = tab === t.key;
           // PROJ2-6a — Line Items carries a live count badge.
+          // PROJ2-11 — Tasks carries an OPEN-task count (done/cancelled excluded).
           const badge =
             t.key === "line_items" && lineItems.length > 0
               ? lineItems.length
-              : null;
+              : t.key === "tasks" && openTaskCount > 0
+                ? openTaskCount
+                : null;
           return (
             <button
               key={t.key}
@@ -329,6 +344,10 @@ export function JobDetailView({
           canEdit={canEdit}
           canViewFinancials={canViewFinancials}
         />
+      )}
+
+      {tab === "tasks" && (
+        <JobTasksTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
       )}
 
       {tab === "attachments" && <div>{attachmentsSlot}</div>}
