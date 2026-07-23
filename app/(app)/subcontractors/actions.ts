@@ -27,10 +27,12 @@ import {
   listComplianceDocs,
   getComplianceSummary,
   getComplianceSummariesForSubs,
+  getComplianceRisk,
   createComplianceDoc,
   updateComplianceDoc,
   deleteComplianceDoc,
   type ComplianceDocRow,
+  type ComplianceRisk,
   type CreateComplianceDocInput,
 } from "@/lib/api/subcontractor-compliance";
 import { deleteAttachment } from "@/app/(app)/attachments/actions";
@@ -322,6 +324,21 @@ export async function deleteComplianceDocAction(
     revalidatePath(`/subcontractors/${subcontractorId}`);
     revalidatePath("/subcontractors");
     return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * SUB-3 — the compliance at-risk worklist (active subs with expired, missing,
+ * or expiring-soon required docs). One call for the whole panel + the nav badge.
+ */
+export async function getComplianceRiskAction(): Promise<ActionResult<ComplianceRisk>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    const risk = await getComplianceRisk();
+    return { ok: true, data: risk };
   } catch (e) {
     return fail(e);
   }

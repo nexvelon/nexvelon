@@ -49,6 +49,7 @@ import {
   getRosterComplianceAction,
 } from "@/app/(app)/subcontractors/actions";
 import { SubcontractorFormDrawer, type DrawerMode } from "./SubcontractorFormDrawer";
+import { ComplianceRiskPanel } from "./ComplianceRiskPanel";
 import type { SubcontractorListRow } from "@/lib/api/subcontractors";
 import type { ComplianceSummary, WorstState } from "@/lib/subcontractors/compliance-status";
 import { DOC_TYPE_LABEL } from "@/lib/subcontractors/compliance-status";
@@ -176,6 +177,9 @@ export function SubcontractorsView() {
           ) : null
         }
       />
+
+      {/* SUB-3 — compliance at-risk worklist, above the roster. */}
+      <ComplianceRiskPanel />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs flex-1">
