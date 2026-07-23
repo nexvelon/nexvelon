@@ -1,15 +1,46 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-config";
 import { useRole } from "@/lib/role-context";
 import { canViewRoute } from "@/lib/permissions";
+import { getComplianceRiskAction } from "@/app/(app)/subcontractors/actions";
+
+// SUB-3 — the compliance at-risk count that badges the Subcontractors nav item
+// so lapsed/missing docs find the operator without navigating. Fetched ONCE on
+// mount (the sidebar lives in the persistent app layout, so this fires per page
+// load, not per route). `severe` = any expired or missing required doc → red;
+// otherwise amber (expiring only). Hidden at zero.
+interface SubRisk {
+  count: number;
+  severe: boolean;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const { role } = useRole();
+  const [subRisk, setSubRisk] = useState<SubRisk | null>(null);
+
+  const canViewSubs = canViewRoute(role, "subcontractors");
+  useEffect(() => {
+    if (!canViewSubs) {
+      setSubRisk(null);
+      return;
+    }
+    let live = true;
+    getComplianceRiskAction().then((res) => {
+      if (!live || !res.ok) return;
+      const { expired, missing_required, expiring_soon } = res.data.counts;
+      const count = expired + missing_required + expiring_soon;
+      setSubRisk({ count, severe: expired + missing_required > 0 });
+    });
+    return () => {
+      live = false;
+    };
+  }, [canViewSubs]);
 
   return (
     <aside
@@ -114,6 +145,24 @@ export function Sidebar() {
                 }}
               />
               <span className="flex-1">{item.label}</span>
+              {item.href === "/subcontractors" && subRisk && subRisk.count > 0 && (
+                <span
+                  className="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white"
+                  style={{
+                    background: subRisk.severe
+                      ? "var(--destructive)"
+                      : "var(--brand-accent)",
+                  }}
+                  title={
+                    subRisk.severe
+                      ? `${subRisk.count} subcontractor${subRisk.count === 1 ? "" : "s"} with expired or missing required documents`
+                      : `${subRisk.count} subcontractor${subRisk.count === 1 ? "" : "s"} with documents expiring soon`
+                  }
+                  aria-label={`${subRisk.count} subcontractors at compliance risk`}
+                >
+                  {subRisk.count}
+                </span>
+              )}
               {item.count !== undefined && (
                 <span
                   className="rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums"

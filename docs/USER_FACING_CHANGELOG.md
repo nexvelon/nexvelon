@@ -116,6 +116,15 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — Compliance alerting (SUB-3)
+
+- Users see a compliance-at-risk panel on the subcontractors page listing every
+  active subcontractor with expired, expiring, or missing required documents —
+  each with the specific problem in plain language ("WSIB clearance expired 12
+  days ago", "Missing: WSIB clearance") — so problems surface without opening
+  each subcontractor. A count badge on the Subcontractors sidebar item (red for
+  expired/missing, amber for expiring) makes the risk visible from anywhere.
+
 ### Subcontractors — Compliance (SUB-2)
 
 - Users can attach compliance documents (WSIB clearance, insurance
