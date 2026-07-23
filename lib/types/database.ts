@@ -1364,6 +1364,10 @@ export interface DbInvoice {
   // line's text — any combination of
   // 'master_part_number' | 'part_number' | 'name' | 'description'. Default {name}.
   line_identifier_fields: string[];
+  // FIN-9 (migration 0094): true on an invoice that COLLECTS a holdback release.
+  // Such invoices carry no holdback of their own and are tax-exempt (HST was
+  // already charged on the original invoices' full subtotal).
+  is_holdback_release: boolean;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -1390,6 +1394,7 @@ export type DbInvoiceInsert = {
   total?: number;
   amount_due?: number;
   notes?: string | null;
+  is_holdback_release?: boolean;
   created_by?: string | null;
   updated_by?: string | null;
 };
@@ -1858,4 +1863,41 @@ export type DbBillPaymentInsert = {
   reference?: string | null;
   notes?: string | null;
   created_by?: string | null;
+};
+
+
+// ----------------------------------------------------------------------------
+// FIN-9 — Ontario statutory holdback release, migration 0094. Records the
+// RELEASE EVENT for a project's retained holdback (Σ invoices.holdback_amount);
+// the retained balance itself is derived, never stored here.
+// ----------------------------------------------------------------------------
+export type DbHoldbackReleaseStatus = "pending" | "eligible" | "released" | "void";
+
+export interface DbHoldbackRelease {
+  id: string;
+  project_id: string;
+  amount: number;
+  substantial_completion_date: string; // date
+  eligible_release_date: string; // date — substantial_completion + 60
+  released_at: string | null; // date, null until released
+  release_invoice_id: string | null;
+  status: DbHoldbackReleaseStatus;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbHoldbackReleaseInsert = {
+  project_id: string;
+  amount: number;
+  substantial_completion_date: string;
+  eligible_release_date: string;
+  released_at?: string | null;
+  release_invoice_id?: string | null;
+  status?: DbHoldbackReleaseStatus;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
 };

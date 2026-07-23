@@ -92,6 +92,17 @@ import {
   type OpcoPnl,
   type PnlPortfolioRow,
 } from "@/lib/api/project-pnl";
+import {
+  getProjectHoldbackStatus,
+  createHoldbackRelease,
+  releaseHoldback,
+  voidHoldbackRelease,
+  getHoldbackWorklist,
+  type ProjectHoldbackStatus,
+  type ReleaseHoldbackResult,
+  type HoldbackWorklistRow,
+} from "@/lib/api/holdback";
+import type { DbHoldbackRelease } from "@/lib/types/database";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbRole } from "@/lib/types/database";
@@ -780,6 +791,86 @@ export async function exportOpcoPnlCsvAction(
         filename: `nexvelon-opco-pnl-${businessDateISO()}.csv`,
       },
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Holdback release (FIN-9) ────────────────────────────────────────────────
+// Status is revenue-side info (retained is money owed to us), so the READ sits
+// at financials:view. Creating the release record and generating its invoice
+// are billable mutations → financials:edit.
+
+function revalidateHoldback(projectId?: string | null) {
+  revalidatePath("/financials");
+  revalidatePath("/invoices");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+}
+
+export async function getProjectHoldbackStatusAction(
+  projectId: string
+): Promise<ActionResult<ProjectHoldbackStatus>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!projectId) return { ok: false, error: "No project specified." };
+    return { ok: true, data: await getProjectHoldbackStatus(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getHoldbackWorklistAction(): Promise<
+  ActionResult<HoldbackWorklistRow[]>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getHoldbackWorklist() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createHoldbackReleaseAction(
+  projectId: string
+): Promise<ActionResult<DbHoldbackRelease>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const rel = await createHoldbackRelease({ projectId, actorId: gate.actorId });
+    revalidateHoldback(projectId);
+    return { ok: true, data: rel };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function releaseHoldbackAction(
+  releaseId: string,
+  projectId?: string
+): Promise<ActionResult<ReleaseHoldbackResult>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const res = await releaseHoldback({ releaseId, actorId: gate.actorId });
+    revalidateHoldback(projectId);
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function voidHoldbackReleaseAction(
+  releaseId: string,
+  projectId?: string
+): Promise<ActionResult<DbHoldbackRelease>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    const rel = await voidHoldbackRelease({ releaseId, actorId: gate.actorId });
+    revalidateHoldback(projectId);
+    return { ok: true, data: rel };
   } catch (e) {
     return fail(e);
   }
