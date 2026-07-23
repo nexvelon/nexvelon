@@ -116,6 +116,14 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Tasks (PROJ2-11)
+
+- Users can create tasks on a job or project with a title, description,
+  priority, due date and an assignee (technician or subcontractor), and track
+  them in a list or drag-and-drop kanban board.
+- Overdue tasks are highlighted, and each project shows a summary of task counts
+  by status.
+
 ### Subcontractors — T5018 reporting (SUB-7)
 
 - Users can produce a T5018 contract-payment report for any calendar year,

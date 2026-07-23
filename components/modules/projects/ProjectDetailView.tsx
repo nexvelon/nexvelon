@@ -38,6 +38,7 @@ import {
 } from "@/components/modules/projects/ProjectRollup";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import { ProjectAssignmentsSummary } from "@/components/modules/subcontractors/ProjectAssignmentsSummary";
+import { ProjectTasksCard } from "@/components/modules/projects/ProjectTasksCard";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
@@ -491,6 +492,9 @@ export function ProjectDetailView({
           )}
         </Card>
       </div>
+
+      {/* PROJ2-11 — task counts across the project (self-hides when none). */}
+      <ProjectTasksCard projectId={project.id} />
 
       {/* SUB-6 — who's assigned across this project's jobs (self-hides when none). */}
       <ProjectAssignmentsSummary projectId={project.id} />

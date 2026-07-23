@@ -1268,6 +1268,62 @@ export type DbJobAssignmentUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Job tasks (PROJ2-11, migration 0101) — tasks on a job (job_id set) or on the
+// project as a whole (job_id NULL). The assignee mirrors SUB-6's party model
+// (tech OR subcontractor) but is OPTIONAL: num_nonnulls(...) <= 1, because an
+// unassigned task is a valid state. `source` is the client-portal hook — a
+// service request will land as source='client_request' with no migration.
+// ----------------------------------------------------------------------------
+export type DbTaskStatus =
+  | "todo"
+  | "in_progress"
+  | "blocked"
+  | "done"
+  | "cancelled";
+export type DbTaskPriority = "low" | "normal" | "high" | "urgent";
+export type DbTaskSource = "internal" | "client_request";
+
+export interface DbJobTask {
+  id: string;
+  project_id: string;
+  job_id: string | null;
+  title: string;
+  description: string | null;
+  status: DbTaskStatus;
+  priority: DbTaskPriority;
+  assignee_tech_id: string | null;
+  assignee_subcontractor_id: string | null;
+  due_date: string | null;
+  /** Stored, not derived — a recorded fact about when the work finished. */
+  completed_at: string | null;
+  sort_order: number;
+  source: DbTaskSource;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbJobTaskInsert = {
+  project_id: string;
+  job_id?: string | null;
+  title: string;
+  description?: string | null;
+  status?: DbTaskStatus;
+  priority?: DbTaskPriority;
+  assignee_tech_id?: string | null;
+  assignee_subcontractor_id?: string | null;
+  due_date?: string | null;
+  completed_at?: string | null;
+  sort_order?: number;
+  source?: DbTaskSource;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbJobTaskUpdate = Partial<Omit<DbJobTaskInsert, "project_id">>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.
