@@ -1113,6 +1113,55 @@ export type DbSubcontractorInsert = {
 
 export type DbSubcontractorUpdate = Partial<DbSubcontractorInsert>;
 
+// SUB-2 — compliance documents (migration 0096). WSIB/insurance/licence certs
+// with issue + expiry dates. NO stored status: validity derives from
+// (expiry_date, today) — see lib/subcontractors/compliance-status.ts.
+export type DbComplianceDocType =
+  | "wsib_clearance"
+  | "liability_insurance"
+  | "auto_insurance"
+  | "license"
+  | "qualification"
+  | "agreement"
+  | "other";
+
+export interface DbSubcontractorComplianceDoc {
+  id: string;
+  subcontractor_id: string;
+  doc_type: DbComplianceDocType;
+  title: string | null;
+  issuer: string | null;
+  reference_number: string | null;
+  issued_date: string | null; // date
+  expiry_date: string | null; // date; null = does not expire
+  coverage_amount: number | null;
+  attachment_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbSubcontractorComplianceDocInsert = {
+  subcontractor_id: string;
+  doc_type: DbComplianceDocType;
+  title?: string | null;
+  issuer?: string | null;
+  reference_number?: string | null;
+  issued_date?: string | null;
+  expiry_date?: string | null;
+  coverage_amount?: number | null;
+  attachment_id?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbSubcontractorComplianceDocUpdate = Partial<
+  Omit<DbSubcontractorComplianceDocInsert, "subcontractor_id">
+>;
+
 // ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is

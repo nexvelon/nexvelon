@@ -46,9 +46,12 @@ import { hasPermission } from "@/lib/permissions";
 import {
   listSubcontractorsAction,
   deleteSubcontractorAction,
+  getRosterComplianceAction,
 } from "@/app/(app)/subcontractors/actions";
 import { SubcontractorFormDrawer, type DrawerMode } from "./SubcontractorFormDrawer";
 import type { SubcontractorListRow } from "@/lib/api/subcontractors";
+import type { ComplianceSummary, WorstState } from "@/lib/subcontractors/compliance-status";
+import { DOC_TYPE_LABEL } from "@/lib/subcontractors/compliance-status";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +66,33 @@ const STATUS_TONE: Record<string, string> = {
   inactive: "bg-muted text-muted-foreground",
   do_not_use: "bg-[color-mix(in_oklab,var(--destructive)_15%,transparent)] text-destructive",
 };
+
+const WORST_BADGE: Record<WorstState, { label: string; cls: string }> = {
+  expired: { label: "Action needed", cls: "bg-[color-mix(in_oklab,var(--destructive)_15%,transparent)] text-destructive" },
+  expiring_soon: { label: "Expiring soon", cls: "bg-[color-mix(in_oklab,#C9A24B_22%,transparent)] text-[#8a6d1f]" },
+  ok: { label: "Compliant", cls: "bg-[color-mix(in_oklab,var(--brand-status-green)_18%,transparent)] text-[var(--brand-status-green)]" },
+};
+
+function ComplianceBadge({ summary }: { summary: ComplianceSummary | undefined }) {
+  if (!summary) return <span className="text-muted-foreground text-xs">—</span>;
+  const badge = WORST_BADGE[summary.worst];
+  const title =
+    summary.missing_required.length > 0
+      ? `Missing: ${summary.missing_required.map((t) => DOC_TYPE_LABEL[t]).join(", ")}`
+      : summary.worst === "expired"
+        ? `${summary.expired} expired`
+        : summary.worst === "expiring_soon"
+          ? `${summary.expiring_soon} expiring soon`
+          : "All required documents current";
+  return (
+    <span
+      title={title}
+      className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium", badge.cls)}
+    >
+      {badge.label}
+    </span>
+  );
+}
 
 export function SubcontractorsView() {
   const router = useRouter();
@@ -81,6 +111,7 @@ export function SubcontractorsView() {
   });
   const [confirmDelete, setConfirmDelete] = useState<SubcontractorListRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [compliance, setCompliance] = useState<Record<string, ComplianceSummary>>({});
 
   const reload = async () => {
     const res = await listSubcontractorsAction({
@@ -90,6 +121,10 @@ export function SubcontractorsView() {
     if (res.ok) {
       setRows(res.data.rows);
       setTrades(res.data.trades);
+      const ids = res.data.rows.map((r) => r.id);
+      getRosterComplianceAction(ids).then((c) => {
+        if (c.ok) setCompliance(c.data);
+      });
     } else {
       toast.error(res.error);
     }
@@ -185,6 +220,7 @@ export function SubcontractorsView() {
               <TableHead className="text-[11px] uppercase">Contact</TableHead>
               <TableHead className="text-right text-[11px] uppercase">Default rate</TableHead>
               <TableHead className="text-[11px] uppercase">Status</TableHead>
+              <TableHead className="text-[11px] uppercase">Compliance</TableHead>
               <TableHead className="text-[11px] uppercase">Vendor link</TableHead>
               <TableHead className="text-[11px] uppercase" />
             </TableRow>
@@ -192,7 +228,7 @@ export function SubcontractorsView() {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-8 text-center text-sm">
+                <TableCell colSpan={8} className="text-muted-foreground py-8 text-center text-sm">
                   {rows.length === 0
                     ? "No subcontractors yet."
                     : "No subcontractors match your filters."}
@@ -227,6 +263,9 @@ export function SubcontractorsView() {
                   <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_TONE[s.status])}>
                     {STATUS_LABEL[s.status] ?? s.status}
                   </span>
+                </TableCell>
+                <TableCell>
+                  <ComplianceBadge summary={compliance[s.id]} />
                 </TableCell>
                 <TableCell className="text-xs">
                   {s.vendor_name ? (

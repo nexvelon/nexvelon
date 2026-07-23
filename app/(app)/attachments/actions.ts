@@ -78,6 +78,9 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   // SAFARI-FIX residual (#311): quote drawings (quote-drawings bucket) — the
   // drawings schedule edits the quote, so uploads/removals gate on quotes.
   quote_drawing: "quotes",
+  // SUB-2: subcontractor compliance docs (WSIB, insurance, licences) ride the
+  // default `attachments` bucket; managing them edits the subcontractor.
+  subcontractor_doc: "subcontractors",
 };
 
 function resourceFor(entityType: string): Resource {
@@ -333,6 +336,14 @@ export async function getSignedUploadUrlAction(input: {
     // quote_drawing mirrors the quote-drawings bucket constraints (20 MB,
     // application/pdf) and is namespaced by the AUTHENTICATED user — the
     // client-supplied entityId is ignored for this surface.
+    // SUB-2: compliance docs cap at 20 MB (mirrors quote drawings); the
+    // client allow-list already limits to PDF + images.
+    if (input.entityType === "subcontractor_doc") {
+      if (input.sizeBytes > QUOTE_DRAWING_MAX_BYTES) {
+        return { ok: false, error: "File too large. Max 20 MB." };
+      }
+    }
+
     let entityId = input.entityId;
     if (input.entityType === "quote_drawing") {
       if (input.contentType !== "application/pdf") {
