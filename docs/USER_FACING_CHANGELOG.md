@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors (SUB-1)
+
+- Users can create, view, edit and search subcontractors (trade, contact
+  details, business number, default labour rate) and optionally link a
+  subcontractor to a vendor record so their bills flow into project costs.
+
 ### Financials — Holdback (FIN-9)
 
 - Users can track statutory holdback retained on a project, see when it becomes

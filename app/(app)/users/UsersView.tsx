@@ -7,7 +7,6 @@ import {
   RolesTab,
   PermissionsMatrixTab,
   ActivityLogTab,
-  SubcontractorsTab,
   InvitationsTab,
 } from "@/components/modules/users/Tabs";
 import { InviteUserDrawer } from "@/components/modules/users/InviteUserDrawer";
@@ -21,7 +20,6 @@ const TABS = [
   { key: "roles", label: "Roles" },
   { key: "matrix", label: "Permissions Matrix" },
   { key: "log", label: "Activity Log" },
-  { key: "subs", label: "Subcontractors" },
   { key: "invites", label: "Invitations" },
 ] as const;
 
@@ -116,7 +114,6 @@ export default function UsersView({
       {tab === "roles" && <RolesTab />}
       {tab === "matrix" && <PermissionsMatrixTab />}
       {tab === "log" && <ActivityLogTab events={auditEvents} />}
-      {tab === "subs" && <SubcontractorsTab />}
       {tab === "invites" && <InvitationsTab realUsers={realUsers} />}
 
       <InviteUserDrawer

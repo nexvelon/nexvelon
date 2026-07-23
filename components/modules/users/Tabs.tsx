@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  Building2,
   Check,
   Copy,
   MoreHorizontal,
@@ -41,7 +40,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { users } from "@/lib/mock-data/users";
-import { subcontractors } from "@/lib/mock-data/subcontractors";
 import type { AuditEventWithProfile } from "@/lib/api/audit";
 import {
   MODULE_ORDER,
@@ -49,7 +47,6 @@ import {
   ROLE_DEFAULT_PERMISSIONS,
 } from "@/lib/permissions-matrix";
 import { ROLE_LABELS } from "@/lib/permissions";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { normalizeDbRole } from "@/lib/auth/normalize-role";
@@ -746,80 +743,6 @@ export function ActivityLogTab({ events }: ActivityLogTabProps) {
         </Table>
       </Card>
     </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// SUBCONTRACTORS
-// ────────────────────────────────────────────────────────────────────────────
-
-export function SubcontractorsTab() {
-  return (
-    <Card className="bg-card overflow-hidden p-0 shadow-sm">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-[11px] uppercase">Company</TableHead>
-            <TableHead className="text-[11px] uppercase">Primary Contact</TableHead>
-            <TableHead className="text-[11px] uppercase">Trade</TableHead>
-            <TableHead className="text-[11px] uppercase">Insurance Expiry</TableHead>
-            <TableHead className="text-[11px] uppercase">WSIB #</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Active Projects</TableHead>
-            <TableHead className="text-right text-[11px] uppercase">Paid YTD</TableHead>
-            <TableHead className="text-[11px] uppercase">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {subcontractors.map((s) => {
-            const expiry = parseISO(s.insuranceExpiry);
-            const daysToExpiry = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            const expiringSoon = daysToExpiry < 60;
-            return (
-              <TableRow key={s.id}>
-                <TableCell>
-                  <div className="text-brand-charcoal inline-flex items-center gap-2 text-xs font-medium">
-                    <Building2 className="text-brand-gold h-3.5 w-3.5" />
-                    {s.company}
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs">
-                  <div>{s.primaryContact}</div>
-                  <div className="text-muted-foreground text-[10px]">{s.email}</div>
-                </TableCell>
-                <TableCell className="text-xs">{s.trade}</TableCell>
-                <TableCell
-                  className={cn(
-                    "text-xs tabular-nums",
-                    expiringSoon ? "text-red-600 font-semibold" : "text-muted-foreground"
-                  )}
-                >
-                  {format(expiry, "MMM d, yyyy")}
-                </TableCell>
-                <TableCell className="text-muted-foreground font-mono text-[11px]">{s.wsibNumber}</TableCell>
-                <TableCell className="text-right text-xs tabular-nums">{s.activeProjects}</TableCell>
-                <TableCell className="text-brand-navy text-right text-sm font-semibold tabular-nums">
-                  {formatCurrency(s.paidYTD)}
-                </TableCell>
-                <TableCell>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      s.status === "Active"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : s.status === "Pending Documents"
-                          ? "bg-amber-50 text-amber-800"
-                          : "bg-red-50 text-red-700"
-                    )}
-                  >
-                    {s.status}
-                  </span>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </Card>
   );
 }
 

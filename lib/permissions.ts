@@ -6,6 +6,7 @@ export type Resource =
   | "projects"
   | "clients"
   | "inventory"
+  | "subcontractors" // SUB-1 — the payable-entity roster (not the login persona)
   | "scheduling"
   | "financials"
   | "reports"
@@ -36,6 +37,7 @@ const ALL_RESOURCES: Resource[] = [
   "projects",
   "clients",
   "inventory",
+  "subcontractors",
   "scheduling",
   "financials",
   "reports",
@@ -95,7 +97,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   // internal notes. They also see schedule for everyone, not just themselves.
   ProjectManager: [
     ...viewAll().filter((p) => p.resource !== "users"),
-    ...crud(["projects", "scheduling", "quotes"]),
+    // SUB-1 — PMs create + edit subcontractors (view comes from viewAll);
+    // deletion stays Admin-only (crud excludes delete).
+    ...crud(["projects", "scheduling", "quotes", "subcontractors"]),
     { resource: "quotes", action: "approve" },
     { resource: "quotes", action: "convert" },
     { resource: "quotes", action: "viewMargin" },
@@ -112,6 +116,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     { resource: "scheduling", action: "view" },
     { resource: "inventory", action: "view" },
     { resource: "clients", action: "view" },
+    // SUB-1 — read-only on the subcontractor roster (Technician has no viewAll).
+    { resource: "subcontractors", action: "view" },
     // Technicians see only their own schedule (no scheduling.viewAll), and
     // cannot see inventory cost columns.
   ],
