@@ -70,6 +70,13 @@ import {
   type BillSubcontractorOption,
 } from "@/lib/api/subcontractor-compliance";
 import {
+  getT5018Report,
+  getT5018YearsAvailable,
+  getSubPaymentYearTotals,
+  buildT5018Csv,
+  type T5018Report,
+} from "@/lib/api/t5018";
+import {
   getApAgingSummary,
   getApAgingByVendor,
   getVendorStatement,
@@ -911,6 +918,74 @@ export async function voidHoldbackReleaseAction(
     const rel = await voidHoldbackRelease({ releaseId, actorId: gate.actorId });
     revalidateHoldback(projectId);
     return { ok: true, data: rel };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── T5018 annual contract-payment reporting (SUB-7) ─────────────────────────
+// GATING: financials:edit — payment totals per payee are sensitive AP data,
+// the same tier as the FIN-6 AP aging / FIN-7 net position. The basis is PAID
+// in the calendar year (cash, tax-inclusive) — see lib/api/t5018.ts.
+
+export async function getT5018ReportAction(
+  year: number
+): Promise<ActionResult<T5018Report>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return { ok: false, error: "Invalid reporting year." };
+    }
+    return { ok: true, data: await getT5018Report(year) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getT5018YearsAction(): Promise<ActionResult<number[]>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getT5018YearsAvailable() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function exportT5018CsvAction(
+  year: number
+): Promise<ActionResult<{ csv: string; filename: string }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return { ok: false, error: "Invalid reporting year." };
+    }
+    const report = await getT5018Report(year);
+    return {
+      ok: true,
+      data: { csv: buildT5018Csv(report), filename: `nexvelon-t5018-${year}.csv` },
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * SUB-7 (6b) — one sub's this-year / last-year payment totals for the sub
+ * detail page. Same edit tier as the report (it IS the per-sub T5018 figure).
+ */
+export async function getSubPaymentYearTotalsAction(
+  subcontractorId: string
+): Promise<ActionResult<{ this_year: number; last_year: number; year: number }>> {
+  try {
+    const gate = await requireFinancialsEdit();
+    if (!gate.ok) return gate;
+    if (!subcontractorId) return { ok: false, error: "No subcontractor specified." };
+    const year = Number(businessDateISO().slice(0, 4));
+    const totals = await getSubPaymentYearTotals(subcontractorId, year);
+    return { ok: true, data: { ...totals, year } };
   } catch (e) {
     return fail(e);
   }

@@ -19,7 +19,10 @@ import {
 } from "@/components/ui/table";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
-import { listBillsForSubcontractorAction } from "@/app/(app)/financials/actions";
+import {
+  listBillsForSubcontractorAction,
+  getSubPaymentYearTotalsAction,
+} from "@/app/(app)/financials/actions";
 import type { BillListRow } from "@/lib/api/vendor-bills";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -34,8 +37,16 @@ const STATUS_LABEL: Record<string, string> = {
 export function SubcontractorBillsCard({ subcontractorId }: { subcontractorId: string }) {
   const { role } = useRole();
   const canView = hasPermission(role, "financials", "view");
+  // SUB-7 — the per-sub T5018 figure (payments this/last calendar year) is
+  // edit-tier, matching the report itself.
+  const canSeeTotals = hasPermission(role, "financials", "edit");
   const [rows, setRows] = useState<BillListRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [yearTotals, setYearTotals] = useState<{
+    this_year: number;
+    last_year: number;
+    year: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!canView) return;
@@ -43,7 +54,12 @@ export function SubcontractorBillsCard({ subcontractorId }: { subcontractorId: s
       setLoaded(true);
       if (res.ok) setRows(res.data);
     });
-  }, [subcontractorId, canView]);
+    if (canSeeTotals) {
+      getSubPaymentYearTotalsAction(subcontractorId).then((res) => {
+        if (res.ok) setYearTotals(res.data);
+      });
+    }
+  }, [subcontractorId, canView, canSeeTotals]);
 
   if (!canView) return null;
 
@@ -63,6 +79,23 @@ export function SubcontractorBillsCard({ subcontractorId }: { subcontractorId: s
           <Summary label="Outstanding" value={openBalance} tone={openBalance > 0 ? "text-[#8a6d1f]" : undefined} />
         </div>
       </div>
+
+      {/* SUB-7 — the T5018 basis per sub: payments made in the calendar year
+          (tax-inclusive), so the filing figure is visible without the report. */}
+      {yearTotals && (yearTotals.this_year > 0 || yearTotals.last_year > 0) && (
+        <p className="text-muted-foreground text-[11px]">
+          Payments {yearTotals.year}:{" "}
+          <span className="text-brand-charcoal font-semibold tabular-nums">
+            {formatCurrency(yearTotals.this_year)}
+          </span>
+          {" · "}
+          {yearTotals.year - 1}:{" "}
+          <span className="text-brand-charcoal font-semibold tabular-nums">
+            {formatCurrency(yearTotals.last_year)}
+          </span>{" "}
+          <span className="text-muted-foreground">(T5018 basis, incl. HST)</span>
+        </p>
+      )}
 
       {!loaded ? null : rows.length === 0 ? (
         <p className="text-muted-foreground text-[11px]">

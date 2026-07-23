@@ -116,6 +116,15 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — T5018 reporting (SUB-7)
+
+- Users can produce a T5018 contract-payment report for any calendar year,
+  listing total payments per subcontractor with business numbers and addresses,
+  and export it to CSV for filing. Rows under CRA's $500 threshold and rows
+  missing a business number are flagged (never silently dropped), and each
+  subcontractor's page shows its this-year / last-year payment totals with an
+  amber hint when a paid subcontractor has no business number on file.
+
 ### Subcontractors — Job assignment (SUB-6)
 
 - Users can assign subcontractors to a job or project with a role and dates, and
