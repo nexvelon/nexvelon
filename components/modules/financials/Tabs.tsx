@@ -44,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AnimatedNumber } from "@/components/modules/dashboard/AnimatedNumber";
+import { T5018Section } from "@/components/modules/financials/T5018Section";
 import {
   OPCO_LABEL,
   STATUS_LABEL,
@@ -904,6 +905,10 @@ export function TaxTab({ from, to }: TabProps) {
           </Card>
         </>
       )}
+
+      {/* SUB-7 — T5018 contract-payment report, alongside the HST position
+          (both CRA filings). Edit-tier only; self-hides with no activity. */}
+      {canSeeNet && <T5018Section />}
     </div>
   );
 }

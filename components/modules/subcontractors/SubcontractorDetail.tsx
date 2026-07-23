@@ -35,6 +35,7 @@ import {
   linkVendorAction,
   listVendorOptionsAction,
 } from "@/app/(app)/subcontractors/actions";
+import { getSubPaymentYearTotalsAction } from "@/app/(app)/financials/actions";
 import { SubcontractorFormDrawer } from "./SubcontractorFormDrawer";
 import { ComplianceDocsCard } from "./ComplianceDocsCard";
 import { SubcontractorBillsCard } from "./SubcontractorBillsCard";
@@ -70,6 +71,10 @@ export function SubcontractorDetail({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [compliance, setCompliance] = useState<ComplianceSummary | null>(null);
+  // SUB-7 (6c) — has this sub received payments? Only fetched when the BN is
+  // missing (the nudge condition) and the caller can see AP payment data.
+  const canSeePayments = hasPermission(role, "financials", "edit");
+  const [hasPayments, setHasPayments] = useState(false);
 
   const load = () => {
     getSubcontractorAction(id).then((res) => {
@@ -81,6 +86,15 @@ export function SubcontractorDetail({ id }: { id: string }) {
   useEffect(() => {
     if (canEdit) listVendorOptionsAction().then((r) => r.ok && setVendors(r.data));
   }, [canEdit]);
+  useEffect(() => {
+    if (!canSeePayments || !sub || sub.business_number) {
+      setHasPayments(false);
+      return;
+    }
+    getSubPaymentYearTotalsAction(id).then((r) => {
+      if (r.ok) setHasPayments(r.data.this_year > 0 || r.data.last_year > 0);
+    });
+  }, [id, canSeePayments, sub]);
 
   const handleLinkVendor = async (vendorId: string | null) => {
     setBusy(true);
@@ -197,6 +211,13 @@ export function SubcontractorDetail({ id }: { id: string }) {
         </InfoCard>
 
         <InfoCard title="Business details">
+          {/* SUB-7 (6c) — a paid sub with no BN can't go on a T5018 slip. */}
+          {hasPayments && !sub.business_number && (
+            <p className="rounded-md border border-[#C9A24B]/50 bg-[color-mix(in_oklab,#C9A24B_12%,transparent)] px-2 py-1.5 text-[11px] text-[#8a6d1f]">
+              This subcontractor has received payments but has no business
+              number — a business number is required for T5018 reporting.
+            </p>
+          )}
           <Row label="Legal name" value={sub.legal_name} />
           <Row label="Business number (BN)" value={sub.business_number} />
           <Row label="GST/HST number" value={sub.gst_hst_number} />
