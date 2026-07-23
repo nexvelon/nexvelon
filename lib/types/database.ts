@@ -1051,6 +1051,69 @@ export type DbVendorInsert = {
 export type DbVendorUpdate = Partial<DbVendorInsert>;
 
 // ----------------------------------------------------------------------------
+// SUB-1 — subcontractors (migration 0095). A PAYABLE BUSINESS ENTITY, distinct
+// from the 'Subcontractor' login persona (profiles.role / employee_type). A
+// nullable vendor_id is the billing hop (FIN-5): a sub's bills ride vendor_bills
+// via its linked vendor, so per-job cost integration comes for free while
+// sub-only columns (labour rate, business number, compliance later) stay off the
+// shared vendors table.
+// ----------------------------------------------------------------------------
+export type DbSubcontractorStatus = "active" | "inactive" | "do_not_use";
+
+export interface DbSubcontractor {
+  id: string;
+  name: string;
+  legal_name: string | null;
+  trade: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  business_number: string | null;
+  gst_hst_number: string | null;
+  default_labour_rate: number | null;
+  payment_terms: string | null;
+  status: DbSubcontractorStatus;
+  vendor_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbSubcontractorInsert = {
+  name: string;
+  legal_name?: string | null;
+  trade?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  business_number?: string | null;
+  gst_hst_number?: string | null;
+  default_labour_rate?: number | null;
+  payment_terms?: string | null;
+  status?: DbSubcontractorStatus;
+  vendor_id?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbSubcontractorUpdate = Partial<DbSubcontractorInsert>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.
