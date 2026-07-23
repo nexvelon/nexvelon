@@ -60,6 +60,11 @@ export function ProjectRollupCard({
         {canSeeFinancials && rollup.labour !== null && (
           <Stat label="Labour cost" value={formatCurrency(rollup.labour)} />
         )}
+        {/* SUB-4 — subcontractor labour, shown only when there is any (folded
+            into Spent/Margin either way). */}
+        {canSeeFinancials && rollup.sub_labour != null && rollup.sub_labour > 0 && (
+          <Stat label="Subcontractors" value={formatCurrency(rollup.sub_labour)} />
+        )}
         {canSeeFinancials && rollup.spent !== null && (
           <Stat label="Spent" value={formatCurrency(rollup.spent)} />
         )}

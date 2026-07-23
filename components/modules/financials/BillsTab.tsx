@@ -46,9 +46,11 @@ import {
   getApAgingSummaryAction,
   getApAgingByVendorAction,
   exportApAgingCsvAction,
+  getBillSubcontractorOptionsAction,
 } from "@/app/(app)/financials/actions";
 import type { ApAgingSummary, ApAgingVendorRow } from "@/lib/api/ap-aging";
 import type { BillDetail, BillListRow } from "@/lib/api/vendor-bills";
+import type { BillSubcontractorOption } from "@/lib/api/subcontractor-compliance";
 import type { DbCashPaymentMethod, DbClientOpco } from "@/lib/types/database";
 import {
   INVOICE_PAYMENT_METHODS,
@@ -163,6 +165,7 @@ export function BillsTab({
 
   const handleCreate = (input: {
     vendorId: string;
+    subcontractorId: string | null;
     purchaseOrderId: string | null;
     billNumber: string;
     billDate: string;
@@ -177,6 +180,7 @@ export function BillsTab({
     startTransition(async () => {
       const res = await createBillAction({
         vendorId: input.vendorId,
+        subcontractorId: input.subcontractorId,
         purchaseOrderId: input.purchaseOrderId,
         billNumber: input.billNumber,
         billDate: input.billDate,
@@ -444,7 +448,18 @@ export function BillsTab({
                   >
                     <TableCell className="font-mono text-xs">{r.bill_number}</TableCell>
                     <TableCell className="text-brand-charcoal text-xs">
-                      {r.vendor_name ?? "—"}
+                      <div className="flex items-center gap-1.5">
+                        {r.subcontractor_name ? (
+                          <>
+                            <span className="text-brand-navy inline-flex shrink-0 items-center rounded-full bg-[color-mix(in_oklab,var(--brand-navy)_14%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
+                              Sub
+                            </span>
+                            <span>{r.subcontractor_name}</span>
+                          </>
+                        ) : (
+                          <span>{r.vendor_name ?? "—"}</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs">{r.po_number ?? "—"}</TableCell>
                     <TableCell className="text-xs">{r.project_number ?? "—"}</TableCell>
@@ -521,6 +536,7 @@ function CreateBillDialog({
   pending: boolean;
   onSubmit: (input: {
     vendorId: string;
+    subcontractorId: string | null;
     purchaseOrderId: string | null;
     billNumber: string;
     billDate: string;
@@ -547,6 +563,10 @@ function CreateBillDialog({
   const [claimableOverride, setClaimableOverride] = useState<string | null>(null);
   const [opco, setOpco] = useState<DbClientOpco>("integrated_solutions");
   const [notes, setNotes] = useState("");
+  // SUB-4 — subcontractor-bill path.
+  const [isSubBill, setIsSubBill] = useState(false);
+  const [subId, setSubId] = useState("");
+  const [subOptions, setSubOptions] = useState<BillSubcontractorOption[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -561,13 +581,27 @@ function CreateBillDialog({
       setClaimableOverride(null);
       setOpco("integrated_solutions");
       setNotes("");
+      setIsSubBill(false);
+      setSubId("");
+      getBillSubcontractorOptionsAction().then((res) => {
+        if (res.ok) setSubOptions(res.data);
+      });
     }
   }, [open, vendors]);
 
-  // Only that vendor's billable POs.
+  const selectedSub = useMemo(
+    () => subOptions.find((s) => s.id === subId) ?? null,
+    [subOptions, subId]
+  );
+  // A sub bill's vendor is the sub's linked vendor (resolved server-side too).
+  const subUnlinked = isSubBill && !!selectedSub && !selectedSub.vendor_id;
+  const effectiveVendorId =
+    isSubBill && selectedSub?.vendor_id ? selectedSub.vendor_id : vendorId;
+
+  // Only that vendor's billable POs (uses the effective vendor for a sub bill).
   const vendorPos = useMemo(
-    () => purchaseOrders.filter((p) => p.vendor_id === vendorId),
-    [purchaseOrders, vendorId]
+    () => purchaseOrders.filter((p) => p.vendor_id === effectiveVendorId),
+    [purchaseOrders, effectiveVendorId]
   );
 
   const autoTotal = Math.round((toNum(subtotal) + toNum(tax)) * 100) / 100;
@@ -581,7 +615,11 @@ function CreateBillDialog({
   // carry its own — otherwise its ITC can't be claimed on any return.
   const standalone = poId === "none";
   const invalid =
-    !vendorId || !billNumber.trim() || !billDate || mismatch || claimableTooHigh;
+    !billNumber.trim() ||
+    !billDate ||
+    mismatch ||
+    claimableTooHigh ||
+    (isSubBill ? !subId || subUnlinked : !vendorId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -595,27 +633,86 @@ function CreateBillDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <label className="block space-y-1">
-            <span className="text-muted-foreground text-[11px]">Vendor</span>
-            <Select
-              value={vendorId}
-              onValueChange={(v) => {
-                setVendorId(v ?? "");
+          {/* SUB-4 — is this a subcontractor (sub-labour) bill? */}
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={isSubBill}
+              onChange={(e) => {
+                setIsSubBill(e.target.checked);
                 setPoId("none");
               }}
-            >
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Select vendor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendors.map((v) => (
-                  <SelectItem key={v.id} value={v.id} className="text-xs">
-                    {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="h-3.5 w-3.5"
+            />
+            <span className="text-brand-charcoal">
+              This is a subcontractor bill (counts as sub-labour cost)
+            </span>
           </label>
+
+          {isSubBill ? (
+            <label className="block space-y-1">
+              <span className="text-muted-foreground text-[11px]">Subcontractor</span>
+              <Select value={subId} onValueChange={(v) => setSubId(v ?? "")}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Select subcontractor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subOptions.map((s) => (
+                    <SelectItem key={s.id} value={s.id} className="text-xs">
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedSub && !subUnlinked && (
+                <span className="text-muted-foreground block text-[11px]">
+                  Vendor set from the subcontractor&rsquo;s linked vendor record
+                  ({selectedSub.vendor_name}).
+                </span>
+              )}
+              {subUnlinked && (
+                <span className="text-destructive block text-[11px]">
+                  This subcontractor isn&rsquo;t linked to a vendor.{" "}
+                  <Link
+                    href={`/subcontractors/${selectedSub!.id}`}
+                    className="underline"
+                  >
+                    Link a vendor on its detail page
+                  </Link>{" "}
+                  first.
+                </span>
+              )}
+              {selectedSub && selectedSub.compliance.worst !== "ok" && (
+                <span className="mt-1 block rounded-md border border-[#C9A24B]/50 bg-[color-mix(in_oklab,#C9A24B_12%,transparent)] px-2 py-1 text-[11px] text-[#8a6d1f]">
+                  This subcontractor has expired, expiring or missing compliance
+                  documents. You can still record the bill (work orders and
+                  assignments will be blocked in a later release).
+                </span>
+              )}
+            </label>
+          ) : (
+            <label className="block space-y-1">
+              <span className="text-muted-foreground text-[11px]">Vendor</span>
+              <Select
+                value={vendorId}
+                onValueChange={(v) => {
+                  setVendorId(v ?? "");
+                  setPoId("none");
+                }}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Select vendor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((v) => (
+                    <SelectItem key={v.id} value={v.id} className="text-xs">
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          )}
 
           <label className="block space-y-1">
             <span className="text-muted-foreground text-[11px]">
@@ -783,7 +880,8 @@ function CreateBillDialog({
             type="button"
             onClick={() =>
               onSubmit({
-                vendorId,
+                vendorId: effectiveVendorId,
+                subcontractorId: isSubBill ? subId : null,
                 purchaseOrderId: poId === "none" ? null : poId,
                 billNumber,
                 billDate,

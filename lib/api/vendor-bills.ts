@@ -37,7 +37,11 @@ export type BillErrorCode =
   | "exceeds_balance"
   | "has_payments"
   | "po_not_issued"
-  | "total_mismatch";
+  | "total_mismatch"
+  // SUB-4 — subcontractor bill path.
+  | "subcontractor_not_found"
+  | "subcontractor_inactive"
+  | "subcontractor_not_linked_to_vendor";
 
 export class BillError extends Error {
   code: BillErrorCode;
@@ -63,6 +67,8 @@ export interface BillListRow extends DbVendorBill {
   vendor_name: string | null;
   po_number: string | null;
   project_number: string | null;
+  /** SUB-4 — the linked subcontractor's name when this is a sub-labour bill. */
+  subcontractor_name: string | null;
   /** total − Σ payments. */
   balance: number;
   paid: number;
@@ -73,6 +79,7 @@ export interface BillDetail {
   vendor_name: string | null;
   po_number: string | null;
   project_number: string | null;
+  subcontractor_name: string | null;
   payments: DbBillPayment[];
   paid: number;
   balance: number;
@@ -82,6 +89,8 @@ export interface BillFilters {
   vendorId?: string;
   status?: string;
   projectId?: string;
+  /** SUB-4 — only bills attributed to this subcontractor. */
+  subcontractorId?: string;
   from?: string | null;
   to?: string | null;
 }
@@ -141,10 +150,11 @@ type BillJoinRow = DbVendorBill & {
   vendor: { name: string } | null;
   purchase_order: { po_number: string } | null;
   project: { project_number: string } | null;
+  subcontractor: { name: string } | null;
 };
 
 const BILL_SELECT =
-  "*, vendor:vendors(name), purchase_order:purchase_orders(po_number), project:projects(project_number)";
+  "*, vendor:vendors(name), purchase_order:purchase_orders(po_number), project:projects(project_number), subcontractor:subcontractors(name)";
 
 export async function listBills(
   filters: BillFilters = {}
@@ -154,6 +164,7 @@ export async function listBills(
   if (filters.vendorId) q = q.eq("vendor_id", filters.vendorId);
   if (filters.status) q = q.eq("status", filters.status);
   if (filters.projectId) q = q.eq("project_id", filters.projectId);
+  if (filters.subcontractorId) q = q.eq("subcontractor_id", filters.subcontractorId);
   if (filters.from) q = q.gte("bill_date", filters.from);
   if (filters.to) q = q.lte("bill_date", filters.to);
   const { data, error } = await q.order("bill_date", { ascending: false });
@@ -166,13 +177,14 @@ export async function listBills(
   );
 
   return rows.map((r) => {
-    const { vendor, purchase_order, project, ...bill } = r;
+    const { vendor, purchase_order, project, subcontractor, ...bill } = r;
     const paid = paidByBill.get(r.id) ?? 0;
     return {
       ...(bill as DbVendorBill),
       vendor_name: vendor?.name ?? null,
       po_number: purchase_order?.po_number ?? null,
       project_number: project?.project_number ?? null,
+      subcontractor_name: subcontractor?.name ?? null,
       paid: round2(paid),
       balance: round2(Number(r.total ?? 0) - paid),
     };
@@ -190,7 +202,7 @@ export async function getBillById(id: string): Promise<BillDetail | null> {
   if (!data) return null;
 
   const row = data as unknown as BillJoinRow;
-  const { vendor, purchase_order, project, ...bill } = row;
+  const { vendor, purchase_order, project, subcontractor, ...bill } = row;
   const payments = await listBillPayments(id);
   const paid = round2(payments.reduce((s, p) => s + Number(p.amount), 0));
 
@@ -199,6 +211,7 @@ export async function getBillById(id: string): Promise<BillDetail | null> {
     vendor_name: vendor?.name ?? null,
     po_number: purchase_order?.po_number ?? null,
     project_number: project?.project_number ?? null,
+    subcontractor_name: subcontractor?.name ?? null,
     payments,
     paid,
     balance: round2(Number(row.total ?? 0) - paid),
@@ -234,17 +247,28 @@ export async function listBillsForPurchaseOrder(
   const rows = (data ?? []) as unknown as BillJoinRow[];
   const paidByBill = await sumPaymentsByBill(supabase, rows.map((r) => r.id));
   return rows.map((r) => {
-    const { vendor, purchase_order, project, ...bill } = r;
+    const { vendor, purchase_order, project, subcontractor, ...bill } = r;
     const paid = paidByBill.get(r.id) ?? 0;
     return {
       ...(bill as DbVendorBill),
       vendor_name: vendor?.name ?? null,
       po_number: purchase_order?.po_number ?? null,
       project_number: project?.project_number ?? null,
+      subcontractor_name: subcontractor?.name ?? null,
       paid: round2(paid),
       balance: round2(Number(r.total ?? 0) - paid),
     };
   });
+}
+
+/**
+ * SUB-4 — every bill attributed to one subcontractor, for the sub detail page's
+ * Bills list. Newest first; carries the same derived paid/balance as listBills.
+ */
+export async function listBillsForSubcontractor(
+  subcontractorId: string
+): Promise<BillListRow[]> {
+  return listBills({ subcontractorId });
 }
 
 export interface ApSummary {
@@ -290,6 +314,45 @@ export async function getApSummary(today: string): Promise<ApSummary> {
   return { outstanding, overdue, billCount };
 }
 
+// ─── Subcontractor resolution (SUB-4) ────────────────────────────────────────
+
+/**
+ * Validate a subcontractor for billing and resolve the vendor_id the bill must
+ * carry (vendor_id is NOT NULL in the schema; a sub bill inherits the sub's
+ * linked vendor). A sub can only be billed if it's ACTIVE and linked to a
+ * vendor — you should not book new cost against a do_not_use sub, and there is
+ * no vendor to owe money to otherwise. Both failures are typed so the UI can
+ * point the user at the fix.
+ */
+async function resolveSubcontractorForBill(
+  supabase: Awaited<ReturnType<typeof db>>,
+  subcontractorId: string
+): Promise<{ vendorId: string }> {
+  const { data, error } = await supabase
+    .from("subcontractors")
+    .select("id, status, vendor_id")
+    .eq("id", subcontractorId)
+    .maybeSingle();
+  if (error) throw new Error(`resolveSubcontractorForBill: ${error.message}`);
+  if (!data) {
+    throw new BillError("subcontractor_not_found", "Subcontractor not found.");
+  }
+  const sub = data as { status: string; vendor_id: string | null };
+  if (sub.status !== "active") {
+    throw new BillError(
+      "subcontractor_inactive",
+      "This subcontractor isn't active, so a new bill can't be booked against it."
+    );
+  }
+  if (!sub.vendor_id) {
+    throw new BillError(
+      "subcontractor_not_linked_to_vendor",
+      "This subcontractor isn't linked to a vendor yet. Link a vendor on the subcontractor's detail page before billing them."
+    );
+  }
+  return { vendorId: sub.vendor_id };
+}
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 export interface CreateBillInput {
@@ -297,6 +360,12 @@ export interface CreateBillInput {
   purchaseOrderId?: string | null;
   projectId?: string | null;
   jobId?: string | null;
+  /**
+   * SUB-4 — when set, this is a subcontractor (sub-labour) bill: vendor_id is
+   * resolved from the sub's linked vendor (overriding vendorId), and the bill's
+   * subtotal feeds the sub_labour cost leg instead of billed_cost.
+   */
+  subcontractorId?: string | null;
   billNumber: string;
   billDate: string;
   dueDate?: string | null;
@@ -334,6 +403,15 @@ export async function createBill(
 
   let projectId = input.projectId ?? null;
   let jobId = input.jobId ?? null;
+
+  // SUB-4 — a subcontractor bill resolves its vendor from the sub's linked
+  // vendor (schema keeps vendor_id NOT NULL) and validates the sub is billable.
+  const subcontractorId = input.subcontractorId ?? null;
+  let vendorId = input.vendorId;
+  if (subcontractorId) {
+    const resolved = await resolveSubcontractorForBill(supabase, subcontractorId);
+    vendorId = resolved.vendorId;
+  }
 
   if (input.purchaseOrderId) {
     const { data: po, error: poErr } = await supabase
@@ -377,7 +455,8 @@ export async function createBill(
   const { data, error } = await supabase
     .from("vendor_bills")
     .insert({
-      vendor_id: input.vendorId,
+      vendor_id: vendorId,
+      subcontractor_id: subcontractorId,
       purchase_order_id: input.purchaseOrderId ?? null,
       project_id: projectId,
       job_id: jobId,
@@ -420,6 +499,12 @@ export interface UpdateBillPatch {
   opco?: DbClientOpco | null;
   projectId?: string | null;
   jobId?: string | null;
+  /**
+   * SUB-4 — set to a sub id to re-classify this bill as sub-labour (re-resolves
+   * vendor_id from the sub's link + re-validates), or null to make it an
+   * ordinary supplier bill again. Undefined leaves the classification untouched.
+   */
+  subcontractorId?: string | null;
   notes?: string | null;
 }
 
@@ -450,6 +535,16 @@ export async function updateBill(
   }
 
   const update: Record<string, unknown> = { updated_by: actorId ?? null };
+  // SUB-4 — re-classifying to a subcontractor re-resolves the vendor from the
+  // sub's link (and re-validates it's billable). Clearing it leaves the current
+  // vendor in place.
+  if (patch.subcontractorId !== undefined) {
+    update.subcontractor_id = patch.subcontractorId;
+    if (patch.subcontractorId) {
+      const resolved = await resolveSubcontractorForBill(supabase, patch.subcontractorId);
+      update.vendor_id = resolved.vendorId;
+    }
+  }
   if (patch.billNumber !== undefined) update.bill_number = patch.billNumber;
   if (patch.billDate !== undefined) update.bill_date = patch.billDate;
   if (patch.dueDate !== undefined) update.due_date = patch.dueDate;

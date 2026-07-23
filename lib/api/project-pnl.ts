@@ -74,11 +74,16 @@ export interface PnlRevenue {
 }
 
 export interface PnlCost {
-  /** Canonical materials cost = Σ vendor-bill subtotals (billed_cost). */
+  /**
+   * Canonical materials cost = Σ NON-sub vendor-bill subtotals (billed_cost,
+   * partitioned in SUB-4 to exclude subcontractor bills — "supplier bills").
+   */
   materials_billed: number | null;
   /** Actual labour (6b labour leg). */
   labour: number | null;
-  /** materials_billed + labour — the only cost in the GP math. */
+  /** SUB-4 — subcontractor labour = Σ sub-attributed vendor-bill subtotals. */
+  sub_labour: number | null;
+  /** materials_billed + labour + sub_labour — the only cost in the GP math. */
   canonical_direct: number | null;
 }
 
@@ -204,7 +209,11 @@ export async function getProjectPnl(
   const r = rollup.perProject;
   const materialsBilled = round2(Number(r.billed_cost ?? 0));
   const labour = round2(Number(r.labour ?? 0));
-  const canonicalDirect = round2(materialsBilled + labour);
+  // SUB-4 — subcontractor labour is a third canonical cost component. No overlap
+  // with materials (it's outsourced labour, not PO-received stock), so unlike
+  // billed_cost/materials it's added straight into gross profit.
+  const subLabour = round2(Number(r.sub_labour ?? 0));
+  const canonicalDirect = round2(materialsBilled + labour + subLabour);
   const grossProfit = round2(revenue.earned - canonicalDirect);
 
   // Open PO commitment = ordered − billed (clamped at zero: once billed
@@ -230,6 +239,7 @@ export async function getProjectPnl(
     cost: {
       materials_billed: materialsBilled,
       labour,
+      sub_labour: subLabour,
       canonical_direct: canonicalDirect,
     },
     gross_profit: grossProfit,
@@ -315,6 +325,7 @@ export interface OpcoPnl {
   revenue: number;
   materials_billed: number;
   labour: number;
+  sub_labour: number;
   canonical_direct: number;
   gross_profit: number;
   gross_margin_pct: number | null;
@@ -364,6 +375,7 @@ export async function getOpcoPnl(
         revenue: 0,
         materials_billed: 0,
         labour: 0,
+        sub_labour: 0,
         canonical_direct: 0,
         gross_profit: 0,
         gross_margin_pct: null,
@@ -381,6 +393,7 @@ export async function getOpcoPnl(
     row.revenue = round2(row.revenue + p.revenue.earned);
     row.materials_billed = round2(row.materials_billed + Number(p.cost.materials_billed ?? 0));
     row.labour = round2(row.labour + Number(p.cost.labour ?? 0));
+    row.sub_labour = round2(row.sub_labour + Number(p.cost.sub_labour ?? 0));
     row.canonical_direct = round2(row.canonical_direct + Number(p.cost.canonical_direct ?? 0));
     row.gross_profit = round2(row.gross_profit + Number(p.gross_profit ?? 0));
     row.memo.contract_quoted = round2(row.memo.contract_quoted + p.memo.contract_quoted);
@@ -445,8 +458,9 @@ export function buildProjectPnlCsv(pnl: ProjectPnl): string {
     ["Client", pnl.project.client_name],
     ["", ""],
     ["Revenue (earned, pre-tax)", pnl.revenue.earned.toFixed(2)],
-    ["Less: Materials (billed)", fmtNeg(pnl.cost.materials_billed)],
+    ["Less: Materials (supplier bills)", fmtNeg(pnl.cost.materials_billed)],
     ["Less: Labour", fmtNeg(pnl.cost.labour)],
+    ["Less: Subcontractors", fmtNeg(pnl.cost.sub_labour)],
     ["Gross Profit", pnl.gross_profit == null ? "" : pnl.gross_profit.toFixed(2)],
     ["Gross Margin %", pnl.gross_margin_pct == null ? "" : pnl.gross_margin_pct.toFixed(1)],
     ["", ""],
@@ -467,8 +481,9 @@ export const OPCO_PNL_CSV_HEADER = [
   "Entity",
   "Projects",
   "Revenue",
-  "Materials (billed)",
+  "Materials (supplier bills)",
   "Labour",
+  "Subcontractors",
   "Direct cost",
   "Gross profit",
   "Gross margin %",
@@ -484,6 +499,7 @@ export function buildOpcoPnlCsv(rows: OpcoPnl[]): string {
         csvField(r.revenue.toFixed(2)),
         csvField(r.materials_billed.toFixed(2)),
         csvField(r.labour.toFixed(2)),
+        csvField(r.sub_labour.toFixed(2)),
         csvField(r.canonical_direct.toFixed(2)),
         csvField(r.gross_profit.toFixed(2)),
         csvField(r.gross_margin_pct == null ? "" : r.gross_margin_pct.toFixed(1)),

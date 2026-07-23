@@ -155,6 +155,7 @@ describe("per-Job variance block", () => {
       revenue: 1100,
       materials: 200,
       labour: 300,
+      sub_labour: 0, // SUB-4 — quoted legs never carry sub-labour
       cost: 500,
       margin_pct: 54.55,
     });
@@ -165,15 +166,17 @@ describe("per-Job variance block", () => {
       revenue: 1240,
       materials: 260,
       labour: 300,
+      sub_labour: 0,
       cost: 560,
       margin_pct: 54.84,
     });
 
-    // Actual: invoiced 1200; stock 100; labour 200.
+    // Actual: invoiced 1200; stock 100; labour 200; no sub bills → sub_labour 0.
     expect(v.actual).toEqual({
       revenue: 1200,
       materials: 100,
       labour: 200,
+      sub_labour: 0,
       cost: 300,
       margin_pct: 75,
     });
@@ -183,6 +186,7 @@ describe("per-Job variance block", () => {
       revenue: 100, // 1200 − 1100
       materials: -160, // 100 − 260
       labour: -100, // 200 − 300
+      sub_labour: 0, // SUB-4 — no sub bills
       cost: -260, // 300 − 560
       margin_pts: 20.45, // 75 − 54.55
     });

@@ -74,6 +74,9 @@ export interface JobVarianceBlock {
     revenue: number;
     materials: number;
     labour: number;
+    // SUB-4 — actual sub-labour vs estimated (always 0 estimated, since quoted
+    // lines aren't classified) — i.e. the sub cost that wasn't in the plan.
+    sub_labour: number;
     cost: number;
     margin_pts: number | null;
   };
@@ -84,6 +87,9 @@ export interface ProjectRollup {
   invoiced: number;
   materials: number;
   labour: number | null;
+  // SUB-4 — Σ sub-attributed vendor-bill subtotals (tax excluded). CANONICAL
+  // cost: folded INTO spent/margin (unlike billed_cost). Financials-redactable.
+  sub_labour: number | null;
   spent: number | null;
   margin: number | null;
   billed_pct: number | null;
@@ -111,12 +117,15 @@ export interface DbJobRollup {
   contract: number;
   materials: number;
   labour: number | null;
+  // SUB-4 — Σ sub-attributed vendor-bill subtotals for this Job (in spent/margin).
+  sub_labour: number | null;
   spent: number | null;
   margin: number | null;
   invoiced: number | null;
   billed_pct: number | null;
   po_committed: number | null;
-  // FIN-5 — Σ vendor-bill subtotals for this Job (tax excluded).
+  // FIN-5 — Σ NON-sub vendor-bill subtotals for this Job (supplier bills; tax
+  // excluded). Supplementary — NOT in spent.
   billed_cost: number | null;
   // PROJ2-6b — per-Job Quoted/Estimated/Actual/Variance. null only
   // post-redaction (financials gate), mirroring the other legs.
@@ -269,28 +278,44 @@ export async function getProjectCostRollup(
     }
   }
 
-  // FIN-5 — billed cost: Σ vendor_bill.subtotal attributed to this project /
-  // Job. Subtotal, not total: tax is a pass-through, so it stays out of cost
-  // exactly as it stays out of the margin legs. Void bills never count.
-  // NOTE: this is reported alongside spent, never folded into it — see the
-  // double-count note in the file header.
+  // FIN-5 + SUB-4 — vendor-bill cost, PARTITIONED by whether the bill is
+  // attributed to a subcontractor. Subtotal, not total: tax is a pass-through,
+  // out of cost exactly as it's out of margin. Void bills never count.
+  //
+  //   billed_cost := Σ subtotal WHERE subcontractor_id IS NULL   (supplier bills)
+  //   sub_labour  := Σ subtotal WHERE subcontractor_id IS NOT NULL (sub bills)
+  //
+  // The partition is TOTAL and mutually exclusive — every non-void bill lands in
+  // exactly one leg. billed_cost stays SUPPLEMENTARY (reported alongside spent,
+  // never folded in — it overlaps `materials` for PO-received parts, see header).
+  // sub_labour is CANONICAL: it's real outsourced-labour cost with no inventory
+  // overlap, so it IS folded into spent/margin (D2). One query, split in JS.
   let billedTotal = 0;
   const billedByJob: Record<string, number> = {};
+  let subLabourTotal = 0;
+  const subLabourByJob: Record<string, number> = {};
   {
     const { data: billData, error: bErr } = await supabase
       .from("vendor_bills")
-      .select("subtotal, job_id, status")
+      .select("subtotal, job_id, status, subcontractor_id")
       .eq("project_id", projectId)
       .neq("status", "void");
     if (bErr) throw new Error(`getProjectCostRollup/bills: ${bErr.message}`);
     for (const b of (billData ?? []) as {
       subtotal: number | null;
       job_id: string | null;
+      subcontractor_id?: string | null;
     }[]) {
       const amt = Number(b.subtotal ?? 0);
-      billedTotal = round2(billedTotal + amt);
-      if (b.job_id)
-        billedByJob[b.job_id] = round2((billedByJob[b.job_id] ?? 0) + amt);
+      if (b.subcontractor_id) {
+        subLabourTotal = round2(subLabourTotal + amt);
+        if (b.job_id)
+          subLabourByJob[b.job_id] = round2((subLabourByJob[b.job_id] ?? 0) + amt);
+      } else {
+        billedTotal = round2(billedTotal + amt);
+        if (b.job_id)
+          billedByJob[b.job_id] = round2((billedByJob[b.job_id] ?? 0) + amt);
+      }
     }
   }
 
@@ -316,7 +341,10 @@ export async function getProjectCostRollup(
     labourTotal = round2(labourTotal + labour);
   }
 
-  const spentTotal = round2(materialsTotal + labourTotal);
+  // SUB-4 — sub_labour is canonical cost, so it enters spent (and therefore
+  // margin) alongside materials + labour. materials/labour are untouched; a
+  // project with no sub bills has subLabourTotal 0 and is byte-identical.
+  const spentTotal = round2(materialsTotal + labourTotal + subLabourTotal);
 
   // PROJ2-4a — per-Job rollup: group the already-computed per-cost-center
   // numbers by job_id. PROJ2-4c adds real invoiced / billed_pct / po_committed.
@@ -368,6 +396,7 @@ export async function getProjectCostRollup(
     invoiced,
     materials: materialsTotal,
     labour: labourTotal,
+    sub_labour: subLabourTotal,
     spent: spentTotal,
     margin: round2(contractTotal - spentTotal),
     billed_pct: contractTotal > 0 ? invoiced / contractTotal : null,
@@ -377,6 +406,7 @@ export async function getProjectCostRollup(
       revenue: invoiced,
       materials: materialsTotal,
       labour: labourTotal,
+      sub_labour: subLabourTotal,
     }),
   };
 
@@ -390,7 +420,8 @@ export async function getProjectCostRollup(
   }[])
     .map((j) => {
       const agg = jobById.get(j.id) ?? { contract: 0, materials: 0, labour: 0 };
-      const spent = round2(agg.materials + agg.labour);
+      const subLabour = round2(subLabourByJob[j.id] ?? 0);
+      const spent = round2(agg.materials + agg.labour + subLabour);
       const jobInvoiced = round2(invoicedByJob[j.id] ?? 0);
       return {
         job_id: j.id,
@@ -401,6 +432,7 @@ export async function getProjectCostRollup(
         contract: agg.contract,
         materials: agg.materials,
         labour: agg.labour,
+        sub_labour: subLabour,
         spent,
         margin: round2(agg.contract - spent),
         invoiced: jobInvoiced,
@@ -411,6 +443,7 @@ export async function getProjectCostRollup(
           revenue: jobInvoiced,
           materials: agg.materials,
           labour: agg.labour,
+          sub_labour: subLabour,
         }),
       };
     })
@@ -429,7 +462,7 @@ export async function getProjectCostRollup(
 // legs vs Estimated.
 function buildVarianceBlock(
   lines: JobLineVarianceInput[],
-  actuals: { revenue: number; materials: number; labour: number }
+  actuals: { revenue: number; materials: number; labour: number; sub_labour: number }
 ): JobVarianceBlock {
   const { quoted, estimated, hasQuotedBaseline } =
     computeQuotedEstimatedLegs(lines);
@@ -437,11 +470,16 @@ function buildVarianceBlock(
   const actualRevenue = round2(actuals.revenue);
   const actualMaterials = round2(actuals.materials);
   const actualLabour = round2(actuals.labour);
-  const actualCost = round2(actualMaterials + actualLabour);
+  // SUB-4 — actual cost gains sub_labour on the same basis (Quoted/Estimated
+  // legs are unchanged — a quote's labour line may cover sub work, but we don't
+  // attempt to classify quoted lines).
+  const actualSubLabour = round2(actuals.sub_labour);
+  const actualCost = round2(actualMaterials + actualLabour + actualSubLabour);
   const actual: VarianceLeg = {
     revenue: actualRevenue,
     materials: actualMaterials,
     labour: actualLabour,
+    sub_labour: actualSubLabour,
     cost: actualCost,
     margin_pct:
       actualRevenue > 0
@@ -460,6 +498,7 @@ function buildVarianceBlock(
       revenue: round2(actual.revenue - revenueBaseline.revenue),
       materials: round2(actual.materials - estimated.materials),
       labour: round2(actual.labour - estimated.labour),
+      sub_labour: round2(actual.sub_labour - estimated.sub_labour),
       cost: round2(actual.cost - estimated.cost),
       margin_pts:
         actual.margin_pct != null && marginBaseline != null

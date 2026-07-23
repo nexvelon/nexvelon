@@ -1905,6 +1905,13 @@ export interface DbVendorBill {
   purchase_order_id: string | null;
   project_id: string | null;
   job_id: string | null;
+  /**
+   * SUB-4 (migration 0097) — the subcontractor this bill pays, when it's a
+   * sub-labour bill. NULL for an ordinary material/supplier bill. This is the
+   * discriminator that partitions cost: NULL → billed_cost (supplementary memo);
+   * NOT NULL → sub_labour (canonical, in job margin). See project-cost-rollup.ts.
+   */
+  subcontractor_id: string | null;
   /** The VENDOR's own invoice number, not ours. */
   bill_number: string;
   bill_date: string; // date
@@ -1937,6 +1944,8 @@ export type DbVendorBillInsert = {
   purchase_order_id?: string | null;
   project_id?: string | null;
   job_id?: string | null;
+  /** SUB-4 — set for a subcontractor (sub-labour) bill; NULL for supplier bills. */
+  subcontractor_id?: string | null;
   bill_number: string;
   bill_date: string;
   due_date?: string | null;
