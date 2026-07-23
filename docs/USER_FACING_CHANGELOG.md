@@ -116,6 +116,16 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — Bills & job cost (SUB-4)
+
+- Users can record a bill against a subcontractor; subcontractor costs now count
+  toward a job's actual cost and reduce its margin, shown as their own line
+  alongside materials and labour (in the project P&L, per-opco P&L, and the job
+  financial summary / performance panel). Ordinary supplier-material bills are
+  unchanged — they stay a supplementary "supplier bills" line, out of margin.
+- Subcontractor detail pages list that subcontractor's bills with total billed,
+  paid and outstanding.
+
 ### Subcontractors — Compliance alerting (SUB-3)
 
 - Users see a compliance-at-risk panel on the subcontractors page listing every

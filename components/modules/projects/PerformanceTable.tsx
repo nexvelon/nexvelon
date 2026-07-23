@@ -52,12 +52,14 @@ export function PerformanceTable({
   // Row spec: label + per-leg accessor + variance accessor + favorability.
   const moneyRows: Array<{
     label: string;
-    key: "revenue" | "materials" | "labour" | "cost";
+    key: "revenue" | "materials" | "labour" | "sub_labour" | "cost";
     favorableWhenPositive: boolean;
   }> = [
     { label: "Revenue", key: "revenue", favorableWhenPositive: true },
     { label: "Materials", key: "materials", favorableWhenPositive: false },
     { label: "Labour", key: "labour", favorableWhenPositive: false },
+    // SUB-4 — subcontractor labour (actual only; Quoted/Estimated are 0).
+    { label: "Subcontractors", key: "sub_labour", favorableWhenPositive: false },
     { label: "Total Cost", key: "cost", favorableWhenPositive: false },
   ];
 

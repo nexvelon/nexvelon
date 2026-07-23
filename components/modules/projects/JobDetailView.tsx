@@ -482,17 +482,22 @@ function FinancialsTab({
   money: (n: number | null | undefined) => string;
   pctv: (n: number | null | undefined) => string;
 }) {
-  // FIN-8 — Job gross profit on the project-P&L basis: pre-tax invoiced
-  // revenue (issued invoices' subtotal) − (vendor-billed materials + labour).
-  // Null when the cost legs are redacted, so `money()` dashes it for view-only.
+  // FIN-8 + SUB-4 — Job gross profit on the project-P&L basis: pre-tax invoiced
+  // revenue (issued invoices' subtotal) − (vendor-billed materials + labour +
+  // subcontractor labour). Null when the cost legs are redacted, so `money()`
+  // dashes it for view-only.
   const jobRevenuePretax = invoices
     .filter((i) => ["sent", "partially_paid", "paid"].includes(i.status))
     .reduce((sum, i) => sum + Number(i.subtotal ?? 0), 0);
   const jobGrossProfit =
-    rollup.billed_cost == null || rollup.labour == null
+    rollup.billed_cost == null || rollup.labour == null || rollup.sub_labour == null
       ? null
       : Math.round(
-          (jobRevenuePretax - Number(rollup.billed_cost) - Number(rollup.labour)) * 100
+          (jobRevenuePretax -
+            Number(rollup.billed_cost) -
+            Number(rollup.labour) -
+            Number(rollup.sub_labour)) *
+            100
         ) / 100;
 
   return (
@@ -510,6 +515,8 @@ function FinancialsTab({
           <Stat label="Contract value" value={money(job.contract_value)} />
           <Stat label="Materials spent" value={money(rollup.materials)} />
           <Stat label="Labour spent" value={money(rollup.labour)} />
+          {/* SUB-4 — subcontractor labour is canonical cost, folded into spent. */}
+          <Stat label="Subcontractors" value={money(rollup.sub_labour)} />
           <Stat label="Total spent" value={money(rollup.spent)} />
           <Stat label="Margin" value={money(rollup.margin)} />
           <Stat label="Invoiced" value={money(rollup.invoiced)} />

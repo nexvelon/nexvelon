@@ -66,6 +66,10 @@ import {
   type BillPaymentResult,
 } from "@/lib/api/vendor-bills";
 import {
+  getBillSubcontractorOptions,
+  type BillSubcontractorOption,
+} from "@/lib/api/subcontractor-compliance";
+import {
   getApAgingSummary,
   getApAgingByVendor,
   getVendorStatement,
@@ -440,6 +444,25 @@ export async function listBillsAction(
   }
 }
 
+/**
+ * SUB-4 — every bill for one subcontractor, for the sub detail page's Bills
+ * card. Gated financials:view: the same tier listBillsAction / the AP surface
+ * use to show bill totals + balances (the cost/margin ROLLUP legs need
+ * financials:edit, but the bill ledger itself is a financials:view read).
+ */
+export async function listBillsForSubcontractorAction(
+  subcontractorId: string
+): Promise<ActionResult<BillListRow[]>> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    if (!subcontractorId) return { ok: true, data: [] };
+    return { ok: true, data: await listBills({ subcontractorId }) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function getBillByIdAction(
   id: string
 ): Promise<ActionResult<BillDetail | null>> {
@@ -483,6 +506,23 @@ export async function getBillFormOptionsAction(): Promise<
     const denied = await requireFinancialsView();
     if (denied) return { ok: false, error: denied };
     return { ok: true, data: await getBillFormOptions() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * SUB-4 — active subcontractors for the record-bill dialog's sub picker, with
+ * their linked vendor + compliance summary. financials:view (it's part of the
+ * bill-entry surface, all financials:view holders can record bills' context).
+ */
+export async function getBillSubcontractorOptionsAction(): Promise<
+  ActionResult<BillSubcontractorOption[]>
+> {
+  try {
+    const denied = await requireFinancialsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getBillSubcontractorOptions() };
   } catch (e) {
     return fail(e);
   }
@@ -701,7 +741,7 @@ export interface ProjectPnlResult {
 function redactPnl(pnl: ProjectPnl): ProjectPnl {
   return {
     ...pnl,
-    cost: { materials_billed: null, labour: null, canonical_direct: null },
+    cost: { materials_billed: null, labour: null, sub_labour: null, canonical_direct: null },
     gross_profit: null,
     gross_margin_pct: null,
     memo: {

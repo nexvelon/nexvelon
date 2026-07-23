@@ -89,8 +89,9 @@ export function ProjectPnl({ projectId }: { projectId: string }) {
       {/* The statement */}
       <div className="space-y-1.5 text-sm">
         <StatementRow label="Revenue (earned)" value={money(pnl.revenue.earned)} strong />
-        <StatementRow label="Less: Materials (billed)" value={negMoney(pnl.cost.materials_billed)} muted />
+        <StatementRow label="Less: Materials (supplier bills)" value={negMoney(pnl.cost.materials_billed)} muted />
         <StatementRow label="Less: Labour" value={negMoney(pnl.cost.labour)} muted />
+        <StatementRow label="Less: Subcontractors" value={negMoney(pnl.cost.sub_labour)} muted />
         <div className="border-t border-[var(--border)] pt-1.5">
           <StatementRow
             label="Gross profit"

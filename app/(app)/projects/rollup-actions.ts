@@ -87,6 +87,7 @@ export async function getProjectCostRollupAction(
 // of the rollup (project, each cost center, each job) for non-financials callers.
 function redactRollup(rollup: ProjectCostRollup): void {
   rollup.perProject.labour = null;
+  rollup.perProject.sub_labour = null;
   rollup.perProject.spent = null;
   rollup.perProject.margin = null;
   // PROJ2-4c — po_committed is spend; redact it too. (Project invoiced/
@@ -105,6 +106,7 @@ function redactRollup(rollup: ProjectCostRollup): void {
   // billed_pct / po_committed) per §5a.
   for (const j of rollup.byJob) {
     j.labour = null;
+    j.sub_labour = null;
     j.spent = null;
     j.margin = null;
     j.invoiced = null;

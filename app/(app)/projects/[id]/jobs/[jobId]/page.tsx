@@ -57,6 +57,7 @@ function redactJob(entry: DbJobRollup): DbJobRollup {
   return {
     ...entry,
     labour: null,
+    sub_labour: null,
     spent: null,
     margin: null,
     invoiced: null,
@@ -105,6 +106,7 @@ export default async function JobDetailPage({
       contract: Number(job.contract_value),
       materials: 0,
       labour: 0,
+      sub_labour: 0,
       spent: 0,
       margin: Number(job.contract_value),
       invoiced: 0,

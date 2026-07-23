@@ -311,6 +311,60 @@ function compareSoonest(a: string | null, b: string | null): number {
   return a < b ? -1 : 1;
 }
 
+// ─── Billing picker options (SUB-4) ──────────────────────────────────────────
+
+/**
+ * Active subcontractors for the "record subcontractor bill" picker, each with
+ * its linked vendor (to autofill the bill's vendor / detect the unlinked case)
+ * and a compliance summary (to surface the amber warning — SUB-4 warns, SUB-5/6
+ * will hard-block). Includes subs with NO vendor link so the UI can show the
+ * "link a vendor first" hint rather than silently hiding them.
+ */
+export interface BillSubcontractorOption {
+  id: string;
+  name: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  compliance: ComplianceSummary;
+}
+
+export async function getBillSubcontractorOptions(): Promise<
+  BillSubcontractorOption[]
+> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("subcontractors")
+    .select("id, name, vendor_id, vendor:vendors(name)")
+    .eq("status", "active")
+    .order("name", { ascending: true });
+  if (error) throw new Error(`getBillSubcontractorOptions: ${error.message}`);
+
+  const subs = ((data ?? []) as unknown as {
+    id: string;
+    name: string;
+    vendor_id: string | null;
+    vendor: { name: string } | null;
+  }[]).map((s) => ({
+    id: s.id,
+    name: s.name,
+    vendor_id: s.vendor_id,
+    vendor_name: s.vendor?.name ?? null,
+  }));
+
+  const summaries = await getComplianceSummariesForSubs(subs.map((s) => s.id));
+  const empty: ComplianceSummary = {
+    expired: 0,
+    expiring_soon: 0,
+    valid: 0,
+    worst: "ok",
+    missing_required: [],
+  };
+  return subs.map((s) => ({
+    ...s,
+    compliance: summaries.get(s.id) ?? empty,
+  }));
+}
+
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
 function assertDateOrder(

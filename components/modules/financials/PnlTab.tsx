@@ -123,8 +123,9 @@ export function PnlTab() {
                 </div>
                 <div className="mt-3 space-y-1.5 text-xs">
                   <Line label="Revenue" value={formatCurrency(o.revenue)} />
-                  <Line label="Materials (billed)" value={`(${formatCurrency(o.materials_billed)})`} muted />
+                  <Line label="Materials (supplier bills)" value={`(${formatCurrency(o.materials_billed)})`} muted />
                   <Line label="Labour" value={`(${formatCurrency(o.labour)})`} muted />
+                  <Line label="Subcontractors" value={`(${formatCurrency(o.sub_labour)})`} muted />
                   <div className="flex justify-between border-t border-[var(--border)] pt-1.5 text-sm font-semibold">
                     <span>Gross profit</span>
                     <span className={cn("tabular-nums", loss ? "text-red-600" : "text-brand-navy")}>

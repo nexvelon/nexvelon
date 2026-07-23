@@ -89,7 +89,11 @@ export interface VarianceLeg {
   revenue: number; // Σ sell totals
   materials: number; // Σ line_kind='part' qty × unit_cost
   labour: number; // Σ line_kind='labour' qty × unit_cost
-  cost: number; // materials + labour
+  // SUB-4 — subcontractor-labour cost. Only the ACTUAL leg carries it (from
+  // sub-attributed vendor bills); the Quoted/Estimated legs are always 0
+  // because quoted line items don't classify which labour is subbed out.
+  sub_labour: number;
+  cost: number; // materials + labour + sub_labour
   margin_pct: number | null; // (revenue − cost) / revenue × 100; null when revenue ≤ 0
 }
 
@@ -119,6 +123,7 @@ function legFrom(
     revenue: rev,
     materials: mat,
     labour: lab,
+    sub_labour: 0, // quoted/estimated legs never carry sub-labour
     cost,
     margin_pct: rev > 0 ? round2(((rev - cost) / rev) * 100) : null,
   };
