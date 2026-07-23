@@ -76,6 +76,7 @@ import type { ApSummary } from "@/lib/api/vendor-bills";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
+import { HoldbackWorklist } from "@/components/modules/financials/HoldbackWorklist";
 import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
 
@@ -623,6 +624,9 @@ export function ReceivablesTab() {
           </Table>
         </div>
       </Card>
+
+      {/* FIN-9 — statutory holdback release worklist ("collect it now"). */}
+      <HoldbackWorklist />
     </div>
   );
 }

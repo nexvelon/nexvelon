@@ -10,6 +10,7 @@ import { ProjectHeader } from "@/components/modules/projects/ProjectHeader";
 import { ProjectJobsTable } from "@/components/modules/projects/ProjectJobsTable";
 import { ProjectDeposits } from "@/components/modules/projects/ProjectDeposits";
 import { ProjectPnl } from "@/components/modules/projects/ProjectPnl";
+import { ProjectHoldback } from "@/components/modules/projects/ProjectHoldback";
 import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrderButton";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -108,6 +109,10 @@ export default async function ProjectDetailPage({
           own action redacts cost/GP/margin unless the caller has
           financials:edit. */}
       {canSeeDeposits ? <ProjectPnl projectId={id} /> : null}
+      {/* FIN-9 — statutory holdback: retained, the 60-day release clock, and
+          the release action. Reachable at financials:view; actions gate on
+          financials:edit inside the component. */}
+      {canSeeDeposits ? <ProjectHoldback projectId={id} /> : null}
       {/* PROJ2-4b — folder tree (Project lens). Needs a site to root the tree. */}
       {detail.project.site_id ? (
         <FolderTreeAttachments

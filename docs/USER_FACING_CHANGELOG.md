@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Financials — Holdback (FIN-9)
+
+- Users can track statutory holdback retained on a project, see when it becomes
+  eligible for release (60 days after substantial completion) with a live
+  countdown, and generate a tax-exempt holdback-release invoice once eligible —
+  from the project page or a "holdback release worklist" on the Receivables tab.
+
 ### Financials — P&L (FIN-8)
 
 - Users can view a per-project profit & loss statement (revenue, costs, gross
