@@ -116,6 +116,16 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — Compliance (SUB-2)
+
+- Users can attach compliance documents (WSIB clearance, insurance
+  certificates, licences, qualifications) to a subcontractor with issue and
+  expiry dates, coverage amounts, and an uploaded file, and see at a glance
+  which subcontractors have expired, expiring-soon, or missing required
+  documents — on the subcontractor's detail page and as a compliance column on
+  the roster. A red banner warns when a subcontractor has expired or missing
+  required documents (WSIB clearance and liability insurance).
+
 ### Subcontractors (SUB-1)
 
 - Users can create, view, edit and search subcontractors (trade, contact

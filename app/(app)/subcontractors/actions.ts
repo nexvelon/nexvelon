@@ -23,12 +23,26 @@ import {
   type SubcontractorFilters,
 } from "@/lib/api/subcontractors";
 import { getVendors } from "@/lib/api/vendors";
+import {
+  listComplianceDocs,
+  getComplianceSummary,
+  getComplianceSummariesForSubs,
+  createComplianceDoc,
+  updateComplianceDoc,
+  deleteComplianceDoc,
+  type ComplianceDocRow,
+  type CreateComplianceDocInput,
+} from "@/lib/api/subcontractor-compliance";
+import { deleteAttachment } from "@/app/(app)/attachments/actions";
+import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import type {
   DbRole,
   DbSubcontractor,
+  DbSubcontractorComplianceDoc,
+  DbSubcontractorComplianceDocUpdate,
   DbSubcontractorInsert,
   DbSubcontractorUpdate,
 } from "@/lib/types/database";
@@ -226,6 +240,106 @@ export async function linkVendorAction(
     revalidatePath("/subcontractors");
     revalidatePath(`/subcontractors/${id}`);
     return { ok: true, data: row };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Compliance documents (SUB-2) ────────────────────────────────────────────
+// Reads at subcontractors:view; mutations at subcontractors:edit — same gates
+// as the entity itself. The uploaded FILE gates independently via the
+// attachments signed-URL flow (entity_type='subcontractor_doc' → subcontractors
+// in ENTITY_RESOURCE), so upload/download/delete of the blob check the same
+// resource.
+
+export async function listComplianceDocsAction(
+  subcontractorId: string
+): Promise<ActionResult<{ docs: ComplianceDocRow[]; summary: ComplianceSummary }>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    if (!subcontractorId) return { ok: false, error: "No subcontractor specified." };
+    const [docs, summary] = await Promise.all([
+      listComplianceDocs(subcontractorId),
+      getComplianceSummary(subcontractorId),
+    ]);
+    return { ok: true, data: { docs, summary } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createComplianceDocAction(
+  input: Omit<CreateComplianceDocInput, "actorId">
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await createComplianceDoc({ ...input, actorId: gate.actorId });
+    revalidatePath(`/subcontractors/${input.subcontractorId}`);
+    revalidatePath("/subcontractors");
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateComplianceDocAction(
+  id: string,
+  subcontractorId: string,
+  patch: DbSubcontractorComplianceDocUpdate
+): Promise<ActionResult<DbSubcontractorComplianceDoc>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await updateComplianceDoc(id, patch, gate.actorId);
+    revalidatePath(`/subcontractors/${subcontractorId}`);
+    return { ok: true, data: row };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteComplianceDocAction(
+  id: string,
+  subcontractorId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const { removed, attachmentId } = await deleteComplianceDoc(id);
+    if (!removed) return { ok: false, error: "Document not found." };
+    // Remove the uploaded file too (row + storage object) via the shared path —
+    // no orphaned blobs. Best-effort: a failed cleanup never blocks the delete.
+    if (attachmentId) {
+      const res = await deleteAttachment(attachmentId);
+      if (!res.ok) {
+        console.error(
+          `[sub-compliance] doc ${id} deleted but attachment ${attachmentId} cleanup failed: ${res.error}`
+        );
+      }
+    }
+    revalidatePath(`/subcontractors/${subcontractorId}`);
+    revalidatePath("/subcontractors");
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Compliance summaries for a set of subcontractors, for the roster's
+ * at-a-glance column. Returned as a plain record (Maps don't cross the action
+ * boundary). One query for all ids.
+ */
+export async function getRosterComplianceAction(
+  subIds: string[]
+): Promise<ActionResult<Record<string, ComplianceSummary>>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    const map = await getComplianceSummariesForSubs(subIds);
+    return { ok: true, data: Object.fromEntries(map) };
   } catch (e) {
     return fail(e);
   }

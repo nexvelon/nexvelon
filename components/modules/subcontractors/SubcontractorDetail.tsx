@@ -36,7 +36,10 @@ import {
   listVendorOptionsAction,
 } from "@/app/(app)/subcontractors/actions";
 import { SubcontractorFormDrawer } from "./SubcontractorFormDrawer";
+import { ComplianceDocsCard } from "./ComplianceDocsCard";
 import type { SubcontractorDetail as SubDetail } from "@/lib/api/subcontractors";
+import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
+import { DOC_TYPE_LABEL } from "@/lib/subcontractors/compliance-status";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +66,7 @@ export function SubcontractorDetail({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [compliance, setCompliance] = useState<ComplianceSummary | null>(null);
 
   const load = () => {
     getSubcontractorAction(id).then((res) => {
@@ -150,6 +154,32 @@ export function SubcontractorDetail({ id }: { id: string }) {
         </div>
       </Card>
 
+      {/* SUB-2 — prominent risk banner when compliance is expired or a required
+          doc is missing. SUB-5/SUB-6 turn this into a hard block. */}
+      {compliance && compliance.worst === "expired" && (
+        <div className="border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] text-destructive rounded-lg border px-4 py-3 text-sm">
+          <p className="font-medium">
+            This subcontractor has expired or missing compliance documents.
+          </p>
+          <p className="text-destructive/90 mt-0.5 text-[13px]">
+            {compliance.missing_required.length > 0 && (
+              <>Missing: {compliance.missing_required.map((t) => DOC_TYPE_LABEL[t]).join(", ")}. </>
+            )}
+            Work orders and job assignments will be blocked (SUB-5 / SUB-6).
+          </p>
+        </div>
+      )}
+      {compliance && compliance.worst === "expiring_soon" && (
+        <div className="rounded-lg border border-[#C9A24B]/50 bg-[color-mix(in_oklab,#C9A24B_12%,transparent)] px-4 py-3 text-sm text-[#8a6d1f]">
+          <p className="font-medium">
+            This subcontractor has compliance documents expiring soon.
+          </p>
+          <p className="mt-0.5 text-[13px] text-[#8a6d1f]/90">
+            Renew them before they lapse to avoid work being blocked.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <InfoCard title="Contact & address">
           <Row label="Contact" value={sub.contact_name} />
@@ -209,9 +239,15 @@ export function SubcontractorDetail({ id }: { id: string }) {
         </InfoCard>
       </div>
 
+      {/* SUB-2 — real compliance documents surface (replaces the placeholder). */}
+      <ComplianceDocsCard
+        subcontractorId={id}
+        canEdit={canEdit}
+        onSummary={setCompliance}
+      />
+
       {/* Inert placeholders — the page shape later chunks slot into. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Placeholder title="Compliance documents" chunk="SUB-2" note="WSIB, insurance and licenses with expiry tracking." />
         <Placeholder title="Bills" chunk="SUB-4" note="Vendor bills from this subcontractor, into per-job cost." />
         <Placeholder title="Agreements" chunk="SUB-5" note="Work orders / sub-agreements with scope and value." />
         <Placeholder title="Assignments" chunk="SUB-6" note="Jobs this subcontractor is assigned to." />
