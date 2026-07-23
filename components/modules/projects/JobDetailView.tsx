@@ -23,6 +23,7 @@ import { JobDeleteButton } from "@/components/modules/projects/JobDeleteButton";
 import { JobMoveMenu } from "@/components/modules/projects/JobMoveMenu";
 import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
+import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -533,6 +534,9 @@ function FinancialsTab({
           <Stat label="Job gross profit" value={money(jobGrossProfit)} />
         </div>
       </Panel>
+
+      {/* SUB-5 — subcontractor work orders attached to this job (self-hides when none). */}
+      <JobWorkOrders jobId={job.id} />
 
       {/* Invoices — link to the (existing) invoice detail route. */}
       <Panel title="Invoices">
