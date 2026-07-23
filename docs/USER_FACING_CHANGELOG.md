@@ -116,6 +116,16 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Subcontractors — Work orders (SUB-5)
+
+- Users can create and issue work orders to subcontractors for a specific
+  project or job, with scope, agreed value and dates, delivered as a PDF and
+  optionally emailed to the subcontractor.
+- Work orders cannot be issued to a subcontractor whose WSIB clearance or
+  liability insurance is missing or expired — the Issue action is blocked and
+  the reasons are shown. (A draft can still be prepared while documents are
+  obtained.)
+
 ### Subcontractors — Bills & job cost (SUB-4)
 
 - Users can record a bill against a subcontractor; subcontractor costs now count

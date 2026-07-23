@@ -1163,6 +1163,65 @@ export type DbSubcontractorComplianceDocUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Subcontractor agreements / work orders (SUB-5, migration 0098). A scoped
+// work order issued to a sub for a project/job; issuing is compliance-gated in
+// the API. scope/value are a snapshot once issued (immutable — see the API).
+// ----------------------------------------------------------------------------
+export type DbSubAgreementStatus =
+  | "draft"
+  | "issued"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
+export interface DbSubAgreement {
+  id: string;
+  agreement_number: string; // WO-10000…
+  subcontractor_id: string;
+  project_id: string | null;
+  job_id: string | null;
+  title: string;
+  scope_of_work: string | null;
+  agreed_value: number;
+  start_date: string | null;
+  target_completion: string | null;
+  status: DbSubAgreementStatus;
+  issued_at: string | null;
+  issued_by: string | null;
+  sent_to_email: string | null;
+  pdf_path: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbSubAgreementInsert = {
+  agreement_number: string;
+  subcontractor_id: string;
+  project_id?: string | null;
+  job_id?: string | null;
+  title: string;
+  scope_of_work?: string | null;
+  agreed_value?: number;
+  start_date?: string | null;
+  target_completion?: string | null;
+  status?: DbSubAgreementStatus;
+  issued_at?: string | null;
+  issued_by?: string | null;
+  sent_to_email?: string | null;
+  pdf_path?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbSubAgreementUpdate = Partial<
+  Omit<DbSubAgreementInsert, "agreement_number" | "subcontractor_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.

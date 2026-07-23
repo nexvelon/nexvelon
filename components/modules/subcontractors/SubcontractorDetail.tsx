@@ -38,6 +38,7 @@ import {
 import { SubcontractorFormDrawer } from "./SubcontractorFormDrawer";
 import { ComplianceDocsCard } from "./ComplianceDocsCard";
 import { SubcontractorBillsCard } from "./SubcontractorBillsCard";
+import { WorkOrdersCard } from "./WorkOrdersCard";
 import type { SubcontractorDetail as SubDetail } from "@/lib/api/subcontractors";
 import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
 import { DOC_TYPE_LABEL } from "@/lib/subcontractors/compliance-status";
@@ -247,12 +248,14 @@ export function SubcontractorDetail({ id }: { id: string }) {
         onSummary={setCompliance}
       />
 
+      {/* SUB-5 — real work-orders surface (replaces the placeholder). */}
+      <WorkOrdersCard subcontractorId={id} subEmail={sub.email} canEdit={canEdit} />
+
       {/* SUB-4 — real bills surface (replaces the placeholder). */}
       <SubcontractorBillsCard subcontractorId={id} />
 
       {/* Inert placeholders — the page shape later chunks slot into. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Placeholder title="Agreements" chunk="SUB-5" note="Work orders / sub-agreements with scope and value." />
         <Placeholder title="Assignments" chunk="SUB-6" note="Jobs this subcontractor is assigned to." />
       </div>
 

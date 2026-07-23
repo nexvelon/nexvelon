@@ -36,12 +36,30 @@ import {
   type CreateComplianceDocInput,
 } from "@/lib/api/subcontractor-compliance";
 import { deleteAttachment } from "@/app/(app)/attachments/actions";
+import {
+  listAgreements,
+  getAgreementById,
+  createAgreement,
+  updateAgreement,
+  issueAgreement,
+  setAgreementStatus,
+  getAgreementPdfUrl,
+  jobLabel,
+  type AgreementListRow,
+  type AgreementFilters,
+  type CreateAgreementInput,
+  type UpdateAgreementPatch,
+} from "@/lib/api/sub-agreements";
+import { listProjects, listJobsForProject } from "@/lib/api/projects";
+import { canIssueWorkOrder, type EligibilityResult } from "@/lib/subcontractors/eligibility";
 import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
+import { businessDateISO } from "@/lib/format";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import type {
   DbRole,
+  DbSubAgreementStatus,
   DbSubcontractor,
   DbSubcontractorComplianceDoc,
   DbSubcontractorComplianceDocUpdate,
@@ -357,6 +375,189 @@ export async function getRosterComplianceAction(
     if (!gate.ok) return gate;
     const map = await getComplianceSummariesForSubs(subIds);
     return { ok: true, data: Object.fromEntries(map) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Work orders / agreements (SUB-5) ────────────────────────────────────────
+// Reads at subcontractors:view; create/update/issue/status at subcontractors:
+// edit. The compliance hard-block is enforced in the API (issueAgreement) — the
+// eligibility action below only powers the UI's disable-and-explain.
+
+export async function listAgreementsAction(
+  filters: AgreementFilters = {}
+): Promise<ActionResult<AgreementListRow[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listAgreements(filters) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getAgreementByIdAction(
+  id: string
+): Promise<ActionResult<AgreementListRow | null>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getAgreementById(id) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createAgreementAction(
+  input: Omit<CreateAgreementInput, "actorId">
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await createAgreement({ ...input, actorId: gate.actorId });
+    revalidatePath(`/subcontractors/${input.subcontractorId}`);
+    if (input.projectId) revalidatePath(`/projects/${input.projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateAgreementAction(
+  id: string,
+  subcontractorId: string,
+  patch: UpdateAgreementPatch
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await updateAgreement(id, patch, gate.actorId);
+    revalidatePath(`/subcontractors/${subcontractorId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Issue a work order. The API enforces the compliance hard-block server-side;
+ * when it blocks, we surface the human-readable reasons so the UI can show them.
+ */
+export async function issueAgreementAction(
+  id: string,
+  subcontractorId: string,
+  sendEmail: boolean
+): Promise<
+  | { ok: true; data: { id: string }; warning?: string }
+  | { ok: false; error: string; reasons?: string[] }
+> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const res = await issueAgreement({ id, sendEmail, actorId: gate.actorId });
+    if (!res.ok) {
+      return "reasons" in res
+        ? { ok: false, error: "compliance_block", reasons: res.reasons }
+        : { ok: false, error: res.error };
+    }
+    revalidatePath(`/subcontractors/${subcontractorId}`);
+    return { ok: true, data: { id: res.agreement.id }, warning: res.warning };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setAgreementStatusAction(
+  id: string,
+  subcontractorId: string,
+  status: DbSubAgreementStatus
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await setAgreementStatus({ id, status, actorId: gate.actorId });
+    revalidatePath(`/subcontractors/${subcontractorId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getAgreementPdfUrlAction(
+  id: string
+): Promise<ActionResult<{ url: string | null }>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: { url: await getAgreementPdfUrl(id) } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Projects for the work-order create dialog's project picker. */
+export async function listWorkOrderProjectOptionsAction(): Promise<
+  ActionResult<{ id: string; number: string | null; title: string | null }[]>
+> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    const projects = await listProjects();
+    return {
+      ok: true,
+      data: projects.map((p) => ({
+        id: p.id,
+        number: p.project_number ?? null,
+        title: p.title ?? null,
+      })),
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Jobs for a project, for the work-order dialog's cascading job picker. */
+export async function listWorkOrderJobOptionsAction(
+  projectId: string
+): Promise<ActionResult<{ id: string; label: string }[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    if (!projectId) return { ok: true, data: [] };
+    const jobs = await listJobsForProject(projectId);
+    return {
+      ok: true,
+      data: jobs.map((j) => ({
+        id: j.id,
+        label: jobLabel(j) ?? j.title,
+      })),
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * The work-order eligibility verdict for a subcontractor — powers the UI's
+ * disable-and-explain on the Issue button. The REAL gate is issueAgreement
+ * (server-side); this is convenience only.
+ */
+export async function getWorkOrderEligibilityAction(
+  subcontractorId: string
+): Promise<ActionResult<EligibilityResult>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    const sub = await getSubcontractorById(subcontractorId);
+    if (!sub) return { ok: false, error: "Subcontractor not found." };
+    const docs = await listComplianceDocs(subcontractorId);
+    const verdict = canIssueWorkOrder(
+      { status: sub.status },
+      docs.map((d) => ({ doc_type: d.doc_type, expiry_date: d.expiry_date })),
+      businessDateISO()
+    );
+    return { ok: true, data: verdict };
   } catch (e) {
     return fail(e);
   }

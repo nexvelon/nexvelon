@@ -1037,6 +1037,63 @@ export async function sendPurchaseOrderEmail(params: {
   return { id: result.data?.id ?? null };
 }
 
+// SUB-5 — email an issued work order (PDF attached) to the subcontractor,
+// mirroring sendPurchaseOrderEmail (same shell/sender contract). Best-effort:
+// the caller treats a throw here as a warning, never a rollback.
+export async function sendWorkOrderEmail(params: {
+  to: string;
+  from: string;
+  agreementNumber: string;
+  subcontractorName: string;
+  contactName: string | null;
+  opcoLegalName: string;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}): Promise<{ id: string | null }> {
+  const greetName = params.contactName ?? params.subcontractorName;
+  const subject = `Work Order ${params.agreementNumber} from ${params.opcoLegalName}`;
+
+  const bodyHtml = letterParagraphs([
+    `Hello ${greetName},`,
+    `Please find attached Work Order ${params.agreementNumber} from ${params.opcoLegalName}. It sets out the scope, agreed value and schedule for the work.`,
+    "Please maintain current WSIB clearance and liability insurance for the duration of the work. If you have any questions, reply to this email.",
+  ]);
+
+  const html = emailShell({
+    eyebrow: "WORK ORDER",
+    headline: `Work Order ${params.agreementNumber}`,
+    bodyHtml,
+    signatureItalic: "If you have any questions, please reply to this email.",
+    signatureGroup: params.opcoLegalName,
+    signatureSubline: "WORK ORDER",
+    outerNote: outerNoteFor("This work order was sent to", params.to),
+  });
+
+  const text = [
+    `Work Order ${params.agreementNumber}`,
+    "",
+    `Hello ${greetName},`,
+    "",
+    `Please find attached Work Order ${params.agreementNumber} from ${params.opcoLegalName}.`,
+    "",
+    "Please maintain current WSIB clearance and liability insurance for the duration of the work.",
+    "",
+    `— ${params.opcoLegalName}`,
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: params.from,
+    to: params.to,
+    subject,
+    html,
+    text,
+    attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+  });
+  if (result.error) throw new Error(`sendWorkOrderEmail: ${result.error.message}`);
+  return { id: result.data?.id ?? null };
+}
+
 // INV-4 — email a return authorization (RMA) PDF to the vendor sales rep,
 // mirroring sendPurchaseOrderEmail (same shell/sender contract).
 export async function sendRmaEmail(params: {
