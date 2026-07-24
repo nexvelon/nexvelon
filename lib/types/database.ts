@@ -1324,6 +1324,157 @@ export type DbJobTaskInsert = {
 export type DbJobTaskUpdate = Partial<Omit<DbJobTaskInsert, "project_id">>;
 
 // ----------------------------------------------------------------------------
+// Deficiencies (PROJ2-12, migration 0102) — punch-list items on a job.
+// Assignee mirrors job_tasks (tech OR sub OR nobody). closed_at/by stamped on
+// close (and on waive — a decision was made). Photos attach via the shared
+// signed-URL attachment flow with entity_type='deficiency'.
+// ----------------------------------------------------------------------------
+export type DbDeficiencySeverity = "minor" | "major" | "safety";
+export type DbDeficiencyStatus =
+  | "open"
+  | "in_progress"
+  | "ready_for_review"
+  | "closed"
+  | "waived";
+
+export interface DbJobDeficiency {
+  id: string;
+  project_id: string;
+  job_id: string;
+  reference: string | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  severity: DbDeficiencySeverity;
+  status: DbDeficiencyStatus;
+  raised_by: string | null;
+  raised_at: string;
+  assignee_tech_id: string | null;
+  assignee_subcontractor_id: string | null;
+  due_date: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  resolution_note: string | null;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbJobDeficiencyInsert = {
+  project_id: string;
+  job_id: string;
+  reference?: string | null;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  severity?: DbDeficiencySeverity;
+  status?: DbDeficiencyStatus;
+  raised_by?: string | null;
+  raised_at?: string;
+  assignee_tech_id?: string | null;
+  assignee_subcontractor_id?: string | null;
+  due_date?: string | null;
+  closed_at?: string | null;
+  closed_by?: string | null;
+  resolution_note?: string | null;
+  sort_order?: number;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbJobDeficiencyUpdate = Partial<
+  Omit<DbJobDeficiencyInsert, "project_id" | "job_id">
+>;
+
+// ----------------------------------------------------------------------------
+// Commissioning (PROJ2-13, migration 0102) — a RUN is one sign-off event for a
+// job; ITEMS are its checklist rows. Re-tests are new runs (history preserved).
+// signature_data is a trimmed-PNG data URL (the pickup-slip mechanism).
+// ----------------------------------------------------------------------------
+export type DbCommissioningRunStatus =
+  | "in_progress"
+  | "completed"
+  | "signed_off"
+  | "cancelled";
+export type DbCommissioningItemResult = "pending" | "pass" | "fail" | "na";
+
+export interface DbCommissioningRun {
+  id: string;
+  project_id: string;
+  job_id: string;
+  title: string;
+  status: DbCommissioningRunStatus;
+  performed_by: string | null;
+  performed_at: string | null;
+  witnessed_by: string | null;
+  signed_off_at: string | null;
+  signed_off_by: string | null;
+  signature_data: string | null;
+  signer_name: string | null;
+  signer_title: string | null;
+  pdf_path: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbCommissioningRunInsert = {
+  project_id: string;
+  job_id: string;
+  title?: string;
+  status?: DbCommissioningRunStatus;
+  performed_by?: string | null;
+  performed_at?: string | null;
+  witnessed_by?: string | null;
+  signed_off_at?: string | null;
+  signed_off_by?: string | null;
+  signature_data?: string | null;
+  signer_name?: string | null;
+  signer_title?: string | null;
+  pdf_path?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbCommissioningRunUpdate = Partial<
+  Omit<DbCommissioningRunInsert, "project_id" | "job_id">
+>;
+
+export interface DbCommissioningItem {
+  id: string;
+  run_id: string;
+  category: string | null;
+  description: string;
+  expected_result: string | null;
+  result: DbCommissioningItemResult;
+  actual_note: string | null;
+  deficiency_id: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbCommissioningItemInsert = {
+  run_id: string;
+  category?: string | null;
+  description: string;
+  expected_result?: string | null;
+  result?: DbCommissioningItemResult;
+  actual_note?: string | null;
+  deficiency_id?: string | null;
+  sort_order?: number;
+};
+
+export type DbCommissioningItemUpdate = Partial<
+  Omit<DbCommissioningItemInsert, "run_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.

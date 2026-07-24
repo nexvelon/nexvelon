@@ -116,6 +116,17 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Deficiencies & Commissioning (PROJ2-12/13)
+
+- Users can log deficiencies (punch-list items) against a job with severity,
+  location, assignee, due date and photos, and track them through to closure
+  (list or kanban). Each project shows an open/safety deficiency summary, and a
+  warning appears when a project is marked substantially complete with open
+  safety deficiencies.
+- Users can run commissioning checklists on a job, record pass/fail results per
+  item, raise a deficiency from a failed item, and capture a witnessed signature
+  that produces a commissioning certificate PDF.
+
 ### Projects & Jobs — Tasks (PROJ2-11)
 
 - Users can create tasks on a job or project with a title, description,
