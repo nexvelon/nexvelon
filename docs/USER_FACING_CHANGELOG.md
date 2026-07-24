@@ -116,6 +116,16 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Warranty & Bonds (PROJ2-14/19)
+
+- Users can record warranty periods on a project or job with scope, provider and
+  duration (or an explicit end date), log the client handover, and see which
+  warranties are approaching expiry — including a cross-project list of
+  warranties nearing expiry as renewal opportunities.
+- Users can track performance bonds and project insurance with coverage amounts,
+  policy numbers, certificates and expiry dates, and are alerted when a bond
+  that's still marked active has expired.
+
 ### Projects & Jobs — Deficiencies & Commissioning (PROJ2-12/13)
 
 - Users can log deficiencies (punch-list items) against a job with severity,

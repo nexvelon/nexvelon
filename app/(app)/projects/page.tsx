@@ -13,6 +13,7 @@ import { Plus, Search, X } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ProjectComplianceAlertsPanel } from "@/components/modules/projects/ProjectComplianceAlertsPanel";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -102,6 +103,9 @@ export default function ProjectsListPage() {
           </Link>
         }
       />
+
+      {/* PROJ2-14/19 — cross-project bond alarms + warranty renewal leads. */}
+      <ProjectComplianceAlertsPanel />
 
       {/* Count-based stats */}
       <div className="flex flex-wrap items-center gap-2">

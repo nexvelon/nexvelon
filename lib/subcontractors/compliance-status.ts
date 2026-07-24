@@ -7,7 +7,7 @@
 // compliance that's the one failure you can't accept. So validity is always a
 // function of (expiry_date, today).
 
-import { daysBetween } from "@/lib/aging-buckets";
+import { daysUntil, expiryState } from "@/lib/expiry-state";
 import type { DbComplianceDocType } from "@/lib/types/database";
 
 /** A doc within this many days of expiring is flagged "expiring soon". */
@@ -35,19 +35,18 @@ export function daysUntilExpiry(
   doc: { expiry_date: string | null },
   today: string
 ): number | null {
-  if (!doc.expiry_date) return null;
-  return daysBetween(today, doc.expiry_date);
+  return daysUntil(doc.expiry_date, today);
 }
 
+// Delegates to the shared expiry vocabulary (lib/expiry-state.ts), mapping the
+// generic 'active' back to SUB-2's original 'valid' so this module's behaviour
+// and tests are unchanged.
 export function complianceState(
   doc: { expiry_date: string | null },
   today: string
 ): ComplianceState {
-  const days = daysUntilExpiry(doc, today);
-  if (days === null) return "no_expiry";
-  if (days < 0) return "expired";
-  if (days <= EXPIRING_SOON_DAYS) return "expiring_soon";
-  return "valid";
+  const s = expiryState(doc.expiry_date, today, EXPIRING_SOON_DAYS);
+  return s === "active" ? "valid" : s;
 }
 
 /** A doc counts as "current" (satisfies a requirement) unless it's expired. */

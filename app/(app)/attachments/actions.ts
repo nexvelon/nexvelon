@@ -84,6 +84,9 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   // PROJ2-12: deficiency photos ride the default `attachments` bucket; adding
   // one edits the project's punch list, so it gates on projects.
   deficiency: "projects",
+  // PROJ2-19: bond / insurance certificates ride the default `attachments`
+  // bucket; managing them edits the project, so they gate on projects.
+  project_bond: "projects",
 };
 
 function resourceFor(entityType: string): Resource {
