@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, MoreHorizontal, AlertTriangle } from "lucide-react";
+import { Plus, MoreHorizontal, AlertTriangle, User, Building2, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,9 +40,11 @@ import {
   createAssignmentAction,
   setAssignmentStatusAction,
   listActiveSubcontractorOptionsAction,
+  listAssignableTechsAction,
   listLinkableWorkOrdersAction,
   getAssignmentEligibilityAction,
 } from "@/app/(app)/projects/assignment-actions";
+import type { AssignableTech } from "@/lib/api/job-assignments";
 import type { AssignmentRow } from "@/lib/api/job-assignments";
 import type { EligibilityResult } from "@/lib/subcontractors/eligibility";
 import type { DbAssignmentRole } from "@/lib/types/database";
@@ -99,7 +101,7 @@ export function JobAssignments({
         <h3 className="text-brand-navy font-serif text-base">Assigned</h3>
         {canEdit && (
           <Button type="button" size="xs" onClick={() => setAssignOpen(true)} disabled={pending}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> Assign subcontractor
+            <Plus className="mr-1 h-3.5 w-3.5" /> Assign
           </Button>
         )}
       </div>
@@ -110,10 +112,22 @@ export function JobAssignments({
         <ul className="divide-y divide-[var(--border)]">
           {rows.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
+              {/* Person icon for an in-house tech, company icon for a sub. */}
+              {r.assignee_kind === "tech" ? (
+                <User className="text-brand-navy h-3.5 w-3.5 shrink-0" aria-label="In-house technician" />
+              ) : (
+                <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-label="Subcontractor" />
+              )}
               <span className="text-brand-charcoal font-medium">{r.assignee_name}</span>
-              <span className="text-muted-foreground rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px]">
-                {ROLE_LABEL[r.role]}
-              </span>
+              {r.role === "lead" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--brand-accent)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--brand-accent)]">
+                  <Star className="h-2.5 w-2.5" /> Lead
+                </span>
+              ) : (
+                <span className="text-muted-foreground rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px]">
+                  {ROLE_LABEL[r.role]}
+                </span>
+              )}
               {r.assignee_kind === "tech" && (
                 <span className="text-muted-foreground text-[10px]">(in-house)</span>
               )}
@@ -185,6 +199,12 @@ function AssignDialog({
   projectId: string;
   onAssigned: () => void;
 }) {
+  // ONE dialog with a party-type toggle (Technician / Subcontractor) rather
+  // than two separate buttons — the same "pick the kind, then the person"
+  // shape as PROJ2-11's task assignee picker. Keeps a single flow for role /
+  // dates / notes and makes "who's on this job" one action.
+  const [partyType, setPartyType] = useState<"tech" | "sub">("tech");
+  const [techId, setTechId] = useState("");
   const [subId, setSubId] = useState("");
   const [role, setRole] = useState<DbAssignmentRole>("crew");
   const [startDate, setStartDate] = useState("");
@@ -192,30 +212,35 @@ function AssignDialog({
   const [agreementId, setAgreementId] = useState("none");
   const [notes, setNotes] = useState("");
   const [subs, setSubs] = useState<{ id: string; name: string; email: string | null }[]>([]);
+  const [techs, setTechs] = useState<AssignableTech[]>([]);
   const [workOrders, setWorkOrders] = useState<{ id: string; agreement_number: string; title: string }[]>([]);
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setSubId(""); setRole("crew"); setStartDate(""); setEndDate("");
-      setAgreementId("none"); setNotes(""); setEligibility(null); setWorkOrders([]);
+      setPartyType("tech"); setTechId(""); setSubId(""); setRole("crew");
+      setStartDate(""); setEndDate(""); setAgreementId("none"); setNotes("");
+      setEligibility(null); setWorkOrders([]);
+      listAssignableTechsAction().then((r) => r.ok && setTechs(r.data));
       listActiveSubcontractorOptionsAction().then((r) => r.ok && setSubs(r.data));
     }
   }, [open]);
 
+  // Compliance eligibility + linkable work orders apply to the SUB path only.
   useEffect(() => {
     setEligibility(null);
     setAgreementId("none");
     setWorkOrders([]);
-    if (!subId) return;
+    if (partyType !== "sub" || !subId) return;
     getAssignmentEligibilityAction(subId).then((r) => r.ok && setEligibility(r.data));
     listLinkableWorkOrdersAction(jobId, subId).then((r) => r.ok && setWorkOrders(r.data));
-  }, [subId, jobId]);
+  }, [partyType, subId, jobId]);
 
-  const blocked = eligibility != null && !eligibility.ok;
+  const blocked = partyType === "sub" && eligibility != null && !eligibility.ok;
   const datesInvalid = startDate !== "" && endDate !== "" && endDate < startDate;
-  const invalid = !subId || blocked || datesInvalid || saving;
+  const noParty = partyType === "tech" ? !techId : !subId;
+  const invalid = noParty || blocked || datesInvalid || saving;
 
   const handleAssign = async () => {
     setSaving(true);
@@ -223,8 +248,9 @@ function AssignDialog({
       const res = await createAssignmentAction({
         projectId,
         jobId,
-        subcontractorId: subId,
-        agreementId: agreementId === "none" ? null : agreementId,
+        techId: partyType === "tech" ? techId : null,
+        subcontractorId: partyType === "sub" ? subId : null,
+        agreementId: partyType === "sub" && agreementId !== "none" ? agreementId : null,
         role,
         startDate: startDate || null,
         endDate: endDate || null,
@@ -235,7 +261,7 @@ function AssignDialog({
         else toast.error(res.error);
         return;
       }
-      toast.success("Subcontractor assigned");
+      toast.success(partyType === "tech" ? "Technician assigned" : "Subcontractor assigned");
       onAssigned();
     } finally {
       setSaving(false);
@@ -246,28 +272,49 @@ function AssignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign subcontractor</DialogTitle>
+          <DialogTitle>Assign to job</DialogTitle>
           <DialogDescription>
-            Put a subcontractor on this job. Assigning requires current WSIB
-            clearance and liability insurance.
+            Put an in-house technician or a subcontractor on this job. A
+            subcontractor needs current WSIB clearance and liability insurance.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <Field label="Subcontractor">
-            <Select value={subId} onValueChange={(v) => setSubId(v ?? "")}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Select an active subcontractor" />
-              </SelectTrigger>
-              <SelectContent>
-                {subs.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          {/* Party-type toggle */}
+          <div className="flex gap-1">
+            <Button type="button" size="xs" variant={partyType === "tech" ? "secondary" : "outline"} onClick={() => setPartyType("tech")}>
+              <User className="mr-1 h-3.5 w-3.5" /> Technician
+            </Button>
+            <Button type="button" size="xs" variant={partyType === "sub" ? "secondary" : "outline"} onClick={() => setPartyType("sub")}>
+              <Building2 className="mr-1 h-3.5 w-3.5" /> Subcontractor
+            </Button>
+          </div>
 
-          {blocked && !eligibility!.ok && (
+          {partyType === "tech" ? (
+            <Field label="Technician">
+              <Select value={techId} onValueChange={(v) => setTechId(v ?? "")}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Select an active technician" />
+                </SelectTrigger>
+                <SelectContent>
+                  {techs.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : (
+            <Field label="Subcontractor">
+              <Select value={subId} onValueChange={(v) => setSubId(v ?? "")}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Select an active subcontractor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subs.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {blocked && eligibility != null && !eligibility.ok && (
             <div className="border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] text-destructive rounded-md border px-3 py-2 text-xs">
               <p className="inline-flex items-center gap-1.5 font-medium">
                 <AlertTriangle className="h-3.5 w-3.5" /> This subcontractor can&rsquo;t be assigned:
