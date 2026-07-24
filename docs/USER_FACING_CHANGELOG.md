@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Team assignment (PROJ2-15)
+
+- Users can assign in-house technicians to a job alongside subcontractors,
+  designate a lead, and see the full project team with each person's role and
+  jobs.
+
 ### Projects & Jobs — Warranty & Bonds (PROJ2-14/19)
 
 - Users can record warranty periods on a project or job with scope, provider and

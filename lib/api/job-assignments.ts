@@ -36,6 +36,7 @@ export type AssignmentErrorCode =
   | "invalid_assignee"
   | "job_mismatch"
   | "already_assigned"
+  | "lead_taken" // PROJ2-15 — a job already has an active lead
   | "invalid_status"
   | "invalid_dates";
 
@@ -139,6 +140,92 @@ export async function listAssignmentsForSubcontractor(
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listAssignmentsForSubcontractor: ${error.message}`);
   return ((data ?? []) as unknown as AssignmentJoinRow[]).map(toRow);
+}
+
+/** PROJ2-15 — what a given in-house tech is assigned to. Mirrors the sub view. */
+export async function listAssignmentsForTech(techId: string): Promise<AssignmentRow[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("job_assignments")
+    .select(ASSIGNMENT_SELECT)
+    .eq("tech_id", techId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`listAssignmentsForTech: ${error.message}`);
+  return ((data ?? []) as unknown as AssignmentJoinRow[]).map(toRow);
+}
+
+/** PROJ2-15 — active techs for the assign picker, ordered by name. */
+export interface AssignableTech {
+  id: string;
+  name: string;
+  default_cost_rate: number | null;
+}
+export async function listAssignableTechs(): Promise<AssignableTech[]> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("techs")
+    .select("id, name, default_cost_rate")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  if (error) throw new Error(`listAssignableTechs: ${error.message}`);
+  return (data ?? []) as AssignableTech[];
+}
+
+// ─── Project team (PROJ2-15) ─────────────────────────────────────────────────
+
+export interface TeamMember {
+  kind: "tech" | "subcontractor";
+  /** tech_id or subcontractor_id. */
+  party_id: string;
+  name: string;
+  /** True when this person holds an active 'lead' role on any of the project's jobs. */
+  is_lead: boolean;
+  /** Distinct active roles held across the project. */
+  roles: DbAssignmentRole[];
+  /** Jobs this person is actively on (label; null label = project-wide). */
+  jobs: { job_id: string | null; job_label: string | null }[];
+  active_count: number;
+}
+
+/**
+ * The combined crew across a project's jobs — techs AND subs — DEDUPED into one
+ * row per person (a tech on three jobs is one row with three jobs listed).
+ * Only ACTIVE assignments count. Leads are sorted first.
+ */
+export async function getProjectTeam(projectId: string): Promise<TeamMember[]> {
+  const rows = (await listAssignmentsForProject(projectId)).filter(
+    (r) => r.status === "active"
+  );
+
+  const byPerson = new Map<string, TeamMember>();
+  for (const r of rows) {
+    const key = `${r.assignee_kind}:${r.assignee_kind === "tech" ? r.tech_id : r.subcontractor_id}`;
+    const partyId = (r.assignee_kind === "tech" ? r.tech_id : r.subcontractor_id) ?? "";
+    const cur =
+      byPerson.get(key) ??
+      ({
+        kind: r.assignee_kind,
+        party_id: partyId,
+        name: r.assignee_name,
+        is_lead: false,
+        roles: [],
+        jobs: [],
+        active_count: 0,
+      } as TeamMember);
+    cur.active_count += 1;
+    if (r.role === "lead") cur.is_lead = true;
+    if (!cur.roles.includes(r.role)) cur.roles.push(r.role);
+    // De-dupe the jobs list by job_id (project-wide rows collapse to one).
+    if (!cur.jobs.some((j) => j.job_id === r.job_id)) {
+      cur.jobs.push({ job_id: r.job_id, job_label: r.job_label });
+    }
+    byPerson.set(key, cur);
+  }
+
+  return [...byPerson.values()].sort(
+    (a, b) =>
+      Number(b.is_lead) - Number(a.is_lead) || a.name.localeCompare(b.name)
+  );
 }
 
 /** Active assignment counts per subcontractor (SUB-3 6d — urgency signal). */
@@ -248,7 +335,19 @@ export async function createAssignment(
     .select("*")
     .single();
   if (error) {
-    // The partial unique index surfaces a duplicate active sub-on-job as 23505.
+    // Partial unique indexes surface conflicts as 23505; distinguish them.
+    if (error.message.includes("job_assignments_single_active_lead")) {
+      throw new AssignmentError(
+        "lead_taken",
+        "This job already has an active lead. Change the current lead first, or assign this person another role."
+      );
+    }
+    if (error.message.includes("job_assignments_unique_active_tech")) {
+      throw new AssignmentError(
+        "already_assigned",
+        "This technician is already actively assigned to this job."
+      );
+    }
     if (error.message.includes("job_assignments_unique_active_sub") ||
         error.message.includes("duplicate key value")) {
       throw new AssignmentError(
@@ -259,11 +358,12 @@ export async function createAssignment(
     throw new Error(`createAssignment: ${error.message}`);
   }
 
-  if (input.subcontractorId) {
-    await logActivity("project", input.projectId, "update", {
-      subcontractor_assigned: { from: null, to: input.subcontractorId },
-    });
-  }
+  await logActivity("project", input.projectId, "update", {
+    [input.subcontractorId ? "subcontractor_assigned" : "tech_assigned"]: {
+      from: null,
+      to: input.subcontractorId ?? input.techId,
+    },
+  });
 
   return { ok: true, assignment: data as DbJobAssignment };
 }

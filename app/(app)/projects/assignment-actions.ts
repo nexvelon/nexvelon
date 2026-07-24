@@ -16,11 +16,16 @@ import {
   listAssignmentsForJob,
   listAssignmentsForProject,
   listAssignmentsForSubcontractor,
+  listAssignmentsForTech,
+  listAssignableTechs,
+  getProjectTeam,
   createAssignment,
   updateAssignment,
   setAssignmentStatus,
   deleteAssignment,
   type AssignmentRow,
+  type AssignableTech,
+  type TeamMember,
   type CreateAssignmentInput,
   type UpdateAssignmentPatch,
 } from "@/lib/api/job-assignments";
@@ -128,6 +133,43 @@ export async function listActiveSubcontractorOptionsAction(): Promise<
       ok: true,
       data: subs.map((s) => ({ id: s.id, name: s.name, email: s.email })),
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** PROJ2-15 — active techs for the assign dialog's technician picker. */
+export async function listAssignableTechsAction(): Promise<ActionResult<AssignableTech[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listAssignableTechs() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** PROJ2-15 — what an in-house tech is assigned to (the tech perspective). */
+export async function listAssignmentsForTechAction(
+  techId: string
+): Promise<ActionResult<AssignmentRow[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listAssignmentsForTech(techId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** PROJ2-15 — the deduped project team (techs + subs) for the Project team card. */
+export async function getProjectTeamAction(
+  projectId: string
+): Promise<ActionResult<TeamMember[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getProjectTeam(projectId) };
   } catch (e) {
     return fail(e);
   }
