@@ -40,6 +40,8 @@ import { PerformanceTable } from "@/components/modules/projects/PerformanceTable
 import { ProjectAssignmentsSummary } from "@/components/modules/subcontractors/ProjectAssignmentsSummary";
 import { ProjectTasksCard } from "@/components/modules/projects/ProjectTasksCard";
 import { ProjectDeficienciesCard } from "@/components/modules/projects/ProjectDeficienciesCard";
+import { WarrantyCard } from "@/components/modules/projects/WarrantyCard";
+import { BondsCard } from "@/components/modules/projects/BondsCard";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
 import type { ProjectDetail } from "@/lib/api/projects";
 import type { InvoiceListRow } from "@/lib/api/invoices";
@@ -499,6 +501,12 @@ export function ProjectDetailView({
 
       {/* PROJ2-12 — deficiency counts across the project (self-hides when none). */}
       <ProjectDeficienciesCard projectId={project.id} />
+
+      {/* PROJ2-14 — warranty & handover. */}
+      <WarrantyCard projectId={project.id} actualCompletion={project.actual_completion} canEdit={canEdit} />
+
+      {/* PROJ2-19 — bonds & insurance. */}
+      <BondsCard projectId={project.id} canEdit={canEdit} />
 
       {/* SUB-6 — who's assigned across this project's jobs (self-hides when none). */}
       <ProjectAssignmentsSummary projectId={project.id} />

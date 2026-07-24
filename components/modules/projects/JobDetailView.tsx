@@ -32,6 +32,7 @@ import { listTasksForJobAction } from "@/app/(app)/projects/task-actions";
 import { listDeficienciesForJobAction } from "@/app/(app)/projects/deficiency-actions";
 import { isOpen } from "@/lib/tasks/task-status";
 import { isOpenDeficiency } from "@/lib/deficiencies/deficiency-status";
+import { JobWarrantyLine } from "@/components/modules/projects/JobWarrantyLine";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -437,6 +438,11 @@ function OverviewTab({
           </p>
         )}
       </Panel>
+
+      {/* PROJ2-14 — this job's own warranty (self-hides when none). */}
+      <div className="lg:col-span-2">
+        <JobWarrantyLine jobId={job.id} />
+      </div>
 
       {/* Cost centers */}
       <Panel title="Cost centers" className="lg:col-span-2">

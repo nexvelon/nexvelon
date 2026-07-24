@@ -1475,6 +1475,116 @@ export type DbCommissioningItemUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Warranties (PROJ2-14, migration 0103) — a warranty period on a project or
+// job. end_date is the truth; duration_months is a convenience input. Derived
+// active/expiring/expired state comes from lib/expiry-state.ts.
+// ----------------------------------------------------------------------------
+export type DbWarrantyScope =
+  | "workmanship"
+  | "equipment"
+  | "manufacturer"
+  | "extended"
+  | "other";
+
+export interface DbWarranty {
+  id: string;
+  project_id: string;
+  job_id: string | null;
+  scope: DbWarrantyScope;
+  description: string | null;
+  start_date: string;
+  duration_months: number | null;
+  end_date: string;
+  handover_date: string | null;
+  handover_notes: string | null;
+  handover_signed_by: string | null;
+  provider: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbWarrantyInsert = {
+  project_id: string;
+  job_id?: string | null;
+  scope?: DbWarrantyScope;
+  description?: string | null;
+  start_date: string;
+  duration_months?: number | null;
+  end_date: string;
+  handover_date?: string | null;
+  handover_notes?: string | null;
+  handover_signed_by?: string | null;
+  provider?: string | null;
+  reference_number?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbWarrantyUpdate = Partial<
+  Omit<DbWarrantyInsert, "project_id" | "job_id">
+>;
+
+// ----------------------------------------------------------------------------
+// Project bonds & insurance (PROJ2-19, migration 0103). `status` is an
+// OPERATIONAL state (released/cancelled are decisions), DISTINCT from the
+// derived expiry state — a bond can be status='active' AND expiry-derived
+// 'expired' (the alarm case). Never auto-flipped on expiry.
+// ----------------------------------------------------------------------------
+export type DbBondType =
+  | "performance"
+  | "labour_material"
+  | "bid"
+  | "maintenance"
+  | "liability_insurance"
+  | "builders_risk"
+  | "other";
+export type DbBondStatus = "active" | "expired" | "released" | "cancelled";
+
+export interface DbProjectBond {
+  id: string;
+  project_id: string;
+  bond_type: DbBondType;
+  provider: string | null;
+  policy_number: string | null;
+  coverage_amount: number | null;
+  premium_amount: number | null;
+  effective_date: string | null;
+  expiry_date: string | null;
+  status: DbBondStatus;
+  attachment_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbProjectBondInsert = {
+  project_id: string;
+  bond_type: DbBondType;
+  provider?: string | null;
+  policy_number?: string | null;
+  coverage_amount?: number | null;
+  premium_amount?: number | null;
+  effective_date?: string | null;
+  expiry_date?: string | null;
+  status?: DbBondStatus;
+  attachment_id?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbProjectBondUpdate = Partial<
+  Omit<DbProjectBondInsert, "project_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.
