@@ -26,8 +26,12 @@ import { PerformanceTable } from "@/components/modules/projects/PerformanceTable
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
 import { JobTasksTab } from "@/components/modules/projects/tabs/JobTasksTab";
+import { DeficienciesTab } from "@/components/modules/projects/tabs/DeficienciesTab";
+import { JobCommissioningTab } from "@/components/modules/projects/tabs/JobCommissioningTab";
 import { listTasksForJobAction } from "@/app/(app)/projects/task-actions";
+import { listDeficienciesForJobAction } from "@/app/(app)/projects/deficiency-actions";
 import { isOpen } from "@/lib/tasks/task-status";
+import { isOpenDeficiency } from "@/lib/deficiencies/deficiency-status";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -67,8 +71,8 @@ const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "line_items", label: "Line Items" }, // PROJ2-6a — unlocked
   { key: "attachments", label: "Attachments" },
   { key: "tasks", label: "Tasks" }, // PROJ2-11 — unlocked
-  { key: "deficiencies", label: "Deficiencies", soon: "PROJ2-12" },
-  { key: "commissioning", label: "Commissioning", soon: "PROJ2-13" },
+  { key: "deficiencies", label: "Deficiencies" }, // PROJ2-12 — unlocked
+  { key: "commissioning", label: "Commissioning" }, // PROJ2-13 — unlocked
   { key: "team", label: "Team", soon: "PROJ2-15" },
 ];
 
@@ -112,9 +116,14 @@ export function JobDetailView({
   // badge is right before the tab is ever opened; the tab itself owns the
   // full task state.
   const [openTaskCount, setOpenTaskCount] = useState(0);
+  // PROJ2-12 — open-deficiency count for the Deficiencies tab badge.
+  const [openDeficiencyCount, setOpenDeficiencyCount] = useState(0);
   useEffect(() => {
     listTasksForJobAction(job.id).then((res) => {
       if (res.ok) setOpenTaskCount(res.data.filter(isOpen).length);
+    });
+    listDeficienciesForJobAction(job.id).then((res) => {
+      if (res.ok) setOpenDeficiencyCount(res.data.filter(isOpenDeficiency).length);
     });
   }, [job.id, tab]);
 
@@ -277,7 +286,9 @@ export function JobDetailView({
               ? lineItems.length
               : t.key === "tasks" && openTaskCount > 0
                 ? openTaskCount
-                : null;
+                : t.key === "deficiencies" && openDeficiencyCount > 0
+                  ? openDeficiencyCount
+                  : null;
           return (
             <button
               key={t.key}
@@ -348,6 +359,14 @@ export function JobDetailView({
 
       {tab === "tasks" && (
         <JobTasksTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
+      )}
+
+      {tab === "deficiencies" && (
+        <DeficienciesTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
+      )}
+
+      {tab === "commissioning" && (
+        <JobCommissioningTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
       )}
 
       {tab === "attachments" && <div>{attachmentsSlot}</div>}

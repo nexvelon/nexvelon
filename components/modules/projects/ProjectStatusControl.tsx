@@ -27,6 +27,7 @@ import {
   listAllowedNextStatuses,
 } from "@/lib/projects/status-transitions";
 import { updateProjectStatusAction } from "@/app/(app)/projects/actions";
+import { getProjectDeficiencyCountsAction } from "@/app/(app)/projects/deficiency-actions";
 import type { ProjectStatus } from "@/lib/types/database";
 
 const ERROR_LABELS: Record<string, string> = {
@@ -48,6 +49,10 @@ export function ProjectStatusControl({
   const [target, setTarget] = useState<ProjectStatus | "">("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // PROJ2-12 (6d) — open safety-deficiency count, fetched when the dialog opens.
+  // Substantial completion with open safety items WARNS, never blocks: it's a
+  // contractual judgment, not ours to gate.
+  const [openSafety, setOpenSafety] = useState(0);
 
   const nextStatuses = listAllowedNextStatuses(currentStatus);
 
@@ -59,6 +64,9 @@ export function ProjectStatusControl({
     setTarget("");
     setNote("");
     setOpen(true);
+    getProjectDeficiencyCountsAction(projectId).then((res) => {
+      if (res.ok) setOpenSafety(res.data.open_safety);
+    });
   }
 
   async function confirm() {
@@ -141,6 +149,17 @@ export function ProjectStatusControl({
                   className="text-sm"
                 />
               </div>
+
+              {/* PROJ2-12 (6d) — warn, don't block, on substantial completion
+                  with open safety deficiencies. */}
+              {target === "substantially_complete" && openSafety > 0 && (
+                <p className="border-destructive/40 bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] text-destructive rounded-md border px-2.5 py-2 text-[11px]">
+                  This project has {openSafety} open safety-severity deficienc
+                  {openSafety === 1 ? "y" : "ies"}. You can still mark it
+                  substantially complete — substantial completion is a
+                  contractual judgment — but review them first.
+                </p>
+              )}
             </div>
           )}
 
