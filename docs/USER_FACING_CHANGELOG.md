@@ -116,6 +116,14 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Cost codes & margin snapshots (PROJ2-17/21)
+
+- Users can categorise job line items with cost codes and see an
+  estimate-vs-actual cost breakdown by code on each job.
+- Users can take point-in-time margin snapshots of a job or project (at
+  approval, 50%, completion or manually) and view how the forecast margin has
+  moved over the job's life.
+
 ### Projects & Jobs — Site log (PROJ2-16)
 
 - Users can keep a daily site log per job — weather, crew and hours, work

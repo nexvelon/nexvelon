@@ -192,6 +192,8 @@ export interface CreateLineItemInput {
   unitPrice: number;
   discountPct: number;
   taxable: boolean;
+  /** PROJ2-17 — optional cost code (nullable). */
+  costCodeId?: string | null;
   sortOrder?: number;
   actorId: string | null;
 }
@@ -217,6 +219,7 @@ export async function createLineItem(
       unit_price: input.unitPrice,
       discount_pct: input.discountPct,
       taxable: input.taxable,
+      cost_code_id: input.costCodeId ?? null,
       // quoted_* deliberately omitted → NULL (manual line, not a snapshot).
       sort_order: sortOrder,
       created_by: input.actorId,
@@ -244,6 +247,8 @@ export interface UpdateLineItemPatch {
   taxable?: boolean;
   sortOrder?: number;
   costCenterId?: string | null;
+  /** PROJ2-17 — set/clear the line's cost code. */
+  costCodeId?: string | null;
 }
 
 // Maps the camelCase patch to DB columns. quoted_* are intentionally NOT
@@ -259,6 +264,7 @@ const PATCH_COLUMN: Record<keyof UpdateLineItemPatch, string> = {
   taxable: "taxable",
   sortOrder: "sort_order",
   costCenterId: "cost_center_id",
+  costCodeId: "cost_code_id",
 };
 
 // Patch keys whose change moves a sell total — the only ones that require a

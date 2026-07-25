@@ -1660,6 +1660,76 @@ export type DbSiteLogCrewUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Cost codes (PROJ2-17, migration 0107) — an org-level taxonomy. Line items
+// carry an optional cost_code_id; the rollup's actual legs map to a category.
+// ----------------------------------------------------------------------------
+export type DbCostCategory =
+  | "labour"
+  | "materials"
+  | "subcontractor"
+  | "equipment"
+  | "other";
+
+export interface DbCostCode {
+  id: string;
+  code: string;
+  name: string;
+  category: DbCostCategory;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbCostCodeInsert = {
+  code: string;
+  name: string;
+  category: DbCostCategory;
+  sort_order?: number;
+  is_active?: boolean;
+};
+
+export type DbCostCodeUpdate = Partial<Omit<DbCostCodeInsert, "code">>;
+
+// ----------------------------------------------------------------------------
+// Margin snapshots (PROJ2-21, migration 0107) — an IMMUTABLE point-in-time
+// capture of a job's/project's quoted/estimated/actual/margin numbers, so
+// forecast drift is visible over the job's life. No update path (§2.2).
+// ----------------------------------------------------------------------------
+export interface DbMarginSnapshot {
+  id: string;
+  project_id: string;
+  job_id: string | null;
+  snapshot_at: string;
+  reason: string | null;
+  contract: number;
+  quoted_cost: number;
+  estimated_cost: number;
+  actual_cost: number;
+  actual_revenue: number;
+  margin: number;
+  margin_pct: number | null;
+  by_code: Record<string, { estimated: number; actual: number }> | null;
+  taken_by: string | null;
+  created_at: string;
+}
+
+export type DbMarginSnapshotInsert = {
+  project_id: string;
+  job_id?: string | null;
+  reason?: string | null;
+  contract?: number;
+  quoted_cost?: number;
+  estimated_cost?: number;
+  actual_cost?: number;
+  actual_revenue?: number;
+  margin?: number;
+  margin_pct?: number | null;
+  by_code?: Record<string, { estimated: number; actual: number }> | null;
+  taken_by?: string | null;
+};
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.
@@ -1803,6 +1873,8 @@ export interface DbJobLineItem {
   item_code: string | null;
   description: string;
   category: string | null;
+  /** PROJ2-17 — optional cost code (nullable; uncoded lines fall back to line_kind). */
+  cost_code_id: string | null;
   quantity: number;
   unit_cost: number;
   unit_price: number;

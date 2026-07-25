@@ -8,7 +8,7 @@
 // @dnd-kit sortable pattern as the quote builder (drag handle only). Cost-center
 // contract_value sync + the Quoted/Estimated/Actual variance panel are PROJ2-6b.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -55,6 +55,7 @@ import {
   cloneJobLineItemAction,
   reorderJobLineItemsAction,
 } from "@/app/(app)/projects/actions";
+import { listCostCodesAction } from "@/app/(app)/projects/cost-analysis-actions";
 import type { DbJobLineItem, DbProjectCostCenter } from "@/lib/types/database";
 
 type KindFilter = "all" | "part" | "labour";
@@ -93,6 +94,13 @@ export function JobLineItemsTab({
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<DbJobLineItem | null>(null);
   const [busy, setBusy] = useState(false);
+  // PROJ2-17 — active cost codes for the per-line picker.
+  const [costCodes, setCostCodes] = useState<{ id: string; code: string }[]>([]);
+  useEffect(() => {
+    listCostCodesAction({ activeOnly: true }).then((r) => {
+      if (r.ok) setCostCodes(r.data.map((c) => ({ id: c.id, code: c.code })));
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -166,6 +174,12 @@ export function JobLineItemsTab({
       if (code === li.item_code) return;
       commit(li.id, { item_code: code }, { itemCode: code });
     }
+  };
+
+  // PROJ2-17 — set/clear the line's cost code.
+  const editCostCode = (li: DbJobLineItem, codeId: string | null) => {
+    if (codeId === li.cost_code_id) return;
+    commit(li.id, { cost_code_id: codeId }, { costCodeId: codeId });
   };
 
   // ── Set mutations ──────────────────────────────────────────────────────────
@@ -305,7 +319,7 @@ export function JobLineItemsTab({
           <div className="overflow-x-auto">
             <div className="min-w-[1000px]">
               {/* Header */}
-              <div className="text-muted-foreground grid grid-cols-[24px_64px_100px_1fr_70px_90px_90px_64px_64px_90px_90px_60px] items-center gap-2 border-b border-[var(--border)] px-3 py-2 text-[10px] uppercase tracking-wider">
+              <div className="text-muted-foreground grid grid-cols-[24px_64px_100px_1fr_70px_90px_90px_64px_64px_90px_90px_88px_60px] items-center gap-2 border-b border-[var(--border)] px-3 py-2 text-[10px] uppercase tracking-wider">
                 <span />
                 <span>Kind</span>
                 <span>Code</span>
@@ -317,6 +331,7 @@ export function JobLineItemsTab({
                 <span className="text-right">Margin %</span>
                 <span className="text-right">Sell</span>
                 <span className="text-right">Cost</span>
+                <span>Cost code</span>
                 <span className="text-right">Actions</span>
               </div>
               <DndContext
@@ -342,6 +357,8 @@ export function JobLineItemsTab({
                       onText={editText}
                       onClone={clone}
                       onDelete={setPendingDelete}
+                      costCodes={costCodes}
+                      onCostCode={editCostCode}
                     />
                   ))}
                 </SortableContext>
@@ -461,6 +478,8 @@ function JobLineRow({
   onText,
   onClone,
   onDelete,
+  costCodes,
+  onCostCode,
 }: {
   li: DbJobLineItem;
   canEdit: boolean;
@@ -473,6 +492,8 @@ function JobLineRow({
   onText: (li: DbJobLineItem, field: "description" | "item_code", v: string) => void;
   onClone: (li: DbJobLineItem) => void;
   onDelete: (li: DbJobLineItem) => void;
+  costCodes: { id: string; code: string }[];
+  onCostCode: (li: DbJobLineItem, codeId: string | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: li.id, disabled: !canEdit });
@@ -488,7 +509,7 @@ function JobLineRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="grid grid-cols-[24px_64px_100px_1fr_70px_90px_90px_64px_64px_90px_90px_60px] items-center gap-2 border-b border-[var(--border)] px-3 py-1.5 last:border-0"
+      className="grid grid-cols-[24px_64px_100px_1fr_70px_90px_90px_64px_64px_90px_90px_88px_60px] items-center gap-2 border-b border-[var(--border)] px-3 py-1.5 last:border-0"
     >
       <button
         type="button"
@@ -586,6 +607,21 @@ function JobLineRow({
       <span className="text-muted-foreground text-right text-xs tabular-nums">
         {canViewFinancials ? formatCurrency(lineCost(li)) : "—"}
       </span>
+
+      {/* PROJ2-17 — per-line cost code. Uncoded lines still bucket by line_kind
+          in the breakdown, so this is an optional override. */}
+      <select
+        value={li.cost_code_id ?? ""}
+        disabled={!canEdit}
+        onChange={(e) => onCostCode(li, e.target.value || null)}
+        className="h-7 rounded-md border border-[var(--border)] bg-transparent px-1 text-[11px] disabled:opacity-60"
+        aria-label="Cost code"
+      >
+        <option value="">{isLabour ? "LAB" : "MAT"} (auto)</option>
+        {costCodes.map((c) => (
+          <option key={c.id} value={c.id}>{c.code}</option>
+        ))}
+      </select>
 
       <div className="flex items-center justify-end gap-0.5">
         {canEdit && (
