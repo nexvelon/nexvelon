@@ -12,6 +12,7 @@ import {
   getVendors,
   updateVendor,
 } from "@/lib/api/vendors";
+import { getVendorMetrics, type VendorMetrics } from "@/lib/api/vendor-metrics";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
@@ -135,6 +136,59 @@ export async function updateVendorAction(
 
     revalidatePath("/vendors");
     return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-9-1 — vendor performance metrics. Cost-side (spend) fields are redacted
+// to null for callers without financials:view, mirroring how the cost rollup
+// redacts its financial legs — defense-in-depth so figures never reach a client
+// that shouldn't see them. Operational metrics (on-time, lead time, fill rate,
+// part quantities) stay visible to anyone with inventory:view.
+export type VendorMetricsView = Omit<
+  VendorMetrics,
+  "ytd_spend" | "spend_by_month" | "price_variance" | "top_parts"
+> & {
+  ytd_spend: number | null;
+  spend_by_month: { month: number; amount: number | null }[];
+  price_variance: { pct: number | null; amount: number | null; matched_pos: number };
+  top_parts: { product_id: string; name: string; qty: number; spend: number | null }[];
+};
+
+function redactSpend(m: VendorMetrics): VendorMetricsView {
+  return {
+    ...m,
+    ytd_spend: null,
+    spend_by_month: m.spend_by_month.map((x) => ({ month: x.month, amount: null })),
+    price_variance: { pct: null, amount: null, matched_pos: m.price_variance.matched_pos },
+    top_parts: m.top_parts.map((p) => ({ ...p, spend: null })),
+  };
+}
+
+/**
+ * INV-9-1 — read a vendor's performance metrics. Gate: inventory:view (the same
+ * tier vendor reads ride today). Spend figures additionally require
+ * financials:view; when absent they come back null and the UI shows the
+ * operational metrics only.
+ */
+export async function getVendorMetricsAction(
+  vendorId: string,
+  year?: number
+): Promise<ActionResult<{ metrics: VendorMetricsView; canSeeSpend: boolean }>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me) return { ok: false, error: "You're not signed in." };
+    const role = adaptRole(me.role);
+    if (!hasPermission(role, "inventory", "view")) {
+      return { ok: false, error: "You don't have permission to view vendors." };
+    }
+    const canSeeSpend = hasPermission(role, "financials", "view");
+    const metrics = await getVendorMetrics(vendorId, { year });
+    return {
+      ok: true,
+      data: { metrics: canSeeSpend ? metrics : redactSpend(metrics), canSeeSpend },
+    };
   } catch (e) {
     return fail(e);
   }

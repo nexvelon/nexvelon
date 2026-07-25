@@ -2383,6 +2383,10 @@ export interface DbPurchaseOrder {
   // Historical POs remain unattributed; only new POs get stamped.
   project_id: string | null;
   job_id: string | null;
+  // INV-9-1 (migration 0109) — date the PO reached 'received' (all lines fully
+  // received). NULL for historical/never-fully-received POs (no backfill); the
+  // clean anchor for PO-level on-time % and lead time.
+  fully_received_at: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -2419,6 +2423,10 @@ export interface DbPurchaseOrderLine {
   line_no: number;
   // PO-1 (migration 0076) — denormalized part-number snapshot for durable PDFs.
   part_number: string | null;
+  // INV-9-1 (migration 0109) — date of the most recent receipt against this line
+  // (stamped each time received_qty advances). NULL for historical lines received
+  // before 0109 shipped (no backfill).
+  last_received_at: string | null;
   created_at: string;
   updated_at: string;
 }
