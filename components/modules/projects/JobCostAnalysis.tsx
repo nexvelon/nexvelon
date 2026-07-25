@@ -38,6 +38,8 @@ const REASONS = [
   { value: "approval", label: "At approval" },
   { value: "50%", label: "50% complete" },
   { value: "completion", label: "At completion" },
+  // PROJ2-18 — a WIP review is a natural moment to freeze the numbers.
+  { value: "wip_review", label: "WIP review" },
   { value: "manual", label: "Manual" },
 ];
 

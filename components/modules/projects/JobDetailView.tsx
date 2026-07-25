@@ -26,6 +26,7 @@ import { PerformanceTable } from "@/components/modules/projects/PerformanceTable
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
 import { JobCostAnalysis } from "@/components/modules/projects/JobCostAnalysis";
+import { JobWipCard } from "@/components/modules/projects/JobWipCard";
 import { JobTasksTab } from "@/components/modules/projects/tabs/JobTasksTab";
 import { DeficienciesTab } from "@/components/modules/projects/tabs/DeficienciesTab";
 import { JobCommissioningTab } from "@/components/modules/projects/tabs/JobCommissioningTab";
@@ -590,6 +591,10 @@ function FinancialsTab({
           <Stat label="Job gross profit" value={money(jobGrossProfit)} />
         </div>
       </Panel>
+
+      {/* PROJ2-18 — work-in-progress (over/under-billing). Renders for any
+          project viewer; the action redacts the cost side for non-financials. */}
+      <JobWipCard jobId={job.id} />
 
       {/* PROJ2-17/21 — cost breakdown by code + margin snapshot history.
           financials:edit only (actual cost/margin). */}
