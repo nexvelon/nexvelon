@@ -40,6 +40,7 @@ import { PerformanceTable } from "@/components/modules/projects/PerformanceTable
 import { ProjectTeamCard } from "@/components/modules/projects/ProjectTeamCard";
 import { ProjectFieldActivityCard } from "@/components/modules/projects/ProjectFieldActivityCard";
 import { ProjectWipCard } from "@/components/modules/projects/ProjectWipCard";
+import { ProjectScheduleCard } from "@/components/modules/projects/ProjectScheduleCard";
 import { ProjectTasksCard } from "@/components/modules/projects/ProjectTasksCard";
 import { ProjectDeficienciesCard } from "@/components/modules/projects/ProjectDeficienciesCard";
 import { WarrantyCard } from "@/components/modules/projects/WarrantyCard";
@@ -513,6 +514,9 @@ export function ProjectDetailView({
       {/* PROJ2-15 — the full project team (techs + subs, deduped, lead first).
           Extends SUB-6's assignment summary (self-hides when none). */}
       <ProjectTeamCard projectId={project.id} />
+
+      {/* PROJ2-20 — schedule timeline (Gantt) + milestones (self-hides when no jobs). */}
+      <ProjectScheduleCard projectId={project.id} />
 
       {/* PROJ2-18 — work-in-progress: over/under-billing per job (cost-side card). */}
       <ProjectWipCard projectId={project.id} />
