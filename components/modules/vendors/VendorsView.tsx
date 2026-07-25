@@ -4,6 +4,7 @@
 // Mirrors app/(app)/clients/ClientsView.tsx (local source-of-truth seeded from
 // SSR, refreshed via listVendorsAction after each mutation).
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Edit3, MoreHorizontal, Plus, Search, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -222,7 +223,9 @@ function VendorRow({
       >
         <div className="min-w-0 flex-1">
           <p className="font-serif text-sm font-medium leading-tight" style={{ color: "var(--brand-primary)" }}>
-            {vendor.name}
+            <Link href={`/vendors/${vendor.id}`} className="hover:underline">
+              {vendor.name}
+            </Link>
             {!vendor.is_active && (
               <span className="text-muted-foreground ml-2 text-[10px] uppercase tracking-wide">
                 inactive

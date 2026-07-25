@@ -7,7 +7,7 @@ import "server-only";
 // receiving flow (received_qty) will introduce non-destructive line handling.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { businessPONumber } from "@/lib/format";
+import { businessDateISO, businessPONumber } from "@/lib/format";
 import { receiveStock } from "@/lib/api/products";
 import { getVendorById } from "@/lib/api/vendors";
 import { getSiteById } from "@/lib/api/clients";
@@ -599,9 +599,13 @@ export async function receivePurchaseOrderLines(
     });
 
     // Increment immediately so a retry can't double-receive this delta.
+    // INV-9-1 — stamp the receipt date so lead-time / on-time are computable.
     const { error: upErr } = await supabase
       .from("purchase_order_lines")
-      .update({ received_qty: line.received_qty + qty })
+      .update({
+        received_qty: line.received_qty + qty,
+        last_received_at: businessDateISO(),
+      })
       .eq("id", line.id);
     if (upErr) {
       throw new Error(`receivePurchaseOrderLines/markReceived: ${upErr.message}`);
@@ -620,7 +624,13 @@ export async function receivePurchaseOrderLines(
       : null;
 
   if (next && next !== header.status) {
-    return setPurchaseOrderStatus(poId, next);
+    // INV-9-1 — stamp fully_received_at atomically with the → 'received'
+    // transition (the anchor for PO-level on-time % and lead time).
+    return setPurchaseOrderStatus(
+      poId,
+      next,
+      next === "received" ? { fully_received_at: businessDateISO() } : {}
+    );
   }
   return header;
 }

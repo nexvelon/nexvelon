@@ -5,6 +5,7 @@
 // top-parts metrics + drill-in are removed until they can be derived from real
 // POs (see TODO INV-1c).
 
+import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { DbVendor } from "@/lib/types/database";
@@ -18,9 +19,9 @@ export function VendorsTab({ vendors }: { vendors: DbVendor[] }) {
         <Building2 className="text-muted-foreground/50 mx-auto mb-3 h-8 w-8" />
         <p className="text-muted-foreground text-sm">
           No vendors added yet. Add one from the{" "}
-          <a href="/vendors" className="text-brand-navy underline underline-offset-2">
+          <Link href="/vendors" className="text-brand-navy underline underline-offset-2">
             Vendors
-          </a>{" "}
+          </Link>{" "}
           module.
         </p>
       </Card>
@@ -57,7 +58,8 @@ export function VendorsTab({ vendors }: { vendors: DbVendor[] }) {
               {cityLine ? <Item label="Location" value={cityLine} /> : null}
             </dl>
 
-            {/* TODO INV-1c: YTD spend from POs, lead time, top parts */}
+            {/* INV-9-1 (INV-1c) — YTD spend / lead time / top parts now live on
+                the vendor detail page (Performance): /vendors/[id] */}
           </Card>
         );
       })}

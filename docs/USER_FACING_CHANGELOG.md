@@ -116,6 +116,14 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Vendors — Performance metrics (INV-9-1)
+
+- Vendor pages now show a performance summary — year-to-date spend, on-time
+  delivery, average lead time, fill rate, price variance and top parts — with
+  delivery metrics based on purchase orders received going forward. Spend figures
+  are shown only to users with financials access; when there aren't enough dated
+  receipts yet, a metric reads "Not enough data yet" rather than a misleading 0%.
+
 ### Inventory — Job cost accuracy (INV-9-0)
 
 - Fixed: inventory consumed on a job now stays counted in that job's actual
