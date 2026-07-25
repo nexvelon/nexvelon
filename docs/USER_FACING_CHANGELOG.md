@@ -116,6 +116,18 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Inventory — Cycle counts (INV-9-2)
+
+- Users can run cycle counts — snapshot expected stock at a location (and/or
+  category), enter blind counts, review variances, and apply the adjustments to
+  inventory in one step. Uncounted lines are left untouched (never treated as
+  zero), and every applied correction is recorded on the stock movement ledger.
+
+### Projects & Jobs — Material reconciliation (INV-9-2)
+
+- Users can reconcile planned vs actual material cost on a job to spot over- or
+  under-consumption, on the job's Financials tab (dollar-level).
+
 ### Vendors — Performance metrics (INV-9-1)
 
 - Vendor pages now show a performance summary — year-to-date spend, on-time
