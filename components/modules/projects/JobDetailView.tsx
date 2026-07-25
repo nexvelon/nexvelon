@@ -25,6 +25,7 @@ import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
+import { JobCostAnalysis } from "@/components/modules/projects/JobCostAnalysis";
 import { JobTasksTab } from "@/components/modules/projects/tabs/JobTasksTab";
 import { DeficienciesTab } from "@/components/modules/projects/tabs/DeficienciesTab";
 import { JobCommissioningTab } from "@/components/modules/projects/tabs/JobCommissioningTab";
@@ -589,6 +590,12 @@ function FinancialsTab({
           <Stat label="Job gross profit" value={money(jobGrossProfit)} />
         </div>
       </Panel>
+
+      {/* PROJ2-17/21 — cost breakdown by code + margin snapshot history.
+          financials:edit only (actual cost/margin). */}
+      {canViewFinancials && (
+        <JobCostAnalysis jobId={job.id} projectId={job.project_id} />
+      )}
 
       {/* SUB-6 — who is assigned to this job (subs now, in-house techs later). */}
       <JobAssignments jobId={job.id} projectId={job.project_id} canEdit={canEdit} />

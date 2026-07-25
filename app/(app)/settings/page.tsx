@@ -33,6 +33,7 @@ import { LocationsPane } from "@/components/modules/settings/LocationsPane";
 import { CategoriesPane } from "@/components/modules/settings/CategoriesPane";
 import { TechsPane } from "@/components/modules/settings/TechsPane";
 import { LabourPane } from "@/components/modules/settings/LabourPane";
+import { CostCodesPane } from "@/components/modules/settings/CostCodesPane";
 import { PurchaseOrderEmailPane } from "@/components/modules/settings/PurchaseOrderEmailPane";
 import {
   ApiWebhooks,
@@ -72,6 +73,7 @@ const SECTIONS: Section[] = [
   { key: "locations", label: "Locations", description: "Warehouses and trucks that stock can move between.", icon: Warehouse },
   { key: "techs", label: "Techs", description: "Workers available for logging labour, with optional default cost rates.", icon: Wrench },
   { key: "labour", label: "Labour", description: "Default labour sell rate that prefills new quote labour lines.", icon: HardHat },
+  { key: "cost-codes", label: "Cost Codes", description: "Cost taxonomy for estimate-vs-actual by code on jobs.", icon: Hash },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
   { key: "numbering", label: "Numbering Schemes", description: "Editable patterns for quotes, projects, invoices, POs.", icon: Hash },
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
@@ -171,6 +173,7 @@ export default function SettingsPage() {
             {active === "locations" && <LocationsPane />}
             {active === "techs" && <TechsPane />}
             {active === "labour" && <LabourPane />}
+            {active === "cost-codes" && <CostCodesPane />}
             {active === "po-email" && isAdmin && <PurchaseOrderEmailPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
