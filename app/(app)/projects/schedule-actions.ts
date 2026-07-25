@@ -1,0 +1,209 @@
+"use server";
+
+// PROJ2-20 — schedule server actions. Reads gate projects:view; mutations
+// projects:edit. Revalidate the project + job paths. Cycle/duplicate/cross-
+// project rejection lives in the API (addDependency).
+
+import { revalidatePath } from "next/cache";
+import {
+  setJobPlannedDates,
+  listMilestones,
+  createMilestone,
+  updateMilestone,
+  setMilestoneStatus,
+  deleteMilestone,
+  addDependency,
+  removeDependency,
+  getProjectSchedule,
+  type CreateMilestoneInput,
+  type ProjectSchedule,
+} from "@/lib/api/schedule";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission, type Action } from "@/lib/permissions";
+import type { Role } from "@/lib/types";
+import type { DbMilestoneStatus, DbRole, DbScheduleMilestone } from "@/lib/types/database";
+
+export type ActionResult<T = unknown> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+function fail(err: unknown): { ok: false; error: string } {
+  const message =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
+  return { ok: false, error: message };
+}
+
+function adaptRole(r: DbRole): Role {
+  switch (r) {
+    case "Admin":
+    case "ProjectManager":
+    case "SalesRep":
+    case "Technician":
+    case "Subcontractor":
+    case "Accountant":
+    case "ViewOnly":
+      return r;
+    case "LeadTechnician":
+      return "Technician";
+    case "Dispatcher":
+      return "ProjectManager";
+    case "Warehouse":
+      return "Technician";
+    case "ClientPortal":
+      return "ViewOnly";
+  }
+}
+
+async function require(
+  action: Action
+): Promise<{ ok: true; actorId: string } | { ok: false; error: string }> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "You're not signed in." };
+  if (!hasPermission(adaptRole(me.role), "projects", action)) {
+    return { ok: false, error: "You don't have permission to manage this project." };
+  }
+  return { ok: true, actorId: me.id };
+}
+
+function rp(projectId: string, jobId?: string | null): void {
+  revalidatePath(`/projects/${projectId}`);
+  if (jobId) revalidatePath(`/projects/${projectId}/jobs/${jobId}`);
+}
+
+// ─── Reads ───────────────────────────────────────────────────────────────────
+
+export async function getProjectScheduleAction(
+  projectId: string
+): Promise<ActionResult<ProjectSchedule>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getProjectSchedule(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listMilestonesAction(scope: {
+  projectId?: string;
+  jobId?: string;
+}): Promise<ActionResult<DbScheduleMilestone[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listMilestones(scope) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
+
+export async function setJobPlannedDatesAction(
+  jobId: string,
+  projectId: string,
+  plannedStart: string | null,
+  plannedEnd: string | null
+): Promise<ActionResult<{ jobId: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    await setJobPlannedDates({ jobId, plannedStart, plannedEnd, actorId: gate.actorId });
+    rp(projectId, jobId);
+    return { ok: true, data: { jobId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function createMilestoneAction(
+  input: Omit<CreateMilestoneInput, "actorId">
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await createMilestone({ ...input, actorId: gate.actorId });
+    rp(input.projectId, input.jobId);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateMilestoneAction(
+  id: string,
+  projectId: string,
+  patch: { title?: string; targetDate?: string; notes?: string | null }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await updateMilestone(id, patch, gate.actorId);
+    rp(projectId);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setMilestoneStatusAction(
+  id: string,
+  projectId: string,
+  status: DbMilestoneStatus
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await setMilestoneStatus(id, status, gate.actorId);
+    rp(projectId);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteMilestoneAction(
+  id: string,
+  projectId: string
+): Promise<ActionResult<{ removed: boolean }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const removed = await deleteMilestone(id);
+    rp(projectId);
+    return { ok: true, data: { removed } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function addDependencyAction(
+  jobId: string,
+  dependsOnJobId: string,
+  projectId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await addDependency({ jobId, dependsOnJobId, actorId: gate.actorId });
+    rp(projectId, jobId);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function removeDependencyAction(
+  id: string,
+  projectId: string
+): Promise<ActionResult<{ removed: boolean }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const removed = await removeDependency(id);
+    rp(projectId);
+    return { ok: true, data: { removed } };
+  } catch (e) {
+    return fail(e);
+  }
+}

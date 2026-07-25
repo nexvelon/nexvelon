@@ -1849,15 +1849,70 @@ export interface DbJob {
   contract_value: number;
   status: JobStatus;
   sort_order: number;
+  /** PROJ2-20 — planned schedule (nullable). Distinct from actual completion. */
+  planned_start_date: string | null;
+  planned_end_date: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type DbJobInsert = Omit<DbJob, "id" | "created_at" | "updated_at"> & {
+export type DbJobInsert = Omit<
+  DbJob,
+  "id" | "created_at" | "updated_at" | "planned_start_date" | "planned_end_date"
+> & {
   id?: string;
+  // PROJ2-20 — optional at insert (set later via the schedule surface).
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
 };
+
+// ----------------------------------------------------------------------------
+// Schedule hooks (PROJ2-20, migration 0108) — milestones + simple finish-to-
+// start dependencies feeding a read-first Gantt. The HOOK Sprint 3 builds on.
+// ----------------------------------------------------------------------------
+export type DbMilestoneStatus = "pending" | "met" | "missed" | "cancelled";
+
+export interface DbScheduleMilestone {
+  id: string;
+  project_id: string;
+  job_id: string | null;
+  title: string;
+  target_date: string;
+  completed_at: string | null;
+  status: DbMilestoneStatus;
+  sort_order: number;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbScheduleMilestoneInsert = {
+  project_id: string;
+  job_id?: string | null;
+  title: string;
+  target_date: string;
+  completed_at?: string | null;
+  status?: DbMilestoneStatus;
+  sort_order?: number;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbScheduleMilestoneUpdate = Partial<
+  Omit<DbScheduleMilestoneInsert, "project_id" | "job_id">
+>;
+
+export interface DbJobDependency {
+  id: string;
+  job_id: string;
+  depends_on_job_id: string;
+  created_at: string;
+}
 
 // PROJ2-6a — a Job's line items (parts + labour), unified in one table. Labour
 // lines store hours in `quantity`, cost/hr in `unit_cost`, bill rate/hr in

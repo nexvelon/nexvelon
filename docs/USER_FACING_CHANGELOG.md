@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Schedule & timeline (PROJ2-20)
+
+- Users can set planned start and end dates on jobs, add schedule milestones and
+  simple job dependencies, and view a project timeline (Gantt) with milestone
+  markers, a today line and overdue highlighting.
+
 ### Projects & Jobs — WIP accounting (PROJ2-18)
 
 - Users can see work-in-progress accounting per job and project — percent
