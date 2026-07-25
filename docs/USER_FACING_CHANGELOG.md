@@ -116,6 +116,14 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Inventory — Job cost accuracy (INV-9-0)
+
+- Fixed: inventory consumed on a job now stays counted in that job's actual
+  material cost and margin (previously, marking a part consumed removed its cost,
+  overstating margin). Consumption is now recorded in the part's movement history
+  against the job it was used on. Note: affected jobs will show higher cost and
+  lower — corrected — margin after this change.
+
 ### Projects & Jobs — Schedule & timeline (PROJ2-20)
 
 - Users can set planned start and end dates on jobs, add schedule milestones and
