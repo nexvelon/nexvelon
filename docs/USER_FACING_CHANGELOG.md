@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — WIP accounting (PROJ2-18)
+
+- Users can see work-in-progress accounting per job and project — percent
+  complete, earned revenue, and whether each job is over- or under-billed — with
+  a portfolio view of total over/under-billing across active projects.
+
 ### Projects & Jobs — Cost codes & margin snapshots (PROJ2-17/21)
 
 - Users can categorise job line items with cost codes and see an
