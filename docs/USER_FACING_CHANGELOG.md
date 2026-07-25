@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects & Jobs — Site log (PROJ2-16)
+
+- Users can keep a daily site log per job — weather, crew and hours, work
+  performed, delays, deliveries, visitors and photos — and submit it as the
+  day's field report.
+- Each project shows recent field activity across its jobs.
+
 ### Projects & Jobs — Team assignment (PROJ2-15)
 
 - Users can assign in-house technicians to a job alongside subcontractors,

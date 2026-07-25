@@ -1585,6 +1585,81 @@ export type DbProjectBondUpdate = Partial<
 >;
 
 // ----------------------------------------------------------------------------
+// Site logs (PROJ2-16, migration 0105) — a daily field report per job. Crew
+// hours here are a FIELD RECORD, never a cost input (labour cost flows through
+// labour_entries). One log per (job, date). Photos attach via the signed-URL
+// flow with entity_type='site_log'.
+// ----------------------------------------------------------------------------
+export type DbSiteLogStatus = "draft" | "submitted";
+
+export interface DbSiteLog {
+  id: string;
+  project_id: string;
+  job_id: string;
+  log_date: string;
+  weather: string | null;
+  temperature_c: number | null;
+  work_performed: string | null;
+  delays_issues: string | null;
+  materials_received: string | null;
+  visitors: string | null;
+  safety_notes: string | null;
+  status: DbSiteLogStatus;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbSiteLogInsert = {
+  project_id: string;
+  job_id: string;
+  log_date?: string;
+  weather?: string | null;
+  temperature_c?: number | null;
+  work_performed?: string | null;
+  delays_issues?: string | null;
+  materials_received?: string | null;
+  visitors?: string | null;
+  safety_notes?: string | null;
+  status?: DbSiteLogStatus;
+  submitted_at?: string | null;
+  submitted_by?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbSiteLogUpdate = Partial<
+  Omit<DbSiteLogInsert, "project_id" | "job_id">
+>;
+
+export interface DbSiteLogCrew {
+  id: string;
+  site_log_id: string;
+  tech_id: string | null;
+  subcontractor_id: string | null;
+  person_name: string | null;
+  hours: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export type DbSiteLogCrewInsert = {
+  site_log_id: string;
+  tech_id?: string | null;
+  subcontractor_id?: string | null;
+  person_name?: string | null;
+  hours?: number | null;
+  notes?: string | null;
+};
+
+export type DbSiteLogCrewUpdate = Partial<
+  Omit<DbSiteLogCrewInsert, "site_log_id">
+>;
+
+// ----------------------------------------------------------------------------
 // Projects (PROJ-1, migration 0041) — projects + project_quotes +
 // project_cost_centers. originating_quote_id / quote_id are TEXT (quotes.id is
 // text); client_id / site_id are uuid. 1:1 with the 0041 columns.

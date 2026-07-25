@@ -28,6 +28,7 @@ import { JobAssignments } from "@/components/modules/subcontractors/JobAssignmen
 import { JobTasksTab } from "@/components/modules/projects/tabs/JobTasksTab";
 import { DeficienciesTab } from "@/components/modules/projects/tabs/DeficienciesTab";
 import { JobCommissioningTab } from "@/components/modules/projects/tabs/JobCommissioningTab";
+import { SiteLogTab } from "@/components/modules/projects/tabs/SiteLogTab";
 import { listTasksForJobAction } from "@/app/(app)/projects/task-actions";
 import { listDeficienciesForJobAction } from "@/app/(app)/projects/deficiency-actions";
 import { isOpen } from "@/lib/tasks/task-status";
@@ -64,6 +65,7 @@ type TabKey =
   | "tasks"
   | "deficiencies"
   | "commissioning"
+  | "site_log"
   | "team";
 
 const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
@@ -74,6 +76,7 @@ const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "tasks", label: "Tasks" }, // PROJ2-11 — unlocked
   { key: "deficiencies", label: "Deficiencies" }, // PROJ2-12 — unlocked
   { key: "commissioning", label: "Commissioning" }, // PROJ2-13 — unlocked
+  { key: "site_log", label: "Site log" }, // PROJ2-16 — daily field reports
   { key: "team", label: "Team", soon: "PROJ2-15" },
 ];
 
@@ -368,6 +371,10 @@ export function JobDetailView({
 
       {tab === "commissioning" && (
         <JobCommissioningTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
+      )}
+
+      {tab === "site_log" && (
+        <SiteLogTab jobId={job.id} projectId={job.project_id} canEdit={canEdit} />
       )}
 
       {tab === "attachments" && <div>{attachmentsSlot}</div>}
