@@ -26,11 +26,18 @@ import "server-only";
 //   spent = materials + labour ;  margin = contract − spent ;
 //   billed_pct = invoiced / contract (project-level; null when contract is 0).
 //
-// Material COST exclusion (intentionally narrower than the "billable" rule):
-// rows whose custody_status is 'lost' or 'returned' are EXCLUDED. A returned
-// unit already has current_cost_center_id = NULL (so the cost-center filter
-// drops it anyway), and a lost unit shouldn't appear as spend on a project
-// ledger you'd defend in a margin review — it no longer exists on the job.
+// Material COST inclusion (INV-9-0) — a stock row at the cost-center counts as
+// job material cost when ALL of:
+//   status ∈ {in_stock, allocated, consumed}   ('retired' excluded)
+//   custody_status ∉ {lost, returned}          (genuinely off the job)
+//   rma_status IS NULL                          (not being returned for credit)
+// 'consumed' is deliberately IN the set: a unit consumed on a job is the clearest
+// possible job cost. This corrects a bug where the leg counted ANY status at the
+// cost-center, so consuming a part (which nulled the cost-center on a partial
+// split) dropped its cost and OVERSTATED margin, while 'retired'/RMA'd rows that
+// should be gone lingered in cost. A returned unit already has
+// current_cost_center_id = NULL (so the cost-center filter drops it anyway); a
+// lost unit shouldn't appear as spend on a ledger you'd defend in a margin review.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { round2 } from "@/lib/quote-helpers";
@@ -165,7 +172,16 @@ export async function getProjectCostRollup(
     const { data: stockData, error: sErr } = await supabase
       .from("inventory_stock")
       .select("product_id, quantity, unit_cost, custody_status, current_cost_center_id")
-      .in("current_cost_center_id", ccIds);
+      .in("current_cost_center_id", ccIds)
+      // INV-9-0 — a unit CONSUMED on a job is still that job's material cost (it
+      // was definitively used), so 'consumed' counts alongside 'in_stock' /
+      // 'allocated'. 'retired' rows (write-offs / lost-unit mirror) are gone and
+      // never a job cost; a row with any rma_status is being returned to the
+      // vendor for credit, so it drops too. Before this filter the leg counted
+      // ANY status at the cost-center, so consuming a part could remove its cost
+      // (partial-consume nulled the cost-center) yet retired/RMA'd rows lingered.
+      .in("status", ["in_stock", "allocated", "consumed"])
+      .is("rma_status", null);
     if (sErr) throw new Error(`getProjectCostRollup/stock: ${sErr.message}`);
     const stock = (stockData ?? []) as {
       product_id: string;

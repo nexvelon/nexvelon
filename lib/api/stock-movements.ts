@@ -82,6 +82,41 @@ export async function recordOriginMovement(input: {
   });
 }
 
+/**
+ * INV-9-0 — append a CONSUMPTION event into the ledger. A consumed unit leaves
+ * on-hand stock, but if it was sitting on a job cost-center that consumption IS
+ * a cost of the job — so we snapshot the unit's CURRENT position as the `from`
+ * endpoint (the cost-center/job label when on a job, else warehouse/truck),
+ * giving an auditable trail of what was consumed where even though the row is
+ * now flagged consumed. `to_type='consumed'` (uncontrolled vocab, no DB CHECK).
+ * For a partial consume `stockId` is the split-off consumed row; for a full
+ * consume it is the source row itself.
+ */
+export async function recordConsumptionMovement(input: {
+  unit: DbInventoryStock;
+  stockId: string;
+  quantity: number;
+  note: string | null;
+}): Promise<void> {
+  const supabase = await db();
+  const from = await resolveFrom(supabase, input.unit);
+  const mover = await currentMover();
+  await recordMovement({
+    product_id: input.unit.product_id,
+    stock_id: input.stockId,
+    quantity: input.quantity,
+    from_type: from.type,
+    from_id: from.id,
+    from_label: from.label,
+    to_type: "consumed",
+    to_id: null,
+    to_label: "Consumed",
+    moved_by: mover.id,
+    moved_by_name: mover.name,
+    note: input.note,
+  });
+}
+
 // ── Label resolution ─────────────────────────────────────────────────────────
 
 function locationLabel(loc: {

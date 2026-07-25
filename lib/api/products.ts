@@ -41,7 +41,10 @@ import type {
 
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { getDefaultWarehouse } from "@/lib/api/stock-locations";
-import { recordOriginMovement } from "@/lib/api/stock-movements";
+import {
+  recordConsumptionMovement,
+  recordOriginMovement,
+} from "@/lib/api/stock-movements";
 import { resolveCategoryPaths } from "@/lib/api/categories";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 
@@ -737,7 +740,8 @@ export async function consumeStock(
   const stamp = new Date().toISOString();
 
   if (qty === u.quantity) {
-    // Full consume — flip the row in place.
+    // Full consume — flip the row in place. current_cost_center_id is left
+    // untouched: a unit consumed ON a job stays that job's cost (INV-9-0).
     const mergedNotes = u.notes ? `${u.notes}\n${note}` : note;
     const { error } = await supabase
       .from("inventory_stock")
@@ -745,6 +749,9 @@ export async function consumeStock(
       .eq("id", stockUnitId)
       .eq("status", "in_stock");
     if (error) throw new Error(`consumeStock: ${error.message}`);
+    // INV-9-0 — ledger the consumption against the unit's current position so
+    // "what was consumed on which job" is auditable.
+    await recordConsumptionMovement({ unit: u, stockId: stockUnitId, quantity: qty, note });
     return { consumedRowId: stockUnitId, serialNumber: u.serial_number };
   }
 
@@ -770,6 +777,14 @@ export async function consumeStock(
     po_number: u.po_number,
     acquired_at: u.acquired_at,
     status: "consumed",
+    // INV-9-0 — carry the source's position onto the split-off consumed row.
+    // Previously omitted, so a partial consume of job-placed stock nulled the
+    // cost-center and the row dropped out of the job's actual material cost —
+    // consuming a part silently REMOVED its cost and overstated margin. (Bulk
+    // lots are the only ones that split, and their custody is always the
+    // default 'in_stock', so no custody carry-over is needed.)
+    current_location_id: u.current_location_id,
+    current_cost_center_id: u.current_cost_center_id,
     notes: note,
   };
   const { data: ins, error: insErr } = await supabase
@@ -778,9 +793,13 @@ export async function consumeStock(
     .select("id")
     .single();
   if (insErr) throw new Error(`consumeStock/insert: ${insErr.message}`);
+  const consumedId = (ins as { id: string }).id;
+  // INV-9-0 — ledger the consumption against the source's position (the job
+  // cost-center when on a job), stamped onto the new split row.
+  await recordConsumptionMovement({ unit: u, stockId: consumedId, quantity: qty, note });
   // A partial consume only happens on bulk lots (serialized units are qty 1 →
   // full consume above), so the split-off consumed row carries no serial.
-  return { consumedRowId: (ins as { id: string }).id, serialNumber: null };
+  return { consumedRowId: consumedId, serialNumber: null };
 }
 
 // ----------------------------------------------------------------------------
