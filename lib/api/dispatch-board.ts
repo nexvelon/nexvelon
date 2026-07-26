@@ -47,6 +47,7 @@ export interface DispatchUnscheduledRow {
   job_type: DbScheduleJobType;
   required_certs: string[];
   site_label: string | null;
+  estimated_hours: number | null;
   window_start: string | null;
   window_end: string | null;
 }
@@ -116,14 +117,14 @@ export async function getDispatchBoard(window: {
 
   const { data: unschedData, error: uErr } = await supabase
     .from("schedule_jobs")
-    .select("id, title, priority, job_type, required_certs, site_id, location_text, window_start, window_end")
+    .select("id, title, priority, job_type, required_certs, site_id, location_text, estimated_hours, window_start, window_end")
     .eq("status", "unscheduled")
     .order("created_at", { ascending: false });
   if (uErr) throw new Error(`getDispatchBoard/unscheduled: ${uErr.message}`);
   const unschedJobs = (unschedData ?? []) as {
     id: string; title: string; priority: DbScheduleJobPriority; job_type: DbScheduleJobType;
     required_certs: string[]; site_id: string | null; location_text: string | null;
-    window_start: string | null; window_end: string | null;
+    estimated_hours: number | null; window_start: string | null; window_end: string | null;
   }[];
 
   // Site labels for every site referenced.
@@ -184,6 +185,7 @@ export async function getDispatchBoard(window: {
       job_type: j.job_type,
       required_certs: j.required_certs,
       site_label: labelFor(j.site_id, j.location_text),
+      estimated_hours: j.estimated_hours,
       window_start: j.window_start,
       window_end: j.window_end,
     })),
