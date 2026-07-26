@@ -7,6 +7,8 @@ import "server-only";
 // eligibility block).
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { businessDateISO } from "@/lib/format";
+import { TECH_CERT_WARN_DAYS, techCertState } from "@/lib/scheduling/tech-cert-status";
 import type {
   DbTechCertification,
   DbTechCertificationInsert,
@@ -45,6 +47,58 @@ export async function getCertsByTech(
     (out[c.tech_id] ??= []).push(c);
   }
   return out;
+}
+
+// DES-2 — cross-tech surfacing: every cert expired or expiring within `days`,
+// with the tech name + derived state. Parallel to getBondAlerts /
+// getComplianceRisk. Only dated certs can expire (no_expiry certs are excluded).
+export interface ExpiringTechCert {
+  id: string;
+  tech_id: string;
+  tech_name: string;
+  cert_type: string;
+  expiry_date: string; // non-null (undated certs can't expire)
+  state: "expired" | "expiring_soon";
+}
+
+export async function getExpiringTechCerts(
+  opts: { days?: number } = {}
+): Promise<ExpiringTechCert[]> {
+  const warnDays = opts.days ?? TECH_CERT_WARN_DAYS;
+  const today = businessDateISO();
+  // Cutoff = today + warnDays; anything with an expiry on/before it is expired
+  // or expiring soon. Undated certs (expiry_date IS NULL) can never expire.
+  const cutoff = new Date(`${today}T00:00:00.000Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() + warnDays);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("tech_certifications")
+    .select("id, tech_id, cert_type, expiry_date, tech:techs(name)")
+    .not("expiry_date", "is", null)
+    .lte("expiry_date", cutoffIso)
+    .order("expiry_date", { ascending: true });
+  if (error) throw new Error(`getExpiringTechCerts: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    tech_id: string;
+    cert_type: string;
+    expiry_date: string;
+    tech: { name: string } | null;
+  }[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    tech_id: r.tech_id,
+    tech_name: r.tech?.name ?? "—",
+    cert_type: r.cert_type,
+    expiry_date: r.expiry_date,
+    state: techCertState({ cert_type: r.cert_type, expiry_date: r.expiry_date }, today, warnDays) === "expired"
+      ? "expired"
+      : "expiring_soon",
+  }));
 }
 
 export interface CreateTechCertInput {

@@ -22,8 +22,10 @@ import {
 import {
   KNOWN_CERT_TYPES,
   certTypeLabel,
-  CERT_WARN_DAYS,
 } from "@/lib/scheduling/tech-eligibility";
+// DES-2 — the panel warns at 60d renewal lead time (the dispatch hard-block is
+// expired-only, so this window is informational).
+import { TECH_CERT_WARN_DAYS } from "@/lib/scheduling/tech-cert-status";
 import { expiryState, type ExpiryState } from "@/lib/expiry-state";
 import { businessDateISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -133,7 +135,7 @@ export function TechCertificationsDialog({
           ) : (
             <ul className="space-y-1.5">
               {certs.map((c) => {
-                const state = expiryState(c.expiry_date, today, CERT_WARN_DAYS);
+                const state = expiryState(c.expiry_date, today, TECH_CERT_WARN_DAYS);
                 const badge = STATE_BADGE[state];
                 return (
                   <li key={c.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-xs" style={{ borderColor: "var(--brand-border)" }}>

@@ -16,6 +16,8 @@ vi.mock("@/lib/api/dispatch-board", () => ({
     range: { from: "", to: "" },
   })),
 }));
+// DES-2 — the scheduling tier now also fans out to expiring tech certs.
+vi.mock("@/lib/api/tech-certifications", () => ({ getExpiringTechCerts: vi.fn(async () => []) }));
 
 import { getDashboardAlerts } from "@/lib/api/dashboard";
 

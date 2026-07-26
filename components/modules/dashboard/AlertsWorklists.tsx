@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  BadgeCheck,
   CalendarClock,
   ClipboardCheck,
   Flag,
@@ -42,6 +43,7 @@ export function AlertsWorklists() {
   const d = data.deficiencies;
   const m = data.upcoming_milestones;
   const dt = data.dispatch_today;
+  const tc = data.tech_cert_alerts;
 
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -61,6 +63,16 @@ export function AlertsWorklists() {
             <AllClear label="Nothing expiring" />
           ) : (
             <BigCount n={bw.bonds + bw.warranties} unit="expiring" sub={`${bw.expired} expired · ${bw.expiring_soon} expiring soon`} />
+          )}
+        </AlertCard>
+      )}
+
+      {tc && (
+        <AlertCard icon={BadgeCheck} title="Tech certifications" href="/settings" tone={tc.expired > 0 ? "danger" : tc.expiring_soon > 0 ? "warn" : "ok"}>
+          {tc.total_at_risk === 0 ? (
+            <AllClear label="All certifications current" />
+          ) : (
+            <BigCount n={tc.total_at_risk} unit="cert(s)" sub={`${tc.expired} expired · ${tc.expiring_soon} expiring soon`} danger={tc.expired > 0} />
           )}
         </AlertCard>
       )}
