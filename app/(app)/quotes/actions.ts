@@ -51,6 +51,10 @@ function fail(err: unknown): { ok: false; error: string } {
 
 export async function listQuotesAction(): Promise<ActionResult<Quote[]>> {
   try {
+    // REP-3 — was ungated (RLS-only). The quotes list surface (and now the
+    // pipeline report) both sit behind quotes access, so require quotes:view.
+    const gate = await requireQuotesPermission("view");
+    if (!gate.ok) return gate;
     return { ok: true, data: await listQuotes() };
   } catch (e) {
     return fail(e);
@@ -406,7 +410,7 @@ function adaptRole(r: DbRole): Role {
 }
 
 async function requireQuotesPermission(
-  action: "edit" | "create"
+  action: "view" | "edit" | "create"
 ): Promise<{ ok: true; actorId: string } | { ok: false; error: string }> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };

@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Reports — Operational reports + business snapshot (REP-3 / REP-4)
+
+- Added operational reports — sales pipeline, technician utilization, vendor
+  spend and inventory valuation — plus a business snapshot of real operating
+  metrics, each downloadable as CSV, Excel or PDF and gated by role.
+- Fixed: the quotes list action now requires quotes permission.
+
 ### Reports — Financial reports (REP-2)
 
 - Added financial reports — per-company P&L, margin analysis, project
