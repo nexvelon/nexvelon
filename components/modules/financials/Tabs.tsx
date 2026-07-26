@@ -17,6 +17,7 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { downloadReport } from "@/lib/reports/download";
 import { Button } from "@/components/ui/button";
 import {
   Bar,
@@ -475,15 +476,7 @@ export function ReceivablesTab() {
         toast.error(res.error);
         return;
       }
-      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadReport({ data: res.data.csv, filename: res.data.filename, mime: "text/csv;charset=utf-8;", encoding: "text" });
       toast.success("AR aging exported");
     } finally {
       setExporting(false);
@@ -770,15 +763,7 @@ export function TaxTab({ from, to }: TabProps) {
         toast.error(res.error);
         return;
       }
-      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadReport({ data: res.data.csv, filename: res.data.filename, mime: "text/csv;charset=utf-8;", encoding: "text" });
       toast.success("HST return exported");
     } finally {
       setExporting(false);

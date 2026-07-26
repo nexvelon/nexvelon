@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Can } from "@/lib/role-context";
+import { Can, useRole } from "@/lib/role-context";
+import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type Report = {
@@ -29,19 +30,22 @@ type Report = {
   desc: string;
   icon: React.ComponentType<{ className?: string }>;
   href?: string; // present = available; absent = coming
-  soon?: string; // "REP-2" etc.
+  soon?: string; // "REP-3" etc.
+  /** Financial tier required to open the report; absent = no financial gate. */
+  tier?: "view" | "edit";
 };
 
 const SECTIONS: { section: string; reports: Report[] }[] = [
   {
     section: "Financial",
     reports: [
-      { title: "Work-in-progress (WIP)", desc: "Over/under-billing across active projects.", icon: FileBarChart, href: "/reports/wip" },
-      { title: "P&L by company", desc: "Per-opco profit & loss.", icon: BarChart3, soon: "REP-2" },
-      { title: "Margin analysis", desc: "Quoted vs actual margin by project.", icon: TrendingUp, soon: "REP-2" },
-      { title: "AR aging", desc: "Receivables by age bucket.", icon: Wallet, soon: "REP-2" },
-      { title: "AP aging", desc: "Payables by age bucket.", icon: Receipt, soon: "REP-2" },
-      { title: "HST / tax", desc: "Net HST position per company.", icon: Receipt, soon: "REP-2" },
+      { title: "Work-in-progress (WIP)", desc: "Over/under-billing across active projects.", icon: FileBarChart, href: "/reports/wip", tier: "edit" },
+      { title: "P&L by company", desc: "Per-company profit & loss, project-to-date.", icon: BarChart3, href: "/reports/pnl-by-company", tier: "edit" },
+      { title: "Margin analysis", desc: "Quoted vs actual margin by project.", icon: TrendingUp, href: "/reports/margin", tier: "edit" },
+      { title: "Profitability ranking", desc: "Projects ranked by gross profit.", icon: BarChart3, href: "/reports/profitability", tier: "edit" },
+      { title: "AR aging", desc: "Receivables by client and age bucket.", icon: Wallet, href: "/reports/ar-aging", tier: "view" },
+      { title: "AP aging", desc: "Payables by vendor and age bucket.", icon: Receipt, href: "/reports/ap-aging", tier: "view" },
+      { title: "HST net position", desc: "HST collected vs ITCs, per company.", icon: Receipt, href: "/reports/hst", tier: "edit" },
     ],
   },
   {
@@ -56,12 +60,13 @@ const SECTIONS: { section: string; reports: Report[] }[] = [
   {
     section: "Compliance",
     reports: [
-      { title: "T5018 contractors", desc: "Annual contractor payment report.", icon: ShieldCheck, soon: "REP-2" },
+      { title: "T5018 contractors", desc: "Annual contractor payment report.", icon: ShieldCheck, href: "/reports/t5018", tier: "edit" },
     ],
   },
 ];
 
 export default function ReportsPage() {
+  const { role } = useRole();
   return (
     <Can resource="reports" action="view" fallback={<Restricted />}>
       <div className="space-y-8">
@@ -76,7 +81,11 @@ export default function ReportsPage() {
             <p className="nx-eyebrow mb-3">{section}</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {reports.map((r) => (
-                <ReportCard key={r.title} report={r} />
+                <ReportCard
+                  key={r.title}
+                  report={r}
+                  locked={r.tier ? !hasPermission(role, "financials", r.tier) : false}
+                />
               ))}
             </div>
           </div>
@@ -98,15 +107,17 @@ export default function ReportsPage() {
   );
 }
 
-function ReportCard({ report }: { report: Report }) {
+function ReportCard({ report, locked = false }: { report: Report; locked?: boolean }) {
   const { title, desc, icon: Icon, href, soon } = report;
+  // A report is openable only if it has an href AND (no tier gate or tier met).
+  const open = Boolean(href) && !locked;
   const inner = (
     <Card
       className={cn(
         "bg-card flex h-full items-start gap-3 border-l-4 p-4 shadow-sm transition-shadow",
-        href ? "hover:shadow-md" : "opacity-60"
+        open ? "hover:shadow-md" : "opacity-60"
       )}
-      style={{ borderLeftColor: href ? "var(--brand-accent)" : "var(--brand-border)" }}
+      style={{ borderLeftColor: open ? "var(--brand-accent)" : "var(--brand-border)" }}
     >
       <span
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -122,12 +133,17 @@ function ReportCard({ report }: { report: Report }) {
               {soon}
             </span>
           )}
+          {locked && !soon && (
+            <span className="text-muted-foreground inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide" style={{ borderColor: "var(--brand-border)" }}>
+              <Lock className="h-2.5 w-2.5" /> Restricted
+            </span>
+          )}
         </p>
         <p className="text-muted-foreground text-[13px]">{desc}</p>
       </div>
     </Card>
   );
-  return href ? <Link href={href}>{inner}</Link> : inner;
+  return open && href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 function Restricted() {

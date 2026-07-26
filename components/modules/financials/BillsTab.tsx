@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadReport } from "@/lib/reports/download";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -148,15 +149,7 @@ export function BillsTab({
         toast.error(res.error);
         return;
       }
-      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadReport({ data: res.data.csv, filename: res.data.filename, mime: "text/csv;charset=utf-8;", encoding: "text" });
       toast.success("AP aging exported");
     } finally {
       setExporting(false);

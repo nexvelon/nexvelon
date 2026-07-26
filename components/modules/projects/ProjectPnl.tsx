@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { downloadReport } from "@/lib/reports/download";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,15 +56,7 @@ export function ProjectPnl({ projectId }: { projectId: string }) {
         toast.error(res.error);
         return;
       }
-      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadReport({ data: res.data.csv, filename: res.data.filename, mime: "text/csv;charset=utf-8;", encoding: "text" });
       toast.success("P&L exported");
     } finally {
       setExporting(false);
