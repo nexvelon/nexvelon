@@ -116,6 +116,15 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Permissions — Editable role baselines + Warehouse role (DES-1)
+
+- Admins can now edit what each role can do — changes apply to every user with
+  that role — in addition to per-user overrides. The permissions that let admins
+  manage permissions are protected from accidental removal.
+- Added a Warehouse role (view everything, manage inventory) with consistent
+  access across the app; admins can extend or restrict any individual on top of
+  it.
+
 ### Permissions — Admin UI (PERM-4)
 
 - Admins can now view each role's permissions, grant or deny specific

@@ -143,6 +143,15 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ViewOnly: viewAll().filter(
     (p) => p.resource !== "users" && p.resource !== "settings"
   ),
+
+  // DES-1 — Warehouse: the ViewOnly view-everything baseline PLUS inventory
+  // management (create/edit + cost visibility, since receiving/valuation needs
+  // unit cost). A first-class editable role now, not an alias.
+  Warehouse: [
+    ...viewAll().filter((p) => p.resource !== "users" && p.resource !== "settings"),
+    ...crud(["inventory"]),
+    { resource: "inventory", action: "viewCost" },
+  ],
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -153,6 +162,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   Subcontractor: "Subcontractor",
   Accountant: "Accountant",
   ViewOnly: "View Only",
+  Warehouse: "Warehouse",
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -163,6 +173,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   Subcontractor: "Limited view of assigned projects and schedule.",
   Accountant: "Full visibility incl. margin; read-only on quotes.",
   ViewOnly: "Read-only across operational modules.",
+  Warehouse: "Views everything; creates and edits inventory (incl. cost).",
 };
 
 export function hasPermission(role: Role, resource: Resource, action: Action): boolean {
@@ -183,6 +194,7 @@ export const ALL_ROLES: Role[] = [
   "Subcontractor",
   "Accountant",
   "ViewOnly",
+  "Warehouse",
 ];
 
 /** The role's default grants as "resource:action" keys — the baseline the

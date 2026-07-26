@@ -29,13 +29,11 @@ import type { Role } from "@/lib/types";
 import type { DbProfile, DbRole } from "@/lib/types/database";
 
 /**
- * The 11-value DB role → 7-value app Role adapter used by the SERVER gates.
- * This is the single canonical copy of the function that was duplicated
- * byte-for-byte across 34 server files. Semantics are preserved EXACTLY —
- * note `Warehouse → Technician` (NOT ViewOnly): the client-side
- * `normalizeDbRole` maps Warehouse → ViewOnly, so the two intentionally differ
- * and are NOT merged here (reconciling them would change Warehouse users'
- * server permissions — out of scope for a no-decision-change cutover).
+ * The 11-value DB role → app Role adapter used by the SERVER gates. Single
+ * canonical copy (was duplicated across 34 server files, consolidated in
+ * PERM-2). DES-1: `Warehouse → Warehouse` — it is now a first-class matrix role
+ * with its own baseline, no longer aliased to Technician. This resolves the old
+ * server/client divergence (both adapters now map Warehouse → Warehouse).
  */
 export function adaptDbRole(r: DbRole): Role {
   switch (r) {
@@ -46,13 +44,12 @@ export function adaptDbRole(r: DbRole): Role {
     case "Subcontractor":
     case "Accountant":
     case "ViewOnly":
+    case "Warehouse":
       return r;
     case "LeadTechnician":
       return "Technician";
     case "Dispatcher":
       return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
     case "ClientPortal":
       return "ViewOnly";
   }

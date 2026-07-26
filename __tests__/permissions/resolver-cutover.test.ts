@@ -63,14 +63,15 @@ describe("getCurrentAuth resolution", () => {
     }
   });
 
-  it("adapts Warehouse → Technician (preserving the server adapter's semantics)", async () => {
+  it("adapts Warehouse → Warehouse (DES-1: now a first-class role)", async () => {
     h.profile = { id: "u2", role: "Warehouse", status: "Active" };
     const { getCurrentAuth } = await import("@/lib/permissions/resolve");
     const auth = await getCurrentAuth();
-    expect(auth.role).toBe("Technician");
-    // Technician can view inventory, cannot view financials.
-    expect(auth.can("inventory", "view")).toBe(true);
-    expect(auth.can("financials", "view")).toBe(false);
+    expect(auth.role).toBe("Warehouse");
+    // Warehouse: manages inventory + views everything, but can't edit financials.
+    expect(auth.can("inventory", "edit")).toBe(true);
+    expect(auth.can("financials", "view")).toBe(true); // view-all baseline
+    expect(auth.can("financials", "edit")).toBe(false);
   });
 
   it("resolves ONCE per request — the loader runs a single query across many checks", async () => {

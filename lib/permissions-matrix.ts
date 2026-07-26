@@ -195,6 +195,16 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Set<string>> = {
     "clients.view",
     "reports.view",
   ]),
+  // DES-1 — Warehouse: ViewOnly's view set + inventory management.
+  Warehouse: new Set([
+    "dashboard.view",
+    "quotes.view",
+    "projects.view",
+    "inventory.view", "inventory.viewCost", "inventory.editItems", "inventory.allocate", "inventory.createPO",
+    "scheduling.viewAll",
+    "clients.view",
+    "reports.view",
+  ]),
 };
 
 export function permissionsForRole(role: Role): Set<string> {

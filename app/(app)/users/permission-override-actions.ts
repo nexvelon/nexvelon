@@ -7,6 +7,7 @@
 
 import { requireAdmin, adaptDbRole, resolveEffectiveForUser } from "@/lib/permissions/resolve";
 import { getProfileByIdAdmin } from "@/lib/auth/profile";
+import { ADMIN_LOCKOUT_ERROR, isProtectedAdminCell } from "@/lib/permissions/guard";
 import {
   listOverridesForUser,
   setOverride,
@@ -51,6 +52,17 @@ export async function setUserOverrideAction(input: {
   if (!gate.ok) return gate;
   try {
     if (!input.userId) return { ok: false, error: "No user specified." };
+
+    // GUARDRAIL (DES-1): never let a protected admin-management cell be DENIED
+    // to an Admin-role user — that would strip their ability to fix permissions
+    // (self-lockout, or locking out a fellow admin).
+    if (input.state === "denied" && isProtectedAdminCell(input.resource, input.action)) {
+      const target = await getProfileByIdAdmin(input.userId);
+      if (target && adaptDbRole(target.role) === "Admin") {
+        return { ok: false, error: ADMIN_LOCKOUT_ERROR };
+      }
+    }
+
     const data = await setOverride({
       userId: input.userId,
       resource: input.resource,
