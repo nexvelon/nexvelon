@@ -23,6 +23,17 @@ export function makeSupabaseMock(
   const user = opts?.user === undefined ? { id: "u1" } : opts.user;
   return {
     auth: { getUser: vi.fn(async () => ({ data: { user } })) },
+    // rpc routes through resolve() with a synthetic table `rpc:<fn>` so a test
+    // can return a value for a Postgres function call (e.g. next_count_reference).
+    rpc(fn: string, ...args: unknown[]) {
+      const ctx: ChainCtx = {
+        table: `rpc:${fn}`,
+        op: "select",
+        terminal: "await",
+        filters: args.length ? [{ method: "args", args }] : [],
+      };
+      return Promise.resolve(resolve(ctx));
+    },
     from(table: string) {
       const ctx: ChainCtx = { table, op: "select", terminal: "await", filters: [] };
       const target: Record<string, unknown> = {

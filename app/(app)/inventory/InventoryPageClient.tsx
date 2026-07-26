@@ -13,6 +13,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
   FileBarChart,
   Layers,
@@ -58,6 +59,19 @@ const ReportsTab = dynamic(
   }
 );
 
+// INV-9-2 — self-fetching cycle-count surface; code-split so it loads only when opened.
+const CycleCountsTab = dynamic(
+  () =>
+    import("@/components/modules/inventory/CycleCountsTab").then((m) => m.CycleCountsTab),
+  {
+    loading: () => (
+      <Card className="bg-card p-8 text-center shadow-sm">
+        <p className="text-muted-foreground text-sm">Loading cycle counts…</p>
+      </Card>
+    ),
+  }
+);
+
 const TABS = [
   { key: "stock", label: "Stock", icon: PackageSearch },
   { key: "allocations", label: "Allocations", icon: ClipboardList },
@@ -65,6 +79,7 @@ const TABS = [
   { key: "pos", label: "Purchase Orders", icon: Warehouse },
   { key: "vendors", label: "Vendors", icon: Boxes },
   { key: "categories", label: "Categories", icon: ListTree },
+  { key: "counts", label: "Cycle counts", icon: ClipboardCheck },
   { key: "reports", label: "Reports", icon: FileBarChart },
 ] as const;
 
@@ -218,6 +233,7 @@ export function InventoryPageClient({
       {tab === "categories" && (
         <CategoriesTab categories={categories} products={products} />
       )}
+      {tab === "counts" && <CycleCountsTab />}
       {tab === "reports" && <ReportsTab />}
     </div>
   );

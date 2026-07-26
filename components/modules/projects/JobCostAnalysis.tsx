@@ -25,11 +25,13 @@ import {
 } from "@/components/ui/table";
 import {
   getCostBreakdownByCodeAction,
+  getJobConsumptionReconciliationAction,
   listSnapshotsAction,
   takeSnapshotAction,
   deleteSnapshotAction,
 } from "@/app/(app)/projects/cost-analysis-actions";
 import type { CostCodeBreakdown } from "@/lib/api/cost-codes";
+import type { JobConsumptionReconciliation } from "@/lib/api/consumption-recon";
 import type { DbMarginSnapshot } from "@/lib/types/database";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,7 @@ const REASONS = [
 
 export function JobCostAnalysis({ jobId, projectId }: { jobId: string; projectId: string }) {
   const [breakdown, setBreakdown] = useState<CostCodeBreakdown | null>(null);
+  const [recon, setRecon] = useState<JobConsumptionReconciliation | null>(null);
   const [snaps, setSnaps] = useState<DbMarginSnapshot[]>([]);
   const [takeOpen, setTakeOpen] = useState(false);
   const [reason, setReason] = useState("manual");
@@ -52,6 +55,7 @@ export function JobCostAnalysis({ jobId, projectId }: { jobId: string; projectId
 
   const load = () => {
     getCostBreakdownByCodeAction({ jobId }).then((r) => r.ok && setBreakdown(r.data));
+    getJobConsumptionReconciliationAction(jobId).then((r) => r.ok && setRecon(r.data));
     listSnapshotsAction({ jobId }).then((r) => r.ok && setSnaps(r.data));
   };
   useEffect(load, [jobId]);
@@ -122,6 +126,36 @@ export function JobCostAnalysis({ jobId, projectId }: { jobId: string; projectId
           uncoded lines fall under their line type. Supplier-bill memo cost is
           excluded, matching the margin basis.
         </p>
+      </Card>
+
+      {/* ── Material reconciliation (INV-9-2) ── */}
+      <Card className="p-4 shadow-sm">
+        <h3 className="text-brand-navy mb-3 font-serif text-base">Material reconciliation</h3>
+        {!recon ? (
+          <p className="text-muted-foreground text-[11px]">Loading…</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <ReconStat label="Planned" value={formatCurrency(recon.planned_materials)} />
+              <ReconStat label="Actual drawn" value={formatCurrency(recon.actual_materials)} />
+              <ReconStat
+                label="Variance"
+                value={`${recon.variance > 0 ? "+" : ""}${formatCurrency(recon.variance)}${
+                  recon.variance_pct != null
+                    ? ` (${recon.variance_pct > 0 ? "+" : ""}${recon.variance_pct.toFixed(1)}%)`
+                    : ""
+                }`}
+                tone={recon.variance > 0 ? "over" : recon.variance < 0 ? "under" : "flat"}
+              />
+            </div>
+            <p className="text-muted-foreground mt-3 text-[11px]">
+              Planned = estimated material line items; actual = stock booked to this
+              job (including consumed). A positive variance means more material was
+              drawn than planned (over-consumption). Dollar-level; item-level
+              reconciliation needs catalog-linked line items (future).
+            </p>
+          </>
+        )}
       </Card>
 
       {/* ── Margin history ── */}
@@ -205,6 +239,35 @@ export function JobCostAnalysis({ jobId, projectId }: { jobId: string; projectId
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function ReconStat({
+  label,
+  value,
+  tone = "flat",
+}: {
+  label: string;
+  value: string;
+  tone?: "over" | "under" | "flat";
+}) {
+  return (
+    <div
+      className="rounded-md border p-2.5"
+      style={{ borderColor: "var(--brand-border)", background: "var(--brand-card)" }}
+    >
+      <p className="text-muted-foreground text-[10px] uppercase tracking-wider">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 font-serif text-sm tabular-nums",
+          tone === "over" && "text-red-600",
+          tone === "under" && "text-[var(--brand-status-green)]"
+        )}
+        style={tone === "flat" ? { color: "var(--brand-primary)" } : undefined}
+      >
+        {value}
+      </p>
     </div>
   );
 }

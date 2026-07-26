@@ -988,6 +988,77 @@ export type DbStockMovementInsert = {
 };
 
 // ----------------------------------------------------------------------------
+// Cycle counts (INV-9-2, migration 0110) — a count session snapshots expected
+// on-hand at a scope, a blind physical count is entered per line, variances are
+// reviewed, and apply posts corrections through adjustStockQuantity.
+// ----------------------------------------------------------------------------
+export type DbCountSessionStatus =
+  | "open"
+  | "counting"
+  | "review"
+  | "applied"
+  | "cancelled";
+
+export interface DbCountSession {
+  id: string;
+  reference: string;
+  location_id: string | null;
+  category_id: string | null;
+  status: DbCountSessionStatus;
+  counted_by: string | null;
+  notes: string | null;
+  opened_at: string;
+  applied_at: string | null;
+  applied_by: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbCountSessionInsert = {
+  reference: string;
+  location_id?: string | null;
+  category_id?: string | null;
+  status?: DbCountSessionStatus;
+  counted_by?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export interface DbCountLine {
+  id: string;
+  session_id: string;
+  product_id: string | null;
+  stock_id: string | null;
+  product_label: string | null;
+  sku_snapshot: string | null;
+  serial_snapshot: string | null;
+  unit_cost_snapshot: number | null;
+  expected_qty: number;
+  counted_qty: number | null;
+  variance_qty: number | null;
+  variance_value: number | null;
+  applied: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export type DbCountLineInsert = {
+  session_id: string;
+  product_id?: string | null;
+  stock_id?: string | null;
+  product_label?: string | null;
+  sku_snapshot?: string | null;
+  serial_snapshot?: string | null;
+  unit_cost_snapshot?: number | null;
+  expected_qty: number;
+  counted_qty?: number | null;
+  notes?: string | null;
+};
+
+// ----------------------------------------------------------------------------
 // Vendors (PO-1, migration 0030) — supplier master records. Mirrors the
 // clients posture: free-text fields, is_active soft-state, created_by/updated_by
 // audit uids, shared handle_updated_at() trigger, RLS authenticated read+write

@@ -28,6 +28,10 @@ import {
   deleteSnapshot,
   type SnapshotTrendPoint,
 } from "@/lib/api/margin-snapshots";
+import {
+  getJobConsumptionReconciliation,
+  type JobConsumptionReconciliation,
+} from "@/lib/api/consumption-recon";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
@@ -160,6 +164,21 @@ export async function getCostBreakdownByCodeAction(scope: {
     const gate = await require("financials", "edit");
     if (!gate.ok) return gate;
     return { ok: true, data: await getCostBreakdownByCode(scope) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Consumption reconciliation (INV-9-2) ────────────────────────────────────
+
+/** Planned vs actual material draw for a job — cost variance, financials:edit. */
+export async function getJobConsumptionReconciliationAction(
+  jobId: string
+): Promise<ActionResult<JobConsumptionReconciliation>> {
+  try {
+    const gate = await require("financials", "edit");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getJobConsumptionReconciliation(jobId) };
   } catch (e) {
     return fail(e);
   }
