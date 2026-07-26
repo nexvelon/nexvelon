@@ -5,7 +5,8 @@
 // (requireAdmin, consolidated in PERM-2). Every mutation is audited in the
 // data layer (append-only permission_audit).
 
-import { requireAdmin } from "@/lib/permissions/resolve";
+import { requireAdmin, adaptDbRole, resolveEffectiveForUser } from "@/lib/permissions/resolve";
+import { getProfileByIdAdmin } from "@/lib/auth/profile";
 import {
   listOverridesForUser,
   setOverride,
@@ -16,6 +17,7 @@ import {
   type OverrideState,
 } from "@/lib/api/permission-overrides";
 import type { Action, Resource } from "@/lib/permissions";
+import type { Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -86,6 +88,34 @@ export async function listPermissionAuditAction(input: {
   if (!gate.ok) return gate;
   try {
     return { ok: true, data: await listPermissionAudit(input) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export interface UserEffectivePermissions {
+  role: Role;
+  /** Effective "resource:action" keys (role default + overrides, deny > grant). */
+  effective: string[];
+}
+
+/**
+ * PERM-4 — a user's EFFECTIVE permissions for the admin view. Reuses the
+ * resolver's precedence (resolveEffectiveForUser) so the UI shows exactly what
+ * the server enforces — the precedence is NOT reimplemented in the UI.
+ */
+export async function getUserEffectivePermissionsAction(
+  userId: string
+): Promise<ActionResult<UserEffectivePermissions>> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+  try {
+    if (!userId) return { ok: false, error: "No user specified." };
+    const profile = await getProfileByIdAdmin(userId);
+    if (!profile) return { ok: false, error: "User not found." };
+    const role = adaptDbRole(profile.role);
+    const effective = await resolveEffectiveForUser(userId, role);
+    return { ok: true, data: { role, effective: [...effective] } };
   } catch (e) {
     return fail(e);
   }

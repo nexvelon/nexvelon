@@ -31,7 +31,7 @@ export interface Permission {
   action: Action;
 }
 
-const ALL_RESOURCES: Resource[] = [
+export const ALL_RESOURCES: Resource[] = [
   "dashboard",
   "quotes",
   "projects",
@@ -45,7 +45,7 @@ const ALL_RESOURCES: Resource[] = [
   "settings",
 ];
 
-const ALL_ACTIONS: Action[] = [
+export const ALL_ACTIONS: Action[] = [
   "view",
   "create",
   "edit",
@@ -173,4 +173,20 @@ export function hasPermission(role: Role, resource: Resource, action: Action): b
 
 export function canViewRoute(role: Role, resource: Resource): boolean {
   return hasPermission(role, resource, "view");
+}
+
+export const ALL_ROLES: Role[] = [
+  "Admin",
+  "SalesRep",
+  "ProjectManager",
+  "Technician",
+  "Subcontractor",
+  "Accountant",
+  "ViewOnly",
+];
+
+/** The role's default grants as "resource:action" keys — the baseline the
+ *  per-user override editor renders and diffs against. */
+export function roleDefaultKeys(role: Role): Set<string> {
+  return new Set(ROLE_PERMISSIONS[role].map((p) => `${p.resource}:${p.action}`));
 }

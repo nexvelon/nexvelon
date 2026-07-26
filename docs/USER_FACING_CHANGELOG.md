@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Permissions — Admin UI (PERM-4)
+
+- Admins can now view each role's permissions, grant or deny specific
+  permissions for individual users with a required reason, see each user's
+  effective permissions, and review a full history of permission changes.
+
 ### Permissions — Per-user overrides + audit (PERM-3)
 
 - Admins can now grant or revoke individual permissions for a specific user on
