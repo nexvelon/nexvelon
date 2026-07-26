@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Permissions — DB mirror groundwork (PERM-1)
+
+- Groundwork: role permissions are now mirrored into the database (identical to
+  the existing rules) ahead of configurable permissions — no change to what any
+  role can do.
+
 ### Reports — Operational reports + business snapshot (REP-3 / REP-4)
 
 - Added operational reports — sales pipeline, technician utilization, vendor
