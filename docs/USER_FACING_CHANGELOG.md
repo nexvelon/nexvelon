@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard — Final panels, fully real (DASH-3)
+
+- The dashboard's revenue trend, top clients and inventory health panels now show
+  real data; the entire dashboard is now driven by live data with no fabricated
+  figures.
+
 ### Dashboard — Alerts, worklists & real panels (DASH-2)
 
 - The dashboard now surfaces real alerts and worklists — subcontractor compliance

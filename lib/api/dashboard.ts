@@ -16,7 +16,14 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import { businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
 import { daysBetween } from "@/lib/aging-buckets";
 import { round2 } from "@/lib/quote-helpers";
-import { getRevenueSummary, getHstNetPosition } from "@/lib/api/financials";
+import {
+  getRevenueSummary,
+  getHstNetPosition,
+  getMonthlyRevenue,
+  ISSUED_STATUSES,
+  type MonthlyRevenuePoint,
+} from "@/lib/api/financials";
+import { getInventoryReportData, listProducts } from "@/lib/api/products";
 import { getArAgingSummary } from "@/lib/api/ar-aging";
 import { getApSummary } from "@/lib/api/vendor-bills";
 import { getDepositsHeldTotal } from "@/lib/api/deposits";
@@ -427,5 +434,84 @@ export async function getQuotesByStatus(): Promise<QuotesByStatus> {
   return {
     by_status: [...agg.entries()].map(([status, v]) => ({ status, count: v.count, value: v.value })),
     open_pipeline_value: openValue,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// DASH-3 — the final three panels, wired to real reads. Pure derivation.
+// ────────────────────────────────────────────────────────────────────────────
+
+// Trailing-12-months invoiced revenue + cash collected, by month. NO fabricated
+// EBITDA series (the mock had one; there's no opex tracking).
+export async function getRevenueTrend(): Promise<MonthlyRevenuePoint[]> {
+  return getMonthlyRevenue({ months: 12 });
+}
+
+export interface TopClientRow {
+  client_id: string;
+  client_name: string;
+  revenue: number; // pre-tax (subtotal), issued invoices (sent/partially_paid/paid), in year
+  invoice_count: number;
+}
+
+export async function getTopClientsByRevenue(opts: {
+  year?: number;
+  limit?: number;
+} = {}): Promise<TopClientRow[]> {
+  const supabase = await db();
+  const year = opts.year ?? new Date().getFullYear();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("client_id, subtotal, status, issue_date")
+    .in("status", [...ISSUED_STATUSES])
+    .gte("issue_date", `${year}-01-01`)
+    .lte("issue_date", `${year}-12-31`);
+  if (error) throw new Error(`getTopClientsByRevenue: ${error.message}`);
+  const rows = (data ?? []) as { client_id: string; subtotal: number | null }[];
+
+  const agg = new Map<string, { revenue: number; invoice_count: number }>();
+  for (const r of rows) {
+    const cur = agg.get(r.client_id) ?? { revenue: 0, invoice_count: 0 };
+    cur.revenue = round2(cur.revenue + Number(r.subtotal ?? 0));
+    cur.invoice_count += 1;
+    agg.set(r.client_id, cur);
+  }
+  const clientIds = [...agg.keys()];
+  const names = new Map<string, string>();
+  if (clientIds.length > 0) {
+    const { data: clients } = await supabase.from("clients").select("id, name").in("id", clientIds);
+    for (const c of (clients ?? []) as { id: string; name: string }[]) names.set(c.id, c.name);
+  }
+  return clientIds
+    .map((id) => ({
+      client_id: id,
+      client_name: names.get(id) ?? "—",
+      revenue: agg.get(id)!.revenue,
+      invoice_count: agg.get(id)!.invoice_count,
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, opts.limit ?? 5);
+}
+
+export interface InventoryHealth {
+  by_category: { category: string; value: number }[];
+  low_stock: { product_id: string; name: string; on_hand: number; reorder_point: number }[];
+  low_stock_count: number;
+}
+
+export async function getInventoryHealth(): Promise<InventoryHealth> {
+  const [report, products] = await Promise.all([getInventoryReportData(), listProducts()]);
+  const low = products.filter((p) => p.stock <= p.reorderPoint);
+  return {
+    by_category: report.valuationByCategory
+      .map((c) => ({ category: c.category || "Uncategorized", value: round2(c.value) }))
+      .sort((a, b) => b.value - a.value),
+    low_stock: low.map((p) => ({
+      product_id: p.id,
+      name: p.name,
+      on_hand: p.stock,
+      reorder_point: p.reorderPoint,
+    })),
+    low_stock_count: low.length,
   };
 }

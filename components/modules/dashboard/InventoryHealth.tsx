@@ -1,148 +1,99 @@
 "use client";
 
-import {
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
-import { AlertTriangle } from "lucide-react";
+// DASH-3 — REAL inventory health: stock value by CATEGORY (getInventoryReportData
+// — the mock did by-vendor with no source) + low-stock list. inventory:view gated.
+
+import { useEffect, useState } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { AlertTriangle, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { useThemeColors } from "@/lib/theme-context";
-import type { VendorStockSlice } from "@/lib/dashboard-data";
+import { getInventoryHealthAction } from "@/app/(app)/dashboard/actions";
+import type { InventoryHealth as InventoryHealthData } from "@/lib/api/dashboard";
 
-interface Props {
-  data: VendorStockSlice[];
-  alerts: {
-    id: string;
-    sku: string;
-    name: string;
-    stock: number;
-    reorderPoint: number;
-    vendor: string;
-  }[];
-}
-
-interface TooltipPayload {
-  payload?: { vendor: string; value: number };
-}
-
-function DonutTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: TooltipPayload[];
-}) {
-  if (!active || !payload?.length || !payload[0].payload) return null;
-  const { vendor, value } = payload[0].payload;
-  return (
-    <div className="bg-card border-border rounded-md border p-3 shadow-md">
-      <p className="text-brand-navy font-serif text-sm font-medium">{vendor}</p>
-      <p className="text-brand-charcoal tabular-nums text-sm">
-        {formatCurrency(value)}
-      </p>
-    </div>
-  );
-}
-
-export function InventoryHealth({ data, alerts }: Props) {
+export function InventoryHealth() {
   const t = useThemeColors();
-  const themed = data.map((d, i) => ({ ...d, fill: t.charts[i % t.charts.length] }));
-  const total = themed.reduce((s, d) => s + d.value, 0);
+  const [data, setData] = useState<InventoryHealthData | null>(null);
+  const [restricted, setRestricted] = useState(false);
+
+  useEffect(() => {
+    getInventoryHealthAction().then((r) => {
+      if (r.ok) setData(r.data);
+      else setRestricted(true);
+    });
+  }, []);
+
+  const palette = [t.primary, t.accent, "#475569", "#1E40AF", "#0f766e", "#94a3b8"];
+  const totalValue = data ? data.by_category.reduce((s, c) => s + c.value, 0) : 0;
 
   return (
     <Card className="h-full transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
-        <CardTitle className="font-serif text-lg">Inventory Health</CardTitle>
+        <CardTitle className="font-serif text-lg">Inventory health</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-5 gap-4">
-          <div className="relative col-span-2 h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip content={<DonutTooltip />} />
-                <Pie
-                  data={themed}
-                  dataKey="value"
-                  nameKey="vendor"
-                  innerRadius={48}
-                  outerRadius={72}
-                  paddingAngle={2}
-                  strokeWidth={0}
-                >
-                  {themed.map((entry) => (
-                    <Cell key={entry.vendor} fill={entry.fill} />
+      <CardContent>
+        {restricted ? (
+          <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
+            <Lock className="h-4 w-4" /> Requires inventory access.
+          </div>
+        ) : !data ? (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Value by category */}
+            <div>
+              <p className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wide">Value by category</p>
+              {totalValue === 0 ? (
+                <p className="text-muted-foreground text-xs">No stock on hand.</p>
+              ) : (
+                <>
+                  <div className="h-[150px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={data.by_category} dataKey="value" nameKey="category" innerRadius={38} outerRadius={64} paddingAngle={2}>
+                          {data.by_category.map((_, i) => (
+                            <Cell key={i} fill={palette[i % palette.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-muted-foreground mt-1 text-center text-[11px]">
+                    <span className="text-brand-charcoal font-semibold tabular-nums">{formatCurrency(totalValue)}</span> total
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Low stock */}
+            <div>
+              <p className="text-muted-foreground mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wide">
+                Low stock
+                {data.low_stock_count > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-amber-600">
+                    <AlertTriangle className="h-3 w-3" /> {data.low_stock_count}
+                  </span>
+                )}
+              </p>
+              {data.low_stock_count === 0 ? (
+                <p className="text-[var(--brand-status-green)] text-xs font-medium">✓ All stocked</p>
+              ) : (
+                <ul className="max-h-[150px] space-y-1 overflow-y-auto">
+                  {data.low_stock.slice(0, 8).map((p) => (
+                    <li key={p.product_id} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="truncate" style={{ color: "var(--brand-primary)" }}>{p.name}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">
+                        <span className="font-semibold text-amber-600">{p.on_hand}</span> / {p.reorder_point}
+                      </span>
+                    </li>
                   ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
-                Stock value
-              </p>
-              <p className="text-brand-navy font-serif text-lg leading-tight">
-                {formatCurrency(total)}
-              </p>
+                </ul>
+              )}
             </div>
           </div>
-
-          <div className="col-span-3 space-y-2">
-            {themed.map((d) => (
-              <div key={d.vendor} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ background: d.fill }}
-                  />
-                  <span className="text-brand-charcoal font-medium">{d.vendor}</span>
-                </div>
-                <span className="text-brand-charcoal tabular-nums">
-                  {formatCurrency(d.value)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-brand-charcoal/70 mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
-            <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-            Low-stock alerts
-          </div>
-          <ul className="divide-border divide-y rounded-md border">
-            {alerts.length === 0 && (
-              <li className="text-muted-foreground p-3 text-sm">
-                All parts above their low-stock threshold.
-              </li>
-            )}
-            {alerts.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center justify-between px-3 py-2 text-xs"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-brand-charcoal truncate font-medium">
-                    {a.name}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {a.sku} · {a.vendor}
-                  </p>
-                </div>
-                <div className="ml-3 text-right">
-                  <p className="font-semibold text-red-600 tabular-nums">
-                    {a.stock}
-                  </p>
-                  <p className="text-muted-foreground">
-                    low-stock @ {a.reorderPoint}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

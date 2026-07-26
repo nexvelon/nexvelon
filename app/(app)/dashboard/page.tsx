@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
   AlertCircle,
@@ -18,7 +18,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { RangePicker } from "@/components/modules/dashboard/RangePicker";
 import { KpiCard } from "@/components/modules/dashboard/KpiCard";
 import { Restricted } from "@/components/modules/dashboard/Restricted";
-import { CanFinancials } from "@/components/modules/dashboard/CanFinancials";
 import { RevenueTrendChart } from "@/components/modules/dashboard/RevenueTrendChart";
 import { QuotesByStatusPanel } from "@/components/modules/dashboard/QuotesByStatusPanel";
 import { ActivityFeed } from "@/components/modules/dashboard/ActivityFeed";
@@ -26,15 +25,7 @@ import { TopClientsTable } from "@/components/modules/dashboard/TopClientsTable"
 import { InventoryHealth } from "@/components/modules/dashboard/InventoryHealth";
 import { TechnicianUtilization } from "@/components/modules/dashboard/TechnicianUtilization";
 import { AlertsWorklists } from "@/components/modules/dashboard/AlertsWorklists";
-import {
-  inventoryByVendor,
-  lowStockAlerts,
-  RANGE_LABEL,
-  rangeFor,
-  topClientsYTD,
-  trailing12MonthsTrend,
-  type RangeKey,
-} from "@/lib/dashboard-data";
+import { RANGE_LABEL, rangeFor, type RangeKey } from "@/lib/dashboard-data";
 import { getDashboardKpisAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardKpis } from "@/lib/api/dashboard";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -45,11 +36,6 @@ export default function DashboardPage() {
   const [range, setRange] = useState<RangeKey>("mtd");
   const [kpi, setKpi] = useState<DashboardKpis | null>(null);
   const [loading, setLoading] = useState(true);
-  // DASH-3 still renders these mock tiles (empty until wired).
-  const trend = useMemo(() => trailing12MonthsTrend(), []);
-  const top = useMemo(() => topClientsYTD(5), []);
-  const inv = useMemo(() => inventoryByVendor(), []);
-  const lowStock = useMemo(() => lowStockAlerts(6), []);
 
   // Real today drives the range-aware tiles + greeting (the mock's anchored
   // TODAY is gone from the dashboard).
@@ -211,38 +197,27 @@ export default function DashboardPage() {
         <AlertsWorklists />
       </div>
 
-      {/* Row 2 — Revenue trend (DASH-3, mock) + real Quotes-by-status */}
+      {/* Row 2 — real Revenue trend + real Quotes-by-status */}
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="lg:col-span-8">
-          <CanFinancials
-            fallback={<Restricted label="Revenue Trend" variant="panel" className="min-h-[400px]" />}
-          >
-            <RevenueTrendChart data={trend} />
-          </CanFinancials>
+          <RevenueTrendChart />
         </div>
         <div className="lg:col-span-4">
           <QuotesByStatusPanel />
         </div>
       </section>
 
-      {/* Row 3 — real Activity feed + Top clients (DASH-3, mock) */}
+      {/* Row 3 — real Activity feed + real Top clients */}
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ActivityFeed />
-        <CanFinancials fallback={<Restricted label="Top Clients YTD" variant="panel" />}>
-          <TopClientsTable rows={top} />
-        </CanFinancials>
+        <TopClientsTable />
       </section>
 
-      {/* Row 4 — Inventory (DASH-3, mock) + real Utilization */}
+      {/* Row 4 — real Inventory health + real Utilization */}
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <InventoryHealth data={inv} alerts={lowStock} />
+        <InventoryHealth />
         <TechnicianUtilization />
       </section>
-
-      <p className="text-muted-foreground pt-2 text-center text-[11px]">
-        The revenue trend, top clients and inventory panels are not yet wired to
-        live data (coming in DASH-3).
-      </p>
     </div>
   );
 }

@@ -11,11 +11,17 @@ import {
   getDashboardAlerts,
   getRecentActivity,
   getQuotesByStatus,
+  getRevenueTrend,
+  getTopClientsByRevenue,
+  getInventoryHealth,
   type DashboardKpis,
   type DashboardAlerts,
   type RecentActivityItem,
   type QuotesByStatus,
+  type TopClientRow,
+  type InventoryHealth,
 } from "@/lib/api/dashboard";
+import type { MonthlyRevenuePoint } from "@/lib/api/financials";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
@@ -129,6 +135,46 @@ export async function getQuotesByStatusAction(): Promise<ActionResult<QuotesBySt
       return { ok: false, error: "You don't have permission to view quotes." };
     }
     return { ok: true, data: await getQuotesByStatus() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── DASH-3 final panels ──────────────────────────────────────────────────────
+
+/** Guard a read behind a resource:action; returns null on OK, else the error. */
+async function gateOr(resource: "financials" | "inventory", action: "view"): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me) return "You're not signed in.";
+  if (!hasPermission(adaptRole(me.role), resource, action)) return "Restricted.";
+  return null;
+}
+
+export async function getRevenueTrendAction(): Promise<ActionResult<MonthlyRevenuePoint[]>> {
+  try {
+    const denied = await gateOr("financials", "view");
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getRevenueTrend() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getTopClientsByRevenueAction(): Promise<ActionResult<TopClientRow[]>> {
+  try {
+    const denied = await gateOr("financials", "view");
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getTopClientsByRevenue({ limit: 5 }) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getInventoryHealthAction(): Promise<ActionResult<InventoryHealth>> {
+  try {
+    const denied = await gateOr("inventory", "view");
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await getInventoryHealth() };
   } catch (e) {
     return fail(e);
   }
