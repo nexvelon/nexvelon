@@ -1,3 +1,4 @@
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // SITE-DETAIL — server component for the dedicated /sites/[id] detail page.
 // Loads one site (joined with its parent-client slice) and hands off to the
 // lean SiteDetailView. Kept intentionally minimal: header + parent-client link
@@ -12,32 +13,8 @@ import { QuotesForEntitySection } from "@/components/modules/quotes/QuotesForEnt
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-// DbRole (11) → app Role (7); mirrors the projects/attachments action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 export default async function SiteDetailPage({
   params,

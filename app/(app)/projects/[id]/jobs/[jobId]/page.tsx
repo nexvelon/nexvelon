@@ -1,3 +1,4 @@
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // PROJ2-4d — server component for a single Job (Main Job or Change Order). The
 // single fetch orchestrator: loads the project, the job (validating it belongs
 // to the project), the job's rollup entry, cost centers, invoices, POs, and the
@@ -24,32 +25,8 @@ import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTr
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
-import type { DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-// DbRole (11) → app Role (7); mirrors the project detail page helper.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 // Financial legs redacted for non-financials callers — mirrors redactRollup in
 // rollup-actions.ts so numbers don't reach the client payload either.

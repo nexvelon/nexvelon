@@ -1,4 +1,5 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 // POLISH-17 — server actions for the locked legal-document editor + audit log.
 // Only the two T&C settings keys can be written through here. Every save and
@@ -17,7 +18,6 @@ import {
   type DbSettingsAuditRow,
   type AuditFilters,
 } from "@/lib/api/settings-audit";
-import { getCurrentProfile } from "@/lib/auth/profile";
 import { changeSummary } from "@/lib/word-diff";
 import { businessDateTime } from "@/lib/format";
 import type { DbProfile } from "@/lib/types/database";
@@ -34,17 +34,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-async function requireAdmin(): Promise<
-  { ok: true; profile: DbProfile } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true, profile: me };
 }
 
 function editorName(p: DbProfile): string {

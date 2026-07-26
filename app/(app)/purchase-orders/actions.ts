@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // PO-2 — purchase-orders server actions. Mirrors vendors/clients actions:
 // uniform ActionResult, inventory-resource permission gate, best-effort activity
@@ -31,8 +32,7 @@ import { sendPurchaseOrderEmail } from "@/lib/auth/email";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
-import type { DbPurchaseOrderStatus, DbRole } from "@/lib/types/database";
+import type { DbPurchaseOrderStatus } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -46,28 +46,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-// DbRole (11) → mock Role (7) for hasPermission; mirrors quotes/new + vendors.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function requireInventory(

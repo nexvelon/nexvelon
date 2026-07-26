@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // SCHED-1 — scheduling server actions. Gate on the existing 'scheduling'
 // resource: reads → scheduling:view, mutations → scheduling:edit (Dispatcher
@@ -62,11 +63,9 @@ import { listTechs } from "@/lib/api/techs";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
 import type {
   DbAbsenceStatus,
   DbAbsenceType,
-  DbRole,
   DbScheduleAudit,
   DbScheduleJob,
   DbScheduleJobStatus,
@@ -84,27 +83,6 @@ function fail(err: unknown): { ok: false; error: string } {
   const message =
     err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
   return { ok: false, error: message };
-}
-
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function require(

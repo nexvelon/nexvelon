@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // PROJ-1 — projects server actions. PROJ2-3: gates now live on the projects:*
 // resource — reads on projects:view, createProjectFromQuote on projects:create,
@@ -68,11 +69,10 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import type {
   DbProjectCostCenter,
-  DbRole,
   JobStatus,
   ProjectStatus,
 } from "@/lib/types/database";
-import type { Quote, Role } from "@/lib/types";
+import type { Quote } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -80,29 +80,6 @@ export type ActionResult<T = unknown> =
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
-}
-
-// DbRole (11) → app Role (7) for hasPermission; mirrors the inventory / vendors
-// / attachments action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 // PROJ2-3 — project mutations now gate on the projects:* resource (was

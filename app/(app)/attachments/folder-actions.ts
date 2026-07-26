@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // PROJ2-4b — server actions for the folder tree. Folder + folder-scoped file
 // operations are gated on projects:edit (project-write is the strongest existing
@@ -18,8 +19,7 @@ import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import type { DbRole, DbAttachment } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
+import type { DbAttachment } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -27,27 +27,6 @@ export type ActionResult<T = unknown> =
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
-}
-
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function requireProjectsEdit(): Promise<

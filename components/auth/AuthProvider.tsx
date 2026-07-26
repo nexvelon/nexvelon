@@ -50,6 +50,12 @@ interface AuthContextValue {
   profile: DbProfile | null;
   /** Chunk 3c: the current user's per-user grant keys (allow-only overlay). */
   grants: Set<string>;
+  /**
+   * PERM-2: the user's resolved permission set ("resource:action" keys) from the
+   * DB matrix. `null` until loaded / on failure → consumers fall back to the
+   * static matrix. Equals the static matrix per the PERM-1 parity gate.
+   */
+  permissionSet: Set<string> | null;
   status: AuthStatus;
   isAuthenticated: boolean;
   signOut: () => Promise<void>;
@@ -160,6 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // whenever ANY path sets the profile. Best-effort — empty on failure; never
   // blocks auth.
   const [grants, setGrants] = useState<Set<string>>(new Set());
+  // PERM-2: the user's resolved permission set ("resource:action" keys) loaded
+  // once from role_permission_matrix (the DB mirror of lib/permissions.ts).
+  // `null` until loaded → <Can> falls back to the static matrix during the
+  // window and on failure (never more permissive than today; the DB set equals
+  // the static matrix per the PERM-1 parity gate, so there is no visible swap).
+  const [permissionSet, setPermissionSet] = useState<Set<string> | null>(null);
 
   // We use a ref to avoid stale-closure issues inside the auth subscription.
   const mountedRef = useRef(true);
@@ -544,6 +556,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [profileId]);
 
+  // PERM-2: load the current user's resolved permission set from the DB matrix
+  // (role_permission_matrix, seeded from lib/permissions.ts by 0114). Keyed on
+  // the profile id + role. Best-effort — on any failure the set stays null and
+  // <Can> falls back to the static matrix (fail-safe, never more permissive).
+  const profileRole = profile?.role ?? null;
+  useEffect(() => {
+    if (!profileId || !profileRole) {
+      setPermissionSet(null);
+      return;
+    }
+    const appRole = normalizeDbRole(profileRole);
+    let active = true;
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("role_permission_matrix")
+          .select("resource, action")
+          .eq("role", appRole);
+        if (!active) return;
+        if (error) {
+          setPermissionSet(null); // fail-safe → static matrix
+          return;
+        }
+        setPermissionSet(
+          new Set(
+            (data ?? []).map(
+              (r) => `${r.resource as string}:${r.action as string}`
+            )
+          )
+        );
+      } catch {
+        if (active) setPermissionSet(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [profileId, profileRole]);
+
   const signOut = useCallback(async () => {
     // Fire-and-forget sign-out via /auth/signout (GET) — fixed 2026-05-10.
     //
@@ -648,13 +699,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       grants,
+      permissionSet,
       status,
       isAuthenticated: status === "authenticated",
       signOut,
       refreshProfile,
       seedSession,
     }),
-    [user, profile, grants, status, signOut, refreshProfile, seedSession]
+    [user, profile, grants, permissionSet, status, signOut, refreshProfile, seedSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

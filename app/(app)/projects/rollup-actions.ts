@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // JC-2 — project cost-rollup action. Read-only and open to authenticated
 // callers, BUT the financial-sensitive legs (labour, spent, margin) are
@@ -14,8 +15,6 @@ import {
 import { getJobById } from "@/lib/api/projects";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -29,28 +28,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-// DbRole (11) → app Role (7); mirrors the invoices/labour action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 export interface ProjectRollupResult {

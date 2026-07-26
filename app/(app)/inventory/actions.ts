@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // INV-2b — server actions for product catalog CRUD. Mirrors the
 // clients/actions.ts shape: uniform ActionResult so client callers can toast
@@ -58,36 +59,12 @@ import type {
   DbInventoryProductUpdate,
   DbInventoryStock,
   DbInventoryStockUpdate,
-  DbRole,
 } from "@/lib/types/database";
-import type { Product, Role } from "@/lib/types";
+import type { Product } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-// PARTS-1: DbRole (11) → app Role (7) for hasPermission; mirrors the
-// vendors / PO / attachments action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 function fail(err: unknown): { ok: false; error: string } {
   const message =

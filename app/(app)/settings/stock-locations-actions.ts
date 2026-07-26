@@ -1,4 +1,5 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 // MOVE-1 — server actions for the managed stock-locations list. Mirrors
 // manufacturers-actions.ts: reads open to authenticated callers, writes gated
@@ -11,7 +12,6 @@ import {
   updateStockLocation,
   deleteStockLocation,
 } from "@/lib/api/stock-locations";
-import { getCurrentProfile } from "@/lib/auth/profile";
 import type {
   DbStockLocation,
   DbStockLocationUpdate,
@@ -29,17 +29,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true };
 }
 
 function revalidate() {

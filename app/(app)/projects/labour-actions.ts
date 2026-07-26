@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // JC-1 — labour server actions for the project detail view. Reads are
 // RLS-gated (authenticated SELECT). Writes are financial-sensitive, so they
@@ -17,8 +18,7 @@ import {
 import { listTechs } from "@/lib/api/techs";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbTech, DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
+import type { DbTech } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -32,29 +32,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-// DbRole (11) → app Role (7) for hasPermission; mirrors the invoices/projects
-// action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 // Financial-sensitive: only roles with `financials` edit (Admin, Accountant).

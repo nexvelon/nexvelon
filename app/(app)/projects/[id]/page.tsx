@@ -1,3 +1,4 @@
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // PROJ-1 — server component for a single project. Loads the real project +
 // client/site names + cost centers + linked quotes, then hands off to the
 // interactive ProjectDetailView. The elaborate Tasks/Schedule/Materials/etc.
@@ -15,32 +16,8 @@ import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrd
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-// DbRole (11) → app Role (7); mirrors the projects action helper.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 export default async function ProjectDetailPage({
   params,

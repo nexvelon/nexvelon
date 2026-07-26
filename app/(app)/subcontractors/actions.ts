@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // SUB-1 — subcontractors server actions. Mirrors app/(app)/vendors/actions.ts:
 // uniform ActionResult, a require<resource> gate, empty-diff no-op on update.
@@ -56,9 +57,7 @@ import type { ComplianceSummary } from "@/lib/subcontractors/compliance-status";
 import { businessDateISO } from "@/lib/format";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
 import type {
-  DbRole,
   DbSubAgreementStatus,
   DbSubcontractor,
   DbSubcontractorComplianceDoc,
@@ -79,28 +78,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-// DbRole (11) → app Role (7); mirrors the vendors/projects action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function require(

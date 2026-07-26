@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // SUB-6 — job-assignment server actions. GATE CHOICE: assignments are project
 // data (who is on this job/project) and will extend to in-house techs in
@@ -37,8 +38,7 @@ import { canAssignSubcontractor, type EligibilityResult } from "@/lib/subcontrac
 import { businessDateISO } from "@/lib/format";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
-import type { DbAssignmentStatus, DbRole } from "@/lib/types/database";
+import type { DbAssignmentStatus } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -48,28 +48,6 @@ function fail(err: unknown): { ok: false; error: string } {
   const message =
     err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
   return { ok: false, error: message };
-}
-
-// DbRole (11) → app Role (7); mirrors the rollup/invoices action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function require(

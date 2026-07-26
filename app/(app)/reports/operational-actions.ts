@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // REP-3 / REP-4 — the operational + business-snapshot reports, mounted in the
 // Reports hub. Same generic dispatcher shape as the financial reports, but each
@@ -23,8 +24,6 @@ import type { ReportDataset } from "@/lib/reports/dataset";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import { businessDateISO } from "@/lib/format";
-import type { Role } from "@/lib/types";
-import type { DbRole } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -32,27 +31,6 @@ export type ActionResult<T = unknown> =
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
-}
-
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 export type OperationalReportKey =
