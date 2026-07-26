@@ -485,6 +485,21 @@ until Jay triggers it and the guide lands under `/docs/user-guide/`.
 
 ---
 
+## Deferred modules (planning captured)
+
+Full future vision documented so nothing is lost; **not built**, build
+deferred to after current work.
+
+- **Expenses · Receipt OCR · Payroll/HR** —
+  [`docs/FUTURE_MODULES_EXPENSES_PAYROLL.md`](docs/FUTURE_MODULES_EXPENSES_PAYROLL.md).
+  Employee/reimbursable expenses (manual-first, feeds job cost + HST +
+  reimbursement), an optional pluggable receipt-OCR add-on (no zero-cost OCR
+  exists — manual is the always-on baseline), and full Canadian payroll/paystubs
+  /HR (serious CRA-compliance arc; tax-engine decision required first). See the
+  doc for the consolidated open-decisions list.
+
+---
+
 ## Open architectural decisions awaiting design
 
 These decisions get resolved in the design passes for items 2 + 4
