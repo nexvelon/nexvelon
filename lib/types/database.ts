@@ -948,11 +948,55 @@ export interface DbScheduleAssignment {
   status: DbScheduleAssignmentStatus;
   job_assignment_id: string | null;
   notes: string | null;
+  // SCHED-4 (migration 0113) — the single canonical booking→labour link; set on
+  // conversion, freed (SET NULL) if the labour_entry is deleted.
+  converted_labour_entry_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// SCHED-4 (migration 0113) — the append-only schedule change log.
+export type DbScheduleAuditAction =
+  | "created"
+  | "moved"
+  | "cancelled"
+  | "completed"
+  | "converted_to_labour"
+  | "unconverted";
+
+export interface DbScheduleAudit {
+  id: string;
+  schedule_assignment_id: string | null;
+  schedule_job_id: string | null;
+  tech_id: string | null;
+  action: DbScheduleAuditAction;
+  from_starts_at: string | null;
+  from_ends_at: string | null;
+  to_starts_at: string | null;
+  to_ends_at: string | null;
+  from_tech_id: string | null;
+  to_tech_id: string | null;
+  detail: Record<string, unknown> | null;
+  actor_id: string | null;
+  created_at: string;
+}
+
+export type DbScheduleAuditInsert = {
+  schedule_assignment_id?: string | null;
+  schedule_job_id?: string | null;
+  tech_id?: string | null;
+  action: DbScheduleAuditAction;
+  from_starts_at?: string | null;
+  from_ends_at?: string | null;
+  to_starts_at?: string | null;
+  to_ends_at?: string | null;
+  from_tech_id?: string | null;
+  to_tech_id?: string | null;
+  detail?: Record<string, unknown> | null;
+  actor_id?: string | null;
+};
 
 export type DbScheduleAssignmentInsert = {
   schedule_job_id: string;

@@ -133,6 +133,14 @@
 - Users can reconcile planned vs actual material cost on a job to spot over- or
   under-consumption, on the job's Financials tab (dollar-level).
 
+### Scheduling — Field view, audit & the cost seam (SCHED-4)
+
+- Technician schedules can be viewed read-only, and every booking change is
+  recorded in an append-only schedule history.
+- A completed booking can be explicitly converted into a labour cost entry on its
+  job — once only, with full traceability; bookings never become cost
+  automatically.
+
 ### Scheduling — Working hours & availability (SCHED-3)
 
 - Users can set technician working hours and record time off with an approval
