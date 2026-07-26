@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Permissions — Per-user overrides + audit (PERM-3)
+
+- Admins can now grant or revoke individual permissions for a specific user on
+  top of their role, with a deny always winning over a grant, and every change
+  recorded in an append-only audit log.
+
 ### Permissions — DB-resolved with fail-safe (PERM-2)
 
 - Permissions are now resolved from the database (identical to the previous

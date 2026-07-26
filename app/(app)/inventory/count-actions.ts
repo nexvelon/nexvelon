@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // INV-9-2 — cycle-count server actions. Counts are an inventory operation:
 //   reads      → inventory:view
@@ -22,7 +22,7 @@ import {
 import { listStockLocations } from "@/lib/api/stock-locations";
 import { listCategories } from "@/lib/api/categories";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission, type Action } from "@/lib/permissions";
+import { type Action } from "@/lib/permissions";
 import type { DbCountLine, DbCountSession } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -40,7 +40,7 @@ async function require(
 ): Promise<{ ok: true; actorId: string } | { ok: false; error: string }> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };
-  if (!hasPermission(adaptRole(me.role), "inventory", action)) {
+  if (!(await can("inventory", action))) {
     return { ok: false, error: "You don't have permission to manage cycle counts." };
   }
   return { ok: true, actorId: me.id };

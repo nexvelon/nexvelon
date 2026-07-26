@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // JC-1 — labour server actions for the project detail view. Reads are
 // RLS-gated (authenticated SELECT). Writes are financial-sensitive, so they
@@ -17,7 +17,6 @@ import {
 } from "@/lib/api/labour";
 import { listTechs } from "@/lib/api/techs";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 import type { DbTech } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -37,7 +36,7 @@ function fail(err: unknown): { ok: false; error: string } {
 // Financial-sensitive: only roles with `financials` edit (Admin, Accountant).
 async function requireFinancials(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+  if (!me || !(await can("financials", "edit"))) {
     return "You don't have permission to edit labour.";
   }
   return null;
@@ -49,7 +48,7 @@ async function requireFinancials(): Promise<string | null> {
 // access — it just formalizes the boundary).
 async function requireProjectsView(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "projects", "view")) {
+  if (!me || !(await can("projects", "view"))) {
     return "You don't have permission to view projects.";
   }
   return null;

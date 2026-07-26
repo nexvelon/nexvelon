@@ -124,6 +124,8 @@ function makeClient() {
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: () => makeClient() }));
 vi.mock("@/lib/auth/profile", () => ({ getCurrentProfile: async () => m.profile }));
+vi.mock("react", async (o) => { const a = await o<typeof import("react")>(); return { ...a, cache: (<A extends unknown[], R>(fn: (...x: A) => R) => fn) as typeof a.cache }; });
+vi.mock("@/lib/permissions/db-matrix", async (o) => { const a = await o<typeof import("@/lib/permissions/db-matrix")>(); return { ...a, loadRoleMatrix: async () => (await import("@/lib/permissions/seed-matrix")).buildGrantedMatrix(), loadUserOverrides: async () => ({ granted: new Set<string>(), denied: new Set<string>() }) }; });
 vi.mock("@/lib/api/vendors", () => ({
   getVendors: async () => [],
   getVendorById: async () => m.vendorRecord,

@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // INV-4 — server actions for the RMA flow. Writes gate on inventory:edit,
 // reads on inventory:view (mirrors the inventory/PO action posture). The
@@ -31,7 +31,6 @@ import { sendRmaEmail } from "@/lib/auth/email";
 import { getPoSenderFrom } from "@/lib/settings/po-sender";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 import type { DbVendor } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -44,7 +43,7 @@ function fail(err: unknown): { ok: false; error: string } {
 
 async function requireInventoryEdit(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "edit")) {
+  if (!me || !(await can("inventory", "edit"))) {
     return "You don't have permission to manage RMAs.";
   }
   return null;
@@ -52,7 +51,7 @@ async function requireInventoryEdit(): Promise<string | null> {
 
 async function requireInventoryView(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "view")) {
+  if (!me || !(await can("inventory", "view"))) {
     return "You don't have permission to view RMAs.";
   }
   return null;

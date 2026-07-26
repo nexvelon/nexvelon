@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // PROJ2-18 — WIP server actions.
 //
@@ -23,7 +23,6 @@ import {
 } from "@/lib/api/wip";
 import { businessDateISO } from "@/lib/format";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -41,11 +40,10 @@ async function gate(): Promise<
 > {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };
-  const role = adaptRole(me.role);
-  if (!hasPermission(role, "projects", "view")) {
+  if (!(await can("projects", "view"))) {
     return { ok: false, error: "You don't have permission to view this project." };
   }
-  return { ok: true, canSeeCost: hasPermission(role, "financials", "edit") };
+  return { ok: true, canSeeCost: await can("financials", "edit") };
 }
 
 /** Null every cost-derived leg; keep the billing side. */
@@ -115,7 +113,7 @@ export async function getProjectWipAction(
 export async function getWipPortfolioAction(): Promise<ActionResult<WipPortfolio>> {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+    if (!me || !(await can("financials", "edit"))) {
       return { ok: false, error: "You don't have permission to view WIP." };
     }
     return { ok: true, data: await getWipPortfolio() };
@@ -129,7 +127,7 @@ export async function exportWipCsvAction(): Promise<
 > {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+    if (!me || !(await can("financials", "edit"))) {
       return { ok: false, error: "You don't have permission to export WIP." };
     }
     const portfolio = await getWipPortfolio();

@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // PO-1 — vendors server actions. Mirrors app/(app)/clients/actions.ts: uniform
 // ActionResult, best-effort activity logging, computeChanges-driven update diff.
@@ -16,7 +16,7 @@ import {
 import { getVendorMetrics, type VendorMetrics } from "@/lib/api/vendor-metrics";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission, type Action } from "@/lib/permissions";
+import { type Action } from "@/lib/permissions";
 import type {
   DbVendor,
   DbVendorInsert,
@@ -44,7 +44,7 @@ async function requireInventory(
 ): Promise<{ ok: false; error: string } | null> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };
-  if (!hasPermission(adaptRole(me.role), "inventory", action)) {
+  if (!(await can("inventory", action))) {
     return { ok: false, error: "You don't have permission to manage vendors." };
   }
   return null;
@@ -154,11 +154,10 @@ export async function getVendorMetricsAction(
   try {
     const me = await getCurrentProfile();
     if (!me) return { ok: false, error: "You're not signed in." };
-    const role = adaptRole(me.role);
-    if (!hasPermission(role, "inventory", "view")) {
+    if (!(await can("inventory", "view"))) {
       return { ok: false, error: "You don't have permission to view vendors." };
     }
-    const canSeeSpend = hasPermission(role, "financials", "view");
+    const canSeeSpend = await can("financials", "view");
     const metrics = await getVendorMetrics(vendorId, { year });
     return {
       ok: true,

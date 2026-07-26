@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole, requireAdmin } from "@/lib/permissions/resolve";
+import { can, requireAdmin } from "@/lib/permissions/resolve";
 
 // MOVE-1 — server actions for the universal Move/Assign flow + per-part history.
 // Reads (history) are open to authenticated callers; moveStock is gated on the
@@ -27,7 +27,6 @@ import {
   type BatchEditResult,
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 import type { DbStockMovement } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -40,7 +39,7 @@ function fail(err: unknown): { ok: false; error: string } {
 
 async function requireInventoryEdit(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "edit")) {
+  if (!me || !(await can("inventory", "edit"))) {
     return "You don't have permission to move stock.";
   }
   return null;

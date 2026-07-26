@@ -18,7 +18,11 @@ import "server-only";
 
 import { cache } from "react";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { loadRoleMatrix, dbHasPermission, type RoleMatrix } from "@/lib/permissions/db-matrix";
+import {
+  loadRoleMatrix,
+  loadUserOverrides,
+  type RoleMatrix,
+} from "@/lib/permissions/db-matrix";
 import { buildGrantedMatrix } from "@/lib/permissions/seed-matrix";
 import type { Action, Resource } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
@@ -72,30 +76,70 @@ export const getRoleMatrix = cache(async (): Promise<RoleMatrix> => {
   }
 });
 
+/**
+ * Load the current user's active overrides ONCE per request (cached by id).
+ * FAIL-SAFE: on DB error, resolve to NO overrides so the user falls back to
+ * their role default — a denied user reverts to their role's normal access
+ * (not an escalation BEYOND the role), and a granted-extra user loses the extra
+ * (safe). Overrides are never granted-on-error.
+ */
+const getOverrides = cache(async (userId: string) => {
+  try {
+    return await loadUserOverrides(userId);
+  } catch (e) {
+    console.warn(
+      "[permissions] user_permission_overrides load failed — resolving role defaults only.",
+      e
+    );
+    return { granted: new Set<string>(), denied: new Set<string>() };
+  }
+});
+
 export interface ResolvedAuth {
   profile: DbProfile | null;
   role: Role | null;
-  /** Sync check against the resolved (DB, or static-on-failure) set. */
+  /** Sync check against the resolved set (role default + grants − denies). */
   can: (resource: Resource, action: Action) => boolean;
 }
 
 /**
  * Resolve the current user's identity + permission checker ONCE per request.
  * Callers `await getCurrentAuth()` (they are already in an async context) and
- * then call `auth.can(resource, action)` synchronously. PERM-3 migrates the
- * security-critical server gates onto this so per-user overrides take effect.
+ * then call `auth.can(resource, action)` synchronously.
+ *
+ * PRECEDENCE: role-default set, + granted overrides, − denied overrides applied
+ * LAST → deny > grant > default.
  */
 export const getCurrentAuth = cache(async (): Promise<ResolvedAuth> => {
   const profile = await getCurrentProfile();
   if (!profile) return { profile: null, role: null, can: () => false };
   const role = adaptDbRole(profile.role);
   const matrix = await getRoleMatrix();
+  const overrides = await getOverrides(profile.id);
+
+  // Build the effective set: start from the role default, add grants, then
+  // remove denies LAST so a deny always wins over a grant and the role default.
+  const resolved = new Set<string>(matrix.get(role) ?? new Set<string>());
+  for (const key of overrides.granted) resolved.add(key);
+  for (const key of overrides.denied) resolved.delete(key);
+
   return {
     profile,
     role,
-    can: (resource, action) => dbHasPermission(matrix, role, resource, action),
+    can: (resource, action) => resolved.has(`${resource}:${action}`),
   };
 });
+
+/**
+ * The override-aware permission check for the CURRENT request's user. This is
+ * what the security-critical server gates call in place of the sync static
+ * `hasPermission(adaptRole(me.role), …)` so per-user overrides take effect.
+ * For a user with NO overrides it returns the identical answer to the static
+ * matrix (proven by the parity gate).
+ */
+export async function can(resource: Resource, action: Action): Promise<boolean> {
+  return (await getCurrentAuth()).can(resource, action);
+}
 
 // ── Consolidated server gates ────────────────────────────────────────────────
 
