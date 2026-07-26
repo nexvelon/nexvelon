@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // INV-2b — server actions for product catalog CRUD. Mirrors the
 // clients/actions.ts shape: uniform ActionResult so client callers can toast
@@ -53,7 +53,6 @@ import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
@@ -126,7 +125,7 @@ export async function commitStockUnitAction(
 // checks inventory:view (the base permission every inventory-facing role has).
 async function requireInventoryView(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "view")) {
+  if (!me || !(await can("inventory", "view"))) {
     return "You don't have permission to view inventory.";
   }
   return null;
@@ -152,7 +151,7 @@ export async function lookupBySerialAction(
 // stock (inventory:edit; Admin + PM).
 async function requireInventoryEdit(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "edit")) {
+  if (!me || !(await can("inventory", "edit"))) {
     return "You don't have permission to issue pickup slips.";
   }
   return null;
@@ -395,7 +394,7 @@ export async function deleteProductAction(
     // PARTS-1: gate deletion on the inventory:delete permission (UI gates the
     // button too; this is the authoritative server-side check).
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "inventory", "delete")) {
+    if (!me || !(await can("inventory", "delete"))) {
       return { ok: false, error: "You don't have permission to delete parts." };
     }
     // ATTACH-1: remove this product's attachments (objects + rows) first so
@@ -435,7 +434,7 @@ export async function importProductsAction(
 // reusing the same inventory:delete permission that gates product deletion.
 async function requireInventoryAdmin(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "inventory", "delete")) {
+  if (!me || !(await can("inventory", "delete"))) {
     return "You don't have permission to manage stock.";
   }
   return null;

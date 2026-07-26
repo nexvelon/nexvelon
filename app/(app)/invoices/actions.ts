@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // INVOICE-1 — invoicing server actions. Reads are RLS-gated (authenticated
 // SELECT). Mutations are financial-sensitive, so they require the existing
@@ -42,7 +42,6 @@ import {
   type PaymentResult,
 } from "@/lib/api/invoices";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 import type {
   DbInvoice,
   DbInvoicePayment,
@@ -60,7 +59,7 @@ function fail(e: unknown): { ok: false; error: string } {
 // Financial-sensitive: only roles with `financials` edit (Admin, Accountant).
 async function requireFinancials(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+  if (!me || !(await can("financials", "edit"))) {
     return "You don't have permission to manage invoices.";
   }
   return null;
@@ -368,7 +367,7 @@ export async function recordInvoicePaymentAction(
 ): Promise<ActionResult<PaymentResult>> {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+    if (!me || !(await can("financials", "edit"))) {
       return { ok: false, error: "You don't have permission to record payments." };
     }
     const res = await recordPayment({ ...input, actorId: me.id });
@@ -386,7 +385,7 @@ export async function deleteInvoicePaymentAction(
 ): Promise<ActionResult<PaymentResult>> {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+    if (!me || !(await can("financials", "edit"))) {
       return { ok: false, error: "You don't have permission to remove payments." };
     }
     const res = await deletePayment(paymentId);

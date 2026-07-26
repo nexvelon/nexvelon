@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // PO-2 — purchase-orders server actions. Mirrors vendors/clients actions:
 // uniform ActionResult, inventory-resource permission gate, best-effort activity
@@ -31,7 +31,7 @@ import { uploadPoPdf } from "@/lib/storage/po-pdfs";
 import { sendPurchaseOrderEmail } from "@/lib/auth/email";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission, type Action } from "@/lib/permissions";
+import { type Action } from "@/lib/permissions";
 import type { DbPurchaseOrderStatus } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -53,7 +53,7 @@ async function requireInventory(
 ): Promise<{ ok: false; error: string } | null> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "You're not signed in." };
-  if (!hasPermission(adaptRole(me.role), "inventory", action)) {
+  if (!(await can("inventory", action))) {
     return {
       ok: false,
       error: "You don't have permission to manage purchase orders.",

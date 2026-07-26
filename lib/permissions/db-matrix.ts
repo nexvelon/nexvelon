@@ -56,3 +56,34 @@ export function dbHasPermission(
 ): boolean {
   return matrixHasPermission(matrix, role, resource, action);
 }
+
+export interface UserOverrides {
+  /** "resource:action" keys the user is explicitly GRANTED (added to the role). */
+  granted: Set<string>;
+  /** "resource:action" keys the user is explicitly DENIED (removed from the role). */
+  denied: Set<string>;
+}
+
+/**
+ * Load one user's ACTIVE permission overrides (revoked_at IS NULL) in ONE query.
+ * PERM-3. Throws on DB error so the resolver can fall back to role defaults
+ * (never grant-on-error).
+ */
+export async function loadUserOverrides(userId: string): Promise<UserOverrides> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("user_permission_overrides")
+    .select("resource, action, state")
+    .eq("user_id", userId)
+    .is("revoked_at", null);
+  if (error) throw new Error(`loadUserOverrides: ${error.message}`);
+
+  const granted = new Set<string>();
+  const denied = new Set<string>();
+  for (const r of (data ?? []) as { resource: string; action: string; state: string }[]) {
+    const key = `${r.resource}:${r.action}`;
+    if (r.state === "denied") denied.add(key);
+    else if (r.state === "granted") granted.add(key);
+  }
+  return { granted, denied };
+}

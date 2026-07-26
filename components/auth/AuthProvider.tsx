@@ -579,13 +579,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setPermissionSet(null); // fail-safe → static matrix
           return;
         }
-        setPermissionSet(
-          new Set(
-            (data ?? []).map(
-              (r) => `${r.resource as string}:${r.action as string}`
-            )
-          )
+        const resolved = new Set(
+          (data ?? []).map((r) => `${r.resource as string}:${r.action as string}`)
         );
+        // PERM-3: apply this user's active overrides (deny > grant > default).
+        // Best-effort — if overrides can't load, the role default set stands
+        // (fail-safe: a denied user reverts to role default, never an
+        // escalation; a granted-extra user loses the extra).
+        const { data: ovr } = await supabase
+          .from("user_permission_overrides")
+          .select("resource, action, state")
+          .eq("user_id", profileId)
+          .is("revoked_at", null);
+        if (!active) return;
+        for (const o of ovr ?? []) {
+          const key = `${o.resource as string}:${o.action as string}`;
+          if (o.state === "granted") resolved.add(key);
+        }
+        for (const o of ovr ?? []) {
+          const key = `${o.resource as string}:${o.action as string}`;
+          if (o.state === "denied") resolved.delete(key); // deny wins, applied last
+        }
+        setPermissionSet(resolved);
       } catch {
         if (active) setPermissionSet(null);
       }

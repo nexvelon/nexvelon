@@ -1,5 +1,5 @@
 "use server";
-import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
+import { can } from "@/lib/permissions/resolve";
 
 // FIN-1 — Financials server actions. Read-only in this chunk: every action is
 // gated on financials:view (Admin, ProjectManager, Accountant, ViewOnly —
@@ -116,7 +116,6 @@ import {
 } from "@/lib/api/holdback";
 import type { DbHoldbackRelease } from "@/lib/types/database";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import { hasPermission } from "@/lib/permissions";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -128,7 +127,7 @@ function fail(e: unknown): { ok: false; error: string } {
 
 async function requireFinancialsView(): Promise<string | null> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "financials", "view")) {
+  if (!me || !(await can("financials", "view"))) {
     return "You don't have permission to view financial data.";
   }
   return null;
@@ -184,14 +183,10 @@ export async function getProjectFinancialSummariesAction(): Promise<
 > {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "view")) {
+    if (!me || !(await can("financials", "view"))) {
       return { ok: false, error: "You don't have permission to view financial data." };
     }
-    const canSeeFinancials = hasPermission(
-      adaptRole(me.role),
-      "financials",
-      "edit"
-    );
+    const canSeeFinancials = await can("financials", "edit");
     const summaries = await getProjectFinancialSummaries();
     if (!canSeeFinancials) {
       for (const s of summaries) {
@@ -290,7 +285,7 @@ async function requireFinancialsEdit(): Promise<
   { ok: true; actorId: string } | { ok: false; error: string }
 > {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "financials", "edit")) {
+  if (!me || !(await can("financials", "edit"))) {
     return { ok: false, error: "You don't have permission to manage deposits." };
   }
   return { ok: true, actorId: me.id };
@@ -742,13 +737,13 @@ export async function getProjectPnlAction(
 ): Promise<ActionResult<ProjectPnlResult | null>> {
   try {
     const me = await getCurrentProfile();
-    if (!me || !hasPermission(adaptRole(me.role), "financials", "view")) {
+    if (!me || !(await can("financials", "view"))) {
       return { ok: false, error: "You don't have permission to view financial data." };
     }
     if (!projectId) return { ok: false, error: "No project specified." };
     const pnl = await getProjectPnl(projectId);
     if (!pnl) return { ok: true, data: null };
-    const canSeeCost = hasPermission(adaptRole(me.role), "financials", "edit");
+    const canSeeCost = (await can("financials", "edit"));
     return {
       ok: true,
       data: { pnl: canSeeCost ? pnl : redactPnl(pnl), canSeeCost },
