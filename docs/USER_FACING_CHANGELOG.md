@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Scheduling — Technician certification expiry (DES-2)
+
+- Technician certifications now track expiry dates with clear valid / expiring /
+  expired status, and an expired certification correctly prevents dispatching a
+  technician to a job that requires it.
+
 ### Permissions — Editable role baselines + Warehouse role (DES-1)
 
 - Admins can now edit what each role can do — changes apply to every user with

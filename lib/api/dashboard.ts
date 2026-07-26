@@ -32,6 +32,7 @@ import { getPnlPortfolio } from "@/lib/api/project-pnl";
 import { listQuotes } from "@/lib/api/quotes";
 import { getComplianceRisk } from "@/lib/api/subcontractor-compliance";
 import { getBondAlerts } from "@/lib/api/project-bonds";
+import { getExpiringTechCerts } from "@/lib/api/tech-certifications";
 import { getExpiringWarranties } from "@/lib/api/warranties";
 import { getDispatchBoard } from "@/lib/api/dispatch-board";
 import { OPEN_TASK_STATUSES } from "@/lib/tasks/task-status";
@@ -359,6 +360,10 @@ export interface DashboardAlerts {
   dispatch_today:
     | { booked_today: number; unscheduled: number; techs_out: number; utilization_pct: number | null }
     | null;
+  // DES-2 — technician certs expired or expiring soon (scheduling:view tier).
+  tech_cert_alerts:
+    | { expired: number; expiring_soon: number; total_at_risk: number }
+    | null;
 }
 
 export async function getDashboardAlerts(input: {
@@ -367,7 +372,7 @@ export async function getDashboardAlerts(input: {
   const { tiers } = input;
   const today = businessDateISO();
 
-  const [compliance, bonds, warranties, tasks, defs, milestones, board] = await Promise.all([
+  const [compliance, bonds, warranties, tasks, defs, milestones, board, certAlerts] = await Promise.all([
     tiers.subs ? getComplianceRisk() : null,
     tiers.projects ? getBondAlerts() : null,
     tiers.projects ? getExpiringWarranties() : null,
@@ -377,6 +382,7 @@ export async function getDashboardAlerts(input: {
     tiers.scheduling
       ? getDispatchBoard({ from: `${today}T00:00:00.000Z`, to: `${today}T23:59:59.999Z` })
       : null,
+    tiers.scheduling ? getExpiringTechCerts({}) : null,
   ]);
 
   return {
@@ -407,6 +413,13 @@ export async function getDashboardAlerts(input: {
           unscheduled: board.unscheduled.length,
           techs_out: board.stats.techs_out,
           utilization_pct: board.stats.utilization_pct,
+        }
+      : null,
+    tech_cert_alerts: certAlerts
+      ? {
+          expired: certAlerts.filter((c) => c.state === "expired").length,
+          expiring_soon: certAlerts.filter((c) => c.state === "expiring_soon").length,
+          total_at_risk: certAlerts.length,
         }
       : null,
   };

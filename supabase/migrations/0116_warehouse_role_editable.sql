@@ -28,8 +28,8 @@
 BEGIN;
 
 -- 1. Warehouse baseline (generated from ROLE_PERMISSIONS.Warehouse).
-INSERT INTO public.role_permission_matrix (role, resource, action, granted) VALUES
-('Warehouse', 'dashboard', 'view'),
+INSERT INTO public.role_permission_matrix (role, resource, action) VALUES
+  ('Warehouse', 'dashboard', 'view'),
   ('Warehouse', 'quotes', 'view'),
   ('Warehouse', 'projects', 'view'),
   ('Warehouse', 'clients', 'view'),

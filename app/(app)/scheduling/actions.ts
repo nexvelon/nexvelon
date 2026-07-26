@@ -15,6 +15,8 @@ import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 import { revalidatePath } from "next/cache";
 import {
   listTechCertifications,
+  getExpiringTechCerts,
+  type ExpiringTechCert,
   getCertsByTech,
   createTechCertification,
   updateTechCertification,
@@ -118,6 +120,19 @@ export async function getCertsByTechAction(
     const gate = await require("view");
     if (!gate.ok) return gate;
     return { ok: true, data: await getCertsByTech(techIds) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** DES-2 — every cert expired or expiring within `days` (default 60), across techs. */
+export async function getExpiringTechCertsAction(
+  input: { days?: number } = {}
+): Promise<ActionResult<ExpiringTechCert[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getExpiringTechCerts({ days: input.days }) };
   } catch (e) {
     return fail(e);
   }
