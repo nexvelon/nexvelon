@@ -95,6 +95,23 @@ const getOverrides = cache(async (userId: string) => {
   }
 });
 
+/**
+ * THE precedence merge — role default set, + grants, − denies applied LAST
+ * (deny > grant > default). Shared by the request resolver (enforcement) AND
+ * the admin "effective permissions" view (resolveEffectiveForUser), so the UI
+ * can never diverge from what the server enforces.
+ */
+function mergeEffective(
+  roleSet: Set<string>,
+  granted: Set<string>,
+  denied: Set<string>
+): Set<string> {
+  const resolved = new Set<string>(roleSet);
+  for (const key of granted) resolved.add(key);
+  for (const key of denied) resolved.delete(key);
+  return resolved;
+}
+
 export interface ResolvedAuth {
   profile: DbProfile | null;
   role: Role | null;
@@ -116,12 +133,11 @@ export const getCurrentAuth = cache(async (): Promise<ResolvedAuth> => {
   const role = adaptDbRole(profile.role);
   const matrix = await getRoleMatrix();
   const overrides = await getOverrides(profile.id);
-
-  // Build the effective set: start from the role default, add grants, then
-  // remove denies LAST so a deny always wins over a grant and the role default.
-  const resolved = new Set<string>(matrix.get(role) ?? new Set<string>());
-  for (const key of overrides.granted) resolved.add(key);
-  for (const key of overrides.denied) resolved.delete(key);
+  const resolved = mergeEffective(
+    matrix.get(role) ?? new Set<string>(),
+    overrides.granted,
+    overrides.denied
+  );
 
   return {
     profile,
@@ -129,6 +145,21 @@ export const getCurrentAuth = cache(async (): Promise<ResolvedAuth> => {
     can: (resource, action) => resolved.has(`${resource}:${action}`),
   };
 });
+
+/**
+ * PERM-4 — resolve ANY user's effective permission set (role default + their
+ * overrides, deny > grant > default) for the admin "effective permissions"
+ * view. Reuses the SAME mergeEffective as the enforcement path, so the admin UI
+ * shows exactly what the server will enforce. Returns "resource:action" keys.
+ */
+export async function resolveEffectiveForUser(
+  userId: string,
+  role: Role
+): Promise<Set<string>> {
+  const matrix = await getRoleMatrix();
+  const overrides = await getOverrides(userId);
+  return mergeEffective(matrix.get(role) ?? new Set<string>(), overrides.granted, overrides.denied);
+}
 
 /**
  * The override-aware permission check for the CURRENT request's user. This is

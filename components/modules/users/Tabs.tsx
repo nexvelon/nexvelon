@@ -10,8 +10,10 @@ import {
   RefreshCw,
   Search,
   Shield,
+  ShieldCheck,
   X,
 } from "lucide-react";
+import { UserPermissionsSheet } from "@/components/modules/users/UserPermissionsSheet";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -111,6 +113,8 @@ export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // PERM-4: the per-user override editor sheet target.
+  const [permTarget, setPermTarget] = useState<{ id: string; name: string } | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -265,7 +269,16 @@ export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <UserRowActions profile={u} />
+                    <div className="inline-flex items-center gap-1">
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => setPermTarget({ id: u.id, name: profileDisplayName(u) })}
+                      >
+                        <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Permissions
+                      </Button>
+                      <UserRowActions profile={u} />
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -273,6 +286,13 @@ export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
           </TableBody>
         </Table>
       </Card>
+
+      <UserPermissionsSheet
+        userId={permTarget?.id ?? null}
+        userName={permTarget?.name ?? ""}
+        open={permTarget !== null}
+        onOpenChange={(o) => { if (!o) setPermTarget(null); }}
+      />
     </div>
   );
 }
