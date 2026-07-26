@@ -16,23 +16,33 @@ import {
   makeDroppableId,
 } from "@/lib/scheduling/board-slots";
 import { cn } from "@/lib/utils";
-import type { DispatchBookingRow, DispatchTechRow } from "@/lib/api/dispatch-board";
+import type { DispatchAbsenceRow, DispatchBookingRow, DispatchTechRow } from "@/lib/api/dispatch-board";
 
 const HOUR_HEIGHT = 28;
 const DAY_START_HOUR = 6;
 const DAY_END_HOUR = 20;
 const HOURS = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => DAY_START_HOUR + i);
 
+type WorkingHours = DispatchTechRow["working_hours"];
+
+/** "HH:MM[:SS]" → hour-float clamped to the visible grid. */
+function clampHour(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return Math.min(DAY_END_HOUR, Math.max(DAY_START_HOUR, h + (m || 0) / 60));
+}
+const pxFor = (hourFloat: number) => (hourFloat - DAY_START_HOUR) * HOUR_HEIGHT;
+
 interface Props {
   techs: DispatchTechRow[];
   bookings: DispatchBookingRow[];
+  absences: DispatchAbsenceRow[];
   days: Date[];
   today: Date;
   canEdit: boolean;
   onBookingClick: (b: DispatchBookingRow) => void;
 }
 
-export function CalendarView({ techs, bookings, days, today, canEdit, onBookingClick }: Props) {
+export function CalendarView({ techs, bookings, absences, days, today, canEdit, onBookingClick }: Props) {
   return (
     <div className="bg-card overflow-hidden rounded-lg border border-[var(--border)] shadow-sm">
       <div
@@ -67,6 +77,7 @@ export function CalendarView({ techs, bookings, days, today, canEdit, onBookingC
             days={days}
             today={today}
             bookings={bookings.filter((b) => b.tech_id === t.id)}
+            absences={absences.filter((a) => a.tech_id === t.id)}
             canEdit={canEdit}
             onBookingClick={onBookingClick}
           />
@@ -81,6 +92,7 @@ function Swimlane({
   days,
   today,
   bookings,
+  absences,
   canEdit,
   onBookingClick,
 }: {
@@ -88,6 +100,7 @@ function Swimlane({
   days: Date[];
   today: Date;
   bookings: DispatchBookingRow[];
+  absences: DispatchAbsenceRow[];
   canEdit: boolean;
   onBookingClick: (b: DispatchBookingRow) => void;
 }) {
@@ -97,7 +110,7 @@ function Swimlane({
         <p className="text-brand-charcoal text-xs font-semibold leading-tight">{tech.name}</p>
         <p className="text-muted-foreground text-[10px]">
           {tech.cert_summary.valid_types.length} cert{tech.cert_summary.valid_types.length === 1 ? "" : "s"}
-          {tech.cert_summary.expired_count > 0 ? ` · ${tech.cert_summary.expired_count} expired` : ""}
+          {tech.utilization_pct != null ? ` · ${tech.utilization_pct}% util` : ""}
         </p>
       </div>
 
@@ -107,7 +120,9 @@ function Swimlane({
           day={d}
           today={today}
           techId={tech.id}
+          workingHours={tech.working_hours}
           bookings={bookings.filter((b) => isSameDay(parseISO(b.starts_at), d))}
+          absences={absences.filter((a) => parseISO(a.starts_at) < endOfLocalDay(d) && parseISO(a.ends_at) > d)}
           canEdit={canEdit}
           onBookingClick={onBookingClick}
         />
@@ -116,28 +131,67 @@ function Swimlane({
   );
 }
 
+function endOfLocalDay(d: Date): Date {
+  const e = new Date(d);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+
 function DayCell({
   day,
   today,
   techId,
+  workingHours,
   bookings,
+  absences,
   canEdit,
   onBookingClick,
 }: {
   day: Date;
   today: Date;
   techId: string;
+  workingHours: WorkingHours;
   bookings: DispatchBookingRow[];
+  absences: DispatchAbsenceRow[];
   canEdit: boolean;
   onBookingClick: (b: DispatchBookingRow) => void;
 }) {
+  const hoursKnown = workingHours.length > 0;
+  const wh = workingHours.find((w) => w.day_of_week === day.getDay());
+  const gridTop = pxFor(DAY_START_HOUR);
+  const gridBottom = pxFor(DAY_END_HOUR);
+
+  // Non-working shading (only when hours are KNOWN — unknown hours = no shading).
+  const shades: { top: number; height: number }[] = [];
+  if (hoursKnown) {
+    if (!wh) {
+      shades.push({ top: gridTop, height: gridBottom - gridTop }); // whole day off
+    } else {
+      const ws = pxFor(clampHour(wh.start_time));
+      const we = pxFor(clampHour(wh.end_time));
+      if (ws > gridTop) shades.push({ top: gridTop, height: ws - gridTop });
+      if (we < gridBottom) shades.push({ top: we, height: gridBottom - we });
+    }
+  }
+
   return (
     <div
       className={cn("relative border-b border-l border-[var(--border)]", isSameDay(day, today) && "bg-brand-gold/5")}
       style={{ height: HOUR_HEIGHT * HOURS.length }}
     >
-      {canEdit &&
-        HOURS.map((h) => <DropZone key={h} day={day} techId={techId} hour={h} />)}
+      {shades.map((s, i) => (
+        <div key={`sh${i}`} className="pointer-events-none absolute left-0 right-0 bg-[repeating-linear-gradient(45deg,rgba(100,116,139,0.10),rgba(100,116,139,0.10)_4px,transparent_4px,transparent_8px)]" style={{ top: s.top, height: s.height }} />
+      ))}
+      {absences.map((a) => {
+        const s = new Date(a.starts_at);
+        const e = new Date(a.ends_at);
+        const top = isSameDay(s, day) ? pxFor(clampHour(`${s.getHours()}:${s.getMinutes()}`)) : gridTop;
+        const bottom = isSameDay(e, day) ? pxFor(clampHour(`${e.getHours()}:${e.getMinutes()}`)) : gridBottom;
+        return (
+          <div key={a.id} className="pointer-events-none absolute left-0 right-0 border-y border-red-300 bg-red-500/10" style={{ top, height: Math.max(3, bottom - top) }} title="On approved leave" />
+        );
+      })}
+      {canEdit && HOURS.map((h) => <DropZone key={h} day={day} techId={techId} hour={h} />)}
       {bookings.map((b) => (
         <BookingBlock key={b.id} booking={b} canEdit={canEdit} onClick={() => onBookingClick(b)} />
       ))}

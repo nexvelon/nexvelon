@@ -11,7 +11,7 @@
 // Select on the project page.
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { BadgeCheck, Check, Pencil, Plus, Power, Trash2, X } from "lucide-react";
+import { BadgeCheck, CalendarClock, Check, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
   deleteTechAction,
 } from "@/app/(app)/settings/techs-actions";
 import { TechCertificationsDialog } from "@/components/modules/settings/TechCertificationsDialog";
+import { TechAvailabilityDialog } from "@/components/modules/settings/TechAvailabilityDialog";
 import { formatCurrency } from "@/lib/format";
 import type { DbTech } from "@/lib/types/database";
 
@@ -54,6 +55,7 @@ export function TechsPane() {
   const [editRate, setEditRate] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<DbTech | null>(null);
   const [certTech, setCertTech] = useState<DbTech | null>(null);
+  const [availTech, setAvailTech] = useState<DbTech | null>(null);
   const [pending, start] = useTransition();
 
   const load = useCallback(async () => {
@@ -311,6 +313,16 @@ export function TechsPane() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              onClick={() => setAvailTech(r)}
+                              disabled={pending}
+                              aria-label="Availability"
+                              title="Working hours & time off"
+                            >
+                              <CalendarClock className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => beginEdit(r)}
                               disabled={pending}
                               aria-label="Edit"
@@ -385,6 +397,14 @@ export function TechsPane() {
           tech={certTech}
           open
           onClose={() => setCertTech(null)}
+        />
+      )}
+
+      {availTech && (
+        <TechAvailabilityDialog
+          tech={availTech}
+          open
+          onClose={() => setAvailTech(null)}
         />
       )}
     </div>

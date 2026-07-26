@@ -966,6 +966,58 @@ export type DbScheduleAssignmentInsert = {
   updated_by?: string | null;
 };
 
+// ----------------------------------------------------------------------------
+// SCHED-3 (migration 0112) — tech availability: weekly working hours + absences.
+// ----------------------------------------------------------------------------
+export interface DbTechWorkingHours {
+  id: string;
+  tech_id: string;
+  day_of_week: number; // 0=Sun .. 6=Sat
+  start_time: string; // 'HH:MM:SS'
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbTechWorkingHoursInsert = {
+  tech_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+};
+
+export type DbAbsenceType = "time_off" | "sick" | "training" | "holiday" | "other";
+export type DbAbsenceStatus = "requested" | "approved" | "denied" | "cancelled";
+
+export interface DbTechAbsence {
+  id: string;
+  tech_id: string;
+  absence_type: DbAbsenceType;
+  starts_at: string;
+  ends_at: string;
+  status: DbAbsenceStatus;
+  reason: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbTechAbsenceInsert = {
+  tech_id: string;
+  absence_type?: DbAbsenceType;
+  starts_at: string;
+  ends_at: string;
+  status?: DbAbsenceStatus;
+  reason?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
 // JC-1 (migration 0054) — hours logged against a project cost center.
 // tech_name + cost_rate are SNAPSHOTS frozen at entry time; amount
 // (= hours * cost_rate) is persisted for fast per-cost-center rollups.

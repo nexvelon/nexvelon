@@ -72,6 +72,8 @@ export function bookingErrorMessage(r: BookingResult, techName: string): string 
       return `Can't assign: ${techName} is missing ${r.reasons.join(" ")}`;
     case "tech_double_booked":
       return `Can't assign: ${techName} is already booked ${new Date(r.conflict.starts_at).toLocaleString()} → ${new Date(r.conflict.ends_at).toLocaleString()}`;
+    case "tech_on_leave":
+      return `Can't assign: ${techName} is on approved leave ${new Date(r.absence.starts_at).toLocaleDateString()} → ${new Date(r.absence.ends_at).toLocaleDateString()}`;
     case "invalid_window":
       return "Invalid time window.";
     default:

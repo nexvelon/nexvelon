@@ -16,6 +16,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessDateISO } from "@/lib/format";
 import { isTechEligibleForJob } from "@/lib/scheduling/tech-eligibility";
+import { isTechAvailable } from "@/lib/scheduling/availability";
 import type {
   DbScheduleAssignment,
   DbScheduleAssignmentStatus,
@@ -25,12 +26,55 @@ async function db() {
   return createSupabaseServerClient();
 }
 
+// SCHED-3 — a successful booking may carry an availability WARNING (off-hours):
+// the booking proceeds (dispatchers book overtime / call-outs) but the UI shows
+// an amber note. Approved LEAVE covering the slot is a hard block below.
+export type BookingWarning = "off_hours" | null;
+
 export type BookingResult =
-  | { ok: true; booking: DbScheduleAssignment }
+  | { ok: true; booking: DbScheduleAssignment; warning?: BookingWarning }
   | { ok: false; error: "not_found" }
   | { ok: false; error: "invalid_window" }
   | { ok: false; error: "cert_block"; reasons: string[] }
-  | { ok: false; error: "tech_double_booked"; conflict: { starts_at: string; ends_at: string } };
+  | { ok: false; error: "tech_double_booked"; conflict: { starts_at: string; ends_at: string } }
+  | { ok: false; error: "tech_on_leave"; absence: { starts_at: string; ends_at: string } };
+
+// SCHED-3 — the availability guard. Blocks only when an APPROVED absence covers
+// the whole slot; off-hours is returned as a non-blocking warning. Hours unknown
+// → no warning. Mirrors the pure isTechAvailable matrix.
+async function availabilityGate(
+  supabase: Awaited<ReturnType<typeof db>>,
+  techId: string,
+  startsAt: string,
+  endsAt: string
+): Promise<{ block: { starts_at: string; ends_at: string } | null; warn: boolean }> {
+  const [hoursRes, absRes] = await Promise.all([
+    supabase.from("tech_working_hours").select("day_of_week, start_time, end_time").eq("tech_id", techId),
+    supabase
+      .from("tech_absences")
+      .select("starts_at, ends_at, status")
+      .eq("tech_id", techId)
+      .lt("starts_at", endsAt)
+      .gt("ends_at", startsAt),
+  ]);
+  const absences = (absRes.data ?? []) as { starts_at: string; ends_at: string; status: string }[];
+  const check = isTechAvailable(startsAt, endsAt, {
+    workingHours: (hoursRes.data ?? []) as { day_of_week: number; start_time: string; end_time: string }[],
+    absences,
+  });
+  if (check.verdict === "on_leave") {
+    const covering = absences.find(
+      (a) => a.status === "approved" && a.starts_at <= startsAt && a.ends_at >= endsAt
+    );
+    return {
+      block: covering
+        ? { starts_at: covering.starts_at, ends_at: covering.ends_at }
+        : { starts_at: startsAt, ends_at: endsAt },
+      warn: false,
+    };
+  }
+  return { block: null, warn: check.verdict === "off_hours" };
+}
 
 interface TechRow {
   id: string;
@@ -140,6 +184,10 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
   const certBlock = await certGate(supabase, tech, job);
   if (certBlock) return certBlock;
 
+  // SCHED-3 — approved leave covering the slot BLOCKS; off-hours only warns.
+  const avail = await availabilityGate(supabase, input.techId, input.startsAt, input.endsAt);
+  if (avail.block) return { ok: false, error: "tech_on_leave", absence: avail.block };
+
   const conflict = await findOverlap(supabase, input.techId, input.startsAt, input.endsAt);
   if (conflict) return { ok: false, error: "tech_double_booked", conflict };
 
@@ -174,7 +222,7 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       .update({ status: "scheduled", updated_by: input.actorId })
       .eq("id", input.scheduleJobId);
   }
-  return { ok: true, booking: data as DbScheduleAssignment };
+  return { ok: true, booking: data as DbScheduleAssignment, warning: avail.warn ? "off_hours" : null };
 }
 
 export interface MoveBookingInput {
@@ -206,6 +254,9 @@ export async function moveBooking(input: MoveBookingInput): Promise<BookingResul
   const certBlock = await certGate(supabase, tech, job);
   if (certBlock) return certBlock;
 
+  const avail = await availabilityGate(supabase, techId, input.startsAt, input.endsAt);
+  if (avail.block) return { ok: false, error: "tech_on_leave", absence: avail.block };
+
   const conflict = await findOverlap(supabase, techId, input.startsAt, input.endsAt, input.id);
   if (conflict) return { ok: false, error: "tech_double_booked", conflict };
 
@@ -227,7 +278,7 @@ export async function moveBooking(input: MoveBookingInput): Promise<BookingResul
     }
     throw new Error(`moveBooking: ${error.message}`);
   }
-  return { ok: true, booking: data as DbScheduleAssignment };
+  return { ok: true, booking: data as DbScheduleAssignment, warning: avail.warn ? "off_hours" : null };
 }
 
 // Cancel frees the slot (excluded from the no-overlap constraint). If it was the
