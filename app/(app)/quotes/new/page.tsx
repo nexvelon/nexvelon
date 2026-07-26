@@ -1,3 +1,4 @@
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // Server component — fetches real DB clients/sites and the current user's
 // profile, then hands off to the interactive NewQuotePageClient. Path-1
 // patch (feature/quotes-path1-real-data-real-letterhead): pre-Path-1, this
@@ -29,8 +30,8 @@ import {
   adaptClient,
   adaptSite,
 } from "@/lib/quotes/picker-adapters";
-import type { DbProfile, DbRole, DbSite } from "@/lib/types/database";
-import type { Client, Role, Site, User } from "@/lib/types";
+import type { DbProfile, DbSite } from "@/lib/types/database";
+import type { Client, Site, User } from "@/lib/types";
 
 import { NewQuotePageClient } from "./NewQuotePageClient";
 
@@ -41,30 +42,6 @@ export const dynamic = "force-dynamic";
 // the edit route). The owner/role adapters below stay local — they're only used
 // when creating a new quote.
 // ----------------------------------------------------------------------------
-
-// DbRole has 11 values; the mock Role enum has 7. Map values that don't
-// exist in the mock enum to their closest equivalent so the existing
-// permission matrix and UI gates still resolve.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 function adaptProfileAsOwner(p: DbProfile): User {
   const displayName =

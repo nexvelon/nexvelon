@@ -22,6 +22,12 @@ interface RoleContextValue {
   role: Role;
   /** Chunk 3c: the current user's per-user grant keys (allow-only overlay). */
   grants: Set<string>;
+  /**
+   * PERM-2: DB-resolved permission set ("resource:action"), or null until
+   * loaded / on failure. Consumers prefer this and fall back to the static
+   * matrix when null.
+   */
+  permissionSet: Set<string> | null;
 }
 
 const RoleContext = createContext<RoleContextValue | null>(null);
@@ -30,11 +36,15 @@ const DEFAULT_ROLE: Role = "ViewOnly";
 const EMPTY_GRANTS: Set<string> = new Set();
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const { user, grants } = useAuth();
+  const { user, grants, permissionSet } = useAuth();
 
   const value = useMemo<RoleContextValue>(
-    () => ({ role: user?.role ?? DEFAULT_ROLE, grants: grants ?? EMPTY_GRANTS }),
-    [user?.role, grants]
+    () => ({
+      role: user?.role ?? DEFAULT_ROLE,
+      grants: grants ?? EMPTY_GRANTS,
+      permissionSet: permissionSet ?? null,
+    }),
+    [user?.role, grants, permissionSet]
   );
 
   return (
@@ -46,6 +56,21 @@ export function useRole(): RoleContextValue {
   const ctx = useContext(RoleContext);
   if (!ctx) throw new Error("useRole must be used inside <RoleProvider>");
   return ctx;
+}
+
+/**
+ * PERM-2 — the single client permission decision. Prefers the DB-resolved set
+ * when loaded; falls back to the static matrix otherwise (fail-safe, and
+ * identical to the DB set per the PERM-1 parity gate).
+ */
+export function resolveClientPermission(
+  role: Role,
+  resource: Resource,
+  action: Action,
+  permissionSet: Set<string> | null
+): boolean {
+  if (permissionSet) return permissionSet.has(`${resource}:${action}`);
+  return hasPermission(role, resource, action);
 }
 
 interface CanProps {
@@ -60,7 +85,12 @@ interface CanProps {
  * even if a wrapper provider misses an update.
  */
 export function Can({ resource, action, fallback = null, children }: CanProps) {
-  const { user } = useAuth();
+  const { user, permissionSet } = useAuth();
   const role = user?.role ?? DEFAULT_ROLE;
-  return hasPermission(role, resource, action) ? <>{children}</> : <>{fallback}</>;
+  // PERM-2: prefer the DB-resolved set; fall back to the static matrix until it
+  // loads / on failure. The two are equal per the PERM-1 parity gate, so there
+  // is no visible change.
+  return resolveClientPermission(role, resource, action, permissionSet ?? null)
+    ? <>{children}</>
+    : <>{fallback}</>;
 }

@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // FIN-1 — Financials server actions. Read-only in this chunk: every action is
 // gated on financials:view (Admin, ProjectManager, Accountant, ViewOnly —
@@ -116,8 +117,6 @@ import {
 import type { DbHoldbackRelease } from "@/lib/types/database";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -125,29 +124,6 @@ export type ActionResult<T = unknown> =
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
-}
-
-// DbRole (11) → app Role (7) for hasPermission; mirrors the projects/invoices
-// action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function requireFinancialsView(): Promise<string | null> {

@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // DASH-1 — the dashboard KPI read action. Gates dashboard:view (base), then
 // derives which tiers the caller may see from their permissions and passes them
@@ -24,33 +25,10 @@ import {
 import type { MonthlyRevenuePoint } from "@/lib/api/financials";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
-import type { DbRole } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 export async function getDashboardKpisAction(input: {
   from?: string;

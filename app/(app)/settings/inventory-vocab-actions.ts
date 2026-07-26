@@ -1,4 +1,5 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 // Chunk B-1 — server actions for the inventory managed vocab. Mirrors
 // classifications-actions.ts: uniform ActionResult, reads open to authenticated
@@ -15,7 +16,6 @@ import {
   softDeleteVocab,
   updateVocab,
 } from "@/lib/api/inventory-vocab";
-import { getCurrentProfile } from "@/lib/auth/profile";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -29,17 +29,6 @@ function fail(err: unknown): { ok: false; error: string } {
         ? err
         : "Unknown error";
   return { ok: false, error: message };
-}
-
-async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true };
 }
 
 function revalidate() {

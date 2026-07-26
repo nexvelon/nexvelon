@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // PROJ2-16 — site-log server actions. Reads gate projects:view, mutations
 // projects:edit. Photos upload through the shared signed-URL flow (no browser
@@ -25,8 +26,6 @@ import {
 } from "@/lib/api/site-logs";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
-import type { DbRole } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -36,27 +35,6 @@ function fail(err: unknown): { ok: false; error: string } {
   const message =
     err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
   return { ok: false, error: message };
-}
-
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function require(

@@ -1,7 +1,7 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentProfile } from "@/lib/auth/profile";
 import {
   inviteUserAdmin,
   reactivateUserAdmin,
@@ -22,19 +22,6 @@ export type ActionResult<T = unknown> =
  * Asserts the caller is an authenticated active Admin. Used as the gate at
  * the top of every privileged action in this file.
  */
-async function requireAdmin(): Promise<
-  | { ok: true; admin: { id: string; email: string } }
-  | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin")
-    return { ok: false, error: "Admin access required." };
-  return { ok: true, admin: { id: me.id, email: me.email } };
-}
-
 // ----------------------------------------------------------------------------
 // Invite
 
@@ -83,7 +70,7 @@ export async function inviteUserAction(
     title: input.title ?? null,
     department: input.department ?? null,
     phone: input.phone ?? null,
-    invited_by: gate.admin.id,
+    invited_by: gate.profile.id,
   };
 
   try {
@@ -95,8 +82,8 @@ export async function inviteUserAction(
       user_agent: userAgent,
       metadata: {
         role: input.role,
-        invited_by: gate.admin.id,
-        invited_by_email: gate.admin.email,
+        invited_by: gate.profile.id,
+        invited_by_email: gate.profile.email,
       },
     });
     revalidatePath("/users");
@@ -124,7 +111,7 @@ async function statusChange(
   const gate = await requireAdmin();
   if (!gate.ok) return gate;
 
-  if (userId === gate.admin.id) {
+  if (userId === gate.profile.id) {
     return {
       ok: false,
       error: "You can't change your own account status from this screen.",
@@ -153,7 +140,7 @@ async function statusChange(
       email: updated.email,
       ip,
       user_agent: userAgent,
-      metadata: { actor: gate.admin.id },
+      metadata: { actor: gate.profile.id },
     });
 
     if (kind !== "reactivate") {
@@ -163,7 +150,7 @@ async function statusChange(
         email: updated.email,
         ip,
         user_agent: userAgent,
-        metadata: { reason: kind, actor: gate.admin.id },
+        metadata: { reason: kind, actor: gate.profile.id },
       });
     }
 

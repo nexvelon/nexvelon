@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole, requireAdmin } from "@/lib/permissions/resolve";
 
 // MOVE-1 — server actions for the universal Move/Assign flow + per-part history.
 // Reads (history) are open to authenticated callers; moveStock is gated on the
@@ -27,8 +28,7 @@ import {
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole, DbStockMovement } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
+import type { DbStockMovement } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -36,28 +36,6 @@ export type ActionResult<T = unknown> =
 
 function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : String(err) };
-}
-
-// DbRole (11) → app Role (7); mirrors the inventory action helper.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function requireInventoryEdit(): Promise<string | null> {
@@ -70,17 +48,6 @@ async function requireInventoryEdit(): Promise<string | null> {
 
 // Canonical admin gate (mirrors techs-actions.ts) for the destructive
 // hard-delete history actions below.
-async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true };
-}
-
 export async function listMovementsByProductAction(
   productId: string
 ): Promise<DbStockMovement[]> {

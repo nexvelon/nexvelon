@@ -1,4 +1,5 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 // POLISH-3 — admin actions for the client-invitation system: send an invite,
 // list pending-review clients, and approve / reject them. Admin-gated.
@@ -30,7 +31,6 @@ import {
   INVITATION_SIG_BUCKET,
   INVITATION_PDF_BUCKET,
 } from "@/lib/api/invitation-storage";
-import { getCurrentProfile } from "@/lib/auth/profile";
 import type {
   DbClientWithCounts,
   DbClient,
@@ -60,17 +60,6 @@ function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: message };
 }
 
-async function requireAdmin(): Promise<
-  { ok: true; id: string } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true, id: me.id };
-}
-
 function baseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexvelonglobal.com";
 }
@@ -88,7 +77,7 @@ export async function sendClientInviteAction(
       return { ok: false, error: "Enter a valid email address." };
     const inv = await createInvitation({
       email: trimmed,
-      createdBy: gate.id,
+      createdBy: gate.profile.id,
       inviteType: "full",
     });
     await sendClientInviteEmail({
@@ -120,7 +109,7 @@ export async function sendSiteInviteAction(
     if (!clientId) return { ok: false, error: "Missing client." };
     const inv = await createInvitation({
       email: trimmed,
-      createdBy: gate.id,
+      createdBy: gate.profile.id,
       inviteType: "site_only",
       clientId,
     });
@@ -246,7 +235,7 @@ export async function approvePendingClientAction(
     await recordInvitationDecision({
       clientId: id,
       decision: "approved",
-      decidedBy: gate.id,
+      decidedBy: gate.profile.id,
     });
     const inv = await getInvitationByClientId(id);
     const detail = await getClientById(id);
@@ -261,7 +250,7 @@ export async function approvePendingClientAction(
             pdfPath: inv.tc1_signed_pdf_path,
             clientId: id,
             filename: "Integrated-Solutions-TC-signed.pdf",
-            uploadedBy: gate.id,
+            uploadedBy: gate.profile.id,
           })
         );
       if (inv.tc2_signed_pdf_path)
@@ -270,7 +259,7 @@ export async function approvePendingClientAction(
             pdfPath: inv.tc2_signed_pdf_path,
             clientId: id,
             filename: "Guardian-TC-signed.pdf",
-            uploadedBy: gate.id,
+            uploadedBy: gate.profile.id,
           })
         );
       // POLISH-38 (CHANGE 5) — also copy the application-form PDFs (from the
@@ -282,7 +271,7 @@ export async function approvePendingClientAction(
             sourceBucket: INVITATION_FORM_PDF_BUCKET,
             clientId: id,
             filename: "Client-Application-Form.pdf",
-            uploadedBy: gate.id,
+            uploadedBy: gate.profile.id,
           })
         );
       if (inv.site_form_pdf_path)
@@ -292,7 +281,7 @@ export async function approvePendingClientAction(
             sourceBucket: INVITATION_FORM_PDF_BUCKET,
             clientId: id,
             filename: "Site-Application-Form.pdf",
-            uploadedBy: gate.id,
+            uploadedBy: gate.profile.id,
           })
         );
       try {
@@ -352,7 +341,7 @@ export async function declinePendingClientAction(
     await recordInvitationDecision({
       clientId: id,
       decision: "declined",
-      decidedBy: gate.id,
+      decidedBy: gate.profile.id,
       declineReason: trimmedReason,
     });
     if (to) {

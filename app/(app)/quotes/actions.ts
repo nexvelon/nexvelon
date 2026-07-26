@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole, requireAdmin } from "@/lib/permissions/resolve";
 
 // Chunk F-1a — quotes server actions (plumbing; no UI cutover yet). Uniform
 // ActionResult shape mirroring the other action files; RLS gates reads/writes
@@ -32,8 +33,8 @@ import { diffQuote } from "@/lib/quote-audit-diff";
 import { newId } from "@/lib/quote-helpers";
 import { businessDateISO } from "@/lib/format";
 import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
-import type { Client, Quote, Role, Site } from "@/lib/types";
-import type { DbQuoteAuditLog, DbRole } from "@/lib/types/database";
+import type { Client, Quote, Site } from "@/lib/types";
+import type { DbQuoteAuditLog } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -348,17 +349,6 @@ export async function deleteQuoteAction(
 // ── AUDIT-1: admin hard-delete of quote history (HARD delete, no audit) ───────
 // The History panel is already admin-only client-side; these gate the writes on
 // the server too (canonical admin gate, mirrors techs-actions.ts).
-async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin") return { ok: false, error: "Admin access required." };
-  return { ok: true };
-}
-
 export async function deleteQuoteAuditByIdAction(
   id: string
 ): Promise<ActionResult<{ deleted: boolean }>> {
@@ -386,28 +376,6 @@ export async function deleteAllQuoteAuditForQuoteAction(
 }
 
 // ── Editable number/date + duplicate (this chunk) ────────────────────────────
-
-// DbRole (11) → app Role (7) for hasPermission; mirrors the other action files.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 async function requireQuotesPermission(
   action: "view" | "edit" | "create"

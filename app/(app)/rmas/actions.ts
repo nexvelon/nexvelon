@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // INV-4 — server actions for the RMA flow. Writes gate on inventory:edit,
 // reads on inventory:view (mirrors the inventory/PO action posture). The
@@ -31,8 +32,7 @@ import { getPoSenderFrom } from "@/lib/settings/po-sender";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import type { DbRole, DbVendor } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
+import type { DbVendor } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -40,28 +40,6 @@ export type ActionResult<T = unknown> =
 
 function fail(err: unknown): { ok: false; error: string } {
   return { ok: false, error: err instanceof Error ? err.message : String(err) };
-}
-
-// DbRole (11) → app Role (7); mirrors the inventory / movement action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 async function requireInventoryEdit(): Promise<string | null> {

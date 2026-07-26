@@ -1,4 +1,5 @@
 "use server";
+import { requireAdmin } from "@/lib/permissions/resolve";
 
 import { revalidatePath } from "next/cache";
 import {
@@ -10,7 +11,6 @@ import {
   softDeleteMarginTier,
   updateMarginTier,
 } from "@/lib/api/margin-tiers";
-import { getCurrentProfile } from "@/lib/auth/profile";
 
 // Uniform { ok, ... } result shape — mirrors app/(app)/clients/actions.ts.
 export type ActionResult<T = unknown> =
@@ -31,18 +31,6 @@ function fail(err: unknown): { ok: false; error: string } {
  * Asserts the caller is an authenticated active Admin. Copied verbatim from
  * app/(app)/clients/actions.ts requireAdmin() (the canonical admin gate).
  */
-async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const me = await getCurrentProfile();
-  if (!me) return { ok: false, error: "You're not signed in." };
-  if (me.status !== "Active")
-    return { ok: false, error: "Your account is not active." };
-  if (me.role !== "Admin")
-    return { ok: false, error: "Admin access required." };
-  return { ok: true };
-}
-
 function revalidate() {
   revalidatePath("/settings");
 }

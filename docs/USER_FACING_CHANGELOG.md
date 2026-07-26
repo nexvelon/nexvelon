@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Permissions — DB-resolved with fail-safe (PERM-2)
+
+- Permissions are now resolved from the database (identical to the previous
+  rules), with an automatic fall back to the built-in rules if the database is
+  unavailable — no change to what any role can do.
+
 ### Permissions — DB mirror groundwork (PERM-1)
 
 - Groundwork: role permissions are now mirrored into the database (identical to

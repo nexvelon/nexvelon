@@ -1,4 +1,5 @@
 "use server";
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 
 // INVOICE-1 — invoicing server actions. Reads are RLS-gated (authenticated
 // SELECT). Mutations are financial-sensitive, so they require the existing
@@ -46,9 +47,7 @@ import type {
   DbInvoice,
   DbInvoicePayment,
   DbInvoicePaymentMethod,
-  DbRole,
 } from "@/lib/types/database";
-import type { Role } from "@/lib/types";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -56,29 +55,6 @@ export type ActionResult<T = unknown> =
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
-}
-
-// DbRole (11) → app Role (7) for hasPermission; mirrors the projects/inventory
-// action helpers.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
 }
 
 // Financial-sensitive: only roles with `financials` edit (Admin, Accountant).

@@ -1,3 +1,4 @@
+import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // Admin report — quote numbers shared by 2+ quotes. Sequential numbers can
 // clash if an operator manually overrides a number to one already in use
 // (allowed, with a warning, per the editable-number flow). This page surfaces
@@ -10,32 +11,9 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import { businessDate } from "@/lib/format";
 import { QuoteStatusBadge } from "@/components/modules/quotes/QuoteStatusBadge";
-import type { DbRole } from "@/lib/types/database";
-import type { QuoteStatus, Role } from "@/lib/types";
+import type { QuoteStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-// DbRole (11) → app Role (7); mirrors the other pages' helper.
-function adaptRole(r: DbRole): Role {
-  switch (r) {
-    case "Admin":
-    case "ProjectManager":
-    case "SalesRep":
-    case "Technician":
-    case "Subcontractor":
-    case "Accountant":
-    case "ViewOnly":
-      return r;
-    case "LeadTechnician":
-      return "Technician";
-    case "Dispatcher":
-      return "ProjectManager";
-    case "Warehouse":
-      return "Technician";
-    case "ClientPortal":
-      return "ViewOnly";
-  }
-}
 
 export default async function DuplicateQuoteNumbersPage() {
   const me = await getCurrentProfile();
