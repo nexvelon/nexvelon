@@ -45,6 +45,7 @@ import { MoveAssignDialog } from "@/components/modules/inventory/MoveAssignDialo
 import { MarkDeliveredDialog } from "@/components/modules/inventory/MarkDeliveredDialog";
 import { AdjustStockDialog } from "@/components/modules/inventory/AdjustStockDialog";
 import { MovementHistory } from "@/components/modules/inventory/MovementHistory";
+import { PickupSlipsPanel } from "@/components/modules/inventory/PickupSlipsPanel";
 import {
   EditReceivedBatchDialog,
   type ReceivedBatch,
@@ -1077,6 +1078,9 @@ export function ProductDetailClient({
         productId={product.id}
         partLabel={product.master_part_number ?? product.sku}
       />
+
+      {/* INV-9-3: pickup slips that issued this product. */}
+      <PickupSlipsPanel productId={product.id} />
 
       {/* MATERIALS-1: invoices that bill this part. */}
       <div>

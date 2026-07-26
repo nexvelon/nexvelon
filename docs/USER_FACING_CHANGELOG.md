@@ -116,6 +116,11 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Inventory — Pickup slips on product pages (INV-9-3)
+
+- Product pages now list the pickup slips involving that item, showing who
+  received it, whether the slip is signed, and a link to the signed PDF.
+
 ### Inventory — Cycle counts (INV-9-2)
 
 - Users can run cycle counts — snapshot expected stock at a location (and/or

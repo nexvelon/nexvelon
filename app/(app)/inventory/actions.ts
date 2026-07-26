@@ -40,7 +40,10 @@ import {
   buildPickupSlipPdfProps,
   attachSignatureToPickupSlip,
   setPickupSlipPdfPath,
+  listPickupSlipsForProduct,
+  getPickupSlipPdfUrl,
   type CreatePickupSlipInput,
+  type PickupSlipForProduct,
 } from "@/lib/api/pickup-slips";
 import { renderPickupSlipPdf } from "@/lib/pdf/render-pickup-slip";
 import { uploadPickupSlipPdf } from "@/lib/storage/pickup-slip-pdfs";
@@ -276,6 +279,34 @@ export async function renderPickupSlipPdfAction(
     const denied = await requireInventoryView();
     if (denied) return { ok: false, error: denied };
     return { ok: true, data: await renderAndStoreSlip(slipId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-9-3: the pickup slips that issued a given product (read-only panel on the
+// product detail page). Gated on inventory:view.
+export async function listPickupSlipsForProductAction(
+  productId: string
+): Promise<ActionResult<PickupSlipForProduct[]>> {
+  try {
+    const denied = await requireInventoryView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await listPickupSlipsForProduct(productId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// INV-9-3: a fresh signed URL to a stored pickup-slip PDF (never expose the
+// bucket to the browser). Gated on inventory:view.
+export async function getPickupSlipPdfUrlAction(
+  slipId: string
+): Promise<ActionResult<{ url: string | null }>> {
+  try {
+    const denied = await requireInventoryView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: { url: await getPickupSlipPdfUrl(slipId) } };
   } catch (e) {
     return fail(e);
   }
