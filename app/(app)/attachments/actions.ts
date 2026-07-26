@@ -90,6 +90,9 @@ const ENTITY_RESOURCE: Record<string, Resource> = {
   // PROJ2-16: daily site-log photos ride the default `attachments` bucket;
   // adding one edits the project's field record, so it gates on projects.
   site_log: "projects",
+  // SCHED-1: technician certification documents ride the default `attachments`
+  // bucket; managing them is a scheduling concern (they gate who can be booked).
+  tech_certification: "scheduling",
 };
 
 function resourceFor(entityType: string): Resource {

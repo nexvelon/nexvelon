@@ -11,7 +11,7 @@
 // Select on the project page.
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { Check, Pencil, Plus, Power, Trash2, X } from "lucide-react";
+import { BadgeCheck, Check, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
   setTechActiveAction,
   deleteTechAction,
 } from "@/app/(app)/settings/techs-actions";
+import { TechCertificationsDialog } from "@/components/modules/settings/TechCertificationsDialog";
 import { formatCurrency } from "@/lib/format";
 import type { DbTech } from "@/lib/types/database";
 
@@ -52,6 +53,7 @@ export function TechsPane() {
   const [editName, setEditName] = useState("");
   const [editRate, setEditRate] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<DbTech | null>(null);
+  const [certTech, setCertTech] = useState<DbTech | null>(null);
   const [pending, start] = useTransition();
 
   const load = useCallback(async () => {
@@ -299,6 +301,16 @@ export function TechsPane() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              onClick={() => setCertTech(r)}
+                              disabled={pending}
+                              aria-label="Certifications"
+                              title="Certifications"
+                            >
+                              <BadgeCheck className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => beginEdit(r)}
                               disabled={pending}
                               aria-label="Edit"
@@ -367,6 +379,14 @@ export function TechsPane() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {certTech && (
+        <TechCertificationsDialog
+          tech={certTech}
+          open
+          onClose={() => setCertTech(null)}
+        />
+      )}
     </div>
   );
 }

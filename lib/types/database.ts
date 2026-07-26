@@ -840,6 +840,132 @@ export interface DbTech {
   updated_at: string;
 }
 
+// ----------------------------------------------------------------------------
+// SCHED-1 (migration 0111) — the dispatch model: tech certifications, the
+// dispatchable schedule_jobs unit, and the time-windowed schedule_assignments
+// booking. A booking is a PLAN — nothing here links to labour_entries/cost.
+// ----------------------------------------------------------------------------
+export interface DbTechCertification {
+  id: string;
+  tech_id: string;
+  cert_type: string;
+  cert_name: string | null;
+  issuer: string | null;
+  reference_number: string | null;
+  issued_date: string | null;
+  expiry_date: string | null;
+  attachment_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbTechCertificationInsert = {
+  tech_id: string;
+  cert_type: string;
+  cert_name?: string | null;
+  issuer?: string | null;
+  reference_number?: string | null;
+  issued_date?: string | null;
+  expiry_date?: string | null;
+  attachment_id?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbScheduleJobType =
+  | "install"
+  | "service"
+  | "inspection"
+  | "commissioning"
+  | "other";
+export type DbScheduleJobPriority = "low" | "normal" | "high" | "urgent";
+export type DbScheduleJobStatus =
+  | "unscheduled"
+  | "scheduled"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
+export interface DbScheduleJob {
+  id: string;
+  reference: string;
+  title: string;
+  job_type: DbScheduleJobType;
+  priority: DbScheduleJobPriority;
+  project_id: string | null;
+  project_job_id: string | null;
+  client_id: string | null;
+  site_id: string | null;
+  location_text: string | null;
+  description: string | null;
+  required_certs: string[];
+  estimated_hours: number | null;
+  status: DbScheduleJobStatus;
+  window_start: string | null;
+  window_end: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbScheduleJobInsert = {
+  reference: string;
+  title: string;
+  job_type?: DbScheduleJobType;
+  priority?: DbScheduleJobPriority;
+  project_id?: string | null;
+  project_job_id?: string | null;
+  client_id?: string | null;
+  site_id?: string | null;
+  location_text?: string | null;
+  description?: string | null;
+  required_certs?: string[];
+  estimated_hours?: number | null;
+  status?: DbScheduleJobStatus;
+  window_start?: string | null;
+  window_end?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type DbScheduleAssignmentStatus =
+  | "tentative"
+  | "confirmed"
+  | "completed"
+  | "cancelled";
+
+export interface DbScheduleAssignment {
+  id: string;
+  schedule_job_id: string;
+  tech_id: string;
+  starts_at: string;
+  ends_at: string;
+  status: DbScheduleAssignmentStatus;
+  job_assignment_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbScheduleAssignmentInsert = {
+  schedule_job_id: string;
+  tech_id: string;
+  starts_at: string;
+  ends_at: string;
+  status?: DbScheduleAssignmentStatus;
+  job_assignment_id?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
 // JC-1 (migration 0054) — hours logged against a project cost center.
 // tech_name + cost_rate are SNAPSHOTS frozen at entry time; amount
 // (= hours * cost_rate) is persisted for fast per-cost-center rollups.

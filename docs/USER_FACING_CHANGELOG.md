@@ -133,6 +133,15 @@
 - Users can reconcile planned vs actual material cost on a job to spot over- or
   under-consumption, on the job's Financials tab (dollar-level).
 
+### Scheduling — Dispatch model + certifications (SCHED-1)
+
+- Users can create dispatchable jobs (project work or standalone service calls)
+  with required technician certifications, and book a technician to a time window.
+- The system prevents double-booking a technician and blocks assigning a
+  technician who lacks a required, valid certification.
+- Users can record technician certifications with expiry dates (on each tech in
+  Settings → Techs).
+
 ### Vendors — Performance metrics (INV-9-1)
 
 - Vendor pages now show a performance summary — year-to-date spend, on-time
