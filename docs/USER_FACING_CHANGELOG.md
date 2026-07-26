@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Reports — Financial reports (REP-2)
+
+- Added financial reports — per-company P&L, margin analysis, project
+  profitability, AR and AP aging, HST position and T5018 — each downloadable as
+  CSV, Excel or PDF, gated by role.
+
 ### Reports — Export foundation + hub (REP-1)
 
 - Added a Reports hub with a shared export engine — reports can be downloaded as

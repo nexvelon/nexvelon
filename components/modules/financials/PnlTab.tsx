@@ -27,6 +27,7 @@ import {
   exportOpcoPnlCsvAction,
 } from "@/app/(app)/financials/actions";
 import type { OpcoPnl, PnlPortfolioRow } from "@/lib/api/project-pnl";
+import { downloadReport } from "@/lib/reports/download";
 import { OPCO_LABEL } from "@/components/modules/invoices/shared";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -67,15 +68,7 @@ export function PnlTab() {
         toast.error(res.error);
         return;
       }
-      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadReport({ data: res.data.csv, filename: res.data.filename, mime: "text/csv;charset=utf-8;", encoding: "text" });
       toast.success("P&L exported");
     } finally {
       setExporting(false);
