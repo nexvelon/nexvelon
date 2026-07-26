@@ -8,12 +8,12 @@ import { grantedMatrixRows, buildGrantedMatrix, matrixHasPermission } from "@/li
 import { ROLE_PERMISSIONS } from "@/lib/permissions";
 
 describe("grantedMatrixRows", () => {
-  it("produces exactly 194 unique granted triples (deduped)", () => {
+  it("produces exactly 206 unique granted triples (8 roles) (deduped)", () => {
     const rows = grantedMatrixRows();
-    expect(rows).toHaveLength(194);
+    expect(rows).toHaveLength(206);
     // No duplicate (role,resource,action) — the DB PK requires uniqueness.
     const keys = new Set(rows.map((r) => `${r.role}:${r.resource}:${r.action}`));
-    expect(keys.size).toBe(194);
+    expect(keys.size).toBe(206);
   });
 
   it("Admin = full() = every resource × every action (121 rows)", () => {

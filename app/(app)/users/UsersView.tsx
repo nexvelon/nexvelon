@@ -9,6 +9,7 @@ import {
   ActivityLogTab,
   InvitationsTab,
 } from "@/components/modules/users/Tabs";
+import { RoleBaselineEditor } from "@/components/modules/users/RoleBaselineEditor";
 import { InviteUserDrawer } from "@/components/modules/users/InviteUserDrawer";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ const TABS = [
   { key: "users", label: "Users" },
   { key: "roles", label: "Roles" },
   { key: "matrix", label: "Permissions Matrix" },
+  { key: "baselines", label: "Role Baselines" },
   { key: "log", label: "Activity Log" },
   { key: "invites", label: "Invitations" },
 ] as const;
@@ -113,6 +115,7 @@ export default function UsersView({
       )}
       {tab === "roles" && <RolesTab />}
       {tab === "matrix" && <PermissionsMatrixTab />}
+      {tab === "baselines" && <RoleBaselineEditor />}
       {tab === "log" && <ActivityLogTab events={auditEvents} />}
       {tab === "invites" && <InvitationsTab realUsers={realUsers} />}
 

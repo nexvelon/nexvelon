@@ -70,6 +70,7 @@ const ROLES: Role[] = [
   "Subcontractor",
   "Accountant",
   "ViewOnly",
+  "Warehouse",
 ];
 
 function initials(name: string): string {

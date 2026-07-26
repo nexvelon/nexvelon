@@ -1,18 +1,16 @@
-// PERM-1 — THE SAFETY GATE of Sprint 8.
+// THE PARITY GATE — redefined at DES-1.
 //
-// Iterates ALL 7 roles × 11 resources × 11 actions = 847 triples and asserts the
-// DB-seeded resolver (dbHasPermission over the matrix built from the SAME seed
-// generator migration 0114 uses) returns the IDENTICAL decision as the static
-// hasPermission for EVERY cell. This proves the dormant DB copy is byte-faithful
-// to lib/permissions.ts.
+// OLD invariant (PERM-1..4): the DB matrix always equalled the static matrix.
+// NEW invariant (DES-1, role baselines are now EDITABLE): a FRESH seed —
+// generated from ROLE_PERMISSIONS incl. the 8th Warehouse role — equals the
+// static matrix for all 8 × 11 × 11 = 968 triples. This proves the CODE and the
+// SEED agree on a fresh install. Admin edits to role_permission_matrix then
+// LEGITIMATELY diverge from the static matrix (that's the feature) and are
+// audited; role-baseline-edit.test.ts covers that the resolver reflects edits
+// while a fresh seed still matches static.
 //
-// This test MUST pass now and stay green through PERM-2's cutover (when
-// hasPermission's internals swap onto the DB resolver under the same signature).
-// If a single cell diverges, the cutover is unsafe — that is the whole point.
-//
-// ROLES/RESOURCES/ACTIONS are enumerated INDEPENDENTLY here (not imported from
-// the module's private arrays) so this doubles as a guard: adding a resource or
-// action to the app without re-seeding the matrix breaks this test.
+// ROLES/RESOURCES/ACTIONS are enumerated INDEPENDENTLY here so this doubles as a
+// guard: adding a role/resource/action without re-seeding breaks this test.
 
 import { describe, it, expect } from "vitest";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
@@ -21,7 +19,7 @@ import { buildGrantedMatrix } from "@/lib/permissions/seed-matrix";
 import type { Role } from "@/lib/types";
 
 const ROLES: Role[] = [
-  "Admin", "SalesRep", "ProjectManager", "Technician", "Subcontractor", "Accountant", "ViewOnly",
+  "Admin", "SalesRep", "ProjectManager", "Technician", "Subcontractor", "Accountant", "ViewOnly", "Warehouse",
 ];
 const RESOURCES: Resource[] = [
   "dashboard", "quotes", "projects", "clients", "inventory", "subcontractors",
@@ -36,12 +34,12 @@ const ACTIONS: Action[] = [
 // migration's INSERTs came from (so DB rows === this map by construction).
 const matrix = buildGrantedMatrix();
 
-describe("847-triple parity: DB matrix === static matrix", () => {
-  it("enumerates exactly 7 × 11 × 11 = 847 triples", () => {
-    expect(ROLES).toHaveLength(7);
+describe("968-triple parity: FRESH seed === static matrix (8 roles)", () => {
+  it("enumerates exactly 8 × 11 × 11 = 968 triples", () => {
+    expect(ROLES).toHaveLength(8);
     expect(RESOURCES).toHaveLength(11);
     expect(ACTIONS).toHaveLength(11);
-    expect(ROLES.length * RESOURCES.length * ACTIONS.length).toBe(847);
+    expect(ROLES.length * RESOURCES.length * ACTIONS.length).toBe(968);
   });
 
   it("every (role, resource, action) decision is identical", () => {
@@ -61,10 +59,10 @@ describe("847-triple parity: DB matrix === static matrix", () => {
     }
     expect(mismatches).toEqual([]);
     // The granted count the seed must reproduce exactly (audit 2a).
-    expect(granted).toBe(194);
+    expect(granted).toBe(206);
   });
 
-  it("the seeded matrix's granted count also equals 194", () => {
+  it("the seeded matrix's granted count also equals 206", () => {
     let dbGranted = 0;
     for (const role of ROLES) {
       for (const resource of RESOURCES) {
@@ -73,6 +71,6 @@ describe("847-triple parity: DB matrix === static matrix", () => {
         }
       }
     }
-    expect(dbGranted).toBe(194);
+    expect(dbGranted).toBe(206);
   });
 });

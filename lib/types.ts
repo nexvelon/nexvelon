@@ -318,7 +318,11 @@ export type Role =
   | "Technician"
   | "Subcontractor"
   | "Accountant"
-  | "ViewOnly";
+  | "ViewOnly"
+  // DES-1 — Warehouse promoted from a DbRole alias (was server→Technician /
+  // client→ViewOnly) to a first-class matrix role with its own editable
+  // baseline: view-everything (like ViewOnly) + manage inventory.
+  | "Warehouse";
 
 export interface User {
   id: ID;
