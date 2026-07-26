@@ -133,6 +133,13 @@
 - Users can reconcile planned vs actual material cost on a job to spot over- or
   under-consumption, on the job's Financials tab (dollar-level).
 
+### Scheduling — Live dispatch board (SCHED-2)
+
+- The dispatch board now shows real technician schedules — drag an unscheduled
+  job onto a technician's time slot to book it, or drag a booking to reschedule,
+  with double-booking and missing-certification assignments blocked live. A
+  view-only role sees the board without drag or actions.
+
 ### Scheduling — Dispatch model + certifications (SCHED-1)
 
 - Users can create dispatchable jobs (project work or standalone service calls)
