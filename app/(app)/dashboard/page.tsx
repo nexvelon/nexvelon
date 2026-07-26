@@ -1,15 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
   AlertCircle,
   Banknote,
   ClipboardList,
   FolderOpen,
+  HandCoins,
   Percent,
+  Receipt,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RangePicker } from "@/components/modules/dashboard/RangePicker";
 import { KpiCard } from "@/components/modules/dashboard/KpiCard";
@@ -22,24 +26,28 @@ import { TopClientsTable } from "@/components/modules/dashboard/TopClientsTable"
 import { InventoryHealth } from "@/components/modules/dashboard/InventoryHealth";
 import { TechnicianUtilization } from "@/components/modules/dashboard/TechnicianUtilization";
 import {
-  buildKpis,
   inventoryByVendor,
   lowStockAlerts,
   pipelineFunnel,
+  RANGE_LABEL,
+  rangeFor,
   recentActivity,
   technicianUtilization,
-  TODAY,
   topClientsYTD,
   trailing12MonthsTrend,
   type RangeKey,
 } from "@/lib/dashboard-data";
+import { getDashboardKpisAction } from "@/app/(app)/dashboard/actions";
+import type { DashboardKpis } from "@/lib/api/dashboard";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [range, setRange] = useState<RangeKey>("mtd");
-  const kpis = useMemo(() => buildKpis(range), [range]);
+  const [kpi, setKpi] = useState<DashboardKpis | null>(null);
+  const [loading, setLoading] = useState(true);
+  // DASH-2/3 still render these mock tiles (empty until wired).
   const trend = useMemo(() => trailing12MonthsTrend(), []);
   const funnel = useMemo(() => pipelineFunnel(), []);
   const activity = useMemo(() => recentActivity(10), []);
@@ -48,134 +56,159 @@ export default function DashboardPage() {
   const lowStock = useMemo(() => lowStockAlerts(6), []);
   const utilization = useMemo(() => technicianUtilization(), []);
 
+  // Real today drives the range-aware tiles + greeting (the mock's anchored
+  // TODAY is gone from the dashboard).
+  useEffect(() => {
+    setLoading(true);
+    const { start, end } = rangeFor(range, new Date());
+    getDashboardKpisAction({
+      from: start.toISOString().slice(0, 10),
+      to: end.toISOString().slice(0, 10),
+    }).then((r) => {
+      if (r.ok) setKpi(r.data);
+      else toast.error(r.error);
+      setLoading(false);
+    });
+  }, [range]);
+
+  const now = new Date();
   const greeting =
-    TODAY.getHours() < 12
-      ? "Good morning"
-      : TODAY.getHours() < 18
-        ? "Good afternoon"
-        : "Good evening";
-  // Real signed-in user from AuthProvider — (app) layout guarantees one.
-  // Fallback to "there" only for the brief moment between AuthProvider's
-  // seedSession and the user.name being available.
+    now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
   const firstName = user?.name.split(" ")[0] ?? "there";
+  const asOf = kpi ? format(new Date(kpi.as_of), "MMM d, yyyy") : "today";
+
+  const fin = kpi?.financial ?? null;
+  const finEdit = kpi?.financial_edit ?? null;
+  const proj = kpi?.operational.projects ?? null;
+  const quo = kpi?.operational.quotes ?? null;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`Fiscal Year ${TODAY.getFullYear()} · Q${Math.floor(TODAY.getMonth() / 3) + 1}`}
+        eyebrow={`Fiscal Year ${now.getFullYear()} · Q${Math.floor(now.getMonth() / 3) + 1}`}
         title="Executive Dashboard"
-        description={`${format(TODAY, "EEEE, MMMM d, yyyy")} — ${greeting}, ${firstName}.`}
+        description={`${format(now, "EEEE, MMMM d, yyyy")} — ${greeting}, ${firstName}.`}
         actions={<RangePicker value={range} onChange={setRange} />}
       />
 
-      {/* KPI grid: 2 rows x 3 cols on desktop */}
-      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <KpiCard
-          index={0}
-          label="Revenue MTD"
-          value={kpis.current.revenue}
-          format={formatCurrency}
-          delta={kpis.delta.revenue}
-          icon={Banknote}
-        />
+      {loading && !kpi ? (
+        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-card h-28 animate-pulse rounded-lg border border-[var(--border)]" />
+          ))}
+        </section>
+      ) : (
+        <>
+          <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {/* ── financials:view tier (null block = restricted) ── */}
+            {fin ? (
+              <>
+                <KpiCard index={0} label={`Revenue · ${RANGE_LABEL[range]}`} value={fin.revenue} format={formatCurrency} icon={Banknote} />
+                <KpiCard index={1} label={`Cash collected · ${RANGE_LABEL[range]}`} value={fin.cash_collected} format={formatCurrency} icon={HandCoins} />
+                <KpiCard
+                  index={2}
+                  label="Outstanding AR"
+                  value={fin.ar_outstanding}
+                  format={formatCurrency}
+                  icon={AlertCircle}
+                  footer={<OverdueFooter amount={fin.ar_overdue} />}
+                />
+                <KpiCard
+                  index={3}
+                  label="Payables (AP)"
+                  value={fin.ap_outstanding}
+                  format={formatCurrency}
+                  icon={Receipt}
+                  footer={<OverdueFooter amount={fin.ap_overdue} />}
+                />
+                <KpiCard index={4} label="Deposits held" value={fin.deposits_held} format={formatCurrency} icon={Wallet} />
+              </>
+            ) : (
+              <>
+                <Restricted label="Revenue" variant="kpi" />
+                <Restricted label="Cash collected" variant="kpi" />
+                <Restricted label="Outstanding AR" variant="kpi" />
+                <Restricted label="Payables (AP)" variant="kpi" />
+                <Restricted label="Deposits held" variant="kpi" />
+              </>
+            )}
 
-        <CanFinancials
-          fallback={<Restricted label="EBITDA" variant="kpi" />}
-        >
-          <KpiCard
-            index={1}
-            label="EBITDA"
-            value={kpis.current.ebitda}
-            format={formatCurrency}
-            delta={kpis.delta.ebitda}
-            icon={TrendingUp}
-          />
-        </CanFinancials>
-
-        <CanFinancials
-          fallback={<Restricted label="Gross Margin %" variant="kpi" />}
-        >
-          <KpiCard
-            index={2}
-            label="Gross Margin %"
-            value={kpis.current.grossMargin * 100}
-            format={(n) => `${n.toFixed(1)}%`}
-            delta={kpis.delta.grossMargin}
-            deltaFormat={(n) => `${(n * 100).toFixed(1)} pts`}
-            icon={Percent}
-          />
-        </CanFinancials>
-
-        <KpiCard
-          index={3}
-          label="Open Quotes"
-          value={kpis.current.openQuotes.count}
-          format={formatNumber}
-          icon={ClipboardList}
-          footer={
-            <p className="text-muted-foreground text-xs">
-              <span className="text-brand-charcoal font-semibold tabular-nums">
-                {formatCurrency(kpis.current.openQuotes.total)}
-              </span>{" "}
-              in pipeline value
-            </p>
-          }
-        />
-
-        <KpiCard
-          index={4}
-          label="Active Projects"
-          value={kpis.current.activeProjects.count}
-          format={formatNumber}
-          icon={FolderOpen}
-          footer={
-            <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
-              <span>
-                <span className="text-emerald-600 font-semibold tabular-nums">
-                  {kpis.current.activeProjects.inProgress}
-                </span>{" "}
-                in progress
-              </span>
-              <span>
-                <span className="text-amber-600 font-semibold tabular-nums">
-                  {kpis.current.activeProjects.onHold}
-                </span>{" "}
-                on hold
-              </span>
-              <span>
-                <span className="text-red-600 font-semibold tabular-nums">
-                  {kpis.current.activeProjects.atRisk}
-                </span>{" "}
-                at risk
-              </span>
-            </div>
-          }
-        />
-
-        <KpiCard
-          index={5}
-          label="Overdue Invoices"
-          value={kpis.current.overdueInvoices.count}
-          format={formatNumber}
-          icon={AlertCircle}
-          accent={kpis.current.overdueInvoices.count > 0 ? "danger" : "default"}
-          trendInverted
-          footer={
-            <p className="text-muted-foreground text-xs">
-              <span
-                className={
-                  kpis.current.overdueInvoices.count > 0
-                    ? "font-semibold text-red-600 tabular-nums"
-                    : "text-brand-charcoal font-semibold tabular-nums"
+            {/* ── operational (projects:view / quotes:view) ── */}
+            {proj ? (
+              <KpiCard
+                index={5}
+                label="Active projects"
+                value={proj.active_projects}
+                format={formatNumber}
+                icon={FolderOpen}
+                footer={
+                  <p className="text-muted-foreground text-xs">
+                    <span className="text-brand-charcoal font-semibold tabular-nums">{formatCurrency(proj.active_contract_value)}</span> contract value
+                  </p>
                 }
-              >
-                {formatCurrency(kpis.current.overdueInvoices.total)}
-              </span>{" "}
-              outstanding
-            </p>
-          }
-        />
-      </section>
+              />
+            ) : (
+              <Restricted label="Active projects" variant="kpi" />
+            )}
+
+            {quo ? (
+              <KpiCard
+                index={6}
+                label="Open quotes"
+                value={quo.open_quotes}
+                format={formatNumber}
+                icon={ClipboardList}
+                footer={
+                  <p className="text-muted-foreground text-xs">
+                    <span className="text-brand-charcoal font-semibold tabular-nums">{formatCurrency(quo.open_quotes_value)}</span> in pipeline value
+                  </p>
+                }
+              />
+            ) : (
+              <Restricted label="Open quotes" variant="kpi" />
+            )}
+
+            {/* ── financials:edit tier (cost-side) ── */}
+            {finEdit ? (
+              <>
+                <KpiCard
+                  index={7}
+                  label="WIP net (over/under)"
+                  value={finEdit.wip_net}
+                  format={formatCurrency}
+                  icon={TrendingUp}
+                  footer={
+                    <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
+                      <span><span className="font-semibold text-red-600 tabular-nums">{formatCurrency(finEdit.wip_overbilled)}</span> over</span>
+                      <span><span className="font-semibold text-emerald-600 tabular-nums">{formatCurrency(Math.abs(finEdit.wip_underbilled))}</span> under</span>
+                    </div>
+                  }
+                />
+                <KpiCard index={8} label="HST net position" value={finEdit.hst_net_total} format={formatCurrency} icon={Receipt} />
+                <KpiCard
+                  index={9}
+                  label="Blended margin"
+                  value={finEdit.blended_margin_pct ?? 0}
+                  format={(n) => (finEdit.blended_margin_pct == null ? "—" : `${n.toFixed(1)}%`)}
+                  icon={Percent}
+                  footer={finEdit.blended_margin_pct == null ? <p className="text-muted-foreground text-xs">No revenue yet</p> : undefined}
+                />
+              </>
+            ) : (
+              <>
+                <Restricted label="WIP net" variant="kpi" />
+                <Restricted label="HST net position" variant="kpi" />
+                <Restricted label="Blended margin" variant="kpi" />
+              </>
+            )}
+          </section>
+
+          <p className="text-muted-foreground -mt-2 text-[11px]">
+            Revenue, cash and HST reflect the selected range; AR, AP, deposits, WIP,
+            projects and quotes are a live snapshot as of {asOf}.
+          </p>
+        </>
+      )}
 
       {/* Row 2 — Charts: 8 + 4 */}
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -214,9 +247,20 @@ export default function DashboardPage() {
       </section>
 
       <p className="text-muted-foreground pt-2 text-center text-[11px]">
-        Demo build · figures derived from synthetic data, anchored to{" "}
-        {format(TODAY, "MMM d, yyyy")}.
+        The trend, pipeline, activity, inventory and utilization panels are not
+        yet wired to live data (coming in DASH-2/3).
       </p>
     </div>
+  );
+}
+
+function OverdueFooter({ amount }: { amount: number }) {
+  if (amount <= 0) {
+    return <p className="text-muted-foreground text-xs">Nothing overdue</p>;
+  }
+  return (
+    <p className="text-muted-foreground text-xs">
+      <span className="font-semibold text-red-600 tabular-nums">{formatCurrency(amount)}</span> overdue
+    </p>
   );
 }

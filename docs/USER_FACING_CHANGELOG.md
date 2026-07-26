@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard — Real KPI row (DASH-1)
+
+- The dashboard's key metrics now show real data — revenue, cash collected,
+  outstanding receivables and payables, deposits held, work-in-progress, HST
+  position, blended margin, active projects and open quotes — gated by role, with
+  fabricated figures removed.
+
 ### Inventory — Pickup slips on product pages (INV-9-3)
 
 - Product pages now list the pickup slips involving that item, showing who
