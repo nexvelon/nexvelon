@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Reports — Export foundation + hub (REP-1)
+
+- Added a Reports hub with a shared export engine — reports can be downloaded as
+  CSV, Excel, or PDF. The work-in-progress report is the first available; more
+  arrive next.
+
 ### Dashboard — Final panels, fully real (DASH-3)
 
 - The dashboard's revenue trend, top clients and inventory health panels now show
