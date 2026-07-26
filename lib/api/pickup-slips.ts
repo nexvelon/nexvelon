@@ -8,6 +8,7 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getQuoteTemplate } from "@/lib/company-profile";
+import { signPickupSlipPdf } from "@/lib/storage/pickup-slip-pdfs";
 import type {
   DbPickupSlip,
   DbPickupSlipLine,
@@ -250,4 +251,83 @@ export async function listPickupSlipsForRecipient(input: {
     .order("issued_at", { ascending: false });
   if (error) throw new Error(`listPickupSlipsForRecipient: ${error.message}`);
   return (data ?? []) as DbPickupSlip[];
+}
+
+// INV-9-3 — the slips that issued a given product, for the product-detail panel.
+// Signed state is DERIVED (signature_data_url present), PDF availability from
+// pdf_path — neither is a status column. line_count is the total lines on the
+// slip (how many items were issued together), not just this product's lines.
+export interface PickupSlipForProduct {
+  id: string;
+  reference: string; // slip_number, PS-YYYY-NNNN
+  recipient_type: string; // truck | tech | sub
+  recipient_label: string; // recipient_name snapshot
+  created_at: string; // issued_at
+  is_signed: boolean;
+  has_pdf: boolean;
+  line_count: number;
+}
+
+export async function listPickupSlipsForProduct(
+  productId: string
+): Promise<PickupSlipForProduct[]> {
+  const supabase = await db();
+
+  // Which slips touched this product?
+  const { data: matchLines, error: mErr } = await supabase
+    .from("pickup_slip_lines")
+    .select("pickup_slip_id")
+    .eq("product_id", productId);
+  if (mErr) throw new Error(`listPickupSlipsForProduct/lines: ${mErr.message}`);
+  const slipIds = [
+    ...new Set(
+      ((matchLines ?? []) as { pickup_slip_id: string }[]).map((l) => l.pickup_slip_id)
+    ),
+  ];
+  if (slipIds.length === 0) return [];
+
+  // The headers.
+  const { data: slips, error: sErr } = await supabase
+    .from("pickup_slips")
+    .select("*")
+    .in("id", slipIds)
+    .order("issued_at", { ascending: false });
+  if (sErr) throw new Error(`listPickupSlipsForProduct/slips: ${sErr.message}`);
+
+  // Total line count per slip (all items, not just this product's lines).
+  const { data: allLines, error: lErr } = await supabase
+    .from("pickup_slip_lines")
+    .select("pickup_slip_id")
+    .in("pickup_slip_id", slipIds);
+  if (lErr) throw new Error(`listPickupSlipsForProduct/count: ${lErr.message}`);
+  const countBySlip = new Map<string, number>();
+  for (const l of (allLines ?? []) as { pickup_slip_id: string }[]) {
+    countBySlip.set(l.pickup_slip_id, (countBySlip.get(l.pickup_slip_id) ?? 0) + 1);
+  }
+
+  return ((slips ?? []) as DbPickupSlip[]).map((s) => ({
+    id: s.id,
+    reference: s.slip_number,
+    recipient_type: s.recipient_type,
+    recipient_label: s.recipient_name,
+    created_at: s.issued_at,
+    is_signed: s.signature_data_url != null,
+    has_pdf: s.pdf_path != null,
+    line_count: countBySlip.get(s.id) ?? 0,
+  }));
+}
+
+/** A fresh signed URL to a stored pickup-slip PDF (#311 pattern). Null when the
+ *  slip has no rendered PDF yet. */
+export async function getPickupSlipPdfUrl(slipId: string): Promise<string | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("pickup_slips")
+    .select("pdf_path")
+    .eq("id", slipId)
+    .maybeSingle();
+  if (error) throw new Error(`getPickupSlipPdfUrl: ${error.message}`);
+  const path = (data as { pdf_path: string | null } | null)?.pdf_path;
+  if (!path) return null;
+  return signPickupSlipPdf(path);
 }

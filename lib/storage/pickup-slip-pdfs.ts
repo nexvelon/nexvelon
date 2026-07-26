@@ -39,3 +39,13 @@ export async function uploadPickupSlipPdf(
 
   return { path, signedUrl: signed?.signedUrl ?? null };
 }
+
+/** A fresh signed URL for an already-stored pickup-slip PDF (#311 on-demand
+ *  download pattern — never expose the bucket to the browser). */
+export async function signPickupSlipPdf(path: string): Promise<string | null> {
+  const supabase = admin();
+  const { data } = await supabase.storage
+    .from(PICKUP_SLIP_PDF_BUCKET)
+    .createSignedUrl(path, 60 * 60); // 1 hour
+  return data?.signedUrl ?? null;
+}
