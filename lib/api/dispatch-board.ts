@@ -11,7 +11,15 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import { businessDateISO } from "@/lib/format";
 import { expiryState } from "@/lib/expiry-state";
 import { CERT_WARN_DAYS } from "@/lib/scheduling/tech-eligibility";
+import {
+  availableMinutesInWindow,
+  bookedMinutesInWindow,
+  utilizationPct,
+  type AbsenceRow,
+  type WorkingHoursRow,
+} from "@/lib/scheduling/availability";
 import type {
+  DbAbsenceType,
   DbScheduleJobPriority,
   DbScheduleJobType,
 } from "@/lib/types/database";
@@ -25,6 +33,17 @@ export interface DispatchTechRow {
   name: string;
   is_active: boolean;
   cert_summary: { valid_types: string[]; expiring_count: number; expired_count: number };
+  // SCHED-3 — the weekly template (for shading non-working areas) + window utilization.
+  working_hours: { day_of_week: number; start_time: string; end_time: string }[];
+  utilization_pct: number | null; // null when hours are unknown
+}
+
+export interface DispatchAbsenceRow {
+  id: string;
+  tech_id: string;
+  absence_type: DbAbsenceType;
+  starts_at: string;
+  ends_at: string;
 }
 
 export interface DispatchBookingRow {
@@ -56,6 +75,11 @@ export interface DispatchBoard {
   techs: DispatchTechRow[];
   bookings: DispatchBookingRow[];
   unscheduled: DispatchUnscheduledRow[];
+  // SCHED-3 — approved absences overlapping the window (rendered as leave bands).
+  absences: DispatchAbsenceRow[];
+  // SCHED-3 — the honest stats SCHED-2 removed: techs on leave today, and
+  // window utilization (null when no working hours are set anywhere).
+  stats: { techs_out: number; utilization_pct: number | null };
   range: { from: string; to: string };
 }
 
@@ -101,6 +125,46 @@ export async function getDispatchBoard(window: {
     starts_at: string; ends_at: string; status: string;
   }[];
 
+  // SCHED-3 — working hours (all techs) + approved absences overlapping the window.
+  const hoursByTech: Record<string, WorkingHoursRow[]> = {};
+  const approvedAbsByTech: Record<string, AbsenceRow[]> = {};
+  const windowAbsences: DispatchAbsenceRow[] = [];
+  if (techIds.length > 0) {
+    const { data: hoursData } = await supabase
+      .from("tech_working_hours")
+      .select("tech_id, day_of_week, start_time, end_time")
+      .in("tech_id", techIds);
+    for (const h of (hoursData ?? []) as { tech_id: string; day_of_week: number; start_time: string; end_time: string }[]) {
+      (hoursByTech[h.tech_id] ??= []).push({ day_of_week: h.day_of_week, start_time: h.start_time, end_time: h.end_time });
+    }
+    const { data: absData } = await supabase
+      .from("tech_absences")
+      .select("id, tech_id, absence_type, starts_at, ends_at, status")
+      .in("tech_id", techIds)
+      .eq("status", "approved")
+      .lt("starts_at", window.to)
+      .gt("ends_at", window.from);
+    for (const a of (absData ?? []) as { id: string; tech_id: string; absence_type: DbAbsenceType; starts_at: string; ends_at: string; status: string }[]) {
+      (approvedAbsByTech[a.tech_id] ??= []).push({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status });
+      windowAbsences.push({ id: a.id, tech_id: a.tech_id, absence_type: a.absence_type, starts_at: a.starts_at, ends_at: a.ends_at });
+    }
+  }
+
+  // Techs on leave TODAY (may be outside the viewed window).
+  const todayStart = `${today}T00:00:00.000Z`;
+  const todayEnd = `${today}T23:59:59.999Z`;
+  let techsOut = 0;
+  if (techIds.length > 0) {
+    const { data: todayAbs } = await supabase
+      .from("tech_absences")
+      .select("tech_id")
+      .in("tech_id", techIds)
+      .eq("status", "approved")
+      .lt("starts_at", todayEnd)
+      .gt("ends_at", todayStart);
+    techsOut = new Set(((todayAbs ?? []) as { tech_id: string }[]).map((a) => a.tech_id)).size;
+  }
+
   // The schedule_jobs referenced by those bookings + the unscheduled backlog.
   const bookedJobIds = [...new Set(bookings.map((b) => b.schedule_job_id))];
   const jobById: Record<string, {
@@ -142,27 +206,44 @@ export async function getDispatchBoard(window: {
   const labelFor = (siteId: string | null, locationText: string | null): string | null =>
     (siteId && siteName[siteId]) || locationText || null;
 
-  return {
-    techs: techs.map((t) => {
-      const certs = certsByTech[t.id] ?? [];
-      const valid_types: string[] = [];
-      let expiring = 0;
-      let expired = 0;
-      for (const c of certs) {
-        const state = expiryState(c.expiry_date, today, CERT_WARN_DAYS);
-        if (state === "expired") expired += 1;
-        else {
-          if (!valid_types.includes(c.cert_type)) valid_types.push(c.cert_type);
-          if (state === "expiring_soon") expiring += 1;
-        }
+  // Group window bookings by tech for per-tech utilization.
+  const bookingsByTech: Record<string, { starts_at: string; ends_at: string; status: string }[]> = {};
+  for (const b of bookings) (bookingsByTech[b.tech_id] ??= []).push(b);
+
+  // Board-level utilization: Σ booked ÷ Σ available across techs with known hours.
+  let totalBooked = 0;
+  let totalAvailable = 0;
+  let anyHours = false;
+
+  const techRows = techs.map((t) => {
+    const certs = certsByTech[t.id] ?? [];
+    const valid_types: string[] = [];
+    let expiring = 0;
+    let expired = 0;
+    for (const c of certs) {
+      const state = expiryState(c.expiry_date, today, CERT_WARN_DAYS);
+      if (state === "expired") expired += 1;
+      else {
+        if (!valid_types.includes(c.cert_type)) valid_types.push(c.cert_type);
+        if (state === "expiring_soon") expiring += 1;
       }
-      return {
-        id: t.id,
-        name: t.name,
-        is_active: t.is_active,
-        cert_summary: { valid_types, expiring_count: expiring, expired_count: expired },
-      };
-    }),
+    }
+    const hours = hoursByTech[t.id] ?? [];
+    const available = availableMinutesInWindow(hours, approvedAbsByTech[t.id] ?? [], window.from, window.to);
+    const booked = bookedMinutesInWindow(bookingsByTech[t.id] ?? [], window.from, window.to);
+    if (available != null) { anyHours = true; totalBooked += booked; totalAvailable += available; }
+    return {
+      id: t.id,
+      name: t.name,
+      is_active: t.is_active,
+      cert_summary: { valid_types, expiring_count: expiring, expired_count: expired },
+      working_hours: hours,
+      utilization_pct: utilizationPct(booked, available),
+    };
+  });
+
+  return {
+    techs: techRows,
     bookings: bookings.map((b) => {
       const j = jobById[b.schedule_job_id];
       return {
@@ -189,6 +270,11 @@ export async function getDispatchBoard(window: {
       window_start: j.window_start,
       window_end: j.window_end,
     })),
+    absences: windowAbsences,
+    stats: {
+      techs_out: techsOut,
+      utilization_pct: anyHours ? utilizationPct(totalBooked, totalAvailable) : null,
+    },
     range: window,
   };
 }

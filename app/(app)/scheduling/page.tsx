@@ -17,7 +17,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { CalendarRange, ChevronLeft, ChevronRight, ListChecks, Lock, Users } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight, ListChecks, Lock, PieChart, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,7 +91,12 @@ export default function SchedulingPage() {
     async (res: Awaited<ReturnType<typeof createBookingAction>>, techId: string) => {
       if (!res.ok) { toast.error(res.error); return; }
       const r: BookingResult = res.data;
-      if (r.ok) { toast.success("Booked"); await load(); return; }
+      if (r.ok) {
+        if (r.warning === "off_hours") toast.warning("Booked — but outside the tech's working hours.");
+        else toast.success("Booked");
+        await load();
+        return;
+      }
       // Rejected — surface the typed verdict; the board is unchanged so the job
       // stays in the backlog (no false success on screen).
       toast.error(bookingErrorMessage(r, techName(techId)) ?? "Could not book.");
@@ -146,10 +151,15 @@ export default function SchedulingPage() {
         description="Technician bookings and the unscheduled backlog."
       />
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Booked (window)" value={board?.bookings.length ?? 0} icon={CalendarRange} />
         <Stat label="Unassigned" value={board?.unscheduled.length ?? 0} icon={ListChecks} accent={(board?.unscheduled.length ?? 0) > 5 ? "warning" : "default"} />
-        <Stat label="Technicians" value={board?.techs.length ?? 0} icon={Users} />
+        <Stat
+          label="Utilization"
+          display={board?.stats.utilization_pct != null ? `${board.stats.utilization_pct}%` : "—"}
+          icon={PieChart}
+        />
+        <Stat label="Techs out (today)" value={board?.stats.techs_out ?? 0} icon={UserMinus} accent={(board?.stats.techs_out ?? 0) > 0 ? "warning" : "default"} />
       </section>
 
       <div className="flex items-center justify-between gap-3">
@@ -197,6 +207,7 @@ export default function SchedulingPage() {
               <CalendarView
                 techs={board?.techs ?? []}
                 bookings={board?.bookings ?? []}
+                absences={board?.absences ?? []}
                 days={days}
                 today={startOfDay(new Date())}
                 canEdit={canEdit}
@@ -278,11 +289,13 @@ function BookingActionsDialog({
 function Stat({
   label,
   value,
+  display,
   icon: Icon,
   accent,
 }: {
   label: string;
-  value: number;
+  value?: number;
+  display?: string;
   icon: React.ComponentType<{ className?: string }>;
   accent?: "default" | "warning";
 }) {
@@ -292,7 +305,7 @@ function Stat({
         <span className="font-serif text-xs tracking-wide text-brand-charcoal/70">{label}</span>
         <Icon className={cn("h-4 w-4", accent === "warning" ? "text-red-500" : "text-brand-gold")} />
       </div>
-      <div className="text-brand-navy text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      <div className="text-brand-navy text-2xl font-semibold tracking-tight tabular-nums">{display ?? value}</div>
     </Card>
   );
 }

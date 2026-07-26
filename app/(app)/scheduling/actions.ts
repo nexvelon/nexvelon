@@ -40,17 +40,30 @@ import {
   type BookingResult,
 } from "@/lib/api/schedule-assignments";
 import { getDispatchBoard, type DispatchBoard } from "@/lib/api/dispatch-board";
+import {
+  getWorkingHours,
+  setWorkingHours,
+  listAbsences,
+  requestAbsence,
+  setAbsenceStatus,
+  type ListAbsencesFilter,
+  type WorkingHoursInput,
+} from "@/lib/api/tech-availability";
 import { listTechs } from "@/lib/api/techs";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import type {
+  DbAbsenceStatus,
+  DbAbsenceType,
   DbRole,
   DbScheduleJob,
   DbScheduleJobStatus,
   DbTech,
+  DbTechAbsence,
   DbTechCertification,
+  DbTechWorkingHours,
 } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -166,6 +179,83 @@ export async function deleteTechCertificationAction(
     const gate = await require("edit");
     if (!gate.ok) return gate;
     return { ok: true, data: { removed: await deleteTechCertification(id) } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── Tech availability: working hours + absences (SCHED-3) ────────────────────
+
+export async function getWorkingHoursAction(
+  techId: string
+): Promise<ActionResult<DbTechWorkingHours[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getWorkingHours(techId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setWorkingHoursAction(
+  techId: string,
+  rows: WorkingHoursInput[]
+): Promise<ActionResult<{ ok: true }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    await setWorkingHours(techId, rows);
+    revalidatePath("/settings");
+    revalidatePath("/scheduling");
+    return { ok: true, data: { ok: true } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listAbsencesAction(
+  filter: ListAbsencesFilter = {}
+): Promise<ActionResult<DbTechAbsence[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listAbsences(filter) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function requestAbsenceAction(input: {
+  techId: string;
+  type?: DbAbsenceType;
+  startsAt: string;
+  endsAt: string;
+  reason?: string | null;
+}): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await requestAbsence({ ...input, actorId: gate.actorId });
+    revalidatePath("/scheduling");
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// Approve / deny / cancel — gated scheduling:edit (dispatcher/admin). A tighter
+// "approvals-only" gate isn't warranted for a solo-operator context; reported.
+export async function setAbsenceStatusAction(
+  id: string,
+  status: DbAbsenceStatus
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    await setAbsenceStatus({ id, status, actorId: gate.actorId });
+    revalidatePath("/scheduling");
+    return { ok: true, data: { id } };
   } catch (e) {
     return fail(e);
   }

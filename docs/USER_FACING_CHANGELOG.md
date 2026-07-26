@@ -133,6 +133,15 @@
 - Users can reconcile planned vs actual material cost on a job to spot over- or
   under-consumption, on the job's Financials tab (dollar-level).
 
+### Scheduling — Working hours & availability (SCHED-3)
+
+- Users can set technician working hours and record time off with an approval
+  workflow; the dispatch board shades non-working hours and blocks booking a
+  technician who is on approved leave (off-hours booking still works, with a
+  warning).
+- The board's utilization and technicians-out stats are back, computed from real
+  working hours and absences (shown as "—" when a tech's hours aren't set).
+
 ### Scheduling — Live dispatch board (SCHED-2)
 
 - The dispatch board now shows real technician schedules — drag an unscheduled
