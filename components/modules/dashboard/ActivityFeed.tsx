@@ -1,88 +1,71 @@
 "use client";
 
+// DASH-2 — REAL activity feed from the global activity_log (was mock). High-level
+// by design: entity type + action + actor + when. No restricted field values are
+// shown, so it's safe for any dashboard viewer.
+
+import { useEffect, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
-import type { ActivityEvent } from "@/lib/dashboard-data";
-import { TODAY } from "@/lib/dashboard-data";
+import { Activity } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { getRecentActivityAction } from "@/app/(app)/dashboard/actions";
+import type { RecentActivityItem } from "@/lib/api/dashboard";
 
-interface Props {
-  events: ActivityEvent[];
-}
-
-const KIND_LABEL: Record<ActivityEvent["kind"], string> = {
-  quote: "Quote",
-  invoice: "Invoice",
+const ENTITY_LABEL: Record<string, string> = {
+  client: "Client",
+  site: "Site",
+  contact: "Contact",
+  inventory: "Product",
+  vendor: "Vendor",
+  purchase_order: "Purchase order",
+  attachment: "Attachment",
+  pickup_slip: "Pickup slip",
+  rma: "RMA",
   project: "Project",
-  po: "Purchase Order",
 };
 
-function relative(d: Date): string {
-  const ms = TODAY.getTime() - d.getTime();
-  if (ms < 1000 * 60) return "just now";
-  return `${formatDistanceToNowStrict(d, { addSuffix: false })} ago`;
-}
+const ACTION_VERB: Record<string, string> = {
+  create: "created",
+  update: "updated",
+  delete: "deleted",
+};
 
-export function ActivityFeed({ events }: Props) {
-  if (events.length === 0) {
-    return (
-      <Card className="h-full transition-shadow hover:shadow-md">
-        <CardHeader className="pb-2">
-          <CardTitle className="font-serif text-lg">Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-muted-foreground flex flex-col items-center justify-center gap-1 py-10 text-center">
-            <p className="text-sm">No recent activity</p>
-            <p className="text-[11px]">
-              Quote, invoice, and project events will appear here as they
-              happen.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+export function ActivityFeed() {
+  const [items, setItems] = useState<RecentActivityItem[] | null>(null);
+
+  useEffect(() => {
+    getRecentActivityAction().then((r) => setItems(r.ok ? r.data.items : []));
+  }, []);
+
   return (
-    <Card className="h-full transition-shadow hover:shadow-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-serif text-lg">Recent Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ol className="relative space-y-4 pl-5">
-          <span className="bg-border absolute top-1 bottom-1 left-1.5 w-px" />
-          {events.map((e, idx) => (
-            <motion.li
-              key={e.id}
-              className="relative"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.04 }}
-            >
-              <span className="bg-brand-gold ring-background absolute top-1.5 -left-[14px] h-2.5 w-2.5 rounded-full ring-4" />
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-brand-charcoal text-sm leading-snug">
-                    {e.message}
-                  </p>
-                  <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-                    <span className="text-brand-navy/70 font-medium">
-                      {KIND_LABEL[e.kind]}
-                    </span>
-                    <span>·</span>
-                    <span>{relative(e.timestamp)}</span>
-                  </div>
-                </div>
-                {e.amount !== undefined && (
-                  <span className="text-brand-navy text-sm font-semibold tabular-nums whitespace-nowrap">
-                    {formatCurrency(e.amount)}
-                  </span>
-                )}
-              </div>
-            </motion.li>
+    <Card className="bg-card p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-2">
+        <Activity className="text-brand-navy h-4 w-4" />
+        <h3 className="text-brand-navy font-serif text-base">Recent activity</h3>
+      </div>
+      {!items ? (
+        <p className="text-muted-foreground text-xs">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="text-muted-foreground text-xs">No recent activity.</p>
+      ) : (
+        <ol className="space-y-2.5">
+          {items.map((a) => (
+            <li key={a.id} className="flex items-baseline justify-between gap-3 text-xs">
+              <span>
+                <span className="font-medium" style={{ color: "var(--brand-primary)" }}>
+                  {a.actor_name ?? "System"}
+                </span>{" "}
+                <span className="text-muted-foreground">
+                  {ACTION_VERB[a.action] ?? a.action} a {ENTITY_LABEL[a.entity_type] ?? a.entity_type}
+                </span>
+              </span>
+              <span className="text-muted-foreground shrink-0 tabular-nums">
+                {formatDistanceToNowStrict(new Date(a.created_at), { addSuffix: true })}
+              </span>
+            </li>
           ))}
         </ol>
-      </CardContent>
+      )}
     </Card>
   );
 }

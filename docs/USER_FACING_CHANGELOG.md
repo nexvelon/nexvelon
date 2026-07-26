@@ -116,6 +116,15 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard — Alerts, worklists & real panels (DASH-2)
+
+- The dashboard now surfaces real alerts and worklists — subcontractor compliance
+  at risk, expiring bonds and warranties, overdue tasks, open deficiencies,
+  upcoming milestones, and today's dispatch — each gated by role.
+- Technician utilization and the activity feed are now real, and fabricated
+  pipeline figures were removed (replaced with a real quotes-by-status breakdown).
+- Fixed: inventory report actions now require inventory permission.
+
 ### Dashboard — Real KPI row (DASH-1)
 
 - The dashboard's key metrics now show real data — revenue, cash collected,

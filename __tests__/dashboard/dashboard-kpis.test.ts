@@ -5,7 +5,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeSupabaseMock, type ChainCtx } from "../helpers/supabaseChainMock";
 
-const h = vi.hoisted(() => ({ projects: [] as Record<string, unknown>[] }));
+const h = vi.hoisted(() => ({
+  projects: [] as Record<string, unknown>[],
+  pnl: [] as Record<string, unknown>[],
+}));
 
 function resolve(ctx: ChainCtx): { data: unknown; error: unknown } {
   if (ctx.table === "projects") return { data: h.projects, error: null };
@@ -41,7 +44,7 @@ const ALL = { financialView: true, financialEdit: true, projects: true, quotes: 
 describe("getDashboardKpis fan-out", () => {
   it("maps each field from its source", async () => {
     h.projects = [{ contract_value: 10000 }, { contract_value: 5000 }];
-    (h as { pnl?: unknown }).pnl = [
+    h.pnl = [
       { revenue: 1000, gross_profit: 300 },
       { revenue: 1000, gross_profit: 100 },
     ];
@@ -65,13 +68,13 @@ describe("getDashboardKpis fan-out", () => {
 
   it("blended margin is null when there is NO revenue (not 0)", async () => {
     h.projects = [];
-    (h as { pnl?: unknown }).pnl = [{ revenue: 0, gross_profit: 0 }];
+    h.pnl = [{ revenue: 0, gross_profit: 0 }];
     const k = await getDashboardKpis({ tiers: ALL });
     expect(k.financial_edit!.blended_margin_pct).toBeNull();
   });
 
   it("carries NO fabricated fields (no EBITDA / COGS / ratio margin)", async () => {
-    (h as { pnl?: unknown }).pnl = [{ revenue: 100, gross_profit: 20 }];
+    h.pnl = [{ revenue: 100, gross_profit: 20 }];
     const k = await getDashboardKpis({ tiers: ALL });
     const finKeys = Object.keys(k.financial!);
     const editKeys = Object.keys(k.financial_edit!);

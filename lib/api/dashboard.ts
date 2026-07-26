@@ -13,7 +13,8 @@ import "server-only";
 // is genuinely no revenue to divide by (not a restriction).
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { businessDateISO } from "@/lib/format";
+import { businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
+import { daysBetween } from "@/lib/aging-buckets";
 import { round2 } from "@/lib/quote-helpers";
 import { getRevenueSummary, getHstNetPosition } from "@/lib/api/financials";
 import { getArAgingSummary } from "@/lib/api/ar-aging";
@@ -22,6 +23,17 @@ import { getDepositsHeldTotal } from "@/lib/api/deposits";
 import { getWipPortfolio } from "@/lib/api/wip";
 import { getPnlPortfolio } from "@/lib/api/project-pnl";
 import { listQuotes } from "@/lib/api/quotes";
+import { getComplianceRisk } from "@/lib/api/subcontractor-compliance";
+import { getBondAlerts } from "@/lib/api/project-bonds";
+import { getExpiringWarranties } from "@/lib/api/warranties";
+import { getDispatchBoard } from "@/lib/api/dispatch-board";
+import { OPEN_TASK_STATUSES } from "@/lib/tasks/task-status";
+import { summarizeDeficiencies } from "@/lib/deficiencies/deficiency-status";
+import type {
+  DbActivityLog,
+  DbDeficiencySeverity,
+  DbDeficiencyStatus,
+} from "@/lib/types/database";
 
 async function db() {
   return createSupabaseServerClient();
@@ -150,5 +162,270 @@ export async function getDashboardKpis(input: {
     financial,
     financial_edit,
     operational: { projects: proj, quotes: quo },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// DASH-2 — cross-portfolio alert/worklist aggregates. Each is ONE cross-project
+// query (every source table carries project_id) aggregated in JS. Pure reads.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** project_id → "P-1042 — Title" label, for the aggregates below. */
+async function projectLabels(
+  supabase: Awaited<ReturnType<typeof db>>,
+  ids: string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return out;
+  const { data } = await supabase
+    .from("projects")
+    .select("id, project_number, title")
+    .in("id", unique);
+  for (const p of (data ?? []) as { id: string; project_number: string; title: string | null }[]) {
+    out.set(p.id, p.title ? `${p.project_number} — ${p.title}` : p.project_number);
+  }
+  return out;
+}
+
+export interface OverdueTaskItem {
+  task_id: string;
+  title: string;
+  project: string;
+  due_date: string;
+  days_overdue: number;
+}
+
+export async function getPortfolioOverdueTasks(): Promise<{
+  count: number;
+  items: OverdueTaskItem[];
+}> {
+  const supabase = await db();
+  const today = businessDateISO();
+  const { data, error } = await supabase
+    .from("job_tasks")
+    .select("id, title, project_id, due_date, status")
+    .in("status", OPEN_TASK_STATUSES)
+    .not("due_date", "is", null)
+    .lt("due_date", today) // due TODAY is not overdue (matches isOverdue)
+    .order("due_date", { ascending: true });
+  if (error) throw new Error(`getPortfolioOverdueTasks: ${error.message}`);
+  const rows = (data ?? []) as { id: string; title: string; project_id: string; due_date: string }[];
+  const labels = await projectLabels(supabase, rows.map((r) => r.project_id));
+  return {
+    count: rows.length,
+    items: rows.slice(0, 6).map((r) => ({
+      task_id: r.id,
+      title: r.title,
+      project: labels.get(r.project_id) ?? "—",
+      due_date: r.due_date,
+      days_overdue: daysBetween(r.due_date, today),
+    })),
+  };
+}
+
+export async function getPortfolioDeficiencies(): Promise<{
+  open: number;
+  safety_open: number;
+  projects_affected: number;
+}> {
+  const supabase = await db();
+  const today = businessDateISO();
+  const { data, error } = await supabase
+    .from("job_deficiencies")
+    .select("project_id, status, severity, due_date");
+  if (error) throw new Error(`getPortfolioDeficiencies: ${error.message}`);
+  const rows = (data ?? []) as {
+    project_id: string; status: DbDeficiencyStatus; severity: DbDeficiencySeverity; due_date: string | null;
+  }[];
+  const counts = summarizeDeficiencies(
+    rows.map((r) => ({ status: r.status, severity: r.severity, due_date: r.due_date })),
+    today
+  );
+  // projects with at least one OPEN deficiency
+  const affected = new Set<string>();
+  for (const r of rows) {
+    const c = summarizeDeficiencies([{ status: r.status, severity: r.severity, due_date: r.due_date }], today);
+    if (c.open > 0) affected.add(r.project_id);
+  }
+  return { open: counts.open, safety_open: counts.open_safety, projects_affected: affected.size };
+}
+
+export interface UpcomingMilestoneItem {
+  milestone_id: string;
+  title: string;
+  project: string;
+  target_date: string;
+  days_until: number;
+}
+
+export async function getUpcomingMilestones(opts: { days?: number } = {}): Promise<{
+  items: UpcomingMilestoneItem[];
+}> {
+  const supabase = await db();
+  const today = businessDateISO();
+  const to = businessDatePlusDaysISO(opts.days ?? 14);
+  const { data, error } = await supabase
+    .from("schedule_milestones")
+    .select("id, title, project_id, target_date, status")
+    .eq("status", "pending")
+    .gte("target_date", today)
+    .lte("target_date", to)
+    .order("target_date", { ascending: true });
+  if (error) throw new Error(`getUpcomingMilestones: ${error.message}`);
+  const rows = (data ?? []) as { id: string; title: string; project_id: string; target_date: string }[];
+  const labels = await projectLabels(supabase, rows.map((r) => r.project_id));
+  return {
+    items: rows.map((r) => ({
+      milestone_id: r.id,
+      title: r.title,
+      project: labels.get(r.project_id) ?? "—",
+      target_date: r.target_date,
+      days_until: daysBetween(today, r.target_date),
+    })),
+  };
+}
+
+export interface RecentActivityItem {
+  id: string;
+  entity_type: string;
+  action: string;
+  created_at: string;
+  actor_name: string | null;
+}
+
+export async function getRecentActivity(opts: { limit?: number } = {}): Promise<{
+  items: RecentActivityItem[];
+}> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("id, entity_type, action, actor_id, created_at")
+    .order("created_at", { ascending: false })
+    .limit(opts.limit ?? 15);
+  if (error) throw new Error(`getRecentActivity: ${error.message}`);
+  const rows = (data ?? []) as (Pick<DbActivityLog, "id" | "entity_type" | "action" | "actor_id" | "created_at">)[];
+
+  const actorIds = [...new Set(rows.map((r) => r.actor_id).filter((v): v is string => !!v))];
+  const names = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, display_name, first_name, last_name, email")
+      .in("id", actorIds);
+    for (const p of (profs ?? []) as {
+      id: string; display_name: string | null; first_name: string | null; last_name: string | null; email: string;
+    }[]) {
+      const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+      names.set(p.id, p.display_name?.trim() || full || p.email);
+    }
+  }
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      entity_type: r.entity_type,
+      action: r.action,
+      created_at: r.created_at,
+      actor_name: r.actor_id ? names.get(r.actor_id) ?? null : null,
+    })),
+  };
+}
+
+// ── The alerts fan-out (tier-gated blocks) ──────────────────────────────────
+
+export interface DashboardAlertsTiers {
+  subs: boolean; // subcontractors:view
+  projects: boolean; // projects:view
+  scheduling: boolean; // scheduling:view
+}
+
+export interface DashboardAlerts {
+  compliance_at_risk:
+    | { expired: number; expiring_soon: number; missing_required: number; total_at_risk: number }
+    | null;
+  bond_warranty_alerts:
+    | { bonds: number; warranties: number; expired: number; expiring_soon: number }
+    | null;
+  overdue_tasks: { count: number; items: OverdueTaskItem[] } | null;
+  deficiencies: { open: number; safety_open: number; projects_affected: number } | null;
+  upcoming_milestones: { items: UpcomingMilestoneItem[] } | null;
+  dispatch_today:
+    | { booked_today: number; unscheduled: number; techs_out: number; utilization_pct: number | null }
+    | null;
+}
+
+export async function getDashboardAlerts(input: {
+  tiers: DashboardAlertsTiers;
+}): Promise<DashboardAlerts> {
+  const { tiers } = input;
+  const today = businessDateISO();
+
+  const [compliance, bonds, warranties, tasks, defs, milestones, board] = await Promise.all([
+    tiers.subs ? getComplianceRisk() : null,
+    tiers.projects ? getBondAlerts() : null,
+    tiers.projects ? getExpiringWarranties() : null,
+    tiers.projects ? getPortfolioOverdueTasks() : null,
+    tiers.projects ? getPortfolioDeficiencies() : null,
+    tiers.projects ? getUpcomingMilestones({ days: 14 }) : null,
+    tiers.scheduling
+      ? getDispatchBoard({ from: `${today}T00:00:00.000Z`, to: `${today}T23:59:59.999Z` })
+      : null,
+  ]);
+
+  return {
+    compliance_at_risk: compliance
+      ? {
+          expired: compliance.counts.expired,
+          expiring_soon: compliance.counts.expiring_soon,
+          missing_required: compliance.counts.missing_required,
+          total_at_risk:
+            compliance.counts.expired + compliance.counts.expiring_soon + compliance.counts.missing_required,
+        }
+      : null,
+    bond_warranty_alerts:
+      bonds && warranties
+        ? {
+            bonds: bonds.length,
+            warranties: warranties.length,
+            expired: [...bonds, ...warranties].filter((a) => a.state === "expired").length,
+            expiring_soon: [...bonds, ...warranties].filter((a) => a.state === "expiring_soon").length,
+          }
+        : null,
+    overdue_tasks: tasks,
+    deficiencies: defs,
+    upcoming_milestones: milestones,
+    dispatch_today: board
+      ? {
+          booked_today: board.bookings.length,
+          unscheduled: board.unscheduled.length,
+          techs_out: board.stats.techs_out,
+          utilization_pct: board.stats.utilization_pct,
+        }
+      : null,
+  };
+}
+
+// DASH-2 — a real quotes-by-status breakdown (replaces the fabricated funnel's
+// "Lead = quoted × 1.6"). Statuses come from listQuotes (the app-level blob
+// status), never the stale DB mirror column. Open pipeline value = Draft+Sent.
+export interface QuotesByStatus {
+  by_status: { status: string; count: number; value: number }[];
+  open_pipeline_value: number;
+}
+
+export async function getQuotesByStatus(): Promise<QuotesByStatus> {
+  const quotes = await listQuotes();
+  const agg = new Map<string, { count: number; value: number }>();
+  let openValue = 0;
+  for (const q of quotes) {
+    const cur = agg.get(q.status) ?? { count: 0, value: 0 };
+    cur.count += 1;
+    cur.value = round2(cur.value + Number(q.total ?? 0));
+    agg.set(q.status, cur);
+    if (q.status === "Draft" || q.status === "Sent") openValue = round2(openValue + Number(q.total ?? 0));
+  }
+  return {
+    by_status: [...agg.entries()].map(([status, v]) => ({ status, count: v.count, value: v.value })),
+    open_pipeline_value: openValue,
   };
 }
