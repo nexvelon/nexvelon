@@ -1,95 +1,106 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { motion } from "framer-motion";
-import { useThemeColors } from "@/lib/theme-context";
-import type { UtilizationRow } from "@/lib/dashboard-data";
+// DASH-2 — REAL technician utilization from the dispatch board (SCHED-3). The
+// prior mock was pseudo-random; this reads each tech's utilization_pct
+// (booked ÷ available working hours). When a tech has no working hours set,
+// utilization is unknown → shown as "—", never a fabricated %.
 
-interface Props {
-  rows: UtilizationRow[];
+import { useEffect, useState } from "react";
+import { addDays, endOfDay, startOfDay, startOfWeek } from "date-fns";
+import { Gauge, Lock } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { getDispatchBoardAction } from "@/app/(app)/scheduling/actions";
+import { cn } from "@/lib/utils";
+
+interface Row {
+  id: string;
+  name: string;
+  is_active: boolean;
+  utilization_pct: number | null;
 }
 
-function useBandColor() {
-  const t = useThemeColors();
-  return (u: number): { bar: string; label: string } => {
-    if (u >= 0.8) return { bar: t.accent, label: "text-amber-600" };
-    if (u >= 0.5) return { bar: t.primary, label: "text-brand-navy" };
-    return { bar: "#DC2626", label: "text-red-600" };
-  };
-}
+export function TechnicianUtilization() {
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [overall, setOverall] = useState<number | null>(null);
+  const [restricted, setRestricted] = useState(false);
 
-const ROLE_LABEL: Record<string, string> = {
-  Technician: "Technician",
-  ProjectManager: "Project Mgr",
-  Subcontractor: "Subcontractor",
-};
+  useEffect(() => {
+    const first = startOfWeek(new Date(), { weekStartsOn: 1 });
+    getDispatchBoardAction({
+      from: startOfDay(first).toISOString(),
+      to: endOfDay(addDays(first, 6)).toISOString(),
+    }).then((r) => {
+      if (!r.ok) {
+        setRestricted(true);
+        setRows([]);
+        return;
+      }
+      setRows(
+        r.data.techs.map((t) => ({
+          id: t.id,
+          name: t.name,
+          is_active: t.is_active,
+          utilization_pct: t.utilization_pct,
+        }))
+      );
+      setOverall(r.data.stats.utilization_pct);
+    });
+  }, []);
 
-export function TechnicianUtilization({ rows }: Props) {
-  const bandColor = useBandColor();
-  const t = useThemeColors();
   return (
-    <Card className="h-full transition-shadow hover:shadow-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-serif text-lg">
-          Technician Utilization — This week
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {rows.map((r, idx) => {
-            const c = bandColor(r.utilization);
-            return (
-              <div key={r.id} className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="text-brand-charcoal font-medium">
-                      {r.name}
-                    </span>
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      {ROLE_LABEL[r.role] ?? r.role}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span
-                      className={`text-sm font-semibold tabular-nums ${c.label}`}
-                    >
-                      {Math.round(r.utilization * 100)}%
-                    </span>
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                      {r.billableHours}/{r.capacityHours}h
-                    </span>
-                  </div>
-                </div>
-                <div className="bg-muted h-2.5 w-full overflow-hidden rounded-full">
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ background: c.bar }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${r.utilization * 100}%` }}
-                    transition={{
-                      duration: 0.9,
-                      delay: idx * 0.05,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+    <Card className="bg-card p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Gauge className="text-brand-navy h-4 w-4" />
+          <h3 className="text-brand-navy font-serif text-base">Technician utilization</h3>
         </div>
+        <span className="text-muted-foreground text-[11px]">
+          This week{overall != null ? ` · ${overall}% overall` : ""}
+        </span>
+      </div>
 
-        <div className="text-muted-foreground mt-5 flex items-center gap-4 text-[11px]">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: t.accent }} /> ≥ 80%
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: t.primary }} /> 50–80%
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#DC2626]" /> &lt; 50%
-          </span>
+      {restricted ? (
+        <div className="text-muted-foreground flex items-center gap-2 py-6 text-xs">
+          <Lock className="h-3.5 w-3.5" /> Requires scheduling access.
         </div>
-      </CardContent>
+      ) : !rows ? (
+        <p className="text-muted-foreground text-xs">Loading…</p>
+      ) : rows.filter((t) => t.is_active).length === 0 ? (
+        <p className="text-muted-foreground text-xs">No active technicians yet.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {rows
+            .filter((t) => t.is_active)
+            .map((t) => (
+              <li key={t.id} className="flex items-center gap-3 text-xs">
+                <span className="w-28 truncate" style={{ color: "var(--brand-primary)" }}>
+                  {t.name}
+                </span>
+                <div className="bg-muted relative h-2 flex-1 overflow-hidden rounded-full">
+                  {t.utilization_pct != null && (
+                    <div
+                      className={cn(
+                        "absolute inset-y-0 left-0 rounded-full",
+                        t.utilization_pct >= 90
+                          ? "bg-red-500"
+                          : t.utilization_pct >= 70
+                            ? "bg-emerald-500"
+                            : "bg-amber-400"
+                      )}
+                      style={{ width: `${Math.min(100, t.utilization_pct)}%` }}
+                    />
+                  )}
+                </div>
+                <span className="text-muted-foreground w-12 text-right tabular-nums">
+                  {t.utilization_pct == null ? "—" : `${t.utilization_pct}%`}
+                </span>
+              </li>
+            ))}
+        </ul>
+      )}
+      <p className="text-muted-foreground mt-3 text-[10px]">
+        &ldquo;—&rdquo; means the tech has no working hours set (utilization can&rsquo;t be computed).
+      </p>
     </Card>
   );
 }

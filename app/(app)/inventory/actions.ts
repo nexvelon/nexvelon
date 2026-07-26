@@ -312,7 +312,11 @@ export async function getPickupSlipPdfUrlAction(
   }
 }
 
+// DASH-2 SECURITY FIX — this was ungated. Inventory valuation/aging is inventory
+// data; require inventory:view (the base tier every inventory-facing role holds).
 export async function getInventoryReportDataAction(): Promise<InventoryReportData> {
+  const denied = await requireInventoryView();
+  if (denied) throw new Error(denied);
   return getInventoryReportData();
 }
 
@@ -326,6 +330,9 @@ export async function emailLowStockReportAction(): Promise<{
   reason?: string;
 }> {
   try {
+    // DASH-2 SECURITY FIX — was ungated; requires inventory:view.
+    const denied = await requireInventoryView();
+    if (denied) return { sent: false, count: 0, reason: denied };
     const products = await listProducts();
     const low = products.filter((p) => p.stock <= p.reorderPoint);
     if (low.length === 0) {
