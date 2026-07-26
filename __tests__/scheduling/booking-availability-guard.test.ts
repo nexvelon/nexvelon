@@ -2,7 +2,7 @@
 // call): an approved absence covering the slot BLOCKS (tech_on_leave); off-hours
 // SUCCEEDS with a warning; and the cert + overlap guards still fire, in order.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { it, expect, beforeEach, vi } from "vitest";
 import { makeSupabaseMock, type ChainCtx } from "../helpers/supabaseChainMock";
 
 const local = (y: number, m: number, d: number, h: number, min = 0) =>

@@ -17,6 +17,7 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import { businessDateISO } from "@/lib/format";
 import { isTechEligibleForJob } from "@/lib/scheduling/tech-eligibility";
 import { isTechAvailable } from "@/lib/scheduling/availability";
+import { recordScheduleAudit } from "@/lib/api/schedule-audit";
 import type {
   DbScheduleAssignment,
   DbScheduleAssignmentStatus,
@@ -222,7 +223,18 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       .update({ status: "scheduled", updated_by: input.actorId })
       .eq("id", input.scheduleJobId);
   }
-  return { ok: true, booking: data as DbScheduleAssignment, warning: avail.warn ? "off_hours" : null };
+  const booking = data as DbScheduleAssignment;
+  await recordScheduleAudit({
+    schedule_assignment_id: booking.id,
+    schedule_job_id: input.scheduleJobId,
+    tech_id: input.techId,
+    action: "created",
+    to_starts_at: input.startsAt,
+    to_ends_at: input.endsAt,
+    to_tech_id: input.techId,
+    actor_id: input.actorId,
+  });
+  return { ok: true, booking, warning: avail.warn ? "off_hours" : null };
 }
 
 export interface MoveBookingInput {
@@ -278,6 +290,19 @@ export async function moveBooking(input: MoveBookingInput): Promise<BookingResul
     }
     throw new Error(`moveBooking: ${error.message}`);
   }
+  await recordScheduleAudit({
+    schedule_assignment_id: input.id,
+    schedule_job_id: cur.schedule_job_id,
+    tech_id: techId,
+    action: "moved",
+    from_starts_at: cur.starts_at,
+    from_ends_at: cur.ends_at,
+    from_tech_id: cur.tech_id,
+    to_starts_at: input.startsAt,
+    to_ends_at: input.endsAt,
+    to_tech_id: techId,
+    actor_id: input.actorId,
+  });
   return { ok: true, booking: data as DbScheduleAssignment, warning: avail.warn ? "off_hours" : null };
 }
 
@@ -290,11 +315,12 @@ export async function cancelBooking(input: {
   const supabase = await db();
   const { data: existing } = await supabase
     .from("schedule_assignments")
-    .select("schedule_job_id")
+    .select("schedule_job_id, tech_id")
     .eq("id", input.id)
     .maybeSingle();
   if (!existing) throw new Error("Booking not found.");
-  const jobId = (existing as { schedule_job_id: string }).schedule_job_id;
+  const ex = existing as { schedule_job_id: string; tech_id: string };
+  const jobId = ex.schedule_job_id;
 
   const { error } = await supabase
     .from("schedule_assignments")
@@ -316,18 +342,37 @@ export async function cancelBooking(input: {
       .neq("status", "completed")
       .neq("status", "cancelled");
   }
+  await recordScheduleAudit({
+    schedule_assignment_id: input.id,
+    schedule_job_id: jobId,
+    tech_id: ex.tech_id,
+    action: "cancelled",
+    actor_id: input.actorId,
+  });
 }
 
+// SCHED-4 — marking a booking complete does NOT create labour. That is the
+// deliberate, separate convertBookingToLabour step (the ONLY booking→cost path).
 export async function completeBooking(input: {
   id: string;
   actorId: string | null;
 }): Promise<void> {
   const supabase = await db();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("schedule_assignments")
     .update({ status: "completed", updated_by: input.actorId })
-    .eq("id", input.id);
+    .eq("id", input.id)
+    .select("schedule_job_id, tech_id")
+    .maybeSingle();
   if (error) throw new Error(`completeBooking: ${error.message}`);
+  const row = data as { schedule_job_id: string; tech_id: string } | null;
+  await recordScheduleAudit({
+    schedule_assignment_id: input.id,
+    schedule_job_id: row?.schedule_job_id ?? null,
+    tech_id: row?.tech_id ?? null,
+    action: "completed",
+    actor_id: input.actorId,
+  });
 }
 
 export async function listBookingsForTech(

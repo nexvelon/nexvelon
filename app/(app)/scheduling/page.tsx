@@ -21,8 +21,9 @@ import { CalendarRange, ChevronLeft, ChevronRight, ListChecks, Lock, PieChart, U
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { UnassignedQueue } from "@/components/modules/scheduling/UnassignedQueue";
@@ -33,6 +34,9 @@ import {
   moveBookingAction,
   cancelBookingAction,
   completeBookingAction,
+  convertBookingToLabourAction,
+  unconvertBookingAction,
+  listScheduleAuditAction,
 } from "@/app/(app)/scheduling/actions";
 import {
   bookingErrorMessage,
@@ -45,11 +49,13 @@ import { hasPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { BookingResult } from "@/lib/api/schedule-assignments";
 import type { DispatchBoard, DispatchBookingRow } from "@/lib/api/dispatch-board";
+import type { DbScheduleAudit } from "@/lib/types/database";
 
 export default function SchedulingPage() {
   const { role } = useRole();
   const canView = hasPermission(role, "scheduling", "view");
   const canEdit = hasPermission(role, "scheduling", "edit");
+  const canConvert = hasPermission(role, "financials", "edit");
 
   const [view, setView] = useState<"day" | "week">("week");
   const [anchor, setAnchor] = useState<Date>(() => startOfDay(new Date()));
@@ -222,6 +228,7 @@ export default function SchedulingPage() {
         <BookingActionsDialog
           booking={actionBooking}
           canEdit={canEdit}
+          canConvert={canConvert}
           onClose={() => setActionBooking(null)}
           onDone={async () => { setActionBooking(null); await load(); }}
         />
@@ -233,16 +240,26 @@ export default function SchedulingPage() {
 function BookingActionsDialog({
   booking,
   canEdit,
+  canConvert,
   onClose,
   onDone,
 }: {
   booking: DispatchBookingRow;
   canEdit: boolean;
+  canConvert: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [hours, setHours] = useState(
+    () => Math.round(((new Date(booking.ends_at).getTime() - new Date(booking.starts_at).getTime()) / 3_600_000) * 100) / 100
+  );
+  const [audit, setAudit] = useState<DbScheduleAudit[]>([]);
+
+  useEffect(() => {
+    listScheduleAuditAction({ scheduleAssignmentId: booking.id }).then((r) => r.ok && setAudit(r.data));
+  }, [booking.id]);
 
   const run = async (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setBusy(true);
@@ -251,6 +268,25 @@ function BookingActionsDialog({
     if (!res.ok) { toast.error(res.error ?? "Failed"); return; }
     onDone();
   };
+
+  const convert = async () => {
+    setBusy(true);
+    const res = await convertBookingToLabourAction({ assignmentId: booking.id, hours });
+    setBusy(false);
+    if (!res.ok) { toast.error(res.error); return; }
+    const r = res.data;
+    if (r.ok) { toast.success(`Labour recorded — ${r.hours}h = $${r.amount.toFixed(2)}`); onDone(); return; }
+    const MSG: Record<string, string> = {
+      not_completed: "Only a completed booking can be converted.",
+      already_converted: "This booking is already recorded as labour.",
+      no_cost_center: "No cost center — a standalone service call can't post job labour.",
+      no_rate: "This tech has no default cost rate.",
+      not_found: "Booking not found.",
+    };
+    toast.error(MSG[r.error] ?? "Could not convert.");
+  };
+
+  const completed = booking.status === "completed";
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -262,23 +298,69 @@ function BookingActionsDialog({
             {booking.site_label ? ` · ${booking.site_label}` : ""} · {booking.status}
           </DialogDescription>
         </DialogHeader>
-        {canEdit ? (
+
+        {canEdit && (
           confirmCancel ? (
-            <DialogFooter>
+            <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirmCancel(false)} disabled={busy}>Keep</Button>
               <Button className="bg-red-600 text-white hover:bg-red-700" disabled={busy} onClick={() => run(() => cancelBookingAction(booking.id))}>
                 {busy ? "Cancelling…" : "Cancel booking"}
               </Button>
-            </DialogFooter>
+            </div>
           ) : (
-            <DialogFooter>
+            <div className="flex justify-end gap-2">
               <Button variant="outline" disabled={busy} onClick={() => setConfirmCancel(true)}>Cancel booking</Button>
-              <Button disabled={busy} onClick={() => run(() => completeBookingAction(booking.id))}>
-                {busy ? "…" : "Mark complete"}
-              </Button>
-            </DialogFooter>
+              {!completed && (
+                <Button disabled={busy} onClick={() => run(() => completeBookingAction(booking.id))}>
+                  {busy ? "…" : "Mark complete"}
+                </Button>
+              )}
+            </div>
           )
-        ) : (
+        )}
+
+        {/* The cost seam — only on a completed booking, financials:edit. */}
+        {completed && canConvert && (
+          <div className="rounded-md border p-3" style={{ borderColor: "var(--brand-border)" }}>
+            <h4 className="text-brand-navy mb-2 text-xs font-semibold uppercase tracking-wide">Labour cost</h4>
+            {booking.converted ? (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[var(--brand-status-green)]">Recorded as labour on this job.</span>
+                <Button size="xs" variant="outline" disabled={busy} onClick={() => run(() => unconvertBookingAction(booking.id))}>
+                  {busy ? "…" : "Undo"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-end gap-2">
+                <label className="text-[11px]">
+                  <span className="text-muted-foreground uppercase">Hours</span>
+                  <Input type="number" step="0.25" min={0} value={hours} onChange={(e) => setHours(Number(e.target.value))} className="mt-1 h-8 w-24" />
+                </label>
+                <Button size="sm" disabled={busy} onClick={convert}>{busy ? "…" : "Convert to labour"}</Button>
+              </div>
+            )}
+            <p className="text-muted-foreground mt-2 text-[10px]">
+              A booking is a plan — this is the only way it becomes cost, and only once.
+            </p>
+          </div>
+        )}
+
+        {/* Append-only history */}
+        {audit.length > 0 && (
+          <div>
+            <h4 className="text-brand-navy mb-1 text-xs font-semibold uppercase tracking-wide">History</h4>
+            <ul className="max-h-32 space-y-0.5 overflow-y-auto text-[11px]">
+              {audit.map((a) => (
+                <li key={a.id} className="text-muted-foreground flex justify-between">
+                  <span className="capitalize">{a.action.replace(/_/g, " ")}</span>
+                  <span className="tabular-nums">{new Date(a.created_at).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!canEdit && !canConvert && (
           <p className="text-muted-foreground text-xs">You have read-only access to the schedule.</p>
         )}
       </DialogContent>

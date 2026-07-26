@@ -57,6 +57,8 @@ export interface DispatchBookingRow {
   site_label: string | null;
   priority: DbScheduleJobPriority;
   job_type: DbScheduleJobType;
+  // SCHED-4 — whether this booking has been converted to a labour cost entry.
+  converted: boolean;
 }
 
 export interface DispatchUnscheduledRow {
@@ -114,7 +116,7 @@ export async function getDispatchBoard(window: {
   // Bookings inside the window (active only).
   const { data: bookData, error: bErr } = await supabase
     .from("schedule_assignments")
-    .select("id, schedule_job_id, tech_id, starts_at, ends_at, status")
+    .select("id, schedule_job_id, tech_id, starts_at, ends_at, status, converted_labour_entry_id")
     .neq("status", "cancelled")
     .lt("starts_at", window.to)
     .gt("ends_at", window.from)
@@ -122,7 +124,7 @@ export async function getDispatchBoard(window: {
   if (bErr) throw new Error(`getDispatchBoard/bookings: ${bErr.message}`);
   const bookings = (bookData ?? []) as {
     id: string; schedule_job_id: string; tech_id: string;
-    starts_at: string; ends_at: string; status: string;
+    starts_at: string; ends_at: string; status: string; converted_labour_entry_id: string | null;
   }[];
 
   // SCHED-3 — working hours (all techs) + approved absences overlapping the window.
@@ -257,6 +259,7 @@ export async function getDispatchBoard(window: {
         site_label: j ? labelFor(j.site_id, null) : null,
         priority: j?.priority ?? "normal",
         job_type: j?.job_type ?? "service",
+        converted: b.converted_labour_entry_id != null,
       };
     }),
     unscheduled: unschedJobs.map((j) => ({

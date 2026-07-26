@@ -41,6 +41,15 @@ import {
 } from "@/lib/api/schedule-assignments";
 import { getDispatchBoard, type DispatchBoard } from "@/lib/api/dispatch-board";
 import {
+  convertBookingToLabour,
+  unconvertBooking,
+  type ConvertResult,
+} from "@/lib/api/schedule-cost";
+import {
+  listScheduleAudit,
+  type ListScheduleAuditFilter,
+} from "@/lib/api/schedule-audit";
+import {
   getWorkingHours,
   setWorkingHours,
   listAbsences,
@@ -58,6 +67,7 @@ import type {
   DbAbsenceStatus,
   DbAbsenceType,
   DbRole,
+  DbScheduleAudit,
   DbScheduleJob,
   DbScheduleJobStatus,
   DbTech,
@@ -427,6 +437,54 @@ export async function getDispatchBoardAction(window: {
     const gate = await require("view");
     if (!gate.ok) return gate;
     return { ok: true, data: await getDispatchBoard(window) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── The cost seam + audit trail (SCHED-4) ────────────────────────────────────
+
+// Convert a COMPLETED booking into a labour cost entry — gated financials:edit
+// because it CREATES cost (not merely a scheduling action). Returns the typed
+// ConvertResult so the UI surfaces not_completed / already_converted /
+// no_cost_center honestly.
+export async function convertBookingToLabourAction(input: {
+  assignmentId: string;
+  hours?: number;
+}): Promise<ActionResult<ConvertResult>> {
+  try {
+    const gate = await require("edit", "financials");
+    if (!gate.ok) return gate;
+    const result = await convertBookingToLabour({ ...input, actorId: gate.actorId });
+    revalidatePath("/scheduling");
+    return { ok: true, data: result };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function unconvertBookingAction(
+  assignmentId: string
+): Promise<ActionResult<{ ok: true }>> {
+  try {
+    const gate = await require("edit", "financials");
+    if (!gate.ok) return gate;
+    const res = await unconvertBooking({ assignmentId, actorId: gate.actorId });
+    if (!res.ok) return { ok: false, error: res.error };
+    revalidatePath("/scheduling");
+    return { ok: true, data: { ok: true } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listScheduleAuditAction(
+  filter: ListScheduleAuditFilter
+): Promise<ActionResult<DbScheduleAudit[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listScheduleAudit(filter) };
   } catch (e) {
     return fail(e);
   }
