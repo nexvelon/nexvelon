@@ -266,3 +266,45 @@ export async function sumLabourCostByCostCenter(
   }
   return totals;
 }
+
+// PERF-1 — Σ actual labour HOURS. hours are stored per entry (amount = hours ×
+// cost_rate) but were never summed anywhere; the performance board's labour row
+// surfaces them (Hours + Cost/Hr). No estimated-hours exists at the line level,
+// so this is actual-only.
+async function sumLabourHoursForCostCenters(
+  supabase: Awaited<ReturnType<typeof db>>,
+  ccIds: string[]
+): Promise<number> {
+  if (ccIds.length === 0) return 0;
+  const { data, error } = await supabase
+    .from("labour_entries")
+    .select("hours")
+    .in("cost_center_id", ccIds);
+  if (error) throw new Error(`sumLabourHours: ${error.message}`);
+  let total = 0;
+  for (const r of (data ?? []) as { hours: number | null }[]) {
+    total = round2(total + Number(r.hours ?? 0));
+  }
+  return total;
+}
+
+/** Σ actual labour hours across a whole project. */
+export async function sumLabourHoursForProject(projectId: string): Promise<number> {
+  const supabase = await db();
+  return sumLabourHoursForCostCenters(
+    supabase,
+    await costCenterIdsForProject(supabase, projectId)
+  );
+}
+
+/** Σ actual labour hours for one job (its cost-centers). */
+export async function sumLabourHoursForJob(jobId: string): Promise<number> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("project_cost_centers")
+    .select("id")
+    .eq("job_id", jobId);
+  if (error) throw new Error(`sumLabourHoursForJob/cc: ${error.message}`);
+  const ccIds = (data ?? []).map((r) => (r as { id: string }).id);
+  return sumLabourHoursForCostCenters(supabase, ccIds);
+}

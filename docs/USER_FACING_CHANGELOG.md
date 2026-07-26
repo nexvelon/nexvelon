@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects — Unified performance board (PERF-1)
+
+- The job and project performance view now shows Budgeted, Actual, Earned and a
+  Projected (forecast-at-completion) side by side — with the original quote
+  available as an extra baseline — plus percent complete, over/under-billing and
+  labour hours in one board.
+
 ### Scheduling — Technician certification expiry (DES-2)
 
 - Technician certifications now track expiry dates with clear valid / expiring /
