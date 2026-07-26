@@ -22,7 +22,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Can, useRole } from "@/lib/role-context";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 type Report = {
@@ -31,36 +31,42 @@ type Report = {
   icon: React.ComponentType<{ className?: string }>;
   href?: string; // present = available; absent = coming
   soon?: string; // "REP-3" etc.
-  /** Financial tier required to open the report; absent = no financial gate. */
-  tier?: "view" | "edit";
+  /** Permission required to open the report; absent = no gate. */
+  gate?: { resource: Resource; action: Action };
 };
 
 const SECTIONS: { section: string; reports: Report[] }[] = [
   {
+    section: "Overview",
+    reports: [
+      { title: "Business snapshot", desc: "Run-rate, margin, backlog, position — not a valuation.", icon: Gauge, href: "/reports/business-snapshot", gate: { resource: "financials", action: "edit" } },
+    ],
+  },
+  {
     section: "Financial",
     reports: [
-      { title: "Work-in-progress (WIP)", desc: "Over/under-billing across active projects.", icon: FileBarChart, href: "/reports/wip", tier: "edit" },
-      { title: "P&L by company", desc: "Per-company profit & loss, project-to-date.", icon: BarChart3, href: "/reports/pnl-by-company", tier: "edit" },
-      { title: "Margin analysis", desc: "Quoted vs actual margin by project.", icon: TrendingUp, href: "/reports/margin", tier: "edit" },
-      { title: "Profitability ranking", desc: "Projects ranked by gross profit.", icon: BarChart3, href: "/reports/profitability", tier: "edit" },
-      { title: "AR aging", desc: "Receivables by client and age bucket.", icon: Wallet, href: "/reports/ar-aging", tier: "view" },
-      { title: "AP aging", desc: "Payables by vendor and age bucket.", icon: Receipt, href: "/reports/ap-aging", tier: "view" },
-      { title: "HST net position", desc: "HST collected vs ITCs, per company.", icon: Receipt, href: "/reports/hst", tier: "edit" },
+      { title: "Work-in-progress (WIP)", desc: "Over/under-billing across active projects.", icon: FileBarChart, href: "/reports/wip", gate: { resource: "financials", action: "edit" } },
+      { title: "P&L by company", desc: "Per-company profit & loss, project-to-date.", icon: BarChart3, href: "/reports/pnl-by-company", gate: { resource: "financials", action: "edit" } },
+      { title: "Margin analysis", desc: "Quoted vs actual margin by project.", icon: TrendingUp, href: "/reports/margin", gate: { resource: "financials", action: "edit" } },
+      { title: "Profitability ranking", desc: "Projects ranked by gross profit.", icon: BarChart3, href: "/reports/profitability", gate: { resource: "financials", action: "edit" } },
+      { title: "AR aging", desc: "Receivables by client and age bucket.", icon: Wallet, href: "/reports/ar-aging", gate: { resource: "financials", action: "view" } },
+      { title: "AP aging", desc: "Payables by vendor and age bucket.", icon: Receipt, href: "/reports/ap-aging", gate: { resource: "financials", action: "view" } },
+      { title: "HST net position", desc: "HST collected vs ITCs, per company.", icon: Receipt, href: "/reports/hst", gate: { resource: "financials", action: "edit" } },
     ],
   },
   {
     section: "Operational",
     reports: [
-      { title: "Sales pipeline", desc: "Quotes by stage, conversion, value.", icon: TrendingUp, soon: "REP-3" },
-      { title: "Labour utilization", desc: "Technician booked vs available.", icon: Gauge, soon: "REP-3" },
-      { title: "Vendor spend", desc: "Top vendors by spend.", icon: Truck, soon: "REP-3" },
-      { title: "Inventory valuation", desc: "Stock value by category + aging.", icon: Boxes, soon: "REP-3" },
+      { title: "Sales pipeline", desc: "Quotes by stage, conversion, value.", icon: TrendingUp, href: "/reports/pipeline", gate: { resource: "quotes", action: "view" } },
+      { title: "Technician utilization", desc: "Booked vs available hours by tech.", icon: Gauge, href: "/reports/utilization", gate: { resource: "scheduling", action: "view" } },
+      { title: "Vendor spend", desc: "Top vendors by spend.", icon: Truck, href: "/reports/vendor-spend", gate: { resource: "financials", action: "view" } },
+      { title: "Inventory valuation", desc: "In-stock value by category.", icon: Boxes, href: "/reports/inventory-valuation", gate: { resource: "inventory", action: "view" } },
     ],
   },
   {
     section: "Compliance",
     reports: [
-      { title: "T5018 contractors", desc: "Annual contractor payment report.", icon: ShieldCheck, href: "/reports/t5018", tier: "edit" },
+      { title: "T5018 contractors", desc: "Annual contractor payment report.", icon: ShieldCheck, href: "/reports/t5018", gate: { resource: "financials", action: "edit" } },
     ],
   },
 ];
@@ -84,7 +90,7 @@ export default function ReportsPage() {
                 <ReportCard
                   key={r.title}
                   report={r}
-                  locked={r.tier ? !hasPermission(role, "financials", r.tier) : false}
+                  locked={r.gate ? !hasPermission(role, r.gate.resource, r.gate.action) : false}
                 />
               ))}
             </div>
