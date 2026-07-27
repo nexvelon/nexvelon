@@ -23,6 +23,8 @@ import { JobDeleteButton } from "@/components/modules/projects/JobDeleteButton";
 import { JobMoveMenu } from "@/components/modules/projects/JobMoveMenu";
 import { JobLineItemsTab } from "@/components/modules/projects/JobLineItemsTab";
 import { PerformanceTable } from "@/components/modules/projects/PerformanceTable";
+import { getJobPerformanceBoardAction } from "@/app/(app)/projects/performance-actions";
+import type { PerformanceBoard } from "@/lib/api/performance-board";
 import { JobWorkOrders } from "@/components/modules/subcontractors/JobWorkOrders";
 import { JobAssignments } from "@/components/modules/subcontractors/JobAssignments";
 import { JobCostAnalysis } from "@/components/modules/projects/JobCostAnalysis";
@@ -540,6 +542,22 @@ function FinancialsTab({
   money: (n: number | null | undefined) => string;
   pctv: (n: number | null | undefined) => string;
 }) {
+  // PERF-1 — the unified performance board for this job. Re-fetched whenever the
+  // parent refreshes the rollup (a labour/invoice change moves the board too),
+  // keyed on the rollup object identity.
+  const [perfBoard, setPerfBoard] = useState<PerformanceBoard | null>(null);
+  useEffect(() => {
+    let active = true;
+    getJobPerformanceBoardAction(job.id)
+      .then((res) => {
+        if (active && res.ok) setPerfBoard(res.data.board);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [job.id, rollup]);
+
   // FIN-8 + SUB-4 — Job gross profit on the project-P&L basis: pre-tax invoiced
   // revenue (issued invoices' subtotal) − (vendor-billed materials + labour +
   // subcontractor labour). Null when the cost legs are redacted, so `money()`
@@ -563,7 +581,7 @@ function FinancialsTab({
       {/* PROJ2-6b — Quoted vs Estimated vs Actual with variance. */}
       <Panel title="Performance">
         <PerformanceTable
-          block={rollup.variance}
+          board={perfBoard}
           canViewFinancials={canViewFinancials}
         />
       </Panel>

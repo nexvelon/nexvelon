@@ -31,6 +31,8 @@ import {
   type ProjectLabour,
 } from "@/app/(app)/projects/labour-actions";
 import { getProjectCostRollupAction } from "@/app/(app)/projects/rollup-actions";
+import { getProjectPerformanceBoardAction } from "@/app/(app)/projects/performance-actions";
+import type { PerformanceBoard } from "@/lib/api/performance-board";
 import { CostCenterLabour } from "@/components/modules/projects/CostCenterLabour";
 import {
   ProjectRollupCard,
@@ -138,6 +140,9 @@ export function ProjectDetailView({
   // after any change that moves the numbers (labour edits, invoice creation).
   const [rollup, setRollup] = useState<ProjectCostRollup | null>(null);
   const [canSeeFinancials, setCanSeeFinancials] = useState(false);
+  // PERF-1 — the unified performance board (assembled server-side from the
+  // rollup + WIP + forecast). Refreshed with the rollup after any cost move.
+  const [perfBoard, setPerfBoard] = useState<PerformanceBoard | null>(null);
   const refreshRollup = () => {
     getProjectCostRollupAction(project.id)
       .then((res) => {
@@ -149,6 +154,11 @@ export function ProjectDetailView({
       .catch(() => {
         /* leave as-is */
       });
+    getProjectPerformanceBoardAction(project.id)
+      .then((res) => {
+        if (res.ok) setPerfBoard(res.data.board);
+      })
+      .catch(() => {});
   };
   useEffect(() => {
     let active = true;
@@ -162,6 +172,11 @@ export function ProjectDetailView({
       .catch(() => {
         /* leave empty */
       });
+    getProjectPerformanceBoardAction(project.id)
+      .then((res) => {
+        if (active && res.ok) setPerfBoard(res.data.board);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -305,7 +320,7 @@ export function ProjectDetailView({
           </summary>
           <Card className="bg-card mt-2 p-4 shadow-sm">
             <PerformanceTable
-              block={rollup.perProject.variance}
+              board={perfBoard}
               canViewFinancials={canSeeFinancials}
             />
           </Card>
