@@ -34,7 +34,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { TODAY } from "@/lib/dashboard-data";
 import { clients } from "@/lib/mock-data/clients";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +92,7 @@ interface HistoryRow {
 function buildHistory(): HistoryRow[] {
   const out: HistoryRow[] = [];
   for (let i = 0; i < 30; i++) {
-    const d = subDays(TODAY, i);
+    const d = subDays(new Date(), i);
     const isFull = i % 7 === 0;
     out.push({
       id: `bk-${i}`,

@@ -116,6 +116,15 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects, Subcontractors & Data cleanup (CLEAN-1)
+
+- Users can now edit a saved subcontractor compliance document, correct a
+  site-log crew line's hours in place (instead of removing and re-adding it), and
+  drag commissioning checklist items into the order they want.
+- Project pages now show the assigned PM and lead technician in the header.
+- Removed leftover placeholder data and fixed breadcrumb names, which had shown a
+  raw id instead of the project or quote name on detail pages.
+
 ### Projects — Unified performance board (PERF-1)
 
 - The job and project performance view now shows Budgeted, Actual, Earned and a

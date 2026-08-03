@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   // commissioning api
   listRunsForJob: vi.fn(async () => []),
   createRun: vi.fn(async () => ({ id: "run1" })),
+  reorderItems: vi.fn(async () => 0),
   signOffRun: vi.fn(async () => ({ ok: true, run: { id: "run1" }, pdfPath: null })),
   getCommissioningPdfUrl: vi.fn(async () => null),
 }));
@@ -37,7 +38,7 @@ vi.mock("@/lib/api/commissioning", () => ({
   cancelRun: vi.fn(async () => ({ id: "run1" })),
   addItem: vi.fn(async () => ({ id: "it1" })),
   setItemResult: vi.fn(async () => ({ id: "it1" })),
-  reorderItems: vi.fn(async () => 0),
+  reorderItems: h.reorderItems,
   deleteItem: vi.fn(async () => true),
   raiseDeficiencyFromItem: vi.fn(async () => ({ deficiencyId: "d1" })),
   signOffRun: h.signOffRun,
@@ -54,6 +55,7 @@ import {
 import {
   listRunsForJobAction,
   createRunAction,
+  reorderItemsAction,
   signOffRunAction,
 } from "@/app/(app)/projects/commissioning-actions";
 
@@ -67,9 +69,11 @@ const MUTATIONS = [
   () => createDeficiencyAction({ projectId: "p1", jobId: "job1", title: "t" }),
   () => setDeficiencyStatusAction("d1", "p1", "job1", "closed"),
   () => createRunAction({ projectId: "p1", jobId: "job1" }),
+  // CLEAN-1 §2c — drag-reorder persists via this gated action.
+  () => reorderItemsAction(["it2", "it1"], "p1", "job1"),
   () => signOffRunAction({ runId: "run1", signerName: "J", signatureData: "x" }, "p1", "job1"),
 ];
-const MUTATION_FNS = [h.createDeficiency, h.setDeficiencyStatus, h.createRun, h.signOffRun];
+const MUTATION_FNS = [h.createDeficiency, h.setDeficiencyStatus, h.createRun, h.reorderItems, h.signOffRun];
 
 beforeEach(() => {
   h.profile = { id: "u1", role: "Admin", status: "Active" };

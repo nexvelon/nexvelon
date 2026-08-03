@@ -9,7 +9,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { Plus, FileText, Download, XCircle } from "lucide-react";
+import { Plus, FileText, Download, XCircle, GripVertical } from "lucide-react";
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, arrayMove, useSortable, verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +47,7 @@ import {
   addItemAction,
   setItemResultAction,
   deleteItemAction,
+  reorderItemsAction,
   raiseDeficiencyFromItemAction,
   signOffRunAction,
   getCommissioningPdfUrlAction,
@@ -308,6 +317,26 @@ function RunDetailDialog({
   const cancelled = detail?.status === "cancelled";
   const editable = canEdit && !signedOff && !cancelled;
 
+  // PROJ2-13 — drag-reorder items (persist via reorderItemsAction, optimistic
+  // then server-confirmed refetch; rollback via reload on failure).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+  async function handleReorder(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !detail) return;
+    const ids = detail.items.map((i) => i.id);
+    const oldIdx = ids.indexOf(String(active.id));
+    const newIdx = ids.indexOf(String(over.id));
+    if (oldIdx < 0 || newIdx < 0) return;
+    const orderedIds = arrayMove(ids, oldIdx, newIdx);
+    setDetail({ ...detail, items: arrayMove(detail.items, oldIdx, newIdx) }); // optimistic
+    const res = await reorderItemsAction(orderedIds, projectId, jobId);
+    if (!res.ok) toast.error(res.error);
+    reload(); // server-confirmed order
+  }
+
   const handleAddItem = async () => {
     if (!newDescription.trim()) return;
     setBusy(true);
@@ -394,72 +423,40 @@ function RunDetailDialog({
           ) : (
             <div className="space-y-3">
               <div className="max-h-[40vh] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-[11px] uppercase">Category</TableHead>
-                      <TableHead className="text-[11px] uppercase">Test</TableHead>
-                      <TableHead className="text-[11px] uppercase">Result</TableHead>
-                      {editable && <TableHead className="text-[11px] uppercase" />}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detail.items.length === 0 && (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={editable ? handleReorder : undefined}>
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={editable ? 4 : 3} className="text-muted-foreground py-4 text-center text-xs">
-                          No items yet.
-                        </TableCell>
+                        {editable && <TableHead className="w-6" />}
+                        <TableHead className="text-[11px] uppercase">Category</TableHead>
+                        <TableHead className="text-[11px] uppercase">Test</TableHead>
+                        <TableHead className="text-[11px] uppercase">Result</TableHead>
+                        {editable && <TableHead className="text-[11px] uppercase" />}
                       </TableRow>
-                    )}
-                    {detail.items.map((it) => (
-                      <TableRow key={it.id}>
-                        <TableCell className="text-muted-foreground text-xs">{it.category ?? "—"}</TableCell>
-                        <TableCell className="text-xs">
-                          <div className="text-brand-charcoal">{it.description}</div>
-                          {it.expected_result && <div className="text-muted-foreground text-[10px]">Expect: {it.expected_result}</div>}
-                          {it.deficiency_id && <div className="text-destructive text-[10px]">Deficiency raised</div>}
-                        </TableCell>
-                        <TableCell>
-                          {editable ? (
-                            <div className="flex gap-1">
-                              {(["pass", "fail", "na"] as DbCommissioningItemResult[]).map((res) => (
-                                <button
-                                  key={res}
-                                  type="button"
-                                  onClick={() => handleResult(it.id, res)}
-                                  className={cn(
-                                    "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
-                                    it.result === res ? RESULT_TONE[res] : "text-muted-foreground border border-[var(--border)]"
-                                  )}
-                                >
-                                  {res}
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase", RESULT_TONE[it.result])}>
-                              {it.result}
-                            </span>
-                          )}
-                        </TableCell>
-                        {editable && (
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {it.result === "fail" && !it.deficiency_id && (
-                                <button type="button" onClick={() => handleRaise(it.id)} className="text-destructive text-[10px] hover:underline">
-                                  Raise deficiency
-                                </button>
-                              )}
-                              <button type="button" onClick={() => handleDeleteItem(it.id)} className="text-muted-foreground hover:text-red-600" aria-label="Delete item">
-                                <XCircle className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {detail.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={editable ? 5 : 3} className="text-muted-foreground py-4 text-center text-xs">
+                            No items yet.
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </TableRow>
+                      )}
+                      <SortableContext items={detail.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                        {detail.items.map((it) => (
+                          <CommissioningItemRow
+                            key={it.id}
+                            item={it}
+                            editable={editable}
+                            onResult={handleResult}
+                            onRaise={handleRaise}
+                            onDelete={handleDeleteItem}
+                          />
+                        ))}
+                      </SortableContext>
+                    </TableBody>
+                  </Table>
+                </DndContext>
               </div>
 
               {editable && (
@@ -635,5 +632,90 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-muted-foreground text-[11px] uppercase tracking-wide">{label}</Label>
       {children}
     </div>
+  );
+}
+
+// PROJ2-13 — a single commissioning item row, sortable via a drag handle
+// (@dnd-kit, mirroring JobTasksTab / JobLineItemsTab). Only the grip carries the
+// drag listeners, so the pass/fail/na + delete controls stay clickable.
+function CommissioningItemRow({
+  item,
+  editable,
+  onResult,
+  onRaise,
+  onDelete,
+}: {
+  item: CommissioningRunDetail["items"][number];
+  editable: boolean;
+  onResult: (id: string, result: DbCommissioningItemResult) => void;
+  onRaise: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id, disabled: !editable });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      {editable && (
+        <TableCell className="w-6 pr-0">
+          <button
+            type="button"
+            className="text-muted-foreground/60 hover:text-brand-charcoal cursor-grab touch-none"
+            aria-label="Drag to reorder"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        </TableCell>
+      )}
+      <TableCell className="text-muted-foreground text-xs">{item.category ?? "—"}</TableCell>
+      <TableCell className="text-xs">
+        <div className="text-brand-charcoal">{item.description}</div>
+        {item.expected_result && <div className="text-muted-foreground text-[10px]">Expect: {item.expected_result}</div>}
+        {item.deficiency_id && <div className="text-destructive text-[10px]">Deficiency raised</div>}
+      </TableCell>
+      <TableCell>
+        {editable ? (
+          <div className="flex gap-1">
+            {(["pass", "fail", "na"] as DbCommissioningItemResult[]).map((res) => (
+              <button
+                key={res}
+                type="button"
+                onClick={() => onResult(item.id, res)}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+                  item.result === res ? RESULT_TONE[res] : "text-muted-foreground border border-[var(--border)]"
+                )}
+              >
+                {res}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase", RESULT_TONE[item.result])}>
+            {item.result}
+          </span>
+        )}
+      </TableCell>
+      {editable && (
+        <TableCell className="text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            {item.result === "fail" && !item.deficiency_id && (
+              <button type="button" onClick={() => onRaise(item.id)} className="text-destructive text-[10px] hover:underline">
+                Raise deficiency
+              </button>
+            )}
+            <button type="button" onClick={() => onDelete(item.id)} className="text-muted-foreground hover:text-red-600" aria-label="Delete item">
+              <XCircle className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </TableCell>
+      )}
+    </TableRow>
   );
 }

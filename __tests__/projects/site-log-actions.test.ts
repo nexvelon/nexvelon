@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   createLog: vi.fn(async () => ({ id: "log1" })),
   submitLog: vi.fn(async () => ({ id: "log1" })),
   addCrew: vi.fn(async () => ({ id: "c1" })),
+  updateCrew: vi.fn(async () => ({ id: "c1" })),
 }));
 
 // A hoisted SiteLogError stand-in so the action's `instanceof` check works.
@@ -38,7 +39,7 @@ vi.mock("@/lib/api/site-logs", () => ({
   submitLog: h.submitLog,
   deleteLog: vi.fn(async () => true),
   addCrew: h.addCrew,
-  updateCrew: vi.fn(async () => ({ id: "c1" })),
+  updateCrew: h.updateCrew,
   removeCrew: vi.fn(async () => true),
 }));
 vi.mock("@/lib/auth/profile", () => ({ getCurrentProfile: async () => h.profile }));
@@ -50,6 +51,7 @@ import {
   createLogAction,
   submitLogAction,
   addCrewAction,
+  updateCrewAction,
 } from "@/app/(app)/projects/site-log-actions";
 
 const setRole = (role: string) => (h.profile = { id: "u1", role, status: "Active" });
@@ -62,8 +64,10 @@ const MUTATIONS = [
   () => createLogAction({ jobId: "job1" }, "p1"),
   () => submitLogAction("log1", "p1", "job1"),
   () => addCrewAction({ siteLogId: "log1", techId: "t1" }, "p1", "job1"),
+  // CLEAN-1 §2b — inline-edit a saved crew line (hours/notes).
+  () => updateCrewAction("c1", "p1", "job1", { hours: 6 }),
 ];
-const MUTATION_FNS = [h.createLog, h.submitLog, h.addCrew];
+const MUTATION_FNS = [h.createLog, h.submitLog, h.addCrew, h.updateCrew];
 
 beforeEach(() => {
   h.profile = { id: "u1", role: "Admin", status: "Active" };

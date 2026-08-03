@@ -7,7 +7,7 @@
 // (upload → attachment id → save row; a failed upload never creates a row).
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Download, Plus, Trash2, Upload } from "lucide-react";
+import { Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
 import {
   listComplianceDocsAction,
   createComplianceDocAction,
+  updateComplianceDocAction,
   deleteComplianceDocAction,
 } from "@/app/(app)/subcontractors/actions";
 import { uploadViaSignedUrl } from "@/lib/attachments/upload-client";
@@ -88,7 +89,8 @@ export function ComplianceDocsCard({
 }) {
   const [docs, setDocs] = useState<ComplianceDocRow[]>([]);
   const [summary, setSummary] = useState<ComplianceSummary | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  // "new" opens the add dialog; a doc opens the same dialog in edit mode.
+  const [editing, setEditing] = useState<ComplianceDocRow | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ComplianceDocRow | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -126,7 +128,7 @@ export function ComplianceDocsCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-brand-navy font-serif text-lg">Compliance documents</h3>
         {canEdit && (
-          <Button type="button" size="xs" onClick={() => setAddOpen(true)} disabled={pending}>
+          <Button type="button" size="xs" onClick={() => setEditing("new")} disabled={pending}>
             <Plus className="mr-1 h-3.5 w-3.5" /> Add document
           </Button>
         )}
@@ -216,15 +218,26 @@ export function ComplianceDocsCard({
                     </TableCell>
                     {canEdit && (
                       <TableCell className="text-right">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDelete(d)}
-                          disabled={pending}
-                          className="text-muted-foreground hover:text-red-600"
-                          aria-label="Delete document"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditing(d)}
+                            disabled={pending}
+                            className="text-muted-foreground hover:text-brand-navy"
+                            aria-label="Edit document"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDelete(d)}
+                            disabled={pending}
+                            className="text-muted-foreground hover:text-red-600"
+                            aria-label="Delete document"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -236,12 +249,12 @@ export function ComplianceDocsCard({
       )}
 
       {canEdit && (
-        <AddDocDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
+        <DocDialog
+          editing={editing}
+          onOpenChange={(o) => !o && setEditing(null)}
           subcontractorId={subcontractorId}
           onSaved={() => {
-            setAddOpen(false);
+            setEditing(null);
             load();
           }}
         />
@@ -277,19 +290,22 @@ function CountChip({ label, n, tone }: { label: string; n: number; tone: string 
   );
 }
 
-// ─── Add dialog ──────────────────────────────────────────────────────────────
+// ─── Add / edit dialog ───────────────────────────────────────────────────────
 
-function AddDocDialog({
-  open,
+function DocDialog({
+  editing,
   onOpenChange,
   subcontractorId,
   onSaved,
 }: {
-  open: boolean;
+  editing: ComplianceDocRow | "new" | null;
   onOpenChange: (o: boolean) => void;
   subcontractorId: string;
   onSaved: () => void;
 }) {
+  const open = editing !== null;
+  const doc = editing && editing !== "new" ? editing : null;
+
   const [docType, setDocType] = useState<DbComplianceDocType>("wsib_clearance");
   const [title, setTitle] = useState("");
   const [issuer, setIssuer] = useState("");
@@ -302,14 +318,20 @@ function AddDocDialog({
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Re-seed on open: from the doc when editing, else blank for a new doc.
   useEffect(() => {
-    if (open) {
-      setDocType("wsib_clearance");
-      setTitle(""); setIssuer(""); setReference(""); setIssuedDate("");
-      setExpiryDate(""); setCoverage(""); setNotes(""); setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }, [open]);
+    if (!open) return;
+    setDocType(doc?.doc_type ?? "wsib_clearance");
+    setTitle(doc?.title ?? "");
+    setIssuer(doc?.issuer ?? "");
+    setReference(doc?.reference_number ?? "");
+    setIssuedDate(doc?.issued_date ?? "");
+    setExpiryDate(doc?.expiry_date ?? "");
+    setCoverage(doc?.coverage_amount != null ? String(doc.coverage_amount) : "");
+    setNotes(doc?.notes ?? "");
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }, [open, doc]);
 
   const showsCoverage = useMemo(() => COVERAGE_DOC_TYPES.includes(docType), [docType]);
   const datesInvalid = issuedDate !== "" && expiryDate !== "" && expiryDate < issuedDate;
@@ -321,7 +343,29 @@ function AddDocDialog({
     }
     setSaving(true);
     try {
-      // Upload first — the doc row is only created if the file lands (#310).
+      // EDIT — metadata only (file replacement is a separate flow; keep the
+      // existing attachment as-is).
+      if (doc) {
+        const res = await updateComplianceDocAction(doc.id, subcontractorId, {
+          doc_type: docType,
+          title: title.trim() || null,
+          issuer: issuer.trim() || null,
+          reference_number: reference.trim() || null,
+          issued_date: issuedDate || null,
+          expiry_date: expiryDate || null,
+          coverage_amount: showsCoverage && coverage.trim() !== "" ? Number(coverage) : null,
+          notes: notes.trim() || null,
+        });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        toast.success("Document updated");
+        onSaved();
+        return;
+      }
+
+      // ADD — upload first; the doc row is only created if the file lands (#310).
       let attachmentId: string | null = null;
       if (file) {
         const up = await uploadViaSignedUrl({
@@ -373,7 +417,7 @@ function AddDocDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add compliance document</DialogTitle>
+          <DialogTitle>{doc ? "Edit compliance document" : "Add compliance document"}</DialogTitle>
           <DialogDescription>
             WSIB clearance, insurance certificate, licence or qualification.
           </DialogDescription>
@@ -420,20 +464,30 @@ function AddDocDialog({
               <Input value={coverage} inputMode="decimal" onChange={(e) => setCoverage(e.target.value)} className="h-9 text-sm tabular-nums" placeholder="e.g. 2000000" />
             </Field>
           )}
-          <Field label="File (PDF or image, max 20 MB)">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/pdf,image/png,image/jpeg,image/webp"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-muted-foreground block w-full text-xs file:mr-3 file:rounded-md file:border file:border-[var(--border)] file:bg-card file:px-3 file:py-1.5 file:text-xs"
-            />
-            {file && (
-              <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
-                <Upload className="h-3 w-3" /> {file.name}
+          {doc ? (
+            <Field label="File">
+              <span className="text-muted-foreground text-[11px]">
+                {doc.attachment_filename
+                  ? `${doc.attachment_filename} (unchanged — remove and re-add to replace the file)`
+                  : "No file — remove and re-add to attach one."}
               </span>
-            )}
-          </Field>
+            </Field>
+          ) : (
+            <Field label="File (PDF or image, max 20 MB)">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="text-muted-foreground block w-full text-xs file:mr-3 file:rounded-md file:border file:border-[var(--border)] file:bg-card file:px-3 file:py-1.5 file:text-xs"
+              />
+              {file && (
+                <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
+                  <Upload className="h-3 w-3" /> {file.name}
+                </span>
+              )}
+            </Field>
+          )}
           <Field label="Notes">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} className="h-9 text-sm" />
           </Field>
@@ -444,7 +498,7 @@ function AddDocDialog({
             Cancel
           </Button>
           <Button type="button" onClick={handleSave} disabled={saving || datesInvalid}>
-            {saving ? "Saving…" : "Add document"}
+            {saving ? "Saving…" : doc ? "Save changes" : "Add document"}
           </Button>
         </DialogFooter>
       </DialogContent>
