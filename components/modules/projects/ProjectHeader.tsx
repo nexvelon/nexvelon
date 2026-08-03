@@ -44,7 +44,7 @@ export async function ProjectHeader({
     listJobsForProject(projectId),
   ]);
   if (!data) return null;
-  const { project, client_name, site_name, rollup, change_order_count } = data;
+  const { project, client_name, site_name, rollup, change_order_count, pm_name, lead_name } = data;
   // PROJ2-4a — job counts from the real Job rows.
   const mainCount = jobs.filter((j) => j.job_type === "main_job").length;
   const coCount = jobs.filter((j) => j.job_type === "change_order").length;
@@ -103,6 +103,26 @@ export async function ProjectHeader({
               {project.description}
             </p>
           ) : null}
+
+          {/* CLEAN-1 §3 — assigned PM / lead tech (read-only). Line omitted
+              entirely when neither is set. */}
+          {(pm_name || lead_name) && (
+            <p className="text-muted-foreground text-xs">
+              {pm_name && (
+                <>
+                  <span className="uppercase tracking-wider">PM</span>{" "}
+                  <span className="text-brand-charcoal font-medium">{pm_name}</span>
+                </>
+              )}
+              {pm_name && lead_name ? " · " : ""}
+              {lead_name && (
+                <>
+                  <span className="uppercase tracking-wider">Lead</span>{" "}
+                  <span className="text-brand-charcoal font-medium">{lead_name}</span>
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         {/* Right — stats + edit */}

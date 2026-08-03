@@ -748,6 +748,10 @@ export interface ProjectHeaderData {
     margin: number | null;
   };
   change_order_count: number;
+  // CLEAN-1 §3 — read-only display names for the assigned PM (profiles) and lead
+  // tech (techs). Null when the column is unset OR the referenced row is gone.
+  pm_name: string | null;
+  lead_name: string | null;
 }
 
 export async function getProjectHeaderData(
@@ -757,10 +761,16 @@ export async function getProjectHeaderData(
   if (!detail) return null;
   const rollup = await getProjectCostRollup(projectId);
   const p = rollup.perProject;
+  const { pm_name, lead_name } = await resolveProjectPeople(
+    detail.project.pm_user_id,
+    detail.project.lead_tech_id
+  );
   return {
     project: detail.project,
     client_name: detail.client_name ?? "—",
     site_name: detail.site_name,
+    pm_name,
+    lead_name,
     rollup: {
       contract: p.contract,
       billedPct: p.billed_pct ?? 0,
@@ -772,6 +782,44 @@ export async function getProjectHeaderData(
     change_order_count: detail.quotes.filter((q) => q.role === "change_order")
       .length,
   };
+}
+
+/**
+ * CLEAN-1 §3 — resolve the assigned PM (uuid → profiles) and lead tech
+ * (uuid → techs) to display names. pm_user_id / lead_tech_id have no FK, so a
+ * dangling id simply resolves to null rather than throwing.
+ */
+async function resolveProjectPeople(
+  pmUserId: string | null,
+  leadTechId: string | null
+): Promise<{ pm_name: string | null; lead_name: string | null }> {
+  const supabase = await db();
+  const [pmRes, leadRes] = await Promise.all([
+    pmUserId
+      ? supabase
+          .from("profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", pmUserId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    leadTechId
+      ? supabase.from("techs").select("name").eq("id", leadTechId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const pm = pmRes.data as
+    | { display_name: string | null; first_name: string | null; last_name: string | null }
+    | null;
+  const pm_name = pm
+    ? pm.display_name?.trim() ||
+      [pm.first_name, pm.last_name].filter(Boolean).join(" ").trim() ||
+      null
+    : null;
+
+  const lead = leadRes.data as { name: string | null } | null;
+  const lead_name = lead?.name?.trim() || null;
+
+  return { pm_name, lead_name };
 }
 
 export async function addCostCenter(

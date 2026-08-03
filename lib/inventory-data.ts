@@ -2,7 +2,6 @@ import { addDays, parseISO } from "date-fns";
 import { products } from "./mock-data/products";
 import { projects } from "./mock-data/projects";
 import { users } from "./mock-data/users";
-import { TODAY } from "./dashboard-data";
 import type { Product, Vendor, WarehouseLocation } from "./types";
 
 export const WAREHOUSE_LOCATIONS: WarehouseLocation[] = [
@@ -96,7 +95,7 @@ export function movementHistory(p: Product, limit = 10): MovementRow[] {
   // this synthetic generator is retired.
   if (users.length === 0 || projects.length === 0) return [];
 
-  const start = TODAY;
+  const start = new Date();
   const out: MovementRow[] = [];
   const kinds: MovementRow["kind"][] = ["Receipt", "Pick", "Transfer", "Pick", "Return", "Adjustment"];
   for (let i = 0; i < limit; i++) {

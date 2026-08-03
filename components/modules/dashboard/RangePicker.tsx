@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { RANGE_LABEL, type RangeKey } from "@/lib/dashboard-data";
+import { RANGE_LABEL, type RangeKey } from "@/lib/date-range";
 
 const ORDER: RangeKey[] = ["today", "7d", "mtd", "qtd", "ytd", "custom"];
 

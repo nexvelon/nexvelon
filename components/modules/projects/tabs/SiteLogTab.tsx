@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Plus, CloudSun, Users, Clock, Camera, Trash2, X, Upload, Check,
+  Plus, CloudSun, Users, Clock, Camera, Trash2, X, Upload, Check, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   listLogsForJobAction, getLogByIdAction, createLogAction, updateLogAction,
-  submitLogAction, deleteLogAction, addCrewAction, removeCrewAction,
+  submitLogAction, deleteLogAction, addCrewAction, updateCrewAction, removeCrewAction,
 } from "@/app/(app)/projects/site-log-actions";
 import { listAssignmentsForJobAction } from "@/app/(app)/projects/assignment-actions";
 import { listAttachments, createAttachment, deleteAttachment, getSignedDownloadUrlAction } from "@/app/(app)/attachments/actions";
@@ -375,6 +375,9 @@ function CrewSection({
   const [freeName, setFreeName] = useState("");
   const [hours, setHours] = useState("");
   const [picked, setPicked] = useState<string>("free"); // "free" | "tech:<id>" | "sub:<id>"
+  // Inline hours edit on a saved crew line (PROJ2-16 was remove-and-re-add only).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editHours, setEditHours] = useState("");
 
   useEffect(() => {
     listAssignmentsForJobAction(jobId).then((r) => {
@@ -414,6 +417,26 @@ function CrewSection({
     onChanged();
   };
 
+  const startEdit = (id: string, current: number | null) => {
+    setEditId(id);
+    setEditHours(current != null ? String(current) : "");
+  };
+  const saveEdit = async (id: string) => {
+    const trimmed = editHours.trim();
+    const h = trimmed === "" ? null : Number(trimmed);
+    if (h != null && (!Number.isFinite(h) || h < 0)) {
+      toast.error("Enter valid hours (0 or more), or blank to clear.");
+      return;
+    }
+    const res = await updateCrewAction(id, projectId, jobId, { hours: h });
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setEditId(null);
+    onChanged();
+  };
+
   return (
     <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
       <Label className="text-muted-foreground text-[11px] uppercase tracking-wide">Crew on site</Label>
@@ -425,11 +448,38 @@ function CrewSection({
             <li key={c.id} className="flex items-center gap-2 text-xs">
               <span className="text-brand-charcoal font-medium">{c.display_name}</span>
               {c.kind !== "other" && <span className="text-muted-foreground text-[10px]">({c.kind === "tech" ? "in-house" : "sub"})</span>}
-              {c.hours != null && <span className="text-muted-foreground tabular-nums">{c.hours}h</span>}
-              {canEdit && (
-                <button type="button" onClick={() => remove(c.id)} className="text-muted-foreground ml-auto hover:text-red-600" aria-label="Remove crew">
-                  <X className="h-3 w-3" />
-                </button>
+              {editId === c.id ? (
+                <span className="ml-auto flex items-center gap-1">
+                  <Input
+                    value={editHours}
+                    inputMode="decimal"
+                    onChange={(e) => setEditHours(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveEdit(c.id); if (e.key === "Escape") setEditId(null); }}
+                    autoFocus
+                    className="h-7 w-16 text-xs tabular-nums"
+                    placeholder="hrs"
+                  />
+                  <button type="button" onClick={() => saveEdit(c.id)} className="text-[var(--brand-status-green)] hover:opacity-80" aria-label="Save hours">
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => setEditId(null)} className="text-muted-foreground hover:text-brand-charcoal" aria-label="Cancel">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <span className="text-muted-foreground tabular-nums">{c.hours != null ? `${c.hours}h` : "—"}</span>
+                  {canEdit && (
+                    <span className="ml-auto flex items-center gap-2">
+                      <button type="button" onClick={() => startEdit(c.id, c.hours)} className="text-muted-foreground hover:text-brand-navy" aria-label="Edit hours">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button type="button" onClick={() => remove(c.id)} className="text-muted-foreground hover:text-red-600" aria-label="Remove crew">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                </>
               )}
             </li>
           ))}

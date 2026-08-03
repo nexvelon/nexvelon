@@ -1,83 +1,43 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { projects } from "@/lib/mock-data/projects";
-import { quotes } from "@/lib/mock-data/quotes";
+import {
+  resolveProjectCrumbAction,
+  resolveQuoteCrumbAction,
+} from "@/app/(app)/breadcrumb-actions";
+import { buildCrumbs, detailEntity } from "@/lib/breadcrumbs";
 import { cn } from "@/lib/utils";
-
-const TOP_LABELS: Record<string, string> = {
-  dashboard: "Executive Dashboard",
-  quotes: "Quotes",
-  projects: "Projects",
-  clients: "Clients",
-  inventory: "Inventory",
-  scheduling: "Scheduling",
-  financials: "Financial Operations",
-  users: "Users & Permissions",
-  settings: "Settings",
-  new: "New Quote",
-};
-
-const PROJECT_TAB_LABELS: Record<string, string> = {
-  overview: "Overview",
-  tasks: "Tasks",
-  schedule: "Schedule",
-  materials: "Materials",
-  commissioning: "Commissioning",
-  zones: "Zone List",
-  documents: "Documents",
-  financials: "Financials",
-  time: "Time & Labor",
-};
-
-interface Crumb {
-  label: string;
-  href?: string;
-}
-
-function buildCrumbs(pathname: string, tab: string | null): Crumb[] {
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) return [{ label: "OPERATIONS" }, { label: "DASHBOARD" }];
-
-  const out: Crumb[] = [{ label: "OPERATIONS" }];
-  const top = segments[0];
-  out.push({
-    label: (TOP_LABELS[top] ?? top).toUpperCase(),
-    href: `/${top}`,
-  });
-
-  if (top === "projects" && segments[1]) {
-    if (segments[1] === "new") {
-      out.push({ label: "NEW PROJECT" });
-    } else {
-      const project = projects.find((p) => p.id === segments[1]);
-      out.push({
-        label: (project?.name ?? segments[1]).toUpperCase(),
-      });
-      if (tab && PROJECT_TAB_LABELS[tab]) {
-        out.push({ label: PROJECT_TAB_LABELS[tab].toUpperCase() });
-      }
-    }
-  } else if (top === "quotes" && segments[1]) {
-    if (segments[1] === "new") {
-      out.push({ label: "NEW QUOTE" });
-    } else {
-      const quote = quotes.find((q) => q.id === segments[1]);
-      out.push({ label: (quote?.number ?? segments[1]).toUpperCase() });
-    }
-  }
-
-  return out;
-}
 
 /** Gold uppercase tracked breadcrumbs in the top bar. */
 export function GoldBreadcrumbs({ className }: { className?: string }) {
   const pathname = usePathname();
   const search = useSearchParams();
   const tab = search.get("tab");
-  const crumbs = useMemo(() => buildCrumbs(pathname, tab), [pathname, tab]);
+  const entity = useMemo(() => detailEntity(pathname), [pathname]);
+  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+
+  // Resolve the detail segment (project/quote id) to its real name from the
+  // live tables. Cancels on route change so a stale response can't overwrite.
+  useEffect(() => {
+    setResolvedLabel(null);
+    if (!entity) return;
+    let cancelled = false;
+    const resolver =
+      entity.kind === "project" ? resolveProjectCrumbAction : resolveQuoteCrumbAction;
+    resolver(entity.id).then((label) => {
+      if (!cancelled) setResolvedLabel(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entity]);
+
+  const crumbs = useMemo(
+    () => buildCrumbs(pathname, tab, resolvedLabel),
+    [pathname, tab, resolvedLabel]
+  );
 
   return (
     <nav

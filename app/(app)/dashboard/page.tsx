@@ -25,7 +25,7 @@ import { TopClientsTable } from "@/components/modules/dashboard/TopClientsTable"
 import { InventoryHealth } from "@/components/modules/dashboard/InventoryHealth";
 import { TechnicianUtilization } from "@/components/modules/dashboard/TechnicianUtilization";
 import { AlertsWorklists } from "@/components/modules/dashboard/AlertsWorklists";
-import { RANGE_LABEL, rangeFor, type RangeKey } from "@/lib/dashboard-data";
+import { RANGE_LABEL, rangeFor, type RangeKey } from "@/lib/date-range";
 import { getDashboardKpisAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardKpis } from "@/lib/api/dashboard";
 import { formatCurrency, formatNumber } from "@/lib/format";

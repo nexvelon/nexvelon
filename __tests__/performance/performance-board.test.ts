@@ -19,8 +19,9 @@ const h = vi.hoisted(() => ({
     actual: leg(900, 400, 300, 100, 800, 11.1),
   },
   wipRollup: {
-    estimated_cost: 600, actual_cost: 800, pct_complete: 0.9, earned: 900,
-    billed: 700, over_under: -200, position: "underbilled", holdback_retained: 50,
+    estimated_cost: 600 as number | null, actual_cost: 800 as number | null,
+    pct_complete: 0.9 as number | null, earned: 900,
+    billed: 700, over_under: -200 as number | null, position: "underbilled", holdback_retained: 50,
     remaining_to_bill: 300, indeterminate_jobs: 0, contract: 1000,
   },
   hours: 20,
