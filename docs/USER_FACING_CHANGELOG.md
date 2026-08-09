@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Settings — Themes (UIDG-2)
+
+- Theme colours now match exactly between the app and its charts (the default
+  theme previously showed a slightly different navy and gold in charts than in
+  the sidebar and buttons), and the Settings → Branding & Themes description no
+  longer mis-states how many theme presets exist.
+
 ### Projects, Subcontractors & Data cleanup (CLEAN-1)
 
 - Users can now edit a saved subcontractor compliance document, correct a

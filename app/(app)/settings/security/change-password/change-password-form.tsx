@@ -284,7 +284,7 @@ export function ChangePasswordForm() {
           style={{
             background: "var(--brand-accent)",
             color: "var(--brand-primary)",
-            fontFamily: "var(--font-playfair), serif",
+            fontFamily: "var(--brand-font-serif), serif",
           }}
         >
           {pending ? "Updating password…" : "Update password"}

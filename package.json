@@ -9,6 +9,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "typecheck": "tsc --noEmit",
+    "gen:theme": "tsx scripts/generate-theme-css.ts",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

@@ -288,7 +288,7 @@ export default function LoginPage() {
                 style={{
                   background: "var(--brand-accent)",
                   color: "var(--brand-primary)",
-                  fontFamily: "var(--font-playfair), serif",
+                  fontFamily: "var(--brand-font-serif), serif",
                 }}
               >
                 <Lock className="h-4 w-4" />
