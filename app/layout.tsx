@@ -6,6 +6,7 @@ import "./globals.css";
 import { RoleProvider } from "@/lib/role-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { DEFAULT_THEME, STORAGE_KEY, THEME_ORDER } from "@/lib/theme";
+import { resolveServerThemeKey } from "@/lib/api/ui-theme";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const inter = Inter({
@@ -43,40 +44,54 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-// Suppresses the FOUC of the default theme by setting [data-theme] before
-// React hydrates. Reads from localStorage; falls back to the default theme.
-// The allow-list is serialised from THEME_ORDER (single source of truth) rather
-// than a hand-maintained regex, so a new preset needs no edit here.
-const themeBootstrap = `
+// UIDG-3 — the DB-resolved theme (`serverThemeKey`) is injected below. The server
+// already stamps <html data-theme>, so this runs pre-hydration only to keep the
+// localStorage cache in sync (DB wins). It NEVER lets the cache override the
+// server value — it only fills in from cache if the server somehow left an
+// invalid key. The allow-list is serialised from THEME_ORDER (single source).
+function buildThemeBootstrap(serverThemeKey: string): string {
+  return `
 (function () {
   try {
+    var el = document.documentElement;
     var keys = ${JSON.stringify(THEME_ORDER)};
-    var saved = localStorage.getItem(${JSON.stringify(STORAGE_KEY)});
-    var t = keys.indexOf(saved) !== -1 ? saved : ${JSON.stringify(DEFAULT_THEME)};
-    document.documentElement.dataset.theme = t;
+    var server = ${JSON.stringify(serverThemeKey)};
+    var KEY = ${JSON.stringify(STORAGE_KEY)};
+    if (keys.indexOf(server) !== -1) {
+      el.dataset.theme = server;
+      try { localStorage.setItem(KEY, server); } catch (_) {}
+    } else {
+      var cached = localStorage.getItem(KEY);
+      el.dataset.theme = keys.indexOf(cached) !== -1 ? cached : ${JSON.stringify(DEFAULT_THEME)};
+    }
   } catch (_) {
     document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
   }
 })();
 `;
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolve the theme server-side (user override → org default → DEFAULT), so
+  // the correct theme paints on first byte with no flash and no JS required.
+  const themeKey = await resolveServerThemeKey();
+
   return (
-    <html lang="en" data-theme={DEFAULT_THEME}>
+    <html lang="en" data-theme={themeKey}>
       <head>
         <script
-          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+          dangerouslySetInnerHTML={{ __html: buildThemeBootstrap(themeKey) }}
           suppressHydrationWarning
         />
       </head>
       <body
         className={`${inter.variable} ${playfair.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider>
+        <ThemeProvider serverThemeKey={themeKey}>
           {/* AuthProvider wraps RoleProvider since Session A — RoleProvider
               now sources the live role from useAuth() rather than from
               localStorage. */}
