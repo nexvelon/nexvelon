@@ -625,7 +625,10 @@ export type ActivityEntityType =
   | "attachment"
   | "pickup_slip"
   | "rma"
-  | "project";
+  | "project"
+  // UIDG-3 (migration 0117): theme-preference changes (org default + per-user
+  // override). The DB CHECK was widened to match in the same migration.
+  | "ui_theme";
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */
@@ -649,6 +652,34 @@ export interface DbActivityLog {
   changes: ActivityChanges;
   actor_id: string | null;
   created_at: string;
+}
+
+// ============================================================================
+// UIDG-3 (migration 0117): UI theme persistence.
+// ============================================================================
+
+/** public.user_ui_prefs — one row per user. NULL theme_key/theme_mode means
+ *  "inherit the org default". */
+export interface DbUserUiPrefs {
+  user_id: string;
+  theme_key: string | null;
+  theme_mode: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** public.custom_themes — user-authored palettes (schema landed in UIDG-3; the
+ *  editor ships in UIDG-4). `tokens` holds the resolved ThemeColors shape. */
+export interface DbCustomTheme {
+  id: string;
+  name: string;
+  created_by: string;
+  tokens: Record<string, unknown>;
+  base_theme_key: string | null;
+  is_published: boolean;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // AUDIT-1 — one row in public.quote_audit_log (migration 0038). Immutable,

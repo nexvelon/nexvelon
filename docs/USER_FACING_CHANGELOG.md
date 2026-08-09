@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Settings — Themes (UIDG-3)
+
+- Your theme choice now follows you across devices instead of being saved to one
+  browser.
+- Admins can set a company-wide default theme; each user can choose their own on
+  top of it, and reset back to the company default at any time.
+
 ### Settings — Themes (UIDG-2)
 
 - Theme colours now match exactly between the app and its charts (the default

@@ -14,7 +14,6 @@ import {
   resolveTheme,
   type ResolvedThemeColors,
   type ThemeKey,
-  isThemeKey,
 } from "./theme";
 
 interface ThemeContextValue {
@@ -25,34 +24,51 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Default theme on the server to avoid hydration mismatches; sync from
-  // localStorage after mount.
-  const [theme, setThemeState] = useState<ThemeKey>(DEFAULT_THEME);
+/**
+ * UIDG-3 — the theme is resolved from the DB on the server and passed in as
+ * `serverThemeKey` (already stamped on <html data-theme> for first paint).
+ * localStorage is now a CACHE ONLY: it is written to keep the pre-hydration
+ * bootstrap fast, but it never overrides the server/DB value.
+ */
+export function ThemeProvider({
+  serverThemeKey = DEFAULT_THEME,
+  children,
+}: {
+  serverThemeKey?: ThemeKey;
+  children: ReactNode;
+}) {
+  const [theme, setThemeState] = useState<ThemeKey>(serverThemeKey);
 
+  // Reconcile: the server already resolved + stamped the theme; sync the cache
+  // to it (DB wins on any mismatch). Never read the cache to override state.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (isThemeKey(saved)) {
-      setThemeState(saved);
-      document.documentElement.dataset.theme = saved;
-    } else {
-      document.documentElement.dataset.theme = DEFAULT_THEME;
+    setThemeState(serverThemeKey);
+    if (typeof window !== "undefined") {
+      document.documentElement.dataset.theme = serverThemeKey;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, serverThemeKey);
+      } catch {
+        // Private-mode / disabled storage — the server value still rules.
+      }
     }
-  }, []);
+  }, [serverThemeKey]);
 
+  // Local apply for an in-session switch (the settings pane persists via the
+  // setMyTheme action and reverts on failure).
   const setTheme = useCallback((next: ThemeKey) => {
     setThemeState(next);
     if (typeof window !== "undefined") {
       document.documentElement.dataset.theme = next;
-      window.localStorage.setItem(STORAGE_KEY, next);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next);
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 
   return (
-    <ThemeContext.Provider
-      value={{ theme, colors: resolveTheme(theme), setTheme }}
-    >
+    <ThemeContext.Provider value={{ theme, colors: resolveTheme(theme), setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
