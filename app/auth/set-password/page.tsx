@@ -209,7 +209,7 @@ export default function SetPasswordPage() {
               style={{
                 background: "var(--brand-accent)",
                 color: "var(--brand-primary)",
-                fontFamily: "var(--font-playfair), serif",
+                fontFamily: "var(--brand-font-serif), serif",
               }}
             >
               {pending ? "Sending verification code…" : "Save password & continue"}

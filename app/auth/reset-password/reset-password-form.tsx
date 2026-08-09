@@ -204,7 +204,7 @@ export function ResetPasswordForm({ userEmail }: ResetPasswordFormProps) {
               style={{
                 background: "var(--brand-accent)",
                 color: "var(--brand-primary)",
-                fontFamily: "var(--font-playfair), serif",
+                fontFamily: "var(--brand-font-serif), serif",
               }}
             >
               {pending ? "Saving new password…" : "Save new password"}

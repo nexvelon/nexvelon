@@ -11,15 +11,15 @@ import {
 import {
   DEFAULT_THEME,
   STORAGE_KEY,
-  THEMES,
-  type ThemeColors,
+  resolveTheme,
+  type ResolvedThemeColors,
   type ThemeKey,
   isThemeKey,
 } from "./theme";
 
 interface ThemeContextValue {
   theme: ThemeKey;
-  colors: ThemeColors;
+  colors: ResolvedThemeColors;
   setTheme: (next: ThemeKey) => void;
 }
 
@@ -51,7 +51,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider
-      value={{ theme, colors: THEMES[theme], setTheme }}
+      value={{ theme, colors: resolveTheme(theme), setTheme }}
     >
       {children}
     </ThemeContext.Provider>
@@ -64,6 +64,6 @@ export function useTheme(): ThemeContextValue {
   return ctx;
 }
 
-export function useThemeColors(): ThemeColors {
+export function useThemeColors(): ResolvedThemeColors {
   return useTheme().colors;
 }

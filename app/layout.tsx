@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { RoleProvider } from "@/lib/role-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { DEFAULT_THEME, STORAGE_KEY, THEME_ORDER } from "@/lib/theme";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const inter = Inter({
@@ -43,17 +44,18 @@ export const viewport: Viewport = {
 };
 
 // Suppresses the FOUC of the default theme by setting [data-theme] before
-// React hydrates. Reads from localStorage; falls back to royal-navy.
+// React hydrates. Reads from localStorage; falls back to the default theme.
+// The allow-list is serialised from THEME_ORDER (single source of truth) rather
+// than a hand-maintained regex, so a new preset needs no edit here.
 const themeBootstrap = `
 (function () {
   try {
-    var saved = localStorage.getItem("nexvelon:theme");
-    var t = saved && /^(royal-navy|onyx-brass|oxford-green|burgundy-reserve|imperial-plum|sapphire-noir|emerald-dynasty|espresso-gilt|slate-rose|midnight-teal|mahogany-brass|amethyst-dusk|ivory-court|pearl-platinum)$/.test(saved)
-      ? saved
-      : "royal-navy";
+    var keys = ${JSON.stringify(THEME_ORDER)};
+    var saved = localStorage.getItem(${JSON.stringify(STORAGE_KEY)});
+    var t = keys.indexOf(saved) !== -1 ? saved : ${JSON.stringify(DEFAULT_THEME)};
     document.documentElement.dataset.theme = t;
   } catch (_) {
-    document.documentElement.dataset.theme = "royal-navy";
+    document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
   }
 })();
 `;
@@ -64,7 +66,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="royal-navy">
+    <html lang="en" data-theme={DEFAULT_THEME}>
       <head>
         <script
           dangerouslySetInnerHTML={{ __html: themeBootstrap }}

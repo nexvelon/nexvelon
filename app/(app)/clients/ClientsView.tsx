@@ -325,7 +325,7 @@ export function ClientsView({ clients }: Props) {
             style={{
               background: "var(--brand-accent)",
               color: "var(--brand-primary)",
-              fontFamily: "var(--font-playfair), serif",
+              fontFamily: "var(--brand-font-serif), serif",
             }}
           >
             <Plus className="h-4 w-4" />

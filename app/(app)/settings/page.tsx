@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { BrandingThemes } from "@/components/modules/settings/BrandingThemes";
+import { THEME_ORDER } from "@/lib/theme";
 import { BackupsData } from "@/components/modules/settings/BackupsData";
 import { ClassificationsPane } from "@/components/modules/settings/ClassificationsPane";
 import { ClientTiersPane } from "@/components/modules/settings/ClientTiersPane";
@@ -64,7 +65,7 @@ interface Section {
 
 const SECTIONS: Section[] = [
   { key: "company", label: "Company Profile", description: "Legal name, GST/HST #, ESA, ULC, WSIB, defaults.", icon: Building2 },
-  { key: "branding", label: "Branding & Themes", description: "Logo, login background, four theme presets, email signature.", icon: Palette },
+  { key: "branding", label: "Branding & Themes", description: `Logo, login background, ${THEME_ORDER.length} theme presets, email signature.`, icon: Palette },
   { key: "quote", label: "Quote Defaults", description: "Valid days, payment terms, margin tiers, sections.", icon: FileText },
   { key: "client-tiers", label: "Client Tiers", description: "Prestige tier descriptions (Diamond/Platinum/Gold/Silver/Bronze) shown in invite + outcome emails.", icon: Award },
   { key: "classifications", label: "Classifications", description: "Line item type categories", icon: Tag },
