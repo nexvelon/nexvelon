@@ -116,6 +116,12 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity history (AUDIT-FIX-2)
+
+- Activity history now shows the actual values that changed (e.g. "Tags: (empty) →
+  VIP") instead of just how many items changed. This applies to existing history
+  too — the real values were already stored, only the display was summarising them.
+
 ### Activity history (AUDIT-FIX-1)
 
 - Activity history now records changes that were previously being missed — edits
