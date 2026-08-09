@@ -6,9 +6,11 @@
 // Click an `update` entry to expand its from→to diff. `create` and
 // `delete` entries have no expandable detail (empty `changes`).
 //
-// Field names are humanized snake_case → Title Case at render time so
-// the diff reads naturally. Values are formatted for display: NULL →
-// "(empty)", booleans → Yes/No, arrays → "[N items]", objects → JSON.
+// Field names are humanized snake_case → Title Case at render time so the diff
+// reads naturally. Values are formatted for display by formatActivityValue
+// (lib/audit/format-activity-value.ts) — arrays show their real joined values,
+// objects show a meaningful label, dates/booleans/empties render explicitly, and
+// a bare count is never shown (AUDIT-FIX-2).
 
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
@@ -17,6 +19,10 @@ import type {
   ActivityAction,
   DbActivityLogWithActor,
 } from "@/lib/types/database";
+import {
+  formatActivityValue,
+  humanizeField,
+} from "@/lib/audit/format-activity-value";
 
 interface Props {
   entries: DbActivityLogWithActor[];
@@ -103,10 +109,10 @@ function ActivityEntry({ entry }: { entry: DbActivityLogWithActor }) {
             <div key={field} className="text-xs">
               <span className="font-medium">{humanizeField(field)}:</span>{" "}
               <span className="text-muted-foreground line-through">
-                {formatValue(change.from)}
+                {formatActivityValue(change.from)}
               </span>{" "}
               {"→"}{" "}
-              <span>{formatValue(change.to)}</span>
+              <span>{formatActivityValue(change.to)}</span>
             </div>
           ))}
         </div>
@@ -132,25 +138,4 @@ function describeAction(
   return `updated ${count} fields`;
 }
 
-/** snake_case → Title Case. "billing_postal" → "Billing Postal". */
-function humanizeField(field: string): string {
-  return field
-    .split("_")
-    .map((w) => (w.length === 0 ? "" : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(" ");
-}
-
-/**
- * Render an arbitrary JSON value compactly for the diff line. NULL →
- * "(empty)", booleans → Yes/No, arrays → "[N items]", objects → JSON
- * blob (rarely hit — our jsonb fields are arrays of phones today).
- */
-function formatValue(v: unknown): string {
-  if (v === null || v === undefined) return "(empty)";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  if (Array.isArray(v))
-    return `[${v.length} item${v.length === 1 ? "" : "s"}]`;
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
 
