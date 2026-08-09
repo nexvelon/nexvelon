@@ -116,6 +116,17 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Settings — Themes (UIDG-4)
+
+- You can now build your own theme: duplicate any existing theme, then edit every
+  colour and the fonts with a live preview that retints the whole app as you go —
+  leaving without saving discards it.
+- A theme whose text wouldn't be legible on its background (failing accessibility
+  contrast) can't be saved, so you can't accidentally lock yourself out.
+- Custom themes are private to you by default; an Admin can publish one so it
+  appears as a company theme everyone can pick, and can set it as the company
+  default.
+
 ### Activity history (AUDIT-FIX-2)
 
 - Activity history now shows the actual values that changed (e.g. "Tags: (empty) →

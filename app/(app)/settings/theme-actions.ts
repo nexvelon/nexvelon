@@ -1,55 +1,110 @@
 "use server";
 
-// UIDG-3 — theme persistence actions.
-//   setMyThemeAction        — any authenticated user; writes/clears their override.
-//   setOrgDefaultThemeAction — gated by settings:manage (Admin-only in the
-//                              baseline matrix); sets the company-wide default.
-//   getThemeSettingsAction   — reads the org default + the caller's override.
-// Every mutation validates the key server-side and writes a best-effort
-// activity_log row (§5).
+// UIDG-3/4 — theme persistence + custom-theme actions.
+//   Personal / org default:  setMyThemeAction, setOrgDefaultThemeAction
+//   Custom themes:            create / update / delete / publish / unpublish /
+//                             duplicate, plus getThemeStudioAction for the editor.
+// Every mutation validates server-side, is permission-gated, and writes a
+// best-effort activity_log row (§5, entity_type 'ui_theme').
 
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
-import { isThemeKey, type ThemeKey } from "@/lib/theme";
+import type { DbRole } from "@/lib/types/database";
+import {
+  THEMES,
+  THEME_ORDER,
+  isThemeKey,
+  isUuid,
+  resolveTheme,
+  themeTokens,
+  type ThemeTokens,
+} from "@/lib/theme";
 import {
   getThemeSettings,
   setUserThemeKey,
   setOrgDefaultThemeKey,
   logThemeChange,
+  logThemeAudit,
 } from "@/lib/api/ui-theme";
+import {
+  listVisibleCustomThemes,
+  getCustomThemeForResolve,
+  getCustomThemeRow,
+  createCustomTheme,
+  updateCustomTheme,
+  softDeleteCustomTheme,
+  setCustomThemePublished,
+  type CustomThemeSummary,
+} from "@/lib/api/custom-themes";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-export async function getThemeSettingsAction(): Promise<
-  ActionResult<{
-    orgDefaultKey: ThemeKey;
-    userOverrideKey: ThemeKey | null;
-    canManageOrg: boolean;
-  }>
-> {
+function fail(e: unknown, fallback: string): { ok: false; error: string } {
+  return { ok: false, error: e instanceof Error ? e.message : fallback };
+}
+
+async function canManageOrg(role: DbRole): Promise<boolean> {
+  return hasPermission(adaptRole(role), "settings", "manage");
+}
+
+// ── Studio data ──────────────────────────────────────────────────────────────
+
+export interface ThemeStudioData {
+  builtins: { key: string; name: string }[];
+  customs: CustomThemeSummary[];
+  orgDefaultKey: string;
+  userOverrideKey: string | null;
+  canManageOrg: boolean;
+  meId: string;
+}
+
+export async function getThemeStudioAction(): Promise<ActionResult<ThemeStudioData>> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "Not authenticated." };
   try {
-    const { orgDefaultKey, userOverrideKey } = await getThemeSettings(me.id);
-    const canManageOrg = hasPermission(adaptRole(me.role), "settings", "manage");
-    return { ok: true, data: { orgDefaultKey, userOverrideKey, canManageOrg } };
+    const [{ orgDefaultKey, userOverrideKey }, customs] = await Promise.all([
+      getThemeSettings(me.id),
+      listVisibleCustomThemes(me.id),
+    ]);
+    return {
+      ok: true,
+      data: {
+        builtins: THEME_ORDER.map((key) => ({ key, name: THEMES[key].name })),
+        customs,
+        orgDefaultKey,
+        userOverrideKey,
+        canManageOrg: await canManageOrg(me.role),
+        meId: me.id,
+      },
+    };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Failed to load theme settings." };
+    return fail(e, "Failed to load themes.");
   }
 }
 
-/** Write the current user's override, or clear it (pass null) to inherit the
- *  org default. */
+// ── Personal / org default ───────────────────────────────────────────────────
+
+/** True if the caller may apply this key as their personal theme: any built-in,
+ *  or a custom theme they can see (own or published — enforced by RLS on the
+ *  caller's session client). */
+async function userMayUse(key: string): Promise<boolean> {
+  if (isThemeKey(key)) return true;
+  if (!isUuid(key)) return false;
+  const supabase = await createSupabaseServerClient();
+  return (await getCustomThemeForResolve(supabase, key)) !== null;
+}
+
 export async function setMyThemeAction(
-  themeKey: ThemeKey | null
-): Promise<ActionResult<{ orgDefaultKey: ThemeKey; effectiveKey: ThemeKey }>> {
+  themeKey: string | null
+): Promise<ActionResult<{ orgDefaultKey: string; effectiveKey: string }>> {
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "Not authenticated." };
-  if (themeKey !== null && !isThemeKey(themeKey)) {
-    return { ok: false, error: `Unknown theme: ${themeKey}` };
+  if (themeKey !== null && !(await userMayUse(themeKey))) {
+    return { ok: false, error: "That theme isn't available to you." };
   }
   try {
     const before = await getThemeSettings(me.id);
@@ -57,23 +112,31 @@ export async function setMyThemeAction(
     await logThemeChange(me.id, "user", {
       theme_key: { from: before.userOverrideKey, to: themeKey },
     });
-    const effectiveKey = themeKey ?? before.orgDefaultKey;
-    return { ok: true, data: { orgDefaultKey: before.orgDefaultKey, effectiveKey } };
+    return {
+      ok: true,
+      data: { orgDefaultKey: before.orgDefaultKey, effectiveKey: themeKey ?? before.orgDefaultKey },
+    };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Failed to save theme." };
+    return fail(e, "Failed to save theme.");
   }
 }
 
-/** Set the company-wide default theme. Admin-only via settings:manage. */
 export async function setOrgDefaultThemeAction(
-  themeKey: ThemeKey
-): Promise<ActionResult<{ orgDefaultKey: ThemeKey }>> {
+  themeKey: string
+): Promise<ActionResult<{ orgDefaultKey: string }>> {
   const me = await getCurrentProfile();
-  if (!me || !hasPermission(adaptRole(me.role), "settings", "manage")) {
+  if (!me || !(await canManageOrg(me.role))) {
     return { ok: false, error: "You do not have permission to set the company default theme." };
   }
+  // Built-in OR a PUBLISHED custom theme — a private theme can never be the org
+  // default (guarded server-side).
   if (!isThemeKey(themeKey)) {
-    return { ok: false, error: `Unknown theme: ${themeKey}` };
+    if (!isUuid(themeKey)) return { ok: false, error: `Unknown theme: ${themeKey}` };
+    const row = await getCustomThemeRow(themeKey);
+    if (!row) return { ok: false, error: "That theme no longer exists." };
+    if (!row.is_published) {
+      return { ok: false, error: "Publish the theme before making it the company default." };
+    }
   }
   try {
     const before = await getThemeSettings(me.id);
@@ -83,6 +146,134 @@ export async function setOrgDefaultThemeAction(
     });
     return { ok: true, data: { orgDefaultKey: themeKey } };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Failed to set company default." };
+    return fail(e, "Failed to set company default.");
   }
+}
+
+// ── Custom-theme CRUD ────────────────────────────────────────────────────────
+
+export async function createCustomThemeAction(input: {
+  name: string;
+  tokens: ThemeTokens;
+  baseThemeKey?: string | null;
+}): Promise<ActionResult<{ id: string }>> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Not authenticated." };
+  try {
+    const id = await createCustomTheme(me.id, input);
+    await logThemeAudit(me.id, id, "create", {
+      name: { from: null, to: input.name },
+    });
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e, "Failed to create theme.");
+  }
+}
+
+/** Clone a built-in or a visible custom theme into a new private custom theme —
+ *  the primary creation path (start from something that works). */
+export async function duplicateThemeAction(
+  sourceKey: string
+): Promise<ActionResult<{ id: string; name: string }>> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Not authenticated." };
+  try {
+    let tokens: ThemeTokens;
+    let sourceName: string;
+    if (isThemeKey(sourceKey)) {
+      tokens = themeTokens(resolveTheme(sourceKey));
+      sourceName = THEMES[sourceKey].name;
+    } else if (isUuid(sourceKey)) {
+      const supabase = await createSupabaseServerClient();
+      const src = await getCustomThemeForResolve(supabase, sourceKey);
+      if (!src) return { ok: false, error: "That theme isn't available to copy." };
+      tokens = src.tokens;
+      sourceName = src.name;
+    } else {
+      return { ok: false, error: `Unknown theme: ${sourceKey}` };
+    }
+    const name = `${sourceName} copy`;
+    const id = await createCustomTheme(me.id, { name, tokens, baseThemeKey: sourceKey });
+    await logThemeAudit(me.id, id, "create", { name: { from: null, to: name } });
+    return { ok: true, data: { id, name } };
+  } catch (e) {
+    return fail(e, "Failed to duplicate theme.");
+  }
+}
+
+/** Owner-or-Admin guard, returning the row so callers reuse it. */
+async function requireEditableTheme(
+  id: string,
+  me: { id: string; role: DbRole }
+): Promise<{ ok: true; row: NonNullable<Awaited<ReturnType<typeof getCustomThemeRow>>> } | { ok: false; error: string }> {
+  if (!isUuid(id)) return { ok: false, error: `Unknown theme: ${id}` };
+  const row = await getCustomThemeRow(id);
+  if (!row) return { ok: false, error: "That theme no longer exists." };
+  const mine = row.created_by === me.id;
+  if (!mine && !(await canManageOrg(me.role))) {
+    return { ok: false, error: "You can only edit your own themes." };
+  }
+  return { ok: true, row };
+}
+
+export async function updateCustomThemeAction(
+  id: string,
+  patch: { name?: string; tokens?: ThemeTokens }
+): Promise<ActionResult<{ id: string }>> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Not authenticated." };
+  const gate = await requireEditableTheme(id, me);
+  if (!gate.ok) return gate;
+  try {
+    await updateCustomTheme(id, patch);
+    await logThemeAudit(me.id, id, "update", {
+      ...(patch.name !== undefined ? { name: { from: gate.row.name, to: patch.name } } : {}),
+      ...(patch.tokens !== undefined ? { tokens: { from: "(previous)", to: "(updated)" } } : {}),
+    });
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e, "Failed to update theme.");
+  }
+}
+
+export async function deleteCustomThemeAction(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Not authenticated." };
+  const gate = await requireEditableTheme(id, me);
+  if (!gate.ok) return gate;
+  try {
+    await softDeleteCustomTheme(id);
+    await logThemeAudit(me.id, id, "delete", { name: { from: gate.row.name, to: null } });
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e, "Failed to delete theme.");
+  }
+}
+
+async function setPublished(id: string, published: boolean): Promise<ActionResult<{ id: string }>> {
+  const me = await getCurrentProfile();
+  if (!me || !(await canManageOrg(me.role))) {
+    return { ok: false, error: "Only an admin can publish or unpublish themes." };
+  }
+  if (!isUuid(id)) return { ok: false, error: `Unknown theme: ${id}` };
+  const row = await getCustomThemeRow(id);
+  if (!row) return { ok: false, error: "That theme no longer exists." };
+  try {
+    await setCustomThemePublished(id, published);
+    await logThemeAudit(me.id, id, "update", {
+      is_published: { from: row.is_published, to: published },
+    });
+    return { ok: true, data: { id } };
+  } catch (e) {
+    return fail(e, "Failed to update publication state.");
+  }
+}
+
+export async function publishCustomThemeAction(id: string) {
+  return setPublished(id, true);
+}
+export async function unpublishCustomThemeAction(id: string) {
+  return setPublished(id, false);
 }
