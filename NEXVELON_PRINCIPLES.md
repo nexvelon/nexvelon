@@ -256,6 +256,24 @@ is no "clear log" button.
 coverage is incomplete. PR description must list every new audit event
 type added.
 
+**An audit path must be verified to PERSIST, not merely called.** Lesson
+from AUDIT-FIX-1: `public.activity_log` had RLS enabled with a SELECT
+policy but no INSERT policy, while the `logActivity` helper wrote with the
+authenticated (cookie) client. Every business-audit insert was therefore
+RLS-denied and silently swallowed for months — the table read empty while
+~70 call sites believed they were writing a trail. Two standing rules
+follow: (1) when adding or reviewing an audit write, confirm a row
+actually lands (exercise the action, check the table) — a green call site
+is not proof of a persisted row; and (2) a best-effort audit write must be
+best-effort *but never silent* — on failure it logs server-side with
+enough context to identify the caller (entity_type, action, entity_id,
+actor) while still never throwing or rolling back the business mutation
+(§2.8). Note the two audit tables differ by design: `auth_audit_log` is
+service-role-INSERT-only (via `lib/auth/audit.ts`), whereas
+`activity_log` now allows authenticated INSERT with `WITH CHECK (actor_id
+= auth.uid())` so each row is tied to the acting user; both remain
+append-only (no UPDATE/DELETE policy).
+
 ---
 
 ## 6. Continuity

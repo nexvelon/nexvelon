@@ -615,20 +615,32 @@ export interface DbAuthOtp {
 // ACT-1 (migration 0016): activity log
 // ============================================================================
 
-export type ActivityEntityType =
-  | "client"
-  | "site"
-  | "contact"
-  | "inventory"
-  | "vendor"
-  | "purchase_order"
-  | "attachment"
-  | "pickup_slip"
-  | "rma"
-  | "project"
-  // UIDG-3 (migration 0117): theme-preference changes (org default + per-user
-  // override). The DB CHECK was widened to match in the same migration.
-  | "ui_theme";
+/**
+ * AUDIT-FIX-1 — the single source of truth for activity_log.entity_type. The DB
+ * CHECK constraint (migration 0118) is kept identical to this list, and a vitest
+ * test asserts they match so the two can never drift again (drift had silently
+ * broken audit writes for 'inventory' / 'attachment'). Per §1 you may only ADD
+ * values here — the CHECK may widen, never narrow — and every add must also land
+ * in a new additive migration that widens the CHECK.
+ */
+export const ACTIVITY_ENTITY_TYPES = [
+  "client",
+  "site",
+  "contact",
+  "purchase_order",
+  "vendor",
+  "invoice",
+  "inventory_product",
+  "stock_movement",
+  "pickup_slip",
+  "rma",
+  "project",
+  "ui_theme",
+  "inventory",
+  "attachment",
+] as const;
+
+export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 export type ActivityAction = "create" | "update" | "delete";
 
 /** One field-level change inside a `changes` JSONB blob. */

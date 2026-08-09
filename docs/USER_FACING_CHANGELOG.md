@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity history (AUDIT-FIX-1)
+
+- Activity history now records changes that were previously being missed — edits
+  across clients, projects, inventory, purchase orders, vendors, attachments and
+  more now reliably appear in the log. (History is not backfilled: only actions
+  taken after this change are captured.)
+
 ### Settings — Themes (UIDG-3)
 
 - Your theme choice now follows you across devices instead of being saved to one

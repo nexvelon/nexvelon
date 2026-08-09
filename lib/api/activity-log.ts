@@ -49,13 +49,20 @@ export function computeChanges<T extends Record<string, unknown>>(
 }
 
 /**
- * Best-effort activity-log write. Swallows ALL errors (including auth /
- * RLS / network failures) so a log-write failure never blocks the main
- * mutation. Errors are logged to the server console for ops debugging.
+ * Best-effort activity-log write.
+ *
+ * The tension (AUDIT-FIX-1): this is BEST-EFFORT — it never throws and never
+ * rolls back the caller's mutation, because §2.8 says an audit-write failure
+ * must not break a user's save. But it must never be SILENT either: a missing
+ * RLS INSERT policy denied every one of these writes for months and nobody
+ * noticed, precisely because the failure was swallowed without a useful log.
+ * So on failure we emit a server-side error identifying the caller
+ * (entity_type / action / entity_id / actor) — loud enough to catch in ops, but
+ * still non-fatal to the request.
  *
  * Resolves the actor via the session-cookie supabase client — no extra
- * profiles lookup at write time. Display-name resolution happens at
- * read time in listActivityFor().
+ * profiles lookup at write time. Display-name resolution happens at read time
+ * in listActivityFor().
  */
 export async function logActivity(
   entityType: ActivityEntityType,
@@ -76,11 +83,16 @@ export async function logActivity(
       actor_id: user?.id ?? null,
     });
     if (error) {
-      console.error("[activity_log] insert failed:", error.message);
+      console.error(
+        `[activity_log] insert DENIED/failed — entity_type=${entityType} action=${action} entity_id=${entityId} actor_id=${user?.id ?? "null"}: ${error.message}`
+      );
     }
   } catch (e) {
-    console.error("[activity_log] write failed:", e);
-    // intentionally swallow — never block the main mutation
+    // Never block the main mutation — but never swallow silently either.
+    console.error(
+      `[activity_log] write threw — entity_type=${entityType} action=${action} entity_id=${entityId}:`,
+      e
+    );
   }
 }
 
