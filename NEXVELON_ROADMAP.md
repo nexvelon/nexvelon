@@ -500,6 +500,25 @@ deferred to after current work.
 
 ---
 
+## UI/Dashboard/Gantt initiative
+
+Full vision + project handover captured in
+[`docs/UI_DASHBOARD_GANTT_VISION.md`](docs/UI_DASHBOARD_GANTT_VISION.md);
+**not built** — proceeds as its own multi-sprint arc **after** a read-only
+audit of the theming / dashboard / chart infrastructure that already exists.
+
+A market-leading **UI / theming / dashboard / Gantt** layer positioned as a
+primary commercial differentiator (match *and* exceed Simpro / Q360 / every
+admin template): a "Themes" settings category with many categorized presets +
+full user color customization; a fully customizable drag-and-drop dashboard
+(templates, every market widget/chart/pattern, per-widget controls); a
+full-featured Gantt (dependencies, critical path, baselines, resource
+assignment, style templates); and a broad chart + component library drawn from
+51 reference screenshots. Honors the no-paid-subscription and honest-data
+(§2.8) constraints. First chunk when triggered: **the read-only audit spec.**
+
+---
+
 ## Open architectural decisions awaiting design
 
 These decisions get resolved in the design passes for items 2 + 4
