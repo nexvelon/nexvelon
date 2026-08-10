@@ -253,7 +253,17 @@ export function OverviewTab({ from, to }: TabProps) {
                   tickFormatter={(v) => formatCurrencyCompact(Number(v))}
                   width={64}
                 />
-                <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+                <Tooltip
+                  formatter={(v: unknown) => formatCurrency(Number(v))}
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--foreground)",
+                  }}
+                  labelStyle={{ color: "var(--foreground)" }}
+                  itemStyle={{ color: "var(--foreground)" }}
+                />
                 <Bar dataKey="invoiced" name="Invoiced" fill={t.primary} radius={[3, 3, 0, 0]} />
                 <Bar dataKey="collected" name="Collected" fill={t.accent} radius={[3, 3, 0, 0]} />
               </ComposedChart>

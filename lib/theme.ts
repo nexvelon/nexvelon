@@ -49,7 +49,9 @@ export const DEFAULT_FONTS: ThemeFonts = {
 
 /** The shared semantic status pair. Uniform across every current preset; a
  *  preset may override, otherwise these apply (see resolveTheme). */
-export const DEFAULT_STATUS_GREEN = "#5C7A4A";
+// UIDG-4B — darkened from #5C7A4A so status-green text passes WCAG AA (≥4.5:1)
+// on every light preset background (it was ~4.1–4.4); dark derives lighter.
+export const DEFAULT_STATUS_GREEN = "#4F6A3C";
 export const DEFAULT_STATUS_RED = "#A03B3B";
 
 export interface ThemeColors {
@@ -78,6 +80,10 @@ export interface ThemeColors {
   /** Five-stop chart palette in stable order — used by Recharts. Kept in lockstep
    *  with the chrome: [primary, accent, chartTertiary, chartQuaternary, text]. */
   charts: [string, string, string, string, string];
+  /** UIDG-4B — optional hand-tuned dark override. Dark is derived from the light
+   *  palette by default (deriveDarkTokens); any field set here wins over the
+   *  derived value, so a preset can be polished without changing the mechanism. */
+  dark?: Partial<ThemeTokens>;
 }
 
 export const THEMES: Record<ThemeKey, ThemeColors> = {
@@ -353,6 +359,7 @@ export const THEME_ORDER: ThemeKey[] = [
 
 export const DEFAULT_THEME: ThemeKey = "royal-navy";
 export const STORAGE_KEY = "nexvelon:theme";
+export const MODE_STORAGE_KEY = "nexvelon:mode";
 
 export function isThemeKey(s: string | null): s is ThemeKey {
   return s !== null && (THEME_ORDER as string[]).includes(s);
@@ -444,10 +451,86 @@ export function isUuid(s: string | null | undefined): s is string {
   return typeof s === "string" && UUID_RE.test(s);
 }
 
-export function resolveTheme(key: ThemeKey): ResolvedThemeColors {
+// ── UIDG-4B: light / dark axis ───────────────────────────────────────────────
+
+/** The two rendering modes. A theme is `palette × mode` — mode is a separate
+ *  axis from the palette, not a doubled preset list. */
+export type ThemeMode = "light" | "dark";
+export const DEFAULT_MODE: ThemeMode = "light";
+export const MODES: ThemeMode[] = ["light", "dark"];
+
+export function isThemeMode(s: string | null | undefined): s is ThemeMode {
+  return s === "light" || s === "dark";
+}
+
+function clamp(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+function toRgb(hex: string): [number, number, number] {
+  let h = hex.trim().replace(/^#/, "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  if (h.length === 8) h = h.slice(0, 6);
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function toHex([r, g, b]: [number, number, number]): string {
+  return "#" + [r, g, b].map((c) => clamp(c).toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+/** Mix two hex colours; `amount` is the weight of `b` (0 → a, 1 → b). */
+export function mixHex(a: string, b: string, amount: number): string {
+  const [ar, ag, ab] = toRgb(a);
+  const [br, bg, bb] = toRgb(b);
+  const t = Math.max(0, Math.min(1, amount));
+  return toHex([ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t]);
+}
+
+const NEAR_BLACK = "#0A0A0C";
+const NEAR_WHITE = "#FFFFFF";
+
+/**
+ * Derive a coherent DARK token set from a light palette. Backgrounds go deep
+ * (tinted by the palette's primary so the brand still reads); ink flips to
+ * near-white; the accent is kept for identity; chart/status colours are lightened
+ * so they read on dark. Every custom theme gets dark for free from this; built-in
+ * presets may override any field via `ThemeColors.dark`. Tuned so all 14 built-ins
+ * pass WCAG AA in dark (guarded by a test).
+ */
+export function deriveDarkTokens(light: ThemeTokens): ThemeTokens {
+  const bg = mixHex(light.primary, NEAR_BLACK, 0.86); // deep, faintly brand-tinted
+  const text = mixHex(NEAR_WHITE, light.text, 0.06); // near-white, faint warmth
+  return {
+    primary: mixHex(light.primary, NEAR_WHITE, 0.72), // light brand ink (headings, chart-1)
+    accent: light.accent, // keep the accent for identity
+    accentSoft: mixHex(light.accentSoft, NEAR_WHITE, 0.2),
+    bg,
+    text,
+    card: mixHex(bg, NEAR_WHITE, 0.06),
+    border: mixHex(bg, NEAR_WHITE, 0.16),
+    muted: mixHex(bg, NEAR_WHITE, 0.1),
+    sidebarAccent: mixHex(bg, NEAR_BLACK, 0.3), // sidebar panel: a shade darker than the page
+    sidebarBorder: mixHex(bg, NEAR_WHITE, 0.12),
+    chartTertiary: mixHex(light.chartTertiary, NEAR_WHITE, 0.42),
+    chartQuaternary: mixHex(light.chartQuaternary, NEAR_WHITE, 0.4),
+    statusGreen: mixHex(light.statusGreen, NEAR_WHITE, 0.4),
+    statusRed: mixHex(light.statusRed, NEAR_WHITE, 0.34),
+    fonts: { sans: light.fonts.sans, serif: light.fonts.serif, mono: light.fonts.mono },
+    charts: [
+      mixHex(light.primary, NEAR_WHITE, 0.72),
+      light.accent,
+      mixHex(light.chartTertiary, NEAR_WHITE, 0.42),
+      mixHex(light.chartQuaternary, NEAR_WHITE, 0.4),
+      text,
+    ],
+  };
+}
+
+export function resolveTheme(
+  key: ThemeKey,
+  mode: ThemeMode = "light"
+): ResolvedThemeColors {
   const t = THEMES[key];
   const def = THEMES[DEFAULT_THEME];
-  return {
+  const light: ResolvedThemeColors = {
     key: t.key,
     name: t.name,
     description: t.description,
@@ -468,4 +551,11 @@ export function resolveTheme(key: ThemeKey): ResolvedThemeColors {
     fonts: t.fonts ?? DEFAULT_FONTS,
     charts: t.charts,
   };
+  if (mode === "light") return light;
+  // UIDG-4B — dark tokens are derived from the light palette, with an optional
+  // per-preset authored `dark` override merged on top (for hand-tuning).
+  const dark = deriveDarkTokens(light);
+  const authored = t.dark;
+  const merged = authored ? { ...dark, ...authored } : dark;
+  return { key: t.key, name: t.name, description: t.description, ...merged };
 }

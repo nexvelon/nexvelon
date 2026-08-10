@@ -24,7 +24,9 @@ export function InventoryHealth() {
     });
   }, []);
 
-  const palette = [t.primary, t.accent, "#475569", "#1E40AF", "#0f766e", "#94a3b8"];
+  // UIDG-4B — use the theme's 5-stop chart palette (adapts to palette + dark
+  // mode) instead of hardcoded hex that stayed light.
+  const palette = t.charts;
   const totalValue = data ? data.by_category.reduce((s, c) => s + c.value, 0) : 0;
 
   return (
@@ -51,12 +53,22 @@ export function InventoryHealth() {
                   <div className="h-[150px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={data.by_category} dataKey="value" nameKey="category" innerRadius={38} outerRadius={64} paddingAngle={2}>
+                        <Pie data={data.by_category} dataKey="value" nameKey="category" innerRadius={38} outerRadius={64} paddingAngle={2} stroke="var(--card)">
                           {data.by_category.map((_, i) => (
                             <Cell key={i} fill={palette[i % palette.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                        <Tooltip
+                          formatter={(v) => formatCurrency(Number(v))}
+                          contentStyle={{
+                            background: "var(--card)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 8,
+                            color: "var(--foreground)",
+                          }}
+                          labelStyle={{ color: "var(--foreground)" }}
+                          itemStyle={{ color: "var(--foreground)" }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

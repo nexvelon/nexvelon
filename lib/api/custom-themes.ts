@@ -11,7 +11,7 @@ import "server-only";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateThemeTokens } from "@/lib/theme-validate";
+import { validateThemeTokens, validateThemeBothModes } from "@/lib/theme-validate";
 import type { ThemeTokens } from "@/lib/theme";
 import type { DbCustomTheme } from "@/lib/types/database";
 
@@ -101,7 +101,7 @@ export async function createCustomTheme(
   userId: string,
   input: { name: string; tokens: unknown; baseThemeKey?: string | null }
 ): Promise<string> {
-  const v = validateThemeTokens(input.tokens);
+  const v = validateThemeBothModes(input.tokens);
   if (!v.ok) throw new Error(v.error);
   const name = input.name.trim();
   if (!name) throw new Error("A theme name is required.");
@@ -135,7 +135,7 @@ export async function updateCustomTheme(
     update.name = name;
   }
   if (patch.tokens !== undefined) {
-    const v = validateThemeTokens(patch.tokens);
+    const v = validateThemeBothModes(patch.tokens);
     if (!v.ok) throw new Error(v.error);
     update.tokens = v.value;
   }

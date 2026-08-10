@@ -16,15 +16,19 @@ import {
   THEMES,
   THEME_ORDER,
   isThemeKey,
+  isThemeMode,
   isUuid,
   resolveTheme,
   themeTokens,
+  type ThemeMode,
   type ThemeTokens,
 } from "@/lib/theme";
 import {
   getThemeSettings,
   setUserThemeKey,
+  setUserThemeMode,
   setOrgDefaultThemeKey,
+  setOrgDefaultThemeMode,
   logThemeChange,
   logThemeAudit,
 } from "@/lib/api/ui-theme";
@@ -58,6 +62,8 @@ export interface ThemeStudioData {
   customs: CustomThemeSummary[];
   orgDefaultKey: string;
   userOverrideKey: string | null;
+  orgDefaultMode: ThemeMode;
+  userOverrideMode: ThemeMode | null;
   canManageOrg: boolean;
   meId: string;
 }
@@ -66,7 +72,7 @@ export async function getThemeStudioAction(): Promise<ActionResult<ThemeStudioDa
   const me = await getCurrentProfile();
   if (!me) return { ok: false, error: "Not authenticated." };
   try {
-    const [{ orgDefaultKey, userOverrideKey }, customs] = await Promise.all([
+    const [settings, customs] = await Promise.all([
       getThemeSettings(me.id),
       listVisibleCustomThemes(me.id),
     ]);
@@ -75,14 +81,58 @@ export async function getThemeStudioAction(): Promise<ActionResult<ThemeStudioDa
       data: {
         builtins: THEME_ORDER.map((key) => ({ key, name: THEMES[key].name })),
         customs,
-        orgDefaultKey,
-        userOverrideKey,
+        orgDefaultKey: settings.orgDefaultKey,
+        userOverrideKey: settings.userOverrideKey,
+        orgDefaultMode: settings.orgDefaultMode,
+        userOverrideMode: settings.userOverrideMode,
         canManageOrg: await canManageOrg(me.role),
         meId: me.id,
       },
     };
   } catch (e) {
     return fail(e, "Failed to load themes.");
+  }
+}
+
+// ── Mode (light / dark axis) ─────────────────────────────────────────────────
+
+export async function setMyThemeModeAction(
+  mode: ThemeMode | null
+): Promise<ActionResult<{ mode: ThemeMode | null }>> {
+  const me = await getCurrentProfile();
+  if (!me) return { ok: false, error: "Not authenticated." };
+  if (mode !== null && !isThemeMode(mode)) {
+    return { ok: false, error: `Unknown mode: ${mode}` };
+  }
+  try {
+    const before = await getThemeSettings(me.id);
+    await setUserThemeMode(me.id, mode);
+    await logThemeChange(me.id, "user", {
+      theme_mode: { from: before.userOverrideMode, to: mode },
+    });
+    return { ok: true, data: { mode } };
+  } catch (e) {
+    return fail(e, "Failed to save mode.");
+  }
+}
+
+export async function setOrgDefaultThemeModeAction(
+  mode: ThemeMode
+): Promise<ActionResult<{ mode: ThemeMode }>> {
+  const me = await getCurrentProfile();
+  if (!me || !(await canManageOrg(me.role))) {
+    return { ok: false, error: "You do not have permission to set the company default mode." };
+  }
+  if (!isThemeMode(mode)) return { ok: false, error: `Unknown mode: ${mode}` };
+  try {
+    const before = await getThemeSettings(me.id);
+    await setOrgDefaultThemeMode(mode);
+    await logThemeChange(me.id, "org", {
+      default_ui_theme_mode: { from: before.orgDefaultMode, to: mode },
+    });
+    return { ok: true, data: { mode } };
+  } catch (e) {
+    return fail(e, "Failed to set company default mode.");
   }
 }
 
