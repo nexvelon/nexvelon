@@ -98,15 +98,17 @@ describe("chrome and charts read the same tokens (no drift)", () => {
 describe("generated CSS", () => {
   const css = themePresetsCss();
 
-  it("emits one block per preset (default theme also claims bare :root)", () => {
+  it("emits a light AND a dark block per preset (UIDG-4B)", () => {
     for (const key of THEME_ORDER) {
+      // one [data-theme="key"] in the light block + one in the dark block
       const count = css.split(`[data-theme="${key}"]`).length - 1;
-      expect(count, key).toBe(1);
+      expect(count, key).toBe(2);
     }
     expect(css).toMatch(/:root,\n:root\[data-theme="royal-navy"\]/);
+    expect(css).toMatch(/:root\.dark,\n:root\.dark\[data-theme="royal-navy"\]/);
   });
 
-  it("every block defines all 17 brand/font declarations", () => {
+  it("every block (light + dark) defines all 17 brand/font declarations", () => {
     const TOKENS = [
       "--brand-primary", "--brand-accent", "--brand-accent-soft", "--brand-bg",
       "--brand-text", "--brand-card", "--brand-border", "--brand-muted",
@@ -116,7 +118,8 @@ describe("generated CSS", () => {
     ];
     for (const token of TOKENS) {
       const count = css.split(`${token}:`).length - 1;
-      expect(count, token).toBe(THEME_ORDER.length);
+      // one light + one dark block per preset
+      expect(count, token).toBe(THEME_ORDER.length * 2);
     }
   });
 

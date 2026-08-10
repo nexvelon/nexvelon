@@ -10,6 +10,7 @@
 import {
   DEFAULT_FONTS,
   THEME_COLOR_TOKEN_KEYS,
+  deriveDarkTokens,
   type ThemeFonts,
   type ThemeTokens,
 } from "./theme";
@@ -139,4 +140,25 @@ export function validateThemeTokens(raw: unknown): ThemeTokensResult {
     charts: t.charts as [string, string, string, string, string],
   };
   return { ok: true, value };
+}
+
+/**
+ * UIDG-4B — a custom theme renders in BOTH light and dark, so it must be legible
+ * in both. Validate the stored (light) tokens, then derive the dark tokens the
+ * app will actually render and check their contrast too. A palette that reads in
+ * light but not in dark is blocked, with the failing mode named.
+ */
+export function validateThemeBothModes(raw: unknown): ThemeTokensResult {
+  const light = validateThemeTokens(raw); // structure + light text/bg contrast
+  if (!light.ok) return light;
+
+  const dark = deriveDarkTokens(light.value);
+  const c = checkContrast(dark.text, dark.bg);
+  if (!c.passes) {
+    return {
+      ok: false,
+      error: `Dark-mode text/background contrast ${c.ratio.toFixed(2)}:1 fails WCAG AA (needs ${WCAG_AA_NORMAL}:1).`,
+    };
+  }
+  return light; // the light tokens are what gets stored; dark is derived on render
 }

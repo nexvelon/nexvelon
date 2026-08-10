@@ -40,31 +40,50 @@ function declarations(t: ThemeTokens): string {
   return lines.map(([k, v]) => `  ${k}: ${v};`).join("\n");
 }
 
-/** The selector for a preset. The default theme also claims bare `:root` so the
- *  app renders correctly (default theme) even before the bootstrap script or
- *  with JS disabled. */
-function selector(key: string): string {
+/** Light selector for a preset. The default theme also claims bare `:root` so the
+ *  app renders correctly (default theme) even before the bootstrap script or with
+ *  JS disabled. */
+function lightSelector(key: string): string {
   return key === DEFAULT_THEME
     ? `:root,\n:root[data-theme="${key}"]`
     : `:root[data-theme="${key}"]`;
 }
 
-/** The full generated CSS partial (imported by app/globals.css). */
+/** UIDG-4B — dark selector: scoped under the `.dark` class on <html> (the same
+ *  signal shadcn's `dark:` utilities use), one specificity step above the light
+ *  block so it wins when dark is active. */
+function darkSelector(key: string): string {
+  return key === DEFAULT_THEME
+    ? `:root.dark,\n:root.dark[data-theme="${key}"]`
+    : `:root.dark[data-theme="${key}"]`;
+}
+
+/** The full generated CSS partial (imported by app/globals.css): a light AND a
+ *  dark `--brand-*` block for every preset. */
 export function themePresetsCss(): string {
-  const blocks = THEME_ORDER.map((key) => {
-    const t = resolveTheme(key);
-    return `${selector(key)} {\n${declarations(t)}\n}`;
-  });
+  const blocks: string[] = [];
+  for (const key of THEME_ORDER) {
+    blocks.push(`${lightSelector(key)} {\n${declarations(resolveTheme(key, "light"))}\n}`);
+    blocks.push(`${darkSelector(key)} {\n${declarations(resolveTheme(key, "dark"))}\n}`);
+  }
   return `${GENERATED_HEADER}\n${blocks.join("\n\n")}\n`;
 }
 
 /**
- * UIDG-4 — one `[data-theme="…"]` block for an arbitrary theme value + tokens.
- * Built-in presets are pre-generated in the committed partial above; custom
- * themes are per-user DB rows that can't be, so the layout injects this block
+ * UIDG-4/4B — the light + dark `[data-theme]` blocks for an arbitrary theme value
+ * + tokens. Built-in presets are pre-generated in the committed partial above;
+ * custom themes are per-user DB rows that can't be, so the layout injects these
  * server-side (inline <style>) for the active custom theme — first paint stays
- * correct with no flash and no JS — and the client reuses it for live preview.
+ * correct with no flash and no JS in either mode — and the client reuses them for
+ * live preview. `dark` is the derived (or edited) dark token set.
  */
-export function renderThemeBlock(dataThemeValue: string, tokens: ThemeTokens): string {
-  return `:root[data-theme="${dataThemeValue}"] {\n${declarations(tokens)}\n}`;
+export function renderThemeBlocks(
+  dataThemeValue: string,
+  light: ThemeTokens,
+  dark: ThemeTokens
+): string {
+  return (
+    `:root[data-theme="${dataThemeValue}"] {\n${declarations(light)}\n}\n\n` +
+    `:root.dark[data-theme="${dataThemeValue}"] {\n${declarations(dark)}\n}`
+  );
 }

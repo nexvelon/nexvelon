@@ -7,8 +7,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   user: null as { id: string } | null,
-  prefRow: null as { theme_key: string | null } | null,
+  prefRow: null as { theme_key: string | null; theme_mode?: string | null } | null,
   orgValue: null as string | null,
+  orgMode: null as string | null,
   custom: null as { name: string; tokens: Record<string, unknown> } | null,
   throwClient: false,
 }));
@@ -27,7 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 vi.mock("@/lib/api/company-settings", () => ({
-  getSetting: vi.fn(async () => h.orgValue),
+  getSetting: vi.fn(async (key: string) => (key.includes("mode") ? h.orgMode : h.orgValue)),
   setSetting: vi.fn(),
 }));
 vi.mock("@/lib/api/custom-themes", () => ({
@@ -36,7 +37,7 @@ vi.mock("@/lib/api/custom-themes", () => ({
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 import { resolveServerTheme } from "@/lib/api/ui-theme";
-import { DEFAULT_THEME } from "@/lib/theme";
+import { DEFAULT_THEME, resolveTheme } from "@/lib/theme";
 
 const UUID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const validTokens = {
@@ -52,8 +53,37 @@ beforeEach(() => {
   h.user = null;
   h.prefRow = null;
   h.orgValue = null;
+  h.orgMode = null;
   h.custom = null;
   h.throwClient = false;
+});
+
+describe("resolveServerTheme mode axis (independent of palette)", () => {
+  it("user mode override wins over org default mode", async () => {
+    h.user = { id: "u1" };
+    h.prefRow = { theme_key: null, theme_mode: "dark" };
+    h.orgMode = "light";
+    expect((await resolveServerTheme()).mode).toBe("dark");
+  });
+  it("NULL mode inherits the org default mode", async () => {
+    h.user = { id: "u1" };
+    h.prefRow = { theme_key: null, theme_mode: null };
+    h.orgMode = "dark";
+    expect((await resolveServerTheme()).mode).toBe("dark");
+  });
+  it("no mode set anywhere → light", async () => {
+    h.user = { id: "u1" };
+    expect((await resolveServerTheme()).mode).toBe("light");
+  });
+  it("mode is independent of palette (dark mode + built-in palette)", async () => {
+    h.user = { id: "u1" };
+    h.prefRow = { theme_key: "onyx-brass", theme_mode: "dark" };
+    const r = await resolveServerTheme();
+    expect(r.key).toBe("onyx-brass");
+    expect(r.mode).toBe("dark");
+    // dark colours differ from light for the same palette
+    expect(r.colors.bg).not.toBe(resolveTheme("onyx-brass", "light").bg);
+  });
 });
 
 describe("resolveServerTheme precedence", () => {

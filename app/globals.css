@@ -70,6 +70,7 @@
    ────────────────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: light;
   --background: var(--brand-bg);
   --foreground: var(--brand-text);
   --card: var(--brand-card);
@@ -104,38 +105,48 @@
   --sidebar-ring: var(--brand-accent);
 }
 
-.dark {
-  --background: #0B1B3B;
-  --foreground: #F8F5EE;
-  --card: #122752;
-  --card-foreground: #F8F5EE;
-  --popover: #122752;
-  --popover-foreground: #F8F5EE;
-  --primary: #C9A24B;
-  --primary-foreground: #0B1B3B;
-  --secondary: #1A2C57;
-  --secondary-foreground: #F8F5EE;
-  --muted: #1A2C57;
-  --muted-foreground: #94A3B8;
-  --accent: #C9A24B;
-  --accent-foreground: #0B1B3B;
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: #C9A24B;
-  --chart-1: #C9A24B;
-  --chart-2: #F8F5EE;
-  --chart-3: #94A3B8;
-  --chart-4: #475569;
-  --chart-5: #1F2937;
-  --sidebar: #08152F;
-  --sidebar-foreground: #E5DFD2;
-  --sidebar-primary: #C9A24B;
-  --sidebar-primary-foreground: #0B1B3B;
-  --sidebar-accent: #122752;
-  --sidebar-accent-foreground: #F8F5EE;
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #C9A24B;
+/* ──────────────────────────────────────────────────────────────────
+   UIDG-4B — dark mode. Mode is the `.dark` class on <html> (the same signal
+   shadcn's `dark:` utilities use), independent of the palette in [data-theme].
+   The per-palette dark `--brand-*` values come from the generated partial
+   (:root.dark[data-theme=…]); this block re-derives the shadcn tokens for dark.
+   It mirrors the light :root mapping, flipping only where a brand token's ROLE
+   changes in dark (sidebar surface, gold-accent foregrounds, secondary text) —
+   because in dark --brand-primary is a light ink, not a dark surface.
+   ────────────────────────────────────────────────────────────── */
+:root.dark {
+  color-scheme: dark;
+  --background: var(--brand-bg);
+  --foreground: var(--brand-text);
+  --card: var(--brand-card);
+  --card-foreground: var(--brand-text);
+  --popover: var(--brand-card);
+  --popover-foreground: var(--brand-text);
+  --primary: var(--brand-primary);
+  --primary-foreground: var(--brand-bg);
+  --secondary: var(--brand-muted);
+  --secondary-foreground: var(--brand-text);
+  --muted: var(--brand-muted);
+  --muted-foreground: #9AA1AC;
+  --accent: var(--brand-accent);
+  --accent-foreground: var(--brand-bg);
+  --destructive: var(--brand-status-red);
+  --border: var(--brand-border);
+  --input: var(--brand-border);
+  --ring: var(--brand-accent);
+  --chart-1: var(--brand-primary);
+  --chart-2: var(--brand-accent);
+  --chart-3: var(--brand-chart-tertiary);
+  --chart-4: var(--brand-chart-quaternary);
+  --chart-5: var(--brand-text);
+  --sidebar: var(--brand-sidebar-accent);
+  --sidebar-foreground: var(--brand-text);
+  --sidebar-primary: var(--brand-accent);
+  --sidebar-primary-foreground: var(--brand-bg);
+  --sidebar-accent: var(--brand-card);
+  --sidebar-accent-foreground: var(--brand-text);
+  --sidebar-border: var(--brand-sidebar-border);
+  --sidebar-ring: var(--brand-accent);
 }
 
 @layer base {

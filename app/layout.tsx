@@ -5,9 +5,9 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { RoleProvider } from "@/lib/role-context";
 import { ThemeProvider } from "@/lib/theme-context";
-import { DEFAULT_THEME, STORAGE_KEY, THEME_ORDER } from "@/lib/theme";
+import { DEFAULT_THEME, MODE_STORAGE_KEY, STORAGE_KEY, THEME_ORDER } from "@/lib/theme";
 import { resolveServerTheme } from "@/lib/api/ui-theme";
-import { renderThemeBlock } from "@/lib/theme-css";
+import { renderThemeBlocks } from "@/lib/theme-css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const inter = Inter({
@@ -42,7 +42,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0A1226",
-  colorScheme: "light",
+  // UIDG-4B — the app supports both; the actual scheme is set per-request via the
+  // CSS `color-scheme` on :root / :root.dark (globals.css), driven by the .dark
+  // class so native controls (scrollbars, form widgets) match the resolved mode.
+  colorScheme: "light dark",
 };
 
 // UIDG-3/4 — the server resolves the theme (built-in OR a custom theme) and
@@ -52,14 +55,16 @@ export const viewport: Viewport = {
 // ANY key (built-in or custom uuid); it only falls back to the cache — and then
 // only to a KNOWN built-in — if the server somehow left the value empty (a
 // cached custom key has no injected block, so it must not be restored blind).
-function buildThemeBootstrap(serverThemeKey: string): string {
+function buildThemeBootstrap(serverThemeKey: string, serverMode: string): string {
   return `
 (function () {
   try {
     var el = document.documentElement;
     var builtins = ${JSON.stringify(THEME_ORDER)};
     var server = ${JSON.stringify(serverThemeKey)};
+    var mode = ${JSON.stringify(serverMode)};
     var KEY = ${JSON.stringify(STORAGE_KEY)};
+    var MKEY = ${JSON.stringify(MODE_STORAGE_KEY)};
     if (server) {
       el.dataset.theme = server;
       try { localStorage.setItem(KEY, server); } catch (_) {}
@@ -67,6 +72,8 @@ function buildThemeBootstrap(serverThemeKey: string): string {
       var cached = localStorage.getItem(KEY);
       el.dataset.theme = builtins.indexOf(cached) !== -1 ? cached : ${JSON.stringify(DEFAULT_THEME)};
     }
+    if (mode === "dark") el.classList.add("dark"); else el.classList.remove("dark");
+    try { localStorage.setItem(MKEY, mode === "dark" ? "dark" : "light"); } catch (_) {}
   } catch (_) {
     document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
   }
@@ -79,30 +86,42 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Resolve the theme server-side (user override → org default → DEFAULT), so
-  // the correct theme paints on first byte with no flash and no JS required.
+  // Resolve the theme (palette AND mode) server-side (user override → org default
+  // → default), so the correct look paints on first byte with no flash / no JS.
   const theme = await resolveServerTheme();
 
   return (
-    <html lang="en" data-theme={theme.key}>
+    <html lang="en" data-theme={theme.key} className={theme.mode === "dark" ? "dark" : undefined}>
       <head>
         {/* A custom theme's tokens can't be pre-generated (per-user DB row), so
-            inject its [data-theme] block inline for a correct first paint. */}
-        {theme.isCustom && (
+            inject its light + dark [data-theme] blocks inline for a correct first
+            paint in either mode. */}
+        {theme.isCustom && theme.customLight && theme.customDark && (
           <style
             id="nx-server-theme"
-            dangerouslySetInnerHTML={{ __html: renderThemeBlock(theme.key, theme.colors) }}
+            dangerouslySetInnerHTML={{
+              __html: renderThemeBlocks(theme.key, theme.customLight, theme.customDark),
+            }}
           />
         )}
         <script
-          dangerouslySetInnerHTML={{ __html: buildThemeBootstrap(theme.key) }}
+          dangerouslySetInnerHTML={{ __html: buildThemeBootstrap(theme.key, theme.mode) }}
           suppressHydrationWarning
         />
       </head>
       <body
         className={`${inter.variable} ${playfair.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider serverThemeKey={theme.key} serverThemeColors={theme.colors}>
+        <ThemeProvider
+          serverThemeKey={theme.key}
+          serverMode={theme.mode}
+          serverColors={theme.colors}
+          serverCustom={
+            theme.isCustom && theme.customLight && theme.customDark
+              ? { light: theme.customLight, dark: theme.customDark }
+              : undefined
+          }
+        >
           {/* AuthProvider wraps RoleProvider since Session A — RoleProvider
               now sources the live role from useAuth() rather than from
               localStorage. */}

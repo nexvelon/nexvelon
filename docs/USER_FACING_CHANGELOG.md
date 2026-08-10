@@ -116,6 +116,16 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Settings — Themes (UIDG-4B)
+
+- You can now switch the whole app between light and dark, independently of which
+  colour theme you've picked — every palette works in both. Your choice follows
+  you across devices.
+- Admins can set the company-wide default mode (light or dark) alongside the
+  default theme; each person can still choose their own.
+- Printed and emailed documents (quotes, invoices, POs, reports, etc.) always
+  render light, regardless of your dark-mode choice.
+
 ### Settings — Themes (UIDG-4)
 
 - You can now build your own theme: duplicate any existing theme, then edit every
