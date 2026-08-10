@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { VendorPerformanceCard } from "./VendorPerformanceCard";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import type { VendorMetricsView } from "@/app/(app)/vendors/actions";
 import type { DbVendor } from "@/lib/types/database";
 
@@ -67,6 +68,8 @@ export function VendorDetailView({
         years={years}
         initialYear={initialYear}
       />
+
+      <ActivitySection entityType="vendor" entityId={vendor.id} />
     </div>
   );
 }

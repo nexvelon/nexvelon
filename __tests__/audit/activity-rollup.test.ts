@@ -22,7 +22,12 @@ vi.mock("@/lib/supabase/server", () => ({
         or: (clause: string) => {
           h.orArg(clause);
           return {
-            order: () => ({ limit: async () => ({ data: [], error: null }) }),
+            // AUD-2 — listActivityPage pages via .range(); keep .limit for any
+            // legacy caller so this mock covers both chains.
+            order: () => ({
+              range: async () => ({ data: [], error: null }),
+              limit: async () => ({ data: [], error: null }),
+            }),
           };
         },
       }),
