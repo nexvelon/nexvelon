@@ -38,6 +38,7 @@ import {
 import { getSubPaymentYearTotalsAction } from "@/app/(app)/financials/actions";
 import { SubcontractorFormDrawer } from "./SubcontractorFormDrawer";
 import { ComplianceDocsCard } from "./ComplianceDocsCard";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import { SubcontractorBillsCard } from "./SubcontractorBillsCard";
 import { WorkOrdersCard } from "./WorkOrdersCard";
 import { SubcontractorAssignmentsCard } from "./SubcontractorAssignmentsCard";
@@ -278,6 +279,9 @@ export function SubcontractorDetail({ id }: { id: string }) {
 
       {/* SUB-4 — real bills surface (replaces the placeholder). */}
       <SubcontractorBillsCard subcontractorId={id} />
+
+      {/* AUD-2B — audit trail (own rows + rolled-up compliance docs), last + consistent. */}
+      <ActivitySection entityType="subcontractor" entityId={id} />
 
       {editing && (
         <SubcontractorFormDrawer

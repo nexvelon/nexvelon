@@ -24,6 +24,8 @@ vi.mock("@/lib/api/subcontractor-compliance", () => ({
   createComplianceDoc: h.createComplianceDoc,
   updateComplianceDoc: h.updateComplianceDoc,
   deleteComplianceDoc: h.deleteComplianceDoc,
+  // AUD-2B — the update action now diffs against the current row for audit.
+  getComplianceDocById: vi.fn(async () => ({ id: "doc1", doc_type: "wsib", title: null })),
 }));
 vi.mock("@/app/(app)/attachments/actions", () => ({ deleteAttachment: h.deleteAttachment }));
 vi.mock("@/lib/api/subcontractors", () => new Proxy({}, {

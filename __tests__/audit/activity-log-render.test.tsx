@@ -76,4 +76,28 @@ describe("ActivityLog — rolled-up child events", () => {
     render(<ActivityLog entries={[]} />);
     expect(screen.getByText("No activity recorded yet.")).toBeInTheDocument();
   });
+
+  // AUD-2B — the new child entity_types render with a readable noun + label.
+  it.each([
+    ["job", "create", "Main Job", /added a job — Main Job/],
+    ["job_task", "create", "Fix drywall", /added a task — Fix drywall/],
+    ["deficiency", "delete", "Chipped tile", /removed a deficiency — Chipped tile/],
+    ["commissioning_item", "update", "Airflow test", /updated a commissioning item — Airflow test/],
+    ["stock_movement", "update", "Adjusted quantity · Acme Widget", /updated a stock movement — Adjusted quantity · Acme Widget/],
+    ["subcontractor_compliance", "create", "WSIB", /added a compliance document — WSIB/],
+  ])("renders %s %s as a readable rolled-up row", (entity_type, action, label, re) => {
+    render(
+      <ActivityLog
+        entries={[
+          row({
+            id: `n-${entity_type}`,
+            entity_type: entity_type as DbActivityLogWithActor["entity_type"],
+            action: action as DbActivityLogWithActor["action"],
+            entity_label: label,
+          }),
+        ]}
+      />
+    );
+    expect(screen.getByText(re)).toBeInTheDocument();
+  });
 });

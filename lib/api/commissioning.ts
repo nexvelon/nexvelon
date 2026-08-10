@@ -12,7 +12,7 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { businessDateISO } from "@/lib/format";
-import { logActivity } from "@/lib/api/activity-log";
+import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import { jobLabel } from "@/lib/api/sub-agreements";
 import { createDeficiency } from "@/lib/api/job-deficiencies";
 import { renderCommissioningPdf } from "@/lib/pdf/render-commissioning";
@@ -220,6 +220,27 @@ export interface AddItemInput {
   expectedResult?: string | null;
 }
 
+// AUD-2B — resolve a commissioning item's project (via its run) + description so
+// its audit row rolls up to the project timeline and reads "… a commissioning
+// item — <description>". Returns nulls if the item/run is gone (best-effort).
+type ItemRollup = { projectId: string | null; label: string | null };
+async function itemRollup(
+  supabase: Awaited<ReturnType<typeof db>>,
+  itemId: string
+): Promise<ItemRollup> {
+  const { data } = await supabase
+    .from("commissioning_items")
+    .select("description, run:commissioning_runs(project_id)")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!data) return { projectId: null, label: null };
+  const d = data as { description: string | null; run: unknown };
+  const run = Array.isArray(d.run) ? d.run[0] : d.run;
+  const projectId =
+    (run as { project_id?: string } | null)?.project_id ?? null;
+  return { projectId, label: d.description ?? null };
+}
+
 export async function addItem(input: AddItemInput): Promise<DbCommissioningItem> {
   const description = (input.description ?? "").trim();
   if (!description) {
@@ -248,6 +269,18 @@ export async function addItem(input: AddItemInput): Promise<DbCommissioningItem>
     .select("*")
     .single();
   if (error) throw new Error(`addItem: ${error.message}`);
+
+  // AUD-2B — audit as a commissioning_item rolled up to the run's project.
+  const { data: run } = await supabase
+    .from("commissioning_runs")
+    .select("project_id")
+    .eq("id", input.runId)
+    .maybeSingle<{ project_id: string }>();
+  await logActivity("commissioning_item", (data as DbCommissioningItem).id, "create", {}, {
+    parentType: "project",
+    parentId: run?.project_id ?? null,
+    entityLabel: description,
+  });
   return data as DbCommissioningItem;
 }
 
@@ -256,6 +289,14 @@ export async function updateItem(
   patch: DbCommissioningItemUpdate
 ): Promise<DbCommissioningItem> {
   const supabase = await db();
+  // AUD-2B — snapshot before for a field-level diff + rollup context.
+  const { data: before } = await supabase
+    .from("commissioning_items")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  const rollup = await itemRollup(supabase, id);
+
   const { data, error } = await supabase
     .from("commissioning_items")
     .update(patch)
@@ -263,6 +304,20 @@ export async function updateItem(
     .select("*")
     .single();
   if (error) throw new Error(`updateItem: ${error.message}`);
+
+  const changes = before
+    ? computeChanges(
+        before as unknown as Record<string, unknown>,
+        patch as Record<string, unknown>
+      )
+    : {};
+  if (Object.keys(changes).length > 0) {
+    await logActivity("commissioning_item", id, "update", changes, {
+      parentType: "project",
+      parentId: rollup.projectId,
+      entityLabel: rollup.label,
+    });
+  }
   return data as DbCommissioningItem;
 }
 
@@ -292,13 +347,23 @@ export async function reorderItems(orderedIds: string[]): Promise<number> {
 
 export async function deleteItem(id: string): Promise<boolean> {
   const supabase = await db();
+  // AUD-2B — resolve project + description before the delete for a readable row.
+  const rollup = await itemRollup(supabase, id);
   const { data, error } = await supabase
     .from("commissioning_items")
     .delete()
     .eq("id", id)
     .select("id");
   if (error) throw new Error(`deleteItem: ${error.message}`);
-  return (data?.length ?? 0) > 0;
+  const removed = (data?.length ?? 0) > 0;
+  if (removed) {
+    await logActivity("commissioning_item", id, "delete", {}, {
+      parentType: "project",
+      parentId: rollup.projectId,
+      entityLabel: rollup.label,
+    });
+  }
+  return removed;
 }
 
 /**

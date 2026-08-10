@@ -10,7 +10,7 @@ import "server-only";
 // ENTITY_RESOURCE map gates 'deficiency' → 'projects').
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { logActivity } from "@/lib/api/activity-log";
+import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import { getJobById } from "@/lib/api/projects";
 import { jobLabel } from "@/lib/api/sub-agreements";
 import { isResolvedStatus } from "@/lib/deficiencies/deficiency-status";
@@ -229,13 +229,13 @@ export async function createDeficiency(
     .single();
   if (error) throw new Error(`createDeficiency: ${error.message}`);
 
-  try {
-    await logActivity("project", input.projectId, "update", {
-      deficiency_raised: { from: null, to: title },
-    });
-  } catch {
-    /* best-effort audit */
-  }
+  // AUD-2B — audit as a deficiency rolled up to its project ("added a deficiency
+  // — <title>"). Best-effort.
+  await logActivity("deficiency", (data as DbJobDeficiency).id, "create", {}, {
+    parentType: "project",
+    parentId: input.projectId,
+    entityLabel: title,
+  });
   return data as DbJobDeficiency;
 }
 
@@ -278,15 +278,16 @@ export async function updateDeficiency(
     update.assignee_subcontractor_id = subId;
   }
 
+  const { data: before, error: beforeErr } = await supabase
+    .from("job_deficiencies")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (beforeErr) throw new Error(`updateDeficiency/before: ${beforeErr.message}`);
+  if (!before) throw new DeficiencyError("not_found", "Deficiency not found.");
+
   if (Object.keys(update).length === 0) {
-    const { data, error } = await supabase
-      .from("job_deficiencies")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) throw new Error(`updateDeficiency/noop: ${error.message}`);
-    if (!data) throw new DeficiencyError("not_found", "Deficiency not found.");
-    return data as DbJobDeficiency;
+    return before as DbJobDeficiency;
   }
 
   const { data, error } = await supabase
@@ -296,7 +297,21 @@ export async function updateDeficiency(
     .select("*")
     .single();
   if (error) throw new Error(`updateDeficiency: ${error.message}`);
-  return data as DbJobDeficiency;
+
+  // AUD-2B — audit the field-level diff, rolled up to the project.
+  const row = data as DbJobDeficiency;
+  const changes = computeChanges(
+    before as unknown as Record<string, unknown>,
+    update as Record<string, unknown>
+  );
+  if (Object.keys(changes).length > 0) {
+    await logActivity("deficiency", id, "update", changes, {
+      parentType: "project",
+      parentId: row.project_id,
+      entityLabel: row.title,
+    });
+  }
+  return row;
 }
 
 export interface SetDeficiencyStatusInput {
@@ -314,6 +329,11 @@ export async function setDeficiencyStatus(
 ): Promise<DbJobDeficiency> {
   const supabase = await db();
   const resolved = isResolvedStatus(input.status);
+  const { data: before } = await supabase
+    .from("job_deficiencies")
+    .select("status")
+    .eq("id", input.id)
+    .maybeSingle<{ status: DbDeficiencyStatus }>();
   const { data, error } = await supabase
     .from("job_deficiencies")
     .update({
@@ -326,7 +346,19 @@ export async function setDeficiencyStatus(
     .select("*")
     .single();
   if (error) throw new Error(`setDeficiencyStatus: ${error.message}`);
-  return data as DbJobDeficiency;
+
+  // AUD-2B — audit a real status transition, rolled up to the project.
+  const row = data as DbJobDeficiency;
+  if (before && before.status !== input.status) {
+    await logActivity(
+      "deficiency",
+      row.id,
+      "update",
+      { status: { from: before.status, to: input.status } },
+      { parentType: "project", parentId: row.project_id, entityLabel: row.title }
+    );
+  }
+  return row;
 }
 
 export interface ReorderDeficienciesInput {
@@ -362,11 +394,25 @@ export async function reorderDeficiencies(
 
 export async function deleteDeficiency(id: string): Promise<boolean> {
   const supabase = await db();
+  // AUD-2B — capture title + project before the delete for a readable row.
+  const { data: before } = await supabase
+    .from("job_deficiencies")
+    .select("project_id, title")
+    .eq("id", id)
+    .maybeSingle<{ project_id: string; title: string }>();
   const { data, error } = await supabase
     .from("job_deficiencies")
     .delete()
     .eq("id", id)
     .select("id");
   if (error) throw new Error(`deleteDeficiency: ${error.message}`);
-  return (data?.length ?? 0) > 0;
+  const removed = (data?.length ?? 0) > 0;
+  if (removed && before) {
+    await logActivity("deficiency", id, "delete", {}, {
+      parentType: "project",
+      parentId: before.project_id,
+      entityLabel: before.title,
+    });
+  }
+  return removed;
 }

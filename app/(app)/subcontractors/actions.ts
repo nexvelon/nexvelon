@@ -32,11 +32,13 @@ import {
   createComplianceDoc,
   updateComplianceDoc,
   deleteComplianceDoc,
+  getComplianceDocById,
   type ComplianceDocRow,
   type ComplianceRisk,
   type CreateComplianceDocInput,
 } from "@/lib/api/subcontractor-compliance";
 import { deleteAttachment } from "@/app/(app)/attachments/actions";
+import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import {
   listAgreements,
   getAgreementById,
@@ -173,6 +175,10 @@ export async function createSubcontractorAction(
     const invalid = validate(payload);
     if (invalid) return invalid;
     const row = await createSubcontractor(payload, gate.actorId);
+    // AUD-2B — top-level entity; its own timeline (no parent rollup).
+    await logActivity("subcontractor", row.id, "create", {}, {
+      entityLabel: row.name,
+    });
     revalidatePath("/subcontractors");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -203,6 +209,16 @@ export async function updateSubcontractorAction(
     }
 
     const row = await updateSubcontractor(id, patch, gate.actorId);
+    // AUD-2B — field-level diff on the subcontractor's own timeline.
+    const changes = computeChanges(
+      before as unknown as Record<string, unknown>,
+      patch as Record<string, unknown>
+    );
+    if (Object.keys(changes).length > 0) {
+      await logActivity("subcontractor", id, "update", changes, {
+        entityLabel: row.name,
+      });
+    }
     revalidatePath("/subcontractors");
     revalidatePath(`/subcontractors/${id}`);
     return { ok: true, data: { id: row.id } };
@@ -217,8 +233,13 @@ export async function deleteSubcontractorAction(
   try {
     const gate = await require("delete");
     if (!gate.ok) return gate;
+    // AUD-2B — capture the name before delete for a readable "removed" row.
+    const before = await getSubcontractorById(id);
     const removed = await deleteSubcontractor(id);
     if (!removed) return { ok: false, error: "Subcontractor not found." };
+    await logActivity("subcontractor", id, "delete", {}, {
+      entityLabel: before?.name ?? null,
+    });
     revalidatePath("/subcontractors");
     return { ok: true, data: { id } };
   } catch (e) {
@@ -273,6 +294,12 @@ export async function createComplianceDocAction(
     const gate = await require("edit");
     if (!gate.ok) return gate;
     const row = await createComplianceDoc({ ...input, actorId: gate.actorId });
+    // AUD-2B — roll up to the subcontractor ("added a compliance document — WSIB").
+    await logActivity("subcontractor_compliance", row.id, "create", {}, {
+      parentType: "subcontractor",
+      parentId: input.subcontractorId,
+      entityLabel: row.title || row.doc_type,
+    });
     revalidatePath(`/subcontractors/${input.subcontractorId}`);
     revalidatePath("/subcontractors");
     return { ok: true, data: { id: row.id } };
@@ -289,7 +316,22 @@ export async function updateComplianceDocAction(
   try {
     const gate = await require("edit");
     if (!gate.ok) return gate;
+    const before = await getComplianceDocById(id);
     const row = await updateComplianceDoc(id, patch, gate.actorId);
+    // AUD-2B — field-level diff rolled up to the subcontractor.
+    const changes = before
+      ? computeChanges(
+          before as unknown as Record<string, unknown>,
+          patch as Record<string, unknown>
+        )
+      : {};
+    if (Object.keys(changes).length > 0) {
+      await logActivity("subcontractor_compliance", id, "update", changes, {
+        parentType: "subcontractor",
+        parentId: subcontractorId,
+        entityLabel: row.title || row.doc_type,
+      });
+    }
     revalidatePath(`/subcontractors/${subcontractorId}`);
     return { ok: true, data: row };
   } catch (e) {
@@ -304,8 +346,14 @@ export async function deleteComplianceDocAction(
   try {
     const gate = await require("edit");
     if (!gate.ok) return gate;
-    const { removed, attachmentId } = await deleteComplianceDoc(id);
+    const { removed, attachmentId, docType, title } = await deleteComplianceDoc(id);
     if (!removed) return { ok: false, error: "Document not found." };
+    // AUD-2B — readable "removed a compliance document — <label>", rolled up.
+    await logActivity("subcontractor_compliance", id, "delete", {}, {
+      parentType: "subcontractor",
+      parentId: subcontractorId,
+      entityLabel: title || docType,
+    });
     // Remove the uploaded file too (row + storage object) via the shared path —
     // no orphaned blobs. Best-effort: a failed cleanup never blocks the delete.
     if (attachmentId) {

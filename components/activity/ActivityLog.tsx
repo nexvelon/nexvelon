@@ -142,6 +142,14 @@ const ENTITY_NOUNS: Record<string, string> = {
   site: "site",
   pickup_slip: "pickup slip",
   purchase_order: "purchase order",
+  // AUD-2B — child entities that roll up to a project / job / subcontractor.
+  job: "job",
+  job_task: "task",
+  deficiency: "deficiency",
+  commissioning_item: "commissioning item",
+  stock_movement: "stock movement",
+  subcontractor: "subcontractor",
+  subcontractor_compliance: "compliance document",
 };
 
 function describeAction(

@@ -121,15 +121,16 @@ describe("editJobAction", () => {
     expect(jobId).toBe("j1");
     expect(actorId).toBe("u1");
     expect(diff).toEqual({ title: "Renamed job" });
-    // Log carries job_id + the single field change.
-    const [entity, id, action, changes] = h.logActivity.mock.calls[0] as unknown[];
-    expect(entity).toBe("project");
-    expect(id).toBe("p1");
+    // AUD-2B — logged as a 'job' event (entity_id = jobId) rolled up to the
+    // project, carrying just the field diff (job identity is now the entity).
+    const [entity, id, action, changes, ctx] = h.logActivity.mock.calls[0] as unknown[];
+    expect(entity).toBe("job");
+    expect(id).toBe("j1");
     expect(action).toBe("update");
     expect(changes).toMatchObject({
-      job_id: { from: null, to: "j1" },
       title: { from: "Original title", to: "Renamed job" },
     });
+    expect(ctx).toMatchObject({ parentType: "project", parentId: "p1" });
   });
 
   it("writes both fields when both change", async () => {

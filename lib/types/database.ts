@@ -638,6 +638,14 @@ export const ACTIVITY_ENTITY_TYPES = [
   "ui_theme",
   "inventory",
   "attachment",
+  // AUD-2B — child/entity types whose create/update/delete now write audit rows.
+  // (stock_movement is already listed above; AUD-2B only starts writing it.)
+  "job",
+  "job_task",
+  "deficiency",
+  "commissioning_item",
+  "subcontractor",
+  "subcontractor_compliance",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];

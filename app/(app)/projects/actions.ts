@@ -60,6 +60,7 @@ import {
   type MoveTargetSite,
 } from "@/lib/api/job-move";
 import { logActivity } from "@/lib/api/activity-log";
+import { jobLabel } from "@/lib/api/sub-agreements";
 import {
   scaffoldFoldersForNewProject,
   scaffoldFoldersForNewChangeOrder,
@@ -199,6 +200,18 @@ export async function createProjectFromQuoteAction(
     } catch (logErr) {
       console.error("[activity_log] project create log failed:", logErr);
     }
+    // AUD-2B — also record the Main Job's birth on the Job timeline. Best-effort.
+    try {
+      await logActivity(
+        "job",
+        mainJob.id,
+        "create",
+        { from_quote: { from: null, to: quote.id } },
+        { parentType: "project", parentId: project.id, entityLabel: jobLabel(mainJob) }
+      );
+    } catch (logErr) {
+      console.error("[activity_log] main job create log failed:", logErr);
+    }
     revalidatePath("/projects");
     return {
       ok: true,
@@ -282,6 +295,18 @@ export async function mergeQuoteIntoProjectAction(
       });
     } catch (logErr) {
       console.error("[activity_log] project merge log failed:", logErr);
+    }
+    // AUD-2B — also record the Change Order Job's birth on the Job timeline. Best-effort.
+    try {
+      await logActivity(
+        "job",
+        changeOrderJob.id,
+        "create",
+        { from_quote: { from: null, to: quote.id }, co_number: { from: null, to: changeOrderJob.co_number } },
+        { parentType: "project", parentId: project.id, entityLabel: jobLabel(changeOrderJob) }
+      );
+    } catch (logErr) {
+      console.error("[activity_log] change-order job create log failed:", logErr);
     }
     revalidatePath("/projects");
     revalidatePath(`/projects/${project.id}`);
@@ -606,12 +631,14 @@ export async function editJobAction(input: {
 
     await updateJobFields(input.jobId, diff, gate.actorId);
 
-    // Best-effort audit (§2.8) — logged on the parent project entity, with the
-    // job_id in the payload (there is no 'job' ActivityEntityType).
+    // AUD-2B — audit as a 'job' event rolled up to its project, so it lands on
+    // both the Job and the Project Activity tabs with a readable label.
+    // Best-effort (§2.8): a logging failure must never fail the edit.
     try {
-      await logActivity("project", current.project_id, "update", {
-        job_id: { from: null, to: input.jobId },
-        ...changes,
+      await logActivity("job", input.jobId, "update", changes, {
+        parentType: "project",
+        parentId: current.project_id,
+        entityLabel: jobLabel(current),
       });
     } catch (logErr) {
       console.error("[activity_log] job edit log failed:", logErr);
@@ -649,14 +676,19 @@ export async function updateJobStatusAction(input: {
 
     await setJobStatus(input.jobId, input.newStatus, gate.actorId);
 
-    // Best-effort audit (§2.8) — on the parent project, job_id in the payload.
+    // AUD-2B — status change as a 'job' event rolled up to its project. Best-effort.
+    const note = input.note?.trim();
     try {
-      const note = input.note?.trim();
-      await logActivity("project", current.project_id, "update", {
-        job_id: { from: null, to: input.jobId },
-        status: { from: current.status, to: input.newStatus },
-        ...(note ? { note: { from: null, to: note } } : {}),
-      });
+      await logActivity(
+        "job",
+        input.jobId,
+        "update",
+        {
+          status: { from: current.status, to: input.newStatus },
+          ...(note ? { note: { from: null, to: note } } : {}),
+        },
+        { parentType: "project", parentId: current.project_id, entityLabel: jobLabel(current) }
+      );
     } catch (logErr) {
       console.error("[activity_log] job status log failed:", logErr);
     }
@@ -708,22 +740,22 @@ export async function deleteChangeOrderJobAction(input: {
     );
     await deleteJobRow(input.jobId);
 
-    // Best-effort audit (§2.8) — a 'delete' event on the parent project.
+    // AUD-2B — a 'job' delete rolled up to its project, carrying the job label so
+    // "removed a job — CO #3 — …" stays readable after the row is gone. Best-effort.
     try {
-      await logActivity("project", job.project_id, "delete", {
-        deleted_job_id: { from: input.jobId, to: null },
-        co_number: { from: job.co_number, to: null },
-        main_job_id: { from: null, to: counts.mainJobId },
-        reassigned_cost_centers: {
-          from: null,
-          to: counts.reassignedCostCenters,
+      await logActivity(
+        "job",
+        input.jobId,
+        "delete",
+        {
+          co_number: { from: job.co_number, to: null },
+          main_job_id: { from: null, to: counts.mainJobId },
+          reassigned_cost_centers: { from: null, to: counts.reassignedCostCenters },
+          reassigned_invoices: { from: null, to: counts.reassignedInvoices },
+          reassigned_purchase_orders: { from: null, to: counts.reassignedPurchaseOrders },
         },
-        reassigned_invoices: { from: null, to: counts.reassignedInvoices },
-        reassigned_purchase_orders: {
-          from: null,
-          to: counts.reassignedPurchaseOrders,
-        },
-      });
+        { parentType: "project", parentId: job.project_id, entityLabel: jobLabel(job) }
+      );
     } catch (logErr) {
       console.error("[activity_log] job delete log failed:", logErr);
     }
@@ -792,13 +824,15 @@ export async function addChangeOrderJobAction(input: {
       console.error("[folders] manual C.O scaffold failed:", scaffoldErr);
     }
 
-    // Best-effort audit (§2.8).
+    // AUD-2B — a 'job' create rolled up to its project. Best-effort.
     try {
-      await logActivity("project", input.projectId, "create", {
-        job_id: { from: null, to: job.id },
-        co_number: { from: null, to: job.co_number },
-        source: { from: null, to: "manual" },
-      });
+      await logActivity(
+        "job",
+        job.id,
+        "create",
+        { co_number: { from: null, to: job.co_number }, source: { from: null, to: "manual" } },
+        { parentType: "project", parentId: input.projectId, entityLabel: jobLabel(job) }
+      );
     } catch (logErr) {
       console.error("[activity_log] manual C.O create log failed:", logErr);
     }

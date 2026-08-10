@@ -78,7 +78,10 @@ vi.mock("@/lib/storage/commissioning-pdfs", () => ({
   uploadCommissioningPdf: h.uploadPdf,
   signCommissioningPdf: h.signPdf,
 }));
-vi.mock("@/lib/api/activity-log", () => ({ logActivity: h.logActivity }));
+vi.mock("@/lib/api/activity-log", async (importOriginal) => ({
+  ...(await importOriginal() as Record<string, unknown>),
+  logActivity: h.logActivity,
+}));
 
 import {
   createRun,
