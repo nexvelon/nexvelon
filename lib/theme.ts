@@ -358,14 +358,13 @@ export function isThemeKey(s: string | null): s is ThemeKey {
   return s !== null && (THEME_ORDER as string[]).includes(s);
 }
 
-/** Every token a preset resolves to, with optional fields filled from the
- *  defaults (default theme's accentSoft, the shared status pair, DEFAULT_FONTS).
- *  Both the CSS generator and JS consumers read fully-resolved themes so the two
- *  can never diverge again. */
-export interface ResolvedThemeColors {
-  key: ThemeKey;
-  name: string;
-  description: string;
+/**
+ * The visual tokens of a theme — everything except its identity (key/name/
+ * description). This is exactly what a custom theme stores in
+ * custom_themes.tokens (UIDG-4) and what the CSS emitter needs. Every optional
+ * field on ThemeColors is required here (a resolved/stored theme is complete).
+ */
+export interface ThemeTokens {
   primary: string;
   accent: string;
   accentSoft: string;
@@ -382,6 +381,67 @@ export interface ResolvedThemeColors {
   statusRed: string;
   fonts: ThemeFonts;
   charts: [string, string, string, string, string];
+}
+
+/** The ordered colour-token field names (everything in ThemeTokens except fonts
+ *  and charts). Used by the validator and the editor so they can't drift. */
+export const THEME_COLOR_TOKEN_KEYS = [
+  "primary",
+  "accent",
+  "accentSoft",
+  "bg",
+  "text",
+  "card",
+  "border",
+  "muted",
+  "sidebarAccent",
+  "sidebarBorder",
+  "chartTertiary",
+  "chartQuaternary",
+  "statusGreen",
+  "statusRed",
+] as const satisfies readonly (keyof ThemeTokens)[];
+
+/** Every token a preset resolves to, with optional fields filled from the
+ *  defaults (default theme's accentSoft, the shared status pair, DEFAULT_FONTS).
+ *  Both the CSS generator and JS consumers read fully-resolved themes so the two
+ *  can never diverge again. `key` is a string (not ThemeKey) so a custom theme's
+ *  id can flow through the same shape. */
+export interface ResolvedThemeColors extends ThemeTokens {
+  key: string;
+  name: string;
+  description: string;
+}
+
+/** Strip identity, keeping just the visual tokens (for duplicating a built-in
+ *  into a custom theme). */
+export function themeTokens(t: ThemeTokens): ThemeTokens {
+  return {
+    primary: t.primary,
+    accent: t.accent,
+    accentSoft: t.accentSoft,
+    bg: t.bg,
+    text: t.text,
+    card: t.card,
+    border: t.border,
+    muted: t.muted,
+    sidebarAccent: t.sidebarAccent,
+    sidebarBorder: t.sidebarBorder,
+    chartTertiary: t.chartTertiary,
+    chartQuaternary: t.chartQuaternary,
+    statusGreen: t.statusGreen,
+    statusRed: t.statusRed,
+    fonts: { sans: t.fonts.sans, serif: t.fonts.serif, mono: t.fonts.mono },
+    charts: [...t.charts] as [string, string, string, string, string],
+  };
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A theme key that is a custom-theme id (uuid) rather than a built-in preset. */
+export function isUuid(s: string | null | undefined): s is string {
+  return typeof s === "string" && UUID_RE.test(s);
 }
 
 export function resolveTheme(key: ThemeKey): ResolvedThemeColors {

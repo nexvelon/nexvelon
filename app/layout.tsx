@@ -6,7 +6,8 @@ import "./globals.css";
 import { RoleProvider } from "@/lib/role-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { DEFAULT_THEME, STORAGE_KEY, THEME_ORDER } from "@/lib/theme";
-import { resolveServerThemeKey } from "@/lib/api/ui-theme";
+import { resolveServerTheme } from "@/lib/api/ui-theme";
+import { renderThemeBlock } from "@/lib/theme-css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const inter = Inter({
@@ -44,25 +45,27 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-// UIDG-3 — the DB-resolved theme (`serverThemeKey`) is injected below. The server
-// already stamps <html data-theme>, so this runs pre-hydration only to keep the
-// localStorage cache in sync (DB wins). It NEVER lets the cache override the
-// server value — it only fills in from cache if the server somehow left an
-// invalid key. The allow-list is serialised from THEME_ORDER (single source).
+// UIDG-3/4 — the server resolves the theme (built-in OR a custom theme) and
+// stamps <html data-theme> + injects the custom CSS block below, so first paint
+// is correct with no flash and no JS. This bootstrap runs pre-hydration only to
+// keep the localStorage cache in sync (DB wins). It trusts the server value for
+// ANY key (built-in or custom uuid); it only falls back to the cache — and then
+// only to a KNOWN built-in — if the server somehow left the value empty (a
+// cached custom key has no injected block, so it must not be restored blind).
 function buildThemeBootstrap(serverThemeKey: string): string {
   return `
 (function () {
   try {
     var el = document.documentElement;
-    var keys = ${JSON.stringify(THEME_ORDER)};
+    var builtins = ${JSON.stringify(THEME_ORDER)};
     var server = ${JSON.stringify(serverThemeKey)};
     var KEY = ${JSON.stringify(STORAGE_KEY)};
-    if (keys.indexOf(server) !== -1) {
+    if (server) {
       el.dataset.theme = server;
       try { localStorage.setItem(KEY, server); } catch (_) {}
     } else {
       var cached = localStorage.getItem(KEY);
-      el.dataset.theme = keys.indexOf(cached) !== -1 ? cached : ${JSON.stringify(DEFAULT_THEME)};
+      el.dataset.theme = builtins.indexOf(cached) !== -1 ? cached : ${JSON.stringify(DEFAULT_THEME)};
     }
   } catch (_) {
     document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
@@ -78,20 +81,28 @@ export default async function RootLayout({
 }>) {
   // Resolve the theme server-side (user override → org default → DEFAULT), so
   // the correct theme paints on first byte with no flash and no JS required.
-  const themeKey = await resolveServerThemeKey();
+  const theme = await resolveServerTheme();
 
   return (
-    <html lang="en" data-theme={themeKey}>
+    <html lang="en" data-theme={theme.key}>
       <head>
+        {/* A custom theme's tokens can't be pre-generated (per-user DB row), so
+            inject its [data-theme] block inline for a correct first paint. */}
+        {theme.isCustom && (
+          <style
+            id="nx-server-theme"
+            dangerouslySetInnerHTML={{ __html: renderThemeBlock(theme.key, theme.colors) }}
+          />
+        )}
         <script
-          dangerouslySetInnerHTML={{ __html: buildThemeBootstrap(themeKey) }}
+          dangerouslySetInnerHTML={{ __html: buildThemeBootstrap(theme.key) }}
           suppressHydrationWarning
         />
       </head>
       <body
         className={`${inter.variable} ${playfair.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider serverThemeKey={themeKey}>
+        <ThemeProvider serverThemeKey={theme.key} serverThemeColors={theme.colors}>
           {/* AuthProvider wraps RoleProvider since Session A — RoleProvider
               now sources the live role from useAuth() rather than from
               localStorage. */}
