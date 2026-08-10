@@ -34,6 +34,7 @@ import {
   setMyThemeModeAction,
   setOrgDefaultThemeAction,
   setOrgDefaultThemeModeAction,
+  countThemeOverridesAction,
   duplicateThemeAction,
   updateCustomThemeAction,
   deleteCustomThemeAction,
@@ -41,6 +42,7 @@ import {
   unpublishCustomThemeAction,
   type ThemeStudioData,
 } from "@/app/(app)/settings/theme-actions";
+import { ApplyDefaultDialog } from "@/components/settings/ApplyDefaultDialog";
 
 const COLOR_LABELS: Record<(typeof THEME_COLOR_TOKEN_KEYS)[number], string> = {
   primary: "Primary", accent: "Accent", accentSoft: "Accent (soft)", bg: "Background",
@@ -71,6 +73,7 @@ export function ThemeStudio() {
   const [data, setData] = useState<ThemeStudioData | null>(null);
   const [pending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dialogFor, setDialogFor] = useState<{ key: string; name: string; count: number } | null>(null);
 
   const load = () => getThemeStudioAction().then((r) => r.ok && setData(r.data));
   useEffect(() => {
@@ -134,12 +137,32 @@ export function ThemeStudio() {
     });
   };
 
+  // AUD-1 — count personal overrides first; warn (with the count) only when some
+  // exist. Zero → apply straight away.
   const setOrgDefault = (key: string, name: string) =>
     startTransition(async () => {
-      const res = await setOrgDefaultThemeAction(key);
+      const c = await countThemeOverridesAction();
+      const count = c.ok ? c.data.count : 0;
+      if (count === 0) {
+        applyOrgDefault(key, name, false);
+      } else {
+        setDialogFor({ key, name, count });
+      }
+    });
+  const applyOrgDefault = (key: string, name: string, applyToEveryone: boolean) =>
+    startTransition(async () => {
+      const res = await setOrgDefaultThemeAction(key, applyToEveryone);
+      setDialogFor(null);
       if (!res.ok) { toast.error(res.error); return; }
-      setData((d) => (d ? { ...d, orgDefaultKey: key } : d));
-      toast.success(`Company default set to ${name}`);
+      setData((d) =>
+        d ? { ...d, orgDefaultKey: key, ...(applyToEveryone ? { userOverrideKey: null } : {}) } : d
+      );
+      if (applyToEveryone) setTheme(key); // the admin now inherits the new default too
+      toast.success(
+        applyToEveryone
+          ? `Company default set to ${name} — reset ${res.data.affected} personal choice(s)`
+          : `Company default set to ${name}`
+      );
     });
   const setOrgMode = (next: ThemeMode) =>
     startTransition(async () => {
@@ -257,6 +280,19 @@ export function ThemeStudio() {
           />
         ))}
       </ThemeGroup>
+
+      {dialogFor && (
+        <ApplyDefaultDialog
+          open
+          onOpenChange={(o) => !o && setDialogFor(null)}
+          subject="theme"
+          targetName={dialogFor.name}
+          affectedCount={dialogFor.count}
+          pending={pending}
+          onApplyToEveryone={() => applyOrgDefault(dialogFor.key, dialogFor.name, true)}
+          onKeepChoices={() => applyOrgDefault(dialogFor.key, dialogFor.name, false)}
+        />
+      )}
     </div>
   );
 }

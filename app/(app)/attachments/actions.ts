@@ -150,9 +150,16 @@ export async function createAttachment(
     if (error) throw new Error(error.message);
 
     const row = data as DbAttachment;
-    await logActivity("attachment", row.id, "create", {
-      file: { from: null, to: `${entityType}/${folder}/${row.filename}` },
-    });
+    // AUD-1 — log against the attachment, but roll up to the PARENT entity
+    // (client/site/project/…) so it appears on that entity's Activity tab, with
+    // the filename denormalised so the row survives + reads after deletion.
+    await logActivity(
+      "attachment",
+      row.id,
+      "create",
+      { file: { from: null, to: row.filename } },
+      { parentType: entityType, parentId: entityId, entityLabel: row.filename }
+    );
     return { ok: true, data: row };
   } catch (e) {
     // §4c — log the failure path with enough context to reproduce.
@@ -193,9 +200,13 @@ export async function deleteAttachment(
       .eq("id", id);
     if (delErr) throw new Error(delErr.message);
 
-    await logActivity("attachment", id, "delete", {
-      file: { from: `${att.entity_type}/${att.folder}/${att.filename}`, to: null },
-    });
+    await logActivity(
+      "attachment",
+      id,
+      "delete",
+      { file: { from: att.filename, to: null } },
+      { parentType: att.entity_type, parentId: att.entity_id, entityLabel: att.filename }
+    );
     return { ok: true, data: { id } };
   } catch (e) {
     return fail(e);

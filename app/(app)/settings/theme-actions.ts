@@ -29,6 +29,8 @@ import {
   setUserThemeMode,
   setOrgDefaultThemeKey,
   setOrgDefaultThemeMode,
+  countUsersWithThemeOverride,
+  clearAllUserThemeOverrides,
   logThemeChange,
   logThemeAudit,
 } from "@/lib/api/ui-theme";
@@ -171,9 +173,30 @@ export async function setMyThemeAction(
   }
 }
 
+/** How many users have chosen a personal palette — the dialog uses this to warn
+ *  (and to skip itself when zero). Admin-gated. */
+export async function countThemeOverridesAction(): Promise<ActionResult<{ count: number }>> {
+  const me = await getCurrentProfile();
+  if (!me || !(await canManageOrg(me.role))) {
+    return { ok: false, error: "Not permitted." };
+  }
+  try {
+    return { ok: true, data: { count: await countUsersWithThemeOverride() } };
+  } catch (e) {
+    return fail(e, "Failed to count overrides.");
+  }
+}
+
+/**
+ * Set the company default palette. `applyToEveryone` clears every user's personal
+ * override so all inherit the new default — it ONLY nulls the preference and
+ * never deletes a saved custom theme. Both paths are audited distinctly (which
+ * one, and how many users were affected).
+ */
 export async function setOrgDefaultThemeAction(
-  themeKey: string
-): Promise<ActionResult<{ orgDefaultKey: string }>> {
+  themeKey: string,
+  applyToEveryone = false
+): Promise<ActionResult<{ orgDefaultKey: string; affected: number }>> {
   const me = await getCurrentProfile();
   if (!me || !(await canManageOrg(me.role))) {
     return { ok: false, error: "You do not have permission to set the company default theme." };
@@ -191,10 +214,21 @@ export async function setOrgDefaultThemeAction(
   try {
     const before = await getThemeSettings(me.id);
     await setOrgDefaultThemeKey(themeKey);
+    let affected = 0;
+    if (applyToEveryone) {
+      affected = await clearAllUserThemeOverrides();
+    }
     await logThemeChange(me.id, "org", {
       default_ui_theme: { from: before.orgDefaultKey, to: themeKey },
+      // Distinct audit of the path taken + blast radius.
+      apply_scope: {
+        from: null,
+        to: applyToEveryone
+          ? `cleared ${affected} personal override(s)`
+          : "kept users' choices",
+      },
     });
-    return { ok: true, data: { orgDefaultKey: themeKey } };
+    return { ok: true, data: { orgDefaultKey: themeKey, affected } };
   } catch (e) {
     return fail(e, "Failed to set company default.");
   }

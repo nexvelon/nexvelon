@@ -62,7 +62,11 @@ function ActivityEntry({ entry }: { entry: DbActivityLogWithActor }) {
 
   const changeKeys = Object.keys(entry.changes);
   const changeCount = changeKeys.length;
-  const description = describeAction(entry.action, changeCount, changeKeys);
+  // AUD-1 — a child event that rolled up to this timeline (e.g. a document on a
+  // client) reads "added a document — <name>", not "created this record".
+  const description = entry.parent_type
+    ? describeChild(entry.action, entry.entity_type, entry.entity_label)
+    : describeAction(entry.action, changeCount, changeKeys);
   const timestamp = format(
     parseISO(entry.created_at),
     "MMM d, yyyy 'at' h:mm a"
@@ -120,6 +124,25 @@ function ActivityEntry({ entry }: { entry: DbActivityLogWithActor }) {
     </div>
   );
 }
+
+/** AUD-1 — a rolled-up child event, e.g. "added a document — Site survey.pdf". */
+function describeChild(
+  action: ActivityAction,
+  entityType: string,
+  label: string | null
+): string {
+  const verb = action === "create" ? "added" : action === "delete" ? "removed" : "updated";
+  const noun = ENTITY_NOUNS[entityType] ?? humanizeField(entityType).toLowerCase();
+  return `${verb} a ${noun}${label ? ` — ${label}` : ""}`;
+}
+
+const ENTITY_NOUNS: Record<string, string> = {
+  attachment: "document",
+  contact: "contact",
+  site: "site",
+  pickup_slip: "pickup slip",
+  purchase_order: "purchase order",
+};
 
 function describeAction(
   action: ActivityAction,
