@@ -664,6 +664,11 @@ export interface DbActivityLog {
   changes: ActivityChanges;
   actor_id: string | null;
   created_at: string;
+  // AUD-1 (migration 0119) — parent roll-up + denormalised labels (all nullable).
+  parent_type: string | null;
+  parent_id: string | null;
+  entity_label: string | null;
+  parent_label: string | null;
 }
 
 // ============================================================================

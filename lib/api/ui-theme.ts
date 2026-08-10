@@ -205,6 +205,34 @@ export async function setOrgDefaultThemeMode(mode: ThemeMode): Promise<void> {
   await setSetting(ORG_DEFAULT_THEME_MODE_KEY, mode);
 }
 
+/** AUD-1 — how many users have chosen a personal palette (a non-NULL
+ *  theme_key). Drives the "apply to everyone vs keep their choices" warning.
+ *  Admin client (counts across all users; RLS would restrict to the caller). */
+export async function countUsersWithThemeOverride(): Promise<number> {
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from("user_ui_prefs")
+    .select("user_id", { count: "exact", head: true })
+    .not("theme_key", "is", null);
+  if (error) throw new Error(`countUsersWithThemeOverride: ${error.message}`);
+  return count ?? 0;
+}
+
+/** AUD-1 — clear every user's personal palette override (theme_key → NULL) so
+ *  all users inherit the org default. This ONLY nulls the preference; it never
+ *  touches custom_themes (a saved theme is preserved, just not auto-applied).
+ *  Returns the number of users affected. Admin client. */
+export async function clearAllUserThemeOverrides(): Promise<number> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("user_ui_prefs")
+    .update({ theme_key: null })
+    .not("theme_key", "is", null)
+    .select("user_id");
+  if (error) throw new Error(`clearAllUserThemeOverrides: ${error.message}`);
+  return (data ?? []).length;
+}
+
 /**
  * Best-effort audit row for a theme change (§5). Written via the service-role
  * admin client because public.activity_log has no authenticated INSERT policy

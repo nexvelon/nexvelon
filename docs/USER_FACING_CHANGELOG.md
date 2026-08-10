@@ -116,6 +116,20 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity history (AUD-1)
+
+- Documents added to or removed from a client now appear on that client's
+  Activity tab, with the file name shown.
+- Activity history is kept even after a record is deleted, and stays readable
+  (it remembers the name of what changed, not just an internal id).
+
+### Settings — Themes (AUD-1)
+
+- Admins are now warned before setting a company-wide default theme when
+  employees have picked their own — with a choice to apply it to everyone (which
+  only resets their preference, never deletes a saved theme) or keep their
+  choices.
+
 ### Settings — Themes (UIDG-4B)
 
 - You can now switch the whole app between light and dark, independently of which

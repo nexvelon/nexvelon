@@ -24,6 +24,21 @@ export interface ChangeRecord {
 }
 
 /**
+ * AUD-1 — optional roll-up + survival context for a log row.
+ *   parent* — the entity this event should ALSO surface on (e.g. an attachment
+ *             on a client → parentType: "client", parentId: clientId). The
+ *             parent-timeline query includes rows whose parent matches.
+ *   *Label  — the entity's / parent's display name captured NOW, so the row
+ *             stays readable after the record is deleted (rows survive — no FK).
+ */
+export interface ActivityContext {
+  parentType?: string | null;
+  parentId?: string | null;
+  entityLabel?: string | null;
+  parentLabel?: string | null;
+}
+
+/**
  * Shallow diff: compares only the keys present in `after`. Keys whose
  * value is `undefined` in `after` are skipped (they mean "don't touch
  * this column"). JSONB array/object fields are compared via
@@ -68,7 +83,8 @@ export async function logActivity(
   entityType: ActivityEntityType,
   entityId: string,
   action: ActivityAction,
-  changes: ActivityChanges = {}
+  changes: ActivityChanges = {},
+  ctx: ActivityContext = {}
 ): Promise<void> {
   try {
     const supabase = await createSupabaseServerClient();
@@ -81,6 +97,10 @@ export async function logActivity(
       action,
       changes,
       actor_id: user?.id ?? null,
+      parent_type: ctx.parentType ?? null,
+      parent_id: ctx.parentId ?? null,
+      entity_label: ctx.entityLabel ?? null,
+      parent_label: ctx.parentLabel ?? null,
     });
     if (error) {
       console.error(
@@ -112,11 +132,17 @@ export async function listActivityFor(
 ): Promise<DbActivityLogWithActor[]> {
   const supabase = await createSupabaseServerClient();
 
+  // AUD-1 — the timeline for an entity is its OWN rows PLUS any child event that
+  // rolled up to it (parent_type/parent_id), so e.g. a document added to a client
+  // appears on that client's Activity tab even though the row's entity_type is
+  // 'attachment'.
   const { data: logRows, error: logErr } = await supabase
     .from("activity_log")
     .select("*")
-    .eq("entity_type", entityType)
-    .eq("entity_id", entityId)
+    .or(
+      `and(entity_type.eq.${entityType},entity_id.eq.${entityId}),` +
+        `and(parent_type.eq.${entityType},parent_id.eq.${entityId})`
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
 

@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   getThemeSettings: vi.fn(async () => ({ orgDefaultKey: "royal-navy", userOverrideKey: null as string | null })),
   setUserThemeKey: vi.fn(async () => undefined),
   setOrgDefaultThemeKey: vi.fn(async () => undefined),
+  countUsersWithThemeOverride: vi.fn(async () => 3),
+  clearAllUserThemeOverrides: vi.fn(async () => 3),
   logThemeChange: vi.fn(async () => undefined),
   logThemeAudit: vi.fn(async () => undefined),
   // custom-themes
@@ -28,7 +30,11 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) 
 vi.mock("@/lib/api/ui-theme", () => ({
   getThemeSettings: h.getThemeSettings,
   setUserThemeKey: h.setUserThemeKey,
+  setUserThemeMode: vi.fn(),
   setOrgDefaultThemeKey: h.setOrgDefaultThemeKey,
+  setOrgDefaultThemeMode: vi.fn(),
+  countUsersWithThemeOverride: h.countUsersWithThemeOverride,
+  clearAllUserThemeOverrides: h.clearAllUserThemeOverrides,
   logThemeChange: h.logThemeChange,
   logThemeAudit: h.logThemeAudit,
 }));
@@ -45,6 +51,7 @@ vi.mock("@/lib/api/custom-themes", () => ({
 import {
   setMyThemeAction,
   setOrgDefaultThemeAction,
+  countThemeOverridesAction,
   duplicateThemeAction,
   publishCustomThemeAction,
   deleteCustomThemeAction,
@@ -59,8 +66,33 @@ beforeEach(() => {
     h.getThemeSettings, h.setUserThemeKey, h.setOrgDefaultThemeKey, h.logThemeChange,
     h.logThemeAudit, h.getCustomThemeForResolve, h.getCustomThemeRow, h.createCustomTheme,
     h.updateCustomTheme, h.softDeleteCustomTheme, h.setCustomThemePublished,
+    h.countUsersWithThemeOverride, h.clearAllUserThemeOverrides,
   ]) fn.mockClear();
   h.getThemeSettings.mockResolvedValue({ orgDefaultKey: "royal-navy", userOverrideKey: null });
+});
+
+describe("AUD-1 — org default apply-scope", () => {
+  it("apply-to-everyone clears personal overrides and reports the count", async () => {
+    const res = await setOrgDefaultThemeAction("onyx-brass", true);
+    expect(res.ok).toBe(true);
+    expect(h.clearAllUserThemeOverrides).toHaveBeenCalledTimes(1);
+    if (res.ok) expect(res.data.affected).toBe(3);
+  });
+
+  it("keep-their-choices sets the default WITHOUT clearing overrides", async () => {
+    const res = await setOrgDefaultThemeAction("onyx-brass", false);
+    expect(res.ok).toBe(true);
+    expect(h.clearAllUserThemeOverrides).not.toHaveBeenCalled();
+    if (res.ok) expect(res.data.affected).toBe(0);
+  });
+
+  it("countThemeOverridesAction is Admin-gated", async () => {
+    setRole("Technician");
+    expect((await countThemeOverridesAction()).ok).toBe(false);
+    setRole("Admin");
+    const r = await countThemeOverridesAction();
+    expect(r.ok && r.data.count).toBe(3);
+  });
 });
 
 describe("setMyThemeAction", () => {
