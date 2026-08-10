@@ -15,6 +15,7 @@ import type {
   ActivityAction,
   ActivityChanges,
   ActivityEntityType,
+  DbActivityLog,
   DbActivityLogWithActor,
 } from "@/lib/types/database";
 
@@ -125,18 +126,57 @@ export async function logActivity(
  * Default limit 100; bump if needed. RLS gates SELECT to authenticated
  * users (any authed user can read any log row).
  */
-export async function listActivityFor(
+type SupabaseServer = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+type ActorSlice = {
+  id: string;
+  display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+};
+
+/** Enrich rows with the actor profile slice (one batched profiles lookup). */
+async function enrichActors(
+  supabase: SupabaseServer,
+  logRows: DbActivityLog[]
+): Promise<DbActivityLogWithActor[]> {
+  const actorIds = Array.from(
+    new Set(logRows.map((r) => r.actor_id).filter((id): id is string => id !== null))
+  );
+  const byId = new Map<string, ActorSlice>();
+  if (actorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, first_name, last_name")
+      .in("id", actorIds);
+    for (const p of (profiles as ActorSlice[] | null) ?? []) byId.set(p.id, p);
+  }
+  return logRows.map((r) => ({
+    ...r,
+    actor: r.actor_id ? byId.get(r.actor_id) ?? null : null,
+  })) as DbActivityLogWithActor[];
+}
+
+export interface ActivityPage {
+  entries: DbActivityLogWithActor[];
+  hasMore: boolean;
+}
+
+/**
+ * AUD-2 — one page of an entity's timeline (its OWN rows PLUS any child event
+ * rolled up to it via parent_type/parent_id), latest-first. Fetches limit+1 to
+ * report `hasMore` for lazy "load more". Never loads a whole two-year history at
+ * once — the caller pages via `offset`.
+ */
+export async function listActivityPage(
   entityType: ActivityEntityType,
   entityId: string,
-  limit = 100
-): Promise<DbActivityLogWithActor[]> {
+  opts: { limit?: number; offset?: number } = {}
+): Promise<ActivityPage> {
+  const limit = opts.limit ?? 25;
+  const offset = opts.offset ?? 0;
   const supabase = await createSupabaseServerClient();
 
-  // AUD-1 — the timeline for an entity is its OWN rows PLUS any child event that
-  // rolled up to it (parent_type/parent_id), so e.g. a document added to a client
-  // appears on that client's Activity tab even though the row's entity_type is
-  // 'attachment'.
-  const { data: logRows, error: logErr } = await supabase
+  const { data, error } = await supabase
     .from("activity_log")
     .select("*")
     .or(
@@ -144,41 +184,20 @@ export async function listActivityFor(
         `and(parent_type.eq.${entityType},parent_id.eq.${entityId})`
     )
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit); // limit+1 rows → detect a next page
 
-  if (logErr) throw new Error(`listActivityFor: ${logErr.message}`);
-  if (!logRows || logRows.length === 0) return [];
+  if (error) throw new Error(`listActivityPage: ${error.message}`);
+  const rows = (data ?? []) as DbActivityLog[];
+  const hasMore = rows.length > limit;
+  const entries = await enrichActors(supabase, hasMore ? rows.slice(0, limit) : rows);
+  return { entries, hasMore };
+}
 
-  // Resolve unique actor_ids to profile slices in a single query.
-  const actorIds = Array.from(
-    new Set(
-      logRows
-        .map((r) => r.actor_id as string | null)
-        .filter((id): id is string => id !== null)
-    )
-  );
-
-  type ActorSlice = {
-    id: string;
-    display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-  };
-  const profilesById = new Map<string, ActorSlice>();
-  if (actorIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, first_name, last_name")
-      .in("id", actorIds);
-    if (profiles) {
-      for (const p of profiles as ActorSlice[]) {
-        profilesById.set(p.id, p);
-      }
-    }
-  }
-
-  return logRows.map((r) => ({
-    ...r,
-    actor: r.actor_id ? profilesById.get(r.actor_id) ?? null : null,
-  })) as DbActivityLogWithActor[];
+/** Back-compat single-shot reader (used by the older client tab wiring). */
+export async function listActivityFor(
+  entityType: ActivityEntityType,
+  entityId: string,
+  limit = 100
+): Promise<DbActivityLogWithActor[]> {
+  return (await listActivityPage(entityType, entityId, { limit, offset: 0 })).entries;
 }

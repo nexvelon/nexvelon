@@ -11,6 +11,7 @@ import { listQuotesForSite } from "@/lib/api/quotes";
 import { SiteDetailView } from "./SiteDetailView";
 import { QuotesForEntitySection } from "@/components/modules/quotes/QuotesForEntitySection";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 
@@ -55,6 +56,7 @@ export default async function SiteDetailPage({
         lens="site"
         canEdit={canEditFolders}
       />
+      <ActivitySection entityType="site" entityId={site.id} />
     </div>
   );
 }

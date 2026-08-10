@@ -35,7 +35,7 @@ export function ActivityLog({ entries }: Props) {
         className="rounded-md border p-6 text-center"
         style={{ borderColor: "var(--brand-border)" }}
       >
-        <p className="text-muted-foreground text-sm">No activity yet.</p>
+        <p className="text-muted-foreground text-sm">No activity recorded yet.</p>
       </div>
     );
   }

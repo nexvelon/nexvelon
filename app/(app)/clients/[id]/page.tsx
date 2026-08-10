@@ -5,7 +5,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClientById } from "@/lib/api/clients";
-import { listActivityFor } from "@/lib/api/activity-log";
 import { listQuotesForClient } from "@/lib/api/quotes";
 import type { DbClientWithCounts } from "@/lib/types/database";
 import { ClientDetailView } from "./ClientDetailView";
@@ -44,7 +43,6 @@ export default async function ClientDetailPage({
   // only — site / contact log rows exist in the DB but aren't surfaced on
   // this tab; future /sites/[id] + /contacts/[id] pages will render their
   // own). Run alongside the existing fetches.
-  const activityLog = await listActivityFor("client", id, 100);
 
   // BUGFIX (quotes) A4 — this client's quotes + a site_id → name map for the
   // Quotes tab's Site column (a client spans many sites).
@@ -66,7 +64,6 @@ export default async function ClientDetailPage({
       client={clientWithCounts}
       sites={sites}
       contacts={contacts}
-      activityLog={activityLog}
       quotes={quotes}
       siteNameById={siteNameById}
     />

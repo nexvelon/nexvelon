@@ -63,6 +63,7 @@ import {
 } from "@/app/(app)/inventory/movement-actions";
 import { productImagePublicUrl } from "@/lib/product-image-url";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import { EditStockUnitForm } from "@/components/modules/inventory/EditStockUnitForm";
 import {
   deleteProductAction,
@@ -1140,6 +1141,9 @@ export function ProductDetailClient({
           )}
         </Card>
       </div>
+
+      {/* AUD-2 — full audit trail for this product (own rows + rolled-up children). */}
+      <ActivitySection entityType="inventory" entityId={product.id} />
 
       <ReceiveStockForm
         productId={product.id}

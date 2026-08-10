@@ -14,6 +14,7 @@ import { ProjectPnl } from "@/components/modules/projects/ProjectPnl";
 import { ProjectHoldback } from "@/components/modules/projects/ProjectHoldback";
 import { AddChangeOrderButton } from "@/components/modules/projects/AddChangeOrderButton";
 import { FolderTreeAttachments } from "@/components/modules/attachments/FolderTreeAttachments";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 
@@ -100,6 +101,7 @@ export default async function ProjectDetailPage({
         />
       ) : null}
       <ProjectDetailView detail={detail} hideHeader />
+      <ActivitySection entityType="project" entityId={id} />
     </div>
   );
 }

@@ -17,7 +17,11 @@ import {
   updateContact,
   updateSite,
 } from "@/lib/api/clients";
-import { computeChanges, logActivity } from "@/lib/api/activity-log";
+import {
+  computeChanges,
+  logActivity,
+  type ActivityContext,
+} from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -81,6 +85,35 @@ async function getContactByIdForDiff(id: string): Promise<DbContact | null> {
     .maybeSingle();
   if (error) throw new Error(`getContactByIdForDiff: ${error.message}`);
   return (data as DbContact | null) ?? null;
+}
+
+// AUD-2 — roll a site's own event up onto its parent client's Activity timeline,
+// carrying the site name so the row reads "added a site — Main St" and survives
+// the site's deletion (denormalised label). parentLabel is left for the AUD-3
+// global feed; the per-entity tabs render only entity_label.
+function siteRollup(site: Pick<DbSite, "client_id" | "name">): ActivityContext {
+  return {
+    parentType: "client",
+    parentId: site.client_id,
+    entityLabel: site.name || null,
+  };
+}
+
+// AUD-2 — a contact rolls up to its client when it has one, otherwise to its
+// site (a site-scoped contact created from /sites/[id]). Either way the row
+// carries the person's name so it stays readable after deletion.
+function contactRollup(
+  c: Pick<DbContact, "client_id" | "site_id" | "first_name" | "last_name">
+): ActivityContext {
+  const label =
+    [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || null;
+  if (c.client_id) {
+    return { parentType: "client", parentId: c.client_id, entityLabel: label };
+  }
+  if (c.site_id) {
+    return { parentType: "site", parentId: c.site_id, entityLabel: label };
+  }
+  return { entityLabel: label };
 }
 
 // ----------------------------------------------------------------------------
@@ -482,7 +515,7 @@ export async function createSiteAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const row = await createSite(payload);
-    await logActivity("site", row.id, "create", {});
+    await logActivity("site", row.id, "create", {}, siteRollup(row));
     revalidatePath("/clients");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -505,7 +538,7 @@ export async function updateSiteAction(
       payload as Record<string, unknown>
     );
     if (Object.keys(changes).length > 0) {
-      await logActivity("site", id, "update", changes);
+      await logActivity("site", id, "update", changes, siteRollup(before));
     }
 
     revalidatePath("/clients");
@@ -522,6 +555,9 @@ export async function deleteSiteAction(
     // POLISH-46 (CHANGE 8) — soft-delete logging.
     const me = await getCurrentProfile();
     console.error("[SITE SOFT DELETE]", { siteId: id, role: me?.role ?? null });
+    // AUD-2 — capture name + parent client BEFORE the soft delete so the
+    // rolled-up "removed a site — …" row stays readable afterwards.
+    const before = await getSiteByIdForDiff(id).catch(() => null);
     // POLISH-46 — soft delete (stamp deleted_at). Related records and the parent
     // client are intentionally PRESERVED (not cascaded, attachments kept).
     const deleted = await deleteSite(id);
@@ -535,7 +571,13 @@ export async function deleteSiteAction(
       console.error("[SITE SOFT DELETE RESULT]", { ok: false, error: result.error });
       return result;
     }
-    await logActivity("site", id, "delete", {});
+    await logActivity(
+      "site",
+      id,
+      "delete",
+      {},
+      before ? siteRollup(before) : {}
+    );
     revalidatePath("/sites");
     revalidatePath("/clients");
     console.error("[SITE SOFT DELETE RESULT]", { ok: true, error: null });
@@ -661,7 +703,7 @@ export async function createContactAction(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const row = await createContact(payload);
-    await logActivity("contact", row.id, "create", {});
+    await logActivity("contact", row.id, "create", {}, contactRollup(row));
     // POLISH-58 — diagnostic for site-scoped contacts (CRUD on /sites/[id]).
     if (payload.site_id) {
       console.error("[SITE CONTACT CREATE]", { siteId: payload.site_id, contactId: row.id });
@@ -881,7 +923,7 @@ export async function updateContactAction(
       payload as Record<string, unknown>
     );
     if (Object.keys(changes).length > 0) {
-      await logActivity("contact", id, "update", changes);
+      await logActivity("contact", id, "update", changes, contactRollup(before));
     }
 
     // POLISH-58 — diagnostic for site-scoped contacts (CRUD on /sites/[id]).
@@ -901,12 +943,20 @@ export async function deleteContactAction(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    // AUD-2 — capture name + parent before the hard delete for the rolled-up row.
+    const before = await getContactByIdForDiff(id).catch(() => null);
     // FIX-1: hard delete.
     const deleted = await deleteContact(id);
     if (!deleted) {
       return { ok: false, error: "Contact not found" };
     }
-    await logActivity("contact", id, "delete", {});
+    await logActivity(
+      "contact",
+      id,
+      "delete",
+      {},
+      before ? contactRollup(before) : {}
+    );
     revalidatePath("/clients");
     return { ok: true, data: { id } };
   } catch (e) {

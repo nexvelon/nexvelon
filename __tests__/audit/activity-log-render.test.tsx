@@ -48,4 +48,32 @@ describe("ActivityLog — rolled-up child events", () => {
     render(<ActivityLog entries={[row({ id: "4", entity_type: "client", parent_type: null, entity_label: null })]} />);
     expect(screen.getByText(/created this record/)).toBeInTheDocument();
   });
+
+  // AUD-2 — sites and contacts now roll up to their client with a readable label.
+  it("renders 'added a site — <name>' for a site create rolled up to a client", () => {
+    render(
+      <ActivityLog
+        entries={[
+          row({ id: "5", entity_type: "site", action: "create", entity_label: "Main St Depot" }),
+        ]}
+      />
+    );
+    expect(screen.getByText(/added a site — Main St Depot/)).toBeInTheDocument();
+  });
+
+  it("renders 'removed a contact — <name>' for a contact delete", () => {
+    render(
+      <ActivityLog
+        entries={[
+          row({ id: "6", entity_type: "contact", action: "delete", entity_label: "Jane Doe" }),
+        ]}
+      />
+    );
+    expect(screen.getByText(/removed a contact — Jane Doe/)).toBeInTheDocument();
+  });
+
+  it("shows the AUD-2 empty state (never blank, never fabricated)", () => {
+    render(<ActivityLog entries={[]} />);
+    expect(screen.getByText("No activity recorded yet.")).toBeInTheDocument();
+  });
 });

@@ -116,6 +116,19 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity history (AUD-2)
+
+- Every record with a detail page now has an **Activity** section as its last
+  panel — clients, sites, projects, vendors, and inventory items — showing who
+  changed what and when, newest first. It loads a page at a time with a
+  "Load more" button instead of dumping the whole history at once.
+- Each Activity section also folds in its children's events: a client's tab now
+  shows sites and contacts being added, renamed, or removed (with the site or
+  person's name), alongside its documents.
+- Empty records read "No activity recorded yet." rather than showing a blank
+  panel — the history is never faked.
+- Activity is only shown to people who can already view that record.
+
 ### Activity history (AUD-1)
 
 - Documents added to or removed from a client now appear on that client's
