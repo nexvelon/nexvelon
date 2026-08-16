@@ -1,10 +1,13 @@
 // UIDG-6 — the KPI card family. Import variants from here; the shared contract is
 // KpiCommon (types.ts); the enumerable catalog is KPI_VARIANTS (registry.ts).
 
-export type { KpiCommon, DeltaSpec } from "./types";
+export type { KpiCommon, DeltaSpec, KpiComparison } from "./types";
 export { KpiShell } from "./KpiShell";
 export { KpiValue } from "./KpiValue";
 export { DeltaPill } from "./DeltaPill";
+export { ComparisonDelta } from "./ComparisonDelta";
+export { computeDelta } from "./comparison";
+export type { DeltaResult } from "./comparison";
 
 export { KpiPlain } from "./variants/KpiPlain";
 export type { KpiPlainProps } from "./variants/KpiPlain";

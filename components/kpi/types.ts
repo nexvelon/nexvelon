@@ -37,3 +37,14 @@ export interface DeltaSpec {
   /** `inverted` = a decrease is the good outcome (costs, overdue, AP…). */
   polarity?: "normal" | "inverted";
 }
+
+/** UIDG-6B — a period-over-period comparison the card computes into a delta. The
+ *  card renders nothing when `prior` is null (no comparison) or unchanged. */
+export interface KpiComparison {
+  /** The prior-period value; null → no comparison to draw. */
+  prior: number | null;
+  /** What the current value is compared against (shown on the pill). */
+  basis?: string;
+  /** `inverted` = a decrease is the good outcome. */
+  polarity?: "normal" | "inverted";
+}

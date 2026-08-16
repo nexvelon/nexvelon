@@ -72,6 +72,12 @@ export interface DashboardKpis {
     ap_outstanding: number; // getApSummary(today).outstanding — snapshot
     ap_overdue: number; // .overdue
     deposits_held: number; // getDepositsHeldTotal() — snapshot
+    /** UIDG-6B — prior-period values for the FLOW metrics only (revenue, cash),
+     *  computed over the caller's comparison window. null when no comparison was
+     *  requested. Point-in-time balances (AR/AP/deposits) are NOT compared — there
+     *  is no stored historical snapshot to compare them against. Gated identically
+     *  to the current values (same financialView guard). */
+    compare: { revenue: number; cash_collected: number } | null;
   } | null;
   financial_edit: {
     wip_net: number; // getWipPortfolio().totals.net — snapshot
@@ -119,13 +125,21 @@ async function openQuotesSummary(): Promise<{
 export async function getDashboardKpis(input: {
   from?: string;
   to?: string;
+  /** UIDG-6B — the prior (comparison) window for the flow metrics. Both required
+   *  for a comparison; omit for none. Computed by the caller (comparisonRange). */
+  compareFrom?: string;
+  compareTo?: string;
   tiers: DashboardTiers;
 }): Promise<DashboardKpis> {
   const today = businessDateISO();
   const finRange = { from: input.from, to: input.to };
   const { tiers } = input;
+  // The prior-period read is gated by the SAME financialView flag as the current
+  // revenue read — a caller who can't see current revenue never triggers, nor
+  // receives, the prior figure.
+  const wantCompare = tiers.financialView && !!(input.compareFrom && input.compareTo);
 
-  const [rev, ar, ap, dep, wip, hst, pnl, proj, quo] = await Promise.all([
+  const [rev, ar, ap, dep, wip, hst, pnl, proj, quo, priorRev] = await Promise.all([
     tiers.financialView ? getRevenueSummary(finRange) : null,
     tiers.financialView ? getArAgingSummary() : null,
     tiers.financialView ? getApSummary(today) : null,
@@ -135,6 +149,7 @@ export async function getDashboardKpis(input: {
     tiers.financialEdit ? getPnlPortfolio() : null,
     tiers.projects ? activeProjectsSummary() : null,
     tiers.quotes ? openQuotesSummary() : null,
+    wantCompare ? getRevenueSummary({ from: input.compareFrom, to: input.compareTo }) : null,
   ]);
 
   const financial =
@@ -147,6 +162,9 @@ export async function getDashboardKpis(input: {
           ap_outstanding: ap.outstanding,
           ap_overdue: ap.overdue,
           deposits_held: dep,
+          compare: priorRev
+            ? { revenue: priorRev.total, cash_collected: priorRev.cashCollected }
+            : null,
         }
       : null;
 

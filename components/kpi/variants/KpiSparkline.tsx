@@ -10,14 +10,18 @@
 import { KpiShell } from "../KpiShell";
 import { KpiValue } from "../KpiValue";
 import { DeltaPill } from "../DeltaPill";
+import { ComparisonDelta } from "../ComparisonDelta";
 import { Sparkline } from "@/components/charts";
-import type { KpiCommon, DeltaSpec } from "../types";
+import type { KpiCommon, DeltaSpec, KpiComparison } from "../types";
 
 export interface KpiSparklineProps extends KpiCommon, Partial<DeltaSpec> {
   value: number;
   format: (n: number) => string;
   series: number[];
   color?: string;
+  /** UIDG-6B — a period-over-period comparison; the card computes the delta and
+   *  handles the prior-zero / no-prior edge cases itself. */
+  comparison?: KpiComparison;
 }
 
 export function KpiSparkline({
@@ -28,6 +32,7 @@ export function KpiSparkline({
   delta,
   deltaFormat,
   polarity,
+  comparison,
   ...common
 }: KpiSparklineProps) {
   // The VALUE stands on its own — a missing trend never blanks the card (that
@@ -39,8 +44,17 @@ export function KpiSparkline({
   return (
     <KpiShell {...common}>
       <KpiValue value={value} format={format} />
-      {delta !== undefined && (
-        <DeltaPill delta={delta} deltaFormat={deltaFormat} polarity={polarity} />
+      {comparison ? (
+        <ComparisonDelta
+          current={value}
+          prior={comparison.prior}
+          basis={comparison.basis}
+          polarity={comparison.polarity ?? polarity}
+        />
+      ) : (
+        delta !== undefined && (
+          <DeltaPill delta={delta} deltaFormat={deltaFormat} polarity={polarity} />
+        )
       )}
       {hasHistory && (
         <div className="mt-auto pt-2">
