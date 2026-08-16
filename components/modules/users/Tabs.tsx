@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { format, parseISO } from "date-fns";
 import {
+  Activity,
   Check,
   Copy,
   MoreHorizontal,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { UserPermissionsSheet } from "@/components/modules/users/UserPermissionsSheet";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -271,6 +273,10 @@ export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
+                      {/* AUD-3 — per-user activity (gated users:view on the page). */}
+                      <Button size="xs" variant="ghost" render={<Link href={`/users/${u.id}/activity`} />}>
+                        <Activity className="mr-1 h-3.5 w-3.5" /> Activity
+                      </Button>
                       <Button
                         size="xs"
                         variant="ghost"

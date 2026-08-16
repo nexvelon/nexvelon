@@ -116,6 +116,25 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity (AUD-3)
+
+- There is now a central **Activity** page (in the nav, by Reports) showing
+  everything that has happened across the system, newest first. Filter it by
+  who did it, the kind of record, a date range, created/updated/deleted, and a
+  free-text search — the filters are saved in the URL, so a filtered view can be
+  shared or bookmarked and survives a reload.
+- Each row links straight to the record it's about; a record that has since been
+  deleted still shows — readable, with a "deleted" marker — instead of a broken
+  link. This means a deleted client's history is still viewable even though its
+  own page is gone.
+- You only ever see activity for records you already have permission to view, and
+  the current filtered view exports to CSV.
+- You can open **any person's activity** to see what they've been doing, with a
+  summary of how many actions, of what kinds, and their most recent — reachable
+  from Users & Permissions or by clicking a name in the feed. Viewing a
+  colleague's activity needs Users access; **everyone can always see their own**
+  ("My activity" in the account menu).
+
 ### Activity history (AUD-2B)
 
 - Jobs now have their own **Activity** tab, and subcontractors have an Activity
