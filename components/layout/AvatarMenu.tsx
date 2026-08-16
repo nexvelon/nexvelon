@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { KeyRound, LogOut } from "lucide-react";
+import { Activity, KeyRound, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -94,6 +94,21 @@ export function AvatarMenu({ children }: { children: React.ReactNode }) {
         </div>
         <DropdownMenuSeparator />
         <div className="p-1">
+          {/* AUD-3 — a user can always reach their own activity, regardless of
+              the users:view gate that guards viewing others. */}
+          {user?.id && (
+            <Link
+              href={`/users/${user.id}/activity`}
+              onClick={() => setMenuOpen(false)}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "w-full justify-start gap-1.5 px-1.5 text-sm font-normal"
+              )}
+            >
+              <Activity className="mr-2 h-3.5 w-3.5" />
+              My activity
+            </Link>
+          )}
           <Link
             href="/settings/security/change-password"
             onClick={() => setMenuOpen(false)}

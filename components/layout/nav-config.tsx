@@ -15,6 +15,7 @@ import {
   Undo2,
   UserCog,
   Users,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 import type { Resource } from "@/lib/permissions";
@@ -53,6 +54,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/invoices", label: "Invoices", icon: FileSpreadsheet, resource: "financials" },
   { href: "/financials", label: "Financials", icon: Receipt, resource: "financials" },
   { href: "/reports", label: "Reports", icon: BarChart3, resource: "reports" },
+  // AUD-3 — central Activity feed. Nav discoverability sits with the reporting
+  // group; the page itself is open to any signed-in user and permission-scoped
+  // per row, so gating nav on `reports` never hides activity anyone is entitled
+  // to (each person also has their own activity via the Users area).
+  { href: "/activity", label: "Activity", icon: Activity, resource: "reports" },
   { href: "/users", label: "Users & Permissions", icon: UserCog, resource: "users" },
   { href: "/settings", label: "Settings", icon: Settings, resource: "settings" },
 ];
