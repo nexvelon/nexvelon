@@ -4,16 +4,14 @@
 // — the mock did by-vendor with no source) + low-stock list. inventory:view gated.
 
 import { useEffect, useState } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { AlertTriangle, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
-import { useThemeColors } from "@/lib/theme-context";
+import { DonutChart } from "@/components/charts";
 import { getInventoryHealthAction } from "@/app/(app)/dashboard/actions";
 import type { InventoryHealth as InventoryHealthData } from "@/lib/api/dashboard";
 
 export function InventoryHealth() {
-  const t = useThemeColors();
   const [data, setData] = useState<InventoryHealthData | null>(null);
   const [restricted, setRestricted] = useState(false);
 
@@ -23,11 +21,6 @@ export function InventoryHealth() {
       else setRestricted(true);
     });
   }, []);
-
-  // UIDG-4B — use the theme's 5-stop chart palette (adapts to palette + dark
-  // mode) instead of hardcoded hex that stayed light.
-  const palette = t.charts;
-  const totalValue = data ? data.by_category.reduce((s, c) => s + c.value, 0) : 0;
 
   return (
     <Card className="h-full transition-shadow hover:shadow-md">
@@ -46,37 +39,18 @@ export function InventoryHealth() {
             {/* Value by category */}
             <div>
               <p className="text-muted-foreground mb-1 text-[11px] uppercase tracking-wide">Value by category</p>
-              {totalValue === 0 ? (
-                <p className="text-muted-foreground text-xs">No stock on hand.</p>
-              ) : (
-                <>
-                  <div className="h-[150px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={data.by_category} dataKey="value" nameKey="category" innerRadius={38} outerRadius={64} paddingAngle={2} stroke="var(--card)">
-                          {data.by_category.map((_, i) => (
-                            <Cell key={i} fill={palette[i % palette.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(v) => formatCurrency(Number(v))}
-                          contentStyle={{
-                            background: "var(--card)",
-                            border: "1px solid var(--border)",
-                            borderRadius: 8,
-                            color: "var(--foreground)",
-                          }}
-                          labelStyle={{ color: "var(--foreground)" }}
-                          itemStyle={{ color: "var(--foreground)" }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <p className="text-muted-foreground mt-1 text-center text-[11px]">
-                    <span className="text-brand-charcoal font-semibold tabular-nums">{formatCurrency(totalValue)}</span> total
-                  </p>
-                </>
-              )}
+              {/* UIDG-5 — donut via the wrapper. Slice colours now come from
+                  seriesColor (distinct past 5 categories — the old palette[i %]
+                  made the 6th category identical to the 1st), tooltip is themed,
+                  and the total moves into the donut centre. */}
+              <DonutChart
+                summary="Inventory value by category"
+                height={150}
+                data={data.by_category.map((c) => ({ name: c.category, value: c.value }))}
+                valueFormatter={formatCurrency}
+                centerCaption="total"
+                emptyMessage="No stock on hand."
+              />
             </div>
 
             {/* Low stock */}
