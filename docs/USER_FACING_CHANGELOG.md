@@ -116,6 +116,18 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-6)
+
+- The dashboard KPI tiles are richer and easier to read at a glance: Revenue and
+  Cash collected now carry an inline 12-month trend line; Accounts receivable,
+  Accounts payable, Active projects and Open quotes show their two related figures
+  side by side; WIP shows net / overbilled / underbilled as a small list; and
+  Blended margin is a progress ring. Every tile is now clickable through to its
+  detail area.
+- No tile shows a number the data can't back — a metric with no history stays a
+  plain figure, and a metric with no data reads "Not enough data yet" instead of a
+  fake zero. Tiles you're not permitted to see remain clearly marked restricted.
+
 ### Dashboard (UIDG-5)
 
 - The "Quotes by status" panel now leads with a donut of the live quote-count
