@@ -19,15 +19,7 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { downloadReport } from "@/lib/reports/download";
 import { Button } from "@/components/ui/button";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { BarChart } from "@/components/charts";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -79,7 +71,6 @@ import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/format";
 import { HoldbackWorklist } from "@/components/modules/financials/HoldbackWorklist";
-import { useThemeColors } from "@/lib/theme-context";
 import { cn } from "@/lib/utils";
 
 export interface TabProps {
@@ -128,7 +119,6 @@ function ErrorCard({ message }: { message: string }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function OverviewTab({ from, to }: TabProps) {
-  const t = useThemeColors();
   const [rangeSummary, setRangeSummary] = useState<RevenueSummary | null>(null);
   const [allTime, setAllTime] = useState<RevenueSummary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyRevenuePoint[]>([]);
@@ -241,34 +231,22 @@ export function OverviewTab({ from, to }: TabProps) {
           <h3 className="text-brand-navy mb-3 font-serif text-lg">
             Invoiced vs collected — trailing 12 months
           </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={trend} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                <CartesianGrid stroke={t.border} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: t.chartTertiary, fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fill: t.chartTertiary, fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => formatCurrencyCompact(Number(v))}
-                  width={64}
-                />
-                <Tooltip
-                  formatter={(v: unknown) => formatCurrency(Number(v))}
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--foreground)",
-                  }}
-                  labelStyle={{ color: "var(--foreground)" }}
-                  itemStyle={{ color: "var(--foreground)" }}
-                />
-                <Bar dataKey="invoiced" name="Invoiced" fill={t.primary} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="collected" name="Collected" fill={t.accent} radius={[3, 3, 0, 0]} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          {/* UIDG-5 — grouped bars via the wrapper. Colours now flow from the
+              palette (invoiced=primary, collected=accent), tooltip is themed
+              (was the hand-wired CSS-var tooltip), empty renders "Not enough data
+              yet" instead of an empty axis. */}
+          <BarChart
+            summary="Invoiced vs collected by month, trailing 12 months"
+            height={288}
+            data={trend}
+            xKey="label"
+            series={[
+              { key: "invoiced", name: "Invoiced" },
+              { key: "collected", name: "Collected" },
+            ]}
+            valueFormatter={formatCurrencyCompact}
+            tooltipFormatter={formatCurrency}
+          />
         </Card>
 
         <Card className="p-4 shadow-sm transition-shadow hover:shadow-md lg:col-span-4">

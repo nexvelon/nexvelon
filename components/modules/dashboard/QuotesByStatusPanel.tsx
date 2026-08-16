@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import { GitBranch, Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { getQuotesByStatusAction } from "@/app/(app)/dashboard/actions";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
+import { DonutChart } from "@/components/charts";
 import type { QuotesByStatus } from "@/lib/api/dashboard";
 
 // Display order for the known statuses (unknowns append at the end).
@@ -51,6 +52,18 @@ export function QuotesByStatusPanel() {
         <p className="text-muted-foreground text-xs">No quotes yet.</p>
       ) : (
         <>
+          {/* UIDG-5 demo — a real donut of the live quote-count distribution
+              (no chart existed here before; the list below keeps the exact
+              count + value figures). Real data, real empty state. */}
+          <DonutChart
+            summary="Quote count distribution by status"
+            height={150}
+            data={sorted.map((s) => ({ name: s.status, value: s.count }))}
+            valueFormatter={formatNumber}
+            centerCaption="quotes"
+            emptyMessage="No quotes yet."
+            className="mb-4"
+          />
           <ul className="space-y-2">
             {sorted.map((s) => (
               <li key={s.status} className="text-xs">

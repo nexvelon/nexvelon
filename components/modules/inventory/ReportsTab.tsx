@@ -7,20 +7,23 @@
 // behind inventory:viewCost; unit counts always render.
 
 import { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+// UIDG-5 — this report keeps a bespoke cost-gated tooltip (units + optionally
+// value), so it uses the wrapper's ESCAPE HATCH: raw Recharts inside ChartFrame,
+// with theme prop-builders (gridProps/xAxisProps/yAxisProps) and seriesColor.
+// That fixes the old palette cycling (6+ categories collided) and the hardcoded
+// var(--brand-text) axis ticks, while keeping the two-field tooltip.
+import { Bar, BarChart, Cell, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Card } from "@/components/ui/card";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
-import { useThemeColors } from "@/lib/theme-context";
+import {
+  ChartFrame,
+  useChartTheme,
+  gridProps,
+  xAxisProps,
+  yAxisProps,
+  seriesColor,
+} from "@/components/charts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { getInventoryReportDataAction } from "@/app/(app)/inventory/actions";
 import { LowStockReport } from "./LowStockReport";
@@ -29,7 +32,7 @@ import type { InventoryReportData } from "@/lib/api/products";
 export function ReportsTab() {
   const { role } = useRole();
   const showCost = hasPermission(role, "inventory", "viewCost");
-  const t = useThemeColors();
+  const ct = useChartTheme();
 
   const [data, setData] = useState<InventoryReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +85,7 @@ export function ReportsTab() {
     label: c.category,
     value: c.value,
     units: c.units,
-    fill: t.charts[i % t.charts.length],
+    fill: seriesColor(i, ct.palette),
   }));
   const agingData = data.aging.map((a) => ({
     label: a.bucket,
@@ -118,40 +121,23 @@ export function ReportsTab() {
           </p>
         ) : (
           <>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={valuationData}
-                  margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--brand-text)" }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "var(--brand-text)" }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={showCost ? 64 : 40}
-                  />
-                  <Tooltip
-                    content={
-                      <ReportTooltip showValue={showCost} valueLabel="Value" />
-                    }
-                  />
-                  <Bar
-                    dataKey={showCost ? "value" : "units"}
-                    radius={[4, 4, 0, 0]}
-                  >
-                    {valuationData.map((d) => (
-                      <Cell key={d.label} fill={d.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartFrame
+              summary="Stock valuation by category"
+              height={256}
+              className="w-full"
+            >
+              <BarChart data={valuationData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                <CartesianGrid {...gridProps(ct)} />
+                <XAxis {...xAxisProps(ct)} dataKey="label" />
+                <YAxis {...yAxisProps(ct, { width: showCost ? 64 : 40 })} />
+                <Tooltip content={<ReportTooltip showValue={showCost} valueLabel="Value" />} />
+                <Bar dataKey={showCost ? "value" : "units"} radius={[4, 4, 0, 0]} maxBarSize={48}>
+                  {valuationData.map((d) => (
+                    <Cell key={d.label} fill={d.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartFrame>
 
             {/* Category breakdown table */}
             <ul className="mt-4 space-y-1.5">
@@ -195,32 +181,15 @@ export function ReportsTab() {
             No in-stock units to age yet.
           </p>
         ) : (
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={agingData}
-                margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: "var(--brand-text)" }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "var(--brand-text)" }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={40}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  content={<ReportTooltip showValue={showCost} valueLabel="Value" />}
-                />
-                <Bar dataKey="units" radius={[4, 4, 0, 0]} fill={t.primary} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartFrame summary="In-stock units by age bucket" height={224} className="w-full">
+            <BarChart data={agingData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+              <CartesianGrid {...gridProps(ct)} />
+              <XAxis {...xAxisProps(ct)} dataKey="label" />
+              <YAxis {...yAxisProps(ct, { width: 40, allowDecimals: false })} />
+              <Tooltip content={<ReportTooltip showValue={showCost} valueLabel="Value" />} />
+              <Bar dataKey="units" radius={[4, 4, 0, 0]} fill={ct.primary} maxBarSize={48} />
+            </BarChart>
+          </ChartFrame>
         )}
       </Card>
 

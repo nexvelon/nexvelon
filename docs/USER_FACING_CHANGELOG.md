@@ -116,6 +116,13 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-5)
+
+- The "Quotes by status" panel now leads with a donut of the live quote-count
+  distribution (the exact counts and values stay listed below it). Every chart in
+  the app now shares one look — legible grid lines and tooltips in both light and
+  dark — and shows an honest "Not enough data yet" instead of an empty grid.
+
 ### Activity (AUD-3)
 
 - There is now a central **Activity** page (in the nav, by Reports) showing
