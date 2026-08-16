@@ -256,6 +256,18 @@ is no "clear log" button.
 coverage is incomplete. PR description must list every new audit event
 type added.
 
+**A new entity is not "done" until create, update AND delete all write an
+activity row with a readable `entity_label`.** This has been missed three
+times (AUD-1, AUD-2, AUD-2B each had to backfill a deferred remainder), so
+it is a definition-of-done item, not a nicety: shipping an entity's create
+path while its update/delete go unlogged, or logging a bare id with no
+human-readable label ("updated a task" without *which* task), leaves an
+incomplete trail. A child entity additionally rolls up to the parent whose
+timeline a user would expect it on (`parentType`/`parentId` set), and the
+label is captured BEFORE a delete so the row survives the record. New
+`entity_type` values widen the CHECK additively and land in the same commit
+as `ACTIVITY_ENTITY_TYPES` (the drift test guards this).
+
 **An audit path must be verified to PERSIST, not merely called.** Lesson
 from AUDIT-FIX-1: `public.activity_log` had RLS enabled with a SELECT
 policy but no INSERT policy, while the `logActivity` helper wrote with the

@@ -141,14 +141,15 @@ describe("addChangeOrderJobAction", () => {
 
   it("logs a 'create' event with source: manual", async () => {
     await addChangeOrderJobAction({ projectId: "p1", title: "Extra" });
-    const [entity, id, action, changes] = h.logActivity.mock.calls[0] as unknown[];
-    expect(entity).toBe("project");
-    expect(id).toBe("p1");
+    const [entity, id, action, changes, ctx] = h.logActivity.mock.calls[0] as unknown[];
+    expect(entity).toBe("job"); // AUD-2B — the new C.O job is the entity…
+    expect(id).toBe("co9");
     expect(action).toBe("create");
     expect(changes).toMatchObject({
-      job_id: { from: null, to: "co9" },
       co_number: { from: null, to: 3 },
       source: { from: null, to: "manual" },
     });
+    expect(ctx).toMatchObject({ parentType: "project", parentId: "p1" }); // …rolled up to the project
+
   });
 });

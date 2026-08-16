@@ -21,4 +21,12 @@ export const ACTIVITY_RESOURCE: Partial<Record<ActivityEntityType, Resource>> = 
   stock_movement: "inventory",
   pickup_slip: "inventory",
   rma: "inventory",
+  // AUD-2B — job + its children share the projects gate; subcontractor + its
+  // compliance docs share the subcontractors gate.
+  job: "projects",
+  job_task: "projects",
+  deficiency: "projects",
+  commissioning_item: "projects",
+  subcontractor: "subcontractors",
+  subcontractor_compliance: "subcontractors",
 };

@@ -139,17 +139,18 @@ describe("deleteChangeOrderJobAction", () => {
   it("best-effort log carries the reassignment counts", async () => {
     await deleteChangeOrderJobAction({ jobId: "co1" });
     expect(h.logActivity).toHaveBeenCalledTimes(1);
-    const [entity, id, action, changes] = h.logActivity.mock.calls[0] as unknown[];
-    expect(entity).toBe("project");
-    expect(id).toBe("p1");
+    const [entity, id, action, changes, ctx] = h.logActivity.mock.calls[0] as unknown[];
+    expect(entity).toBe("job"); // AUD-2B — the deleted job is the entity…
+    expect(id).toBe("co1");
     expect(action).toBe("delete");
     expect(changes).toMatchObject({
-      deleted_job_id: { from: "co1", to: null },
       main_job_id: { from: null, to: "main1" },
       reassigned_cost_centers: { from: null, to: 3 },
       reassigned_invoices: { from: null, to: 2 },
       reassigned_purchase_orders: { from: null, to: 1 },
     });
+    expect(ctx).toMatchObject({ parentType: "project", parentId: "p1" }); // …rolled up to the project
+
   });
 
   it("does NOT fail the action if activity logging throws", async () => {

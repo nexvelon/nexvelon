@@ -449,6 +449,20 @@ export async function createComplianceDoc(
   return data as DbSubcontractorComplianceDoc;
 }
 
+// AUD-2B — single-doc fetch so the action layer can diff an update for audit.
+export async function getComplianceDocById(
+  id: string
+): Promise<DbSubcontractorComplianceDoc | null> {
+  const supabase = await db();
+  const { data, error } = await supabase
+    .from("subcontractor_compliance_docs")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`getComplianceDocById: ${error.message}`);
+  return (data as DbSubcontractorComplianceDoc | null) ?? null;
+}
+
 export async function updateComplianceDoc(
   id: string,
   patch: DbSubcontractorComplianceDocUpdate,
@@ -486,19 +500,35 @@ export async function updateComplianceDoc(
  * action layer can also remove the attachment row + storage object via the
  * shared deleteAttachment path — no orphaned blobs.
  */
-export async function deleteComplianceDoc(
-  id: string
-): Promise<{ removed: boolean; attachmentId: string | null }> {
+export async function deleteComplianceDoc(id: string): Promise<{
+  removed: boolean;
+  attachmentId: string | null;
+  // AUD-2B — returned so the action layer can write a readable "removed a
+  // compliance document — <label>" row rolled up to the subcontractor.
+  subcontractorId: string | null;
+  docType: DbComplianceDocType | null;
+  title: string | null;
+}> {
   const supabase = await db();
   const { data, error } = await supabase
     .from("subcontractor_compliance_docs")
     .delete()
     .eq("id", id)
-    .select("id, attachment_id");
+    .select("id, attachment_id, subcontractor_id, doc_type, title");
   if (error) throw new Error(`deleteComplianceDoc: ${error.message}`);
-  const row = (data ?? [])[0] as { attachment_id: string | null } | undefined;
+  const row = (data ?? [])[0] as
+    | {
+        attachment_id: string | null;
+        subcontractor_id: string;
+        doc_type: DbComplianceDocType;
+        title: string | null;
+      }
+    | undefined;
   return {
     removed: !!row,
     attachmentId: row?.attachment_id ?? null,
+    subcontractorId: row?.subcontractor_id ?? null,
+    docType: row?.doc_type ?? null,
+    title: row?.title ?? null,
   };
 }

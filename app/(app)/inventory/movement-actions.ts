@@ -27,7 +27,13 @@ import {
   type BatchEditResult,
 } from "@/lib/api/stock-movements";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import type { DbStockMovement } from "@/lib/types/database";
+import { logActivity } from "@/lib/api/activity-log";
+import { getProductRowById } from "@/lib/api/products";
+import type {
+  DbStockMovement,
+  ActivityAction,
+  ActivityChanges,
+} from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -43,6 +49,30 @@ async function requireInventoryEdit(): Promise<string | null> {
     return "You don't have permission to move stock.";
   }
   return null;
+}
+
+// AUD-2B — audit stock changes as ONE summary row per operation (never one per
+// unit — a bulk move/adjust would otherwise flood the product's feed), rolled up
+// to the product's Activity tab. The label names both the operation and the
+// product, and survives the product's deletion. Best-effort (never blocks).
+async function logStock(
+  productId: string,
+  action: ActivityAction,
+  summary: string,
+  changes: ActivityChanges = {}
+): Promise<void> {
+  let name: string | null = null;
+  try {
+    const p = await getProductRowById(productId);
+    name = p ? p.name || p.sku : null;
+  } catch {
+    /* label is best-effort */
+  }
+  await logActivity("stock_movement", productId, action, changes, {
+    parentType: "inventory",
+    parentId: productId,
+    entityLabel: name ? `${summary} · ${name}` : summary,
+  });
 }
 
 // Canonical admin gate (mirrors techs-actions.ts) for the destructive
@@ -68,6 +98,10 @@ export async function moveStockAction(input: {
       quantity: input.quantity,
       destination: input.destination,
       note: input.note,
+    });
+    await logStock(input.productId, "create", `Moved ${input.quantity}`, {
+      destination: { from: null, to: input.destination.kind },
+      ...(input.note ? { note: { from: null, to: input.note } } : {}),
     });
     revalidatePath(`/inventory/${input.productId}`);
     revalidatePath("/inventory");
@@ -100,6 +134,7 @@ export async function markDeliveredAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markDelivered(stockId, opts);
+    await logStock(productId, "update", "Marked delivered");
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -115,6 +150,7 @@ export async function markInstalledAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markInstalled(stockId);
+    await logStock(productId, "update", "Marked installed");
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -130,6 +166,7 @@ export async function markLostAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markLost(stockId);
+    await logStock(productId, "update", "Marked lost");
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -145,6 +182,7 @@ export async function markReturnedAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markReturned(stockId);
+    await logStock(productId, "update", "Marked returned");
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -160,6 +198,7 @@ export async function markConsumedAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await markConsumed(stockId);
+    await logStock(productId, "update", "Marked consumed");
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -178,6 +217,10 @@ export async function adjustStockQuantityAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await adjustStockQuantity(stockId, newQty, reason);
+    await logStock(productId, "update", "Adjusted quantity", {
+      quantity: { from: null, to: newQty },
+      reason: { from: null, to: reason },
+    });
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -196,6 +239,7 @@ export async function deleteReceivedBatchRowsAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await deleteReceivedBatchRows(productId, stockIds);
+    await logStock(productId, "delete", `Deleted ${stockIds.length} received row(s)`);
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -212,6 +256,9 @@ export async function setBatchRowQuantityAction(
     const denied = await requireInventoryEdit();
     if (denied) return { ok: false, error: denied };
     const result = await setBatchRowQuantity(productId, stockId, newQty);
+    await logStock(productId, "update", "Set batch quantity", {
+      quantity: { from: null, to: newQty },
+    });
     revalidateProduct(productId);
     return { ok: true, data: result };
   } catch (e) {
@@ -219,9 +266,11 @@ export async function setBatchRowQuantityAction(
   }
 }
 
-// ── Admin hard-delete of movement history (HARD delete, no audit) ─────────────
-// Admin-gated. `productId` is the page to revalidate; for the per-row delete it
-// must be passed so the part page re-syncs.
+// ── Admin hard-delete of movement history ─────────────────────────────────────
+// Admin-gated. HARD delete of stock_movement rows; AUD-2B records the PURGE
+// itself on the product's Activity tab (who cleared history, when) even though
+// the deleted rows are gone. `productId` is the page to revalidate; for the
+// per-row delete it must be passed so the part page re-syncs.
 export async function deleteMovementByIdAction(
   id: string,
   productId?: string
@@ -230,7 +279,10 @@ export async function deleteMovementByIdAction(
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
     const deleted = await deleteMovementById(id);
-    if (productId) revalidateProduct(productId);
+    if (productId) {
+      await logStock(productId, "delete", "Deleted a movement record");
+      revalidateProduct(productId);
+    }
     return { ok: true, data: { deleted } };
   } catch (e) {
     return fail(e);
@@ -244,6 +296,7 @@ export async function deleteAllMovementsForProductAction(
     const gate = await requireAdmin();
     if (!gate.ok) return gate;
     const deleted = await deleteAllMovementsForProduct(productId);
+    await logStock(productId, "delete", `Purged movement history (${deleted})`);
     revalidateProduct(productId);
     return { ok: true, data: { deleted } };
   } catch (e) {

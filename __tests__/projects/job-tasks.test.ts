@@ -64,7 +64,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/api/projects", () => ({ getJobById: async () => h.job }));
 vi.mock("@/lib/api/sub-agreements", () => ({ jobLabel: () => "Main Job" }));
-vi.mock("@/lib/api/activity-log", () => ({ logActivity: h.logActivity }));
+vi.mock("@/lib/api/activity-log", async (importOriginal) => ({
+  ...(await importOriginal() as Record<string, unknown>),
+  logActivity: h.logActivity,
+}));
 
 import {
   createTask,

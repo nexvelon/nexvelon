@@ -17,7 +17,7 @@ import "server-only";
 // WSIB certificate has lapsed would be self-defeating. Deliberate decision.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { logActivity } from "@/lib/api/activity-log";
+import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import { getJobById } from "@/lib/api/projects";
 import { jobLabel } from "@/lib/api/sub-agreements";
 import type {
@@ -230,16 +230,13 @@ export async function createTask(input: CreateTaskInput): Promise<DbJobTask> {
     .single();
   if (error) throw new Error(`createTask: ${error.message}`);
 
-  // Best-effort audit under 'project' (activity_log's entity_type CHECK has no
-  // 'task'/'job' value; widening it is out of scope — the task id rides in the
-  // payload). Never blocks the write.
-  try {
-    await logActivity("project", input.projectId, "update", {
-      task_created: { from: null, to: title },
-    });
-  } catch {
-    /* audit is best-effort */
-  }
+  // AUD-2B — audit as a job_task rolled up to its project, carrying the title so
+  // the row reads "added a task — <title>". Best-effort (logActivity never throws).
+  await logActivity("job_task", (data as DbJobTask).id, "create", {}, {
+    parentType: "project",
+    parentId: input.projectId,
+    entityLabel: title,
+  });
 
   return data as DbJobTask;
 }
@@ -278,16 +275,18 @@ export async function updateTask(
     update.assignee_subcontractor_id = subId;
   }
 
+  // Fetch current row up-front: needed for the no-op branch and to diff for audit.
+  const { data: before, error: beforeErr } = await supabase
+    .from("job_tasks")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (beforeErr) throw new Error(`updateTask/before: ${beforeErr.message}`);
+  if (!before) throw new TaskError("not_found", "Task not found.");
+
   // §2.8 — nothing to change: don't write, don't bump updated_at.
   if (Object.keys(update).length === 0) {
-    const { data, error } = await supabase
-      .from("job_tasks")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (error) throw new Error(`updateTask/noop: ${error.message}`);
-    if (!data) throw new TaskError("not_found", "Task not found.");
-    return data as DbJobTask;
+    return before as DbJobTask;
   }
 
   const { data, error } = await supabase
@@ -297,7 +296,21 @@ export async function updateTask(
     .select("*")
     .single();
   if (error) throw new Error(`updateTask: ${error.message}`);
-  return data as DbJobTask;
+
+  // AUD-2B — audit the field-level diff, rolled up to the project.
+  const row = data as DbJobTask;
+  const changes = computeChanges(
+    before as unknown as Record<string, unknown>,
+    update as Record<string, unknown>
+  );
+  if (Object.keys(changes).length > 0) {
+    await logActivity("job_task", id, "update", changes, {
+      parentType: "project",
+      parentId: row.project_id,
+      entityLabel: row.title,
+    });
+  }
+  return row;
 }
 
 export interface SetTaskStatusInput {
@@ -315,6 +328,12 @@ export async function setTaskStatus(
   input: SetTaskStatusInput
 ): Promise<DbJobTask> {
   const supabase = await db();
+  // AUD-2B — capture prior status so we only audit real transitions.
+  const { data: before } = await supabase
+    .from("job_tasks")
+    .select("status")
+    .eq("id", input.id)
+    .maybeSingle<{ status: DbTaskStatus }>();
   const { data, error } = await supabase
     .from("job_tasks")
     .update({
@@ -326,7 +345,20 @@ export async function setTaskStatus(
     .select("*")
     .single();
   if (error) throw new Error(`setTaskStatus: ${error.message}`);
-  return data as DbJobTask;
+
+  // AUD-2B — a status move is a meaningful audit event ("updated a task — <title>",
+  // Status: todo → done on expand). Only log when it actually changed.
+  const row = data as DbJobTask;
+  if (before && before.status !== input.status) {
+    await logActivity(
+      "job_task",
+      row.id,
+      "update",
+      { status: { from: before.status, to: input.status } },
+      { parentType: "project", parentId: row.project_id, entityLabel: row.title }
+    );
+  }
+  return row;
 }
 
 export interface ReorderTasksInput {
@@ -364,13 +396,28 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<number> {
 
 export async function deleteTask(id: string): Promise<boolean> {
   const supabase = await db();
+  // AUD-2B — capture title + project BEFORE the delete so the "removed a task —
+  // <title>" row is readable afterwards.
+  const { data: before } = await supabase
+    .from("job_tasks")
+    .select("project_id, title")
+    .eq("id", id)
+    .maybeSingle<{ project_id: string; title: string }>();
   const { data, error } = await supabase
     .from("job_tasks")
     .delete()
     .eq("id", id)
     .select("id");
   if (error) throw new Error(`deleteTask: ${error.message}`);
-  return (data?.length ?? 0) > 0;
+  const removed = (data?.length ?? 0) > 0;
+  if (removed && before) {
+    await logActivity("job_task", id, "delete", {}, {
+      parentType: "project",
+      parentId: before.project_id,
+      entityLabel: before.title,
+    });
+  }
+  return removed;
 }
 
 // ─── Assignee options (the shared party picker) ──────────────────────────────

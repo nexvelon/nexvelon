@@ -116,6 +116,24 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Activity history (AUD-2B)
+
+- Jobs now have their own **Activity** tab, and subcontractors have an Activity
+  section — every detail record in the app now shows who changed what and when.
+- Changes that previously went unrecorded are now captured: editing, moving, or
+  deleting a task, deficiency, or commissioning item; adding, editing, or
+  removing a subcontractor and its compliance documents; and every stock move,
+  custody change (delivered / installed / lost / returned / consumed), quantity
+  adjustment, or batch edit.
+- Task, deficiency, and commissioning-item changes appear on the parent
+  **Project** Activity tab, each naming the specific item; a job's own edits and
+  status changes appear on both the Job and the Project tabs.
+- A stock operation records **one** readable line naming the product (e.g.
+  "Adjusted quantity · Acme Widget"), not one line per unit — the feed stays
+  legible even for bulk moves.
+- Compliance documents appear on their subcontractor's timeline with the
+  document type, and stay readable after the document is removed.
+
 ### Activity history (AUD-2)
 
 - Every record with a detail page now has an **Activity** section as its last

@@ -38,6 +38,7 @@ import { listDeficienciesForJobAction } from "@/app/(app)/projects/deficiency-ac
 import { isOpen } from "@/lib/tasks/task-status";
 import { isOpenDeficiency } from "@/lib/deficiencies/deficiency-status";
 import { JobWarrantyLine } from "@/components/modules/projects/JobWarrantyLine";
+import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import type { DbJobRollup } from "@/lib/api/project-cost-rollup";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
@@ -70,7 +71,8 @@ type TabKey =
   | "deficiencies"
   | "commissioning"
   | "site_log"
-  | "team";
+  | "team"
+  | "activity";
 
 const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "overview", label: "Overview" },
@@ -82,6 +84,7 @@ const TABS: Array<{ key: TabKey; label: string; soon?: string }> = [
   { key: "commissioning", label: "Commissioning" }, // PROJ2-13 — unlocked
   { key: "site_log", label: "Site log" }, // PROJ2-16 — daily field reports
   { key: "team", label: "Team", soon: "PROJ2-15" },
+  { key: "activity", label: "Activity" }, // AUD-2B — audit trail, last + consistent
 ];
 
 export function jobLabel(job: Pick<DbJob, "job_type" | "co_number" | "title">): string {
@@ -382,6 +385,9 @@ export function JobDetailView({
       )}
 
       {tab === "attachments" && <div>{attachmentsSlot}</div>}
+      {tab === "activity" && (
+        <ActivityTimeline entityType="job" entityId={job.id} />
+      )}
     </div>
   );
 }

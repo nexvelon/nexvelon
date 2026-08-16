@@ -98,15 +98,16 @@ describe("updateJobStatusAction", () => {
     expect(res.ok).toBe(true);
     expect(h.setJobStatus).toHaveBeenCalledWith("j1", "on_hold", "u1");
     expect(h.logActivity).toHaveBeenCalledTimes(1);
-    const [entity, id, action, changes] = h.logActivity.mock.calls[0] as unknown[];
-    expect(entity).toBe("project");
-    expect(id).toBe("p1"); // logged on the parent project
+    const [entity, id, action, changes, ctx] = h.logActivity.mock.calls[0] as unknown[];
+    expect(entity).toBe("job"); // AUD-2B — the job is now the entity…
+    expect(id).toBe("j1");
     expect(action).toBe("update");
     expect(changes).toMatchObject({
-      job_id: { from: null, to: "j1" },
       status: { from: "active", to: "on_hold" },
       note: { from: null, to: "waiting on parts" },
     });
+    expect(ctx).toMatchObject({ parentType: "project", parentId: "p1" }); // …rolled up to the project
+
   });
 
   it("does NOT fail the action if activity logging throws", async () => {

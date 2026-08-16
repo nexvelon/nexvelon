@@ -44,4 +44,17 @@ describe("loadEntityActivityAction — gating", () => {
       offset: 0,
     });
   });
+
+  // AUD-2B — the new host types (job, subcontractor) are gated + readable.
+  it.each(["job", "subcontractor"] as const)(
+    "allows an Admin to read the new %s tab",
+    async (entity) => {
+      const res = await loadEntityActivityAction(entity, "x1", 0);
+      expect(res.ok).toBe(true);
+      expect(h.listActivityPage).toHaveBeenCalledWith(entity, "x1", {
+        limit: 25,
+        offset: 0,
+      });
+    }
+  );
 });

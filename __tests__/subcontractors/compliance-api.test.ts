@@ -156,11 +156,12 @@ describe("deleteComplianceDoc", () => {
   it("returns the linked attachment id so the caller can clean the blob", async () => {
     s.docs = [{ id: "d1", attachment_id: "att-7" }];
     const res = await deleteComplianceDoc("d1");
-    expect(res).toEqual({ removed: true, attachmentId: "att-7" });
+    // AUD-2B — also returns subcontractorId/docType/title for the audit row.
+    expect(res).toMatchObject({ removed: true, attachmentId: "att-7" });
     expect(s.deleted).toContain("d1");
   });
   it("reports removed:false + null attachment for an unknown id", async () => {
     const res = await deleteComplianceDoc("nope");
-    expect(res).toEqual({ removed: false, attachmentId: null });
+    expect(res).toMatchObject({ removed: false, attachmentId: null });
   });
 });
