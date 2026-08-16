@@ -24,7 +24,7 @@ import { TopClientsTable } from "@/components/modules/dashboard/TopClientsTable"
 import { InventoryHealth } from "@/components/modules/dashboard/InventoryHealth";
 import { TechnicianUtilization } from "@/components/modules/dashboard/TechnicianUtilization";
 import { AlertsWorklists } from "@/components/modules/dashboard/AlertsWorklists";
-import { RANGE_LABEL, rangeFor, type RangeKey } from "@/lib/date-range";
+import { RANGE_LABEL, rangeFor, comparisonRange, type RangeKey } from "@/lib/date-range";
 import { getDashboardKpisAction, getRevenueTrendAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardKpis } from "@/lib/api/dashboard";
 import type { MonthlyRevenuePoint } from "@/lib/api/financials";
@@ -47,14 +47,22 @@ export default function DashboardPage() {
   const invoicedSeries = trend ? trend.map((p) => p.invoiced) : [];
   const collectedSeries = trend ? trend.map((p) => p.collected) : [];
 
+  // UIDG-6B — the comparison (prior-period) window follows the SAME range, so
+  // changing the picker moves the current and comparison windows together.
+  const compareBasis = comparisonRange(range).basis;
+
   // Real today drives the range-aware tiles + greeting (the mock's anchored
   // TODAY is gone from the dashboard).
   useEffect(() => {
     setLoading(true);
-    const { start, end } = rangeFor(range, new Date());
+    const anchor = new Date();
+    const { start, end } = rangeFor(range, anchor);
+    const cmp = comparisonRange(range, anchor);
     getDashboardKpisAction({
       from: start.toISOString().slice(0, 10),
       to: end.toISOString().slice(0, 10),
+      compareFrom: cmp.start.toISOString().slice(0, 10),
+      compareTo: cmp.end.toISOString().slice(0, 10),
     }).then((r) => {
       if (r.ok) setKpi(r.data);
       else toast.error(r.error);
@@ -105,6 +113,7 @@ export default function DashboardPage() {
               format={formatCurrency}
               icon={Banknote}
               href="/financials"
+              comparison={{ prior: fin?.compare?.revenue ?? null, basis: compareBasis, polarity: "normal" }}
             />
             <KpiSparkline
               index={1}
@@ -115,6 +124,7 @@ export default function DashboardPage() {
               format={formatCurrency}
               icon={HandCoins}
               href="/financials"
+              comparison={{ prior: fin?.compare?.cash_collected ?? null, basis: compareBasis, polarity: "normal" }}
             />
             <KpiDual
               index={2}

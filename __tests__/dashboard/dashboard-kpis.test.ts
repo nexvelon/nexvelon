@@ -38,6 +38,7 @@ vi.mock("@/lib/api/quotes", () => ({
 }));
 
 import { getDashboardKpis } from "@/lib/api/dashboard";
+import { getRevenueSummary } from "@/lib/api/financials";
 
 const ALL = { financialView: true, financialEdit: true, projects: true, quotes: true };
 
@@ -96,5 +97,33 @@ describe("getDashboardKpis fan-out", () => {
     const k = await getDashboardKpis({ tiers: { financialView: true, financialEdit: false, projects: false, quotes: false } });
     expect(k.financial).not.toBeNull();
     expect(k.financial_edit).toBeNull();
+  });
+});
+
+// UIDG-6B — period-over-period comparison (flow metrics only), gated identically.
+describe("getDashboardKpis — prior-period comparison", () => {
+  it("returns prior revenue + cash when a comparison window is given", async () => {
+    const k = await getDashboardKpis({
+      from: "2026-07-01", to: "2026-07-31",
+      compareFrom: "2026-06-01", compareTo: "2026-06-30",
+      tiers: ALL,
+    });
+    // (mock returns the same summary for both windows)
+    expect(k.financial!.compare).toEqual({ revenue: 5000, cash_collected: 3200 });
+  });
+
+  it("no comparison window → compare is null (never fabricated)", async () => {
+    const k = await getDashboardKpis({ from: "2026-07-01", to: "2026-07-31", tiers: ALL });
+    expect(k.financial!.compare).toBeNull();
+  });
+
+  it("the prior read is gated: a caller without financialView never triggers it", async () => {
+    vi.mocked(getRevenueSummary).mockClear();
+    const k = await getDashboardKpis({
+      compareFrom: "2026-06-01", compareTo: "2026-06-30",
+      tiers: { financialView: false, financialEdit: false, projects: false, quotes: false },
+    });
+    expect(k.financial).toBeNull(); // no current, and…
+    expect(getRevenueSummary).not.toHaveBeenCalled(); // …no prior fetched either (no leak)
   });
 });

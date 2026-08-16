@@ -8,7 +8,13 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import type { DeltaSpec } from "./types";
 
-export function DeltaPill({ delta, deltaFormat, polarity = "normal" }: DeltaSpec) {
+/** The comparison basis label (UIDG-6B) — every delta must say what it compares
+ *  against, so "+12%" is never left as "+12% of what?". */
+interface DeltaPillProps extends DeltaSpec {
+  basis?: string;
+}
+
+export function DeltaPill({ delta, deltaFormat, polarity = "normal", basis = "prev period" }: DeltaPillProps) {
   const inverted = polarity === "inverted";
   const good = delta === 0 ? null : inverted ? delta < 0 : delta > 0;
 
@@ -20,7 +26,9 @@ export function DeltaPill({ delta, deltaFormat, polarity = "normal" }: DeltaSpec
         : "var(--brand-status-red)";
 
   const Arrow = delta > 0 ? ArrowUpRight : delta < 0 ? ArrowDownRight : Minus;
-  const text = deltaFormat ? deltaFormat(delta) : `${(delta * 100).toFixed(1)}%`;
+  const text = deltaFormat
+    ? deltaFormat(delta)
+    : `${delta > 0 ? "+" : ""}${(delta * 100).toFixed(1)}%`;
 
   return (
     <div
@@ -31,7 +39,7 @@ export function DeltaPill({ delta, deltaFormat, polarity = "normal" }: DeltaSpec
     >
       <Arrow className="h-3.5 w-3.5" aria-hidden />
       <span>{text}</span>
-      <span className="text-muted-foreground font-normal">vs prev period</span>
+      <span className="text-muted-foreground font-normal">vs {basis}</span>
     </div>
   );
 }

@@ -116,6 +116,17 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-6B)
+
+- The Revenue and Cash-collected tiles now show how they compare to the previous
+  period — "+12% vs same days last month" — and the comparison follows the date
+  range you pick (today vs yesterday, MTD vs the same days last month, YTD vs the
+  same stretch last year, and so on).
+- The comparison is always like-for-like: 16 days into this month is compared
+  against the first 16 days of last month, never against the whole month. When
+  there's no prior figure to compare against (a brand-new period), the tile shows
+  no change rather than a misleading "+100%".
+
 ### Dashboard (UIDG-6)
 
 - The dashboard KPI tiles are richer and easier to read at a glance: Revenue and

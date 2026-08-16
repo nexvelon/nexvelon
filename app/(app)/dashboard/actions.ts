@@ -33,6 +33,9 @@ export type ActionResult<T = unknown> =
 export async function getDashboardKpisAction(input: {
   from?: string;
   to?: string;
+  // UIDG-6B — prior (comparison) window for the flow-metric deltas.
+  compareFrom?: string;
+  compareTo?: string;
 }): Promise<ActionResult<DashboardKpis>> {
   try {
     const me = await getCurrentProfile();
@@ -44,6 +47,8 @@ export async function getDashboardKpisAction(input: {
     const data = await getDashboardKpis({
       from: input.from,
       to: input.to,
+      compareFrom: input.compareFrom,
+      compareTo: input.compareTo,
       tiers: {
         financialView: hasPermission(role, "financials", "view"),
         financialEdit: hasPermission(role, "financials", "edit"),
