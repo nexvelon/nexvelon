@@ -689,6 +689,9 @@ export interface DbUserUiPrefs {
   user_id: string;
   theme_key: string | null;
   theme_mode: string | null;
+  /** UIDG-8 — dashboard layout override ({widgets:[{id,colSpan}]}); NULL = inherit
+   *  the org default then the built-in. Validated in app code, not the DB. */
+  dashboard_layout: unknown | null;
   created_at: string;
   updated_at: string;
 }
