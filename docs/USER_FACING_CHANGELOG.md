@@ -116,6 +116,23 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-8)
+
+- Your dashboard is now yours: click **Customise** to drag its panels into the
+  order you want, make them wider or narrower, and remove ones you don't need.
+  Your arrangement is saved and follows you across devices — reload and it's still
+  there.
+- Removed a panel and want it back? **Add widget** lists everything you've taken
+  off, ready to drop back in. **Reset to company layout** returns you to the
+  standard arrangement at any time.
+- You only ever see the panels you have access to — the rest simply aren't there,
+  with no empty gaps where they'd be.
+- Admins can arrange the dashboard and **Save as company default** — with a clear
+  choice to apply it to everyone (resetting personal arrangements) or set it only
+  for people who haven't customised their own.
+- Rearranging works with the keyboard, not just the mouse. On phones and small
+  screens the dashboard shows as a single readable column.
+
 ### Dashboard (UIDG-6B)
 
 - The Revenue and Cash-collected tiles now show how they compare to the previous
