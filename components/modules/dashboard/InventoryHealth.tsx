@@ -25,7 +25,7 @@ export function InventoryHealth() {
   return (
     <Card className="h-full transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
-        <CardTitle className="font-serif text-lg">Inventory health</CardTitle>
+        <CardTitle className="font-serif text-lg">Inventory health <span className="text-muted-foreground text-xs font-normal">· as of today</span></CardTitle>
       </CardHeader>
       <CardContent>
         {restricted ? (

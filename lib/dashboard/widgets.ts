@@ -33,17 +33,23 @@ export interface WidgetMeta {
   minCols: number;
   /** Whether the user may resize this widget's width in edit mode. */
   resizable: boolean;
+  /** UIDG-9 — which chrome controls this widget offers (the grid reads this rather
+   *  than special-casing widgets). Every widget gets refresh + expand + the
+   *  overflow menu; a future widget could opt a control out here. */
+  chrome: { refresh: boolean; expand: boolean };
 }
 
+const ALL_CHROME = { refresh: true, expand: true } as const;
+
 export const WIDGET_META: Record<WidgetId, WidgetMeta> = {
-  kpiOverview: { id: "kpiOverview", title: "KPI overview", gate: null, defaultCols: 12, minCols: 12, resizable: false },
-  alerts: { id: "alerts", title: "Alerts & worklists", gate: null, defaultCols: 12, minCols: 6, resizable: true },
-  revenueTrend: { id: "revenueTrend", title: "Revenue & cash trend", gate: { resource: "financials", action: "view" }, defaultCols: 8, minCols: 4, resizable: true },
-  quotesByStatus: { id: "quotesByStatus", title: "Quotes by status", gate: { resource: "quotes", action: "view" }, defaultCols: 4, minCols: 4, resizable: true },
-  activityFeed: { id: "activityFeed", title: "Recent activity", gate: null, defaultCols: 6, minCols: 4, resizable: true },
-  topClients: { id: "topClients", title: "Top clients", gate: { resource: "financials", action: "view" }, defaultCols: 6, minCols: 4, resizable: true },
-  inventoryHealth: { id: "inventoryHealth", title: "Inventory health", gate: { resource: "inventory", action: "view" }, defaultCols: 6, minCols: 4, resizable: true },
-  techUtilization: { id: "techUtilization", title: "Technician utilization", gate: { resource: "scheduling", action: "view" }, defaultCols: 6, minCols: 4, resizable: true },
+  kpiOverview: { id: "kpiOverview", title: "KPI overview", gate: null, defaultCols: 12, minCols: 12, resizable: false, chrome: ALL_CHROME },
+  alerts: { id: "alerts", title: "Alerts & worklists", gate: null, defaultCols: 12, minCols: 6, resizable: true, chrome: ALL_CHROME },
+  revenueTrend: { id: "revenueTrend", title: "Revenue & cash trend", gate: { resource: "financials", action: "view" }, defaultCols: 8, minCols: 4, resizable: true, chrome: ALL_CHROME },
+  quotesByStatus: { id: "quotesByStatus", title: "Quotes by status", gate: { resource: "quotes", action: "view" }, defaultCols: 4, minCols: 4, resizable: true, chrome: ALL_CHROME },
+  activityFeed: { id: "activityFeed", title: "Recent activity", gate: null, defaultCols: 6, minCols: 4, resizable: true, chrome: ALL_CHROME },
+  topClients: { id: "topClients", title: "Top clients", gate: { resource: "financials", action: "view" }, defaultCols: 6, minCols: 4, resizable: true, chrome: ALL_CHROME },
+  inventoryHealth: { id: "inventoryHealth", title: "Inventory health", gate: { resource: "inventory", action: "view" }, defaultCols: 6, minCols: 4, resizable: true, chrome: ALL_CHROME },
+  techUtilization: { id: "techUtilization", title: "Technician utilization", gate: { resource: "scheduling", action: "view" }, defaultCols: 6, minCols: 4, resizable: true, chrome: ALL_CHROME },
 };
 
 export const WIDGET_IDS = Object.keys(WIDGET_META) as WidgetId[];

@@ -14,7 +14,7 @@ const h = vi.hoisted(() => ({
   setOrgDefault: vi.fn(async () => {}),
   clearAll: vi.fn(async () => 3),
   clearUser: vi.fn(async () => {}),
-  insertAudit: vi.fn(async () => ({})),
+  insertAudit: vi.fn(async (_row: unknown) => ({}) as unknown),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({

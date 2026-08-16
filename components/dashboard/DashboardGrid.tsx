@@ -25,6 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Minus, Plus, X } from "lucide-react";
 import { WIDGET_COMPONENTS } from "./widget-registry";
+import { WidgetFrame } from "./WidgetFrame";
 import { WIDGET_META, type LayoutEntry } from "@/lib/dashboard/widgets";
 
 const WIDTH_LADDER = [4, 6, 8, 12];
@@ -163,17 +164,16 @@ function WidgetCell({
         </div>
       )}
 
-      {/* In edit mode the content is inert so a drag/keyboard reorder never fires a
-          link inside a widget; only the toolbar above is interactive. */}
-      <div
-        className={
-          editMode
-            ? "pointer-events-none rounded-lg outline-dashed outline-1 outline-offset-4 outline-[var(--brand-border)]"
-            : ""
-        }
-      >
-        <Component />
-      </div>
+      {/* Edit mode: inert content behind the drag/resize/remove affordances — the
+          per-widget chrome (WidgetFrame) is deliberately NOT shown here so the two
+          control sets never conflict. Normal mode: the WidgetFrame chrome. */}
+      {editMode ? (
+        <div className="pointer-events-none rounded-lg outline-dashed outline-1 outline-offset-4 outline-[var(--brand-border)]">
+          <Component />
+        </div>
+      ) : (
+        <WidgetFrame id={entry.id} onRemove={onRemove} />
+      )}
     </div>
   );
 }

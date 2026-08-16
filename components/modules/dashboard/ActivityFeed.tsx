@@ -41,7 +41,9 @@ export function ActivityFeed() {
     <Card className="bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <Activity className="text-brand-navy h-4 w-4" />
-        <h3 className="text-brand-navy font-serif text-base">Recent activity</h3>
+        <h3 className="text-brand-navy font-serif text-base">
+          Recent activity <span className="text-muted-foreground text-xs font-normal">· latest events</span>
+        </h3>
       </div>
       {!items ? (
         <p className="text-muted-foreground text-xs">Loading…</p>
