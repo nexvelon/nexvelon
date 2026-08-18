@@ -25,6 +25,7 @@ import {
 import { ApplyDefaultDialog } from "@/components/settings/ApplyDefaultDialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { DashboardRangeProvider } from "./range-context";
+import { resolveWindow } from "@/lib/dashboard/range";
 import { DashboardGrid } from "./DashboardGrid";
 import { WIDGET_META, type LayoutEntry, type WidgetId } from "@/lib/dashboard/widgets";
 import {
@@ -64,6 +65,20 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
   const isDesktop = useIsDesktop();
 
   const [range, setRange] = useState<RangeKey>("mtd");
+  // UIDG-9 — custom range dates (yyyy-mm-dd from the date inputs). Seeded from the
+  // current window when the user first switches to Custom, so it starts valid.
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const win = resolveWindow(range, { from: customFrom, to: customTo });
+
+  function changeRange(next: RangeKey) {
+    if (next === "custom" && !customFrom && !customTo) {
+      const cur = resolveWindow(range);
+      setCustomFrom(cur.from);
+      setCustomTo(cur.to);
+    }
+    setRange(next);
+  }
   const [editMode, setEditMode] = useState(false);
   const [layout, setLayout] = useState<LayoutEntry[]>(initialLayout);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -145,8 +160,31 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
         title="Executive Dashboard"
         description={`${format(now, "EEEE, MMMM d, yyyy")} — ${greeting}, ${firstName}.`}
         actions={
-          <div className="flex items-center gap-2">
-            <RangePicker value={range} onChange={setRange} />
+          <div className="flex flex-wrap items-center gap-2">
+            <RangePicker value={range} onChange={changeRange} />
+            {range === "custom" && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <label className="sr-only" htmlFor="range-from">From date</label>
+                <input
+                  id="range-from"
+                  type="date"
+                  value={customFrom}
+                  max={customTo || undefined}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="border-brand-navy/15 rounded-md border px-2 py-1"
+                />
+                <span className="text-muted-foreground">→</span>
+                <label className="sr-only" htmlFor="range-to">To date</label>
+                <input
+                  id="range-to"
+                  type="date"
+                  value={customTo}
+                  min={customFrom || undefined}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="border-brand-navy/15 rounded-md border px-2 py-1"
+                />
+              </div>
+            )}
             {editable && (
               <Button
                 variant={editMode ? "default" : "outline"}
@@ -218,7 +256,7 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
         </p>
       )}
 
-      <DashboardRangeProvider value={range}>
+      <DashboardRangeProvider value={win}>
         <DashboardGrid
           layout={layout}
           editMode={editable && editMode}

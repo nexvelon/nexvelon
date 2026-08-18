@@ -52,7 +52,7 @@ export function TechnicianUtilization() {
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Gauge className="text-brand-navy h-4 w-4" />
-          <h3 className="text-brand-navy font-serif text-base">Technician utilization</h3>
+          <h3 className="text-brand-navy font-serif text-base">Technician utilization <span className="text-muted-foreground text-xs font-normal">· this week</span></h3>
         </div>
         <span className="text-muted-foreground text-[11px]">
           This week{overall != null ? ` · ${overall}% overall` : ""}

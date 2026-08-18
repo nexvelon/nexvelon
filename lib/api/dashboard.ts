@@ -488,15 +488,21 @@ export interface TopClientRow {
 export async function getTopClientsByRevenue(opts: {
   year?: number;
   limit?: number;
+  /** UIDG-9 — explicit window (overrides `year`) so the panel can follow the
+   *  dashboard's selected range. */
+  from?: string;
+  to?: string;
 } = {}): Promise<TopClientRow[]> {
   const supabase = await db();
   const year = opts.year ?? new Date().getFullYear();
+  const from = opts.from ?? `${year}-01-01`;
+  const to = opts.to ?? `${year}-12-31`;
   const { data, error } = await supabase
     .from("invoices")
     .select("client_id, subtotal, status, issue_date")
     .in("status", [...ISSUED_STATUSES])
-    .gte("issue_date", `${year}-01-01`)
-    .lte("issue_date", `${year}-12-31`);
+    .gte("issue_date", from)
+    .lte("issue_date", to);
   if (error) throw new Error(`getTopClientsByRevenue: ${error.message}`);
   const rows = (data ?? []) as { client_id: string; subtotal: number | null }[];
 

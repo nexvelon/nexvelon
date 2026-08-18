@@ -40,7 +40,7 @@ export function QuotesByStatusPanel() {
     <Card className="bg-card h-full p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <GitBranch className="text-brand-navy h-4 w-4" />
-        <h3 className="text-brand-navy font-serif text-base">Quotes by status</h3>
+        <h3 className="text-brand-navy font-serif text-base">Quotes by status <span className="text-muted-foreground text-xs font-normal">· open now</span></h3>
       </div>
       {restricted ? (
         <div className="text-muted-foreground flex items-center gap-2 py-6 text-xs">

@@ -143,11 +143,16 @@ export async function getRevenueTrendAction(): Promise<ActionResult<MonthlyReven
   }
 }
 
-export async function getTopClientsByRevenueAction(): Promise<ActionResult<TopClientRow[]>> {
+export async function getTopClientsByRevenueAction(input?: {
+  from?: string;
+  to?: string;
+}): Promise<ActionResult<TopClientRow[]>> {
   try {
+    // UIDG-9 — the gate is re-checked on every call, so a range-driven refetch
+    // never bypasses the financials:view check the initial fetch performed.
     const denied = await gateOr("financials", "view");
     if (denied) return { ok: false, error: denied };
-    return { ok: true, data: await getTopClientsByRevenue({ limit: 5 }) };
+    return { ok: true, data: await getTopClientsByRevenue({ limit: 5, from: input?.from, to: input?.to }) };
   } catch (e) {
     return fail(e);
   }

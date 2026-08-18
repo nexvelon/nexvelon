@@ -116,6 +116,25 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-9)
+
+- The date range at the top of the dashboard now drives more than the KPI tiles:
+  the **Top clients** table re-queries for whichever window you pick, and its
+  heading names that window so the numbers are never ambiguous.
+- Picked **Custom**? You now get two date fields to set your own start and end;
+  the dashboard waits until both are filled and only accepts a start on or before
+  the end.
+- Panels that intentionally don't follow the range now say what period they show
+  — "trailing 12 months", "open now", "as of today", "this week", "latest events"
+  — so nothing silently shows a different window than you expect.
+- Every panel has its own controls: **refresh** it on its own (without reloading
+  the whole dashboard), **expand** it to a full-screen view (Escape or the close
+  button to leave), and an **⋯** menu to refresh, expand, or remove it. Each panel
+  also shows when it was last updated.
+- A narrower range with nothing in it now says "No data in this range" instead of
+  showing a misleading zero, and refreshing a panel re-checks your access — a
+  panel you're not allowed to see never leaks through a refresh.
+
 ### Dashboard (UIDG-8)
 
 - Your dashboard is now yours: click **Customise** to drag its panels into the

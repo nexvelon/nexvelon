@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { KpiSparkline, KpiDual, KpiPlain, KpiStatList, KpiProgress } from "@/components/kpi";
-import { RANGE_LABEL, rangeFor, comparisonRange } from "@/lib/date-range";
 import { getDashboardKpisAction, getRevenueTrendAction } from "@/app/(app)/dashboard/actions";
 import type { DashboardKpis } from "@/lib/api/dashboard";
 import type { MonthlyRevenuePoint } from "@/lib/api/financials";
@@ -28,7 +27,7 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { useDashboardRange } from "./range-context";
 
 export function KpiOverviewWidget() {
-  const range = useDashboardRange();
+  const win = useDashboardRange();
   const [kpi, setKpi] = useState<DashboardKpis | null>(null);
   const [loading, setLoading] = useState(true);
   const [trend, setTrend] = useState<MonthlyRevenuePoint[] | null>(null);
@@ -41,24 +40,32 @@ export function KpiOverviewWidget() {
   const invoicedSeries = trend ? trend.map((p) => p.invoiced) : [];
   const collectedSeries = trend ? trend.map((p) => p.collected) : [];
 
-  const compareBasis = comparisonRange(range).basis;
+  const compareBasis = win.comparisonBasis;
 
+  // Follows the global range — refetch whenever the resolved window changes. An
+  // incomplete custom range (valid === false) fetches nothing (no wasted query).
   useEffect(() => {
+    if (!win.valid) return;
     setLoading(true);
-    const anchor = new Date();
-    const { start, end } = rangeFor(range, anchor);
-    const cmp = comparisonRange(range, anchor);
     getDashboardKpisAction({
-      from: start.toISOString().slice(0, 10),
-      to: end.toISOString().slice(0, 10),
-      compareFrom: cmp.start.toISOString().slice(0, 10),
-      compareTo: cmp.end.toISOString().slice(0, 10),
+      from: win.from,
+      to: win.to,
+      compareFrom: win.compareFrom,
+      compareTo: win.compareTo,
     }).then((r) => {
       if (r.ok) setKpi(r.data);
       else toast.error(r.error);
       setLoading(false);
     });
-  }, [range]);
+  }, [win.valid, win.from, win.to, win.compareFrom, win.compareTo]);
+
+  if (!win.valid) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Choose a start and end date to see figures for a custom range.
+      </p>
+    );
+  }
 
   const asOf = kpi ? format(new Date(kpi.as_of), "MMM d, yyyy") : "today";
   const fin = kpi?.financial ?? null;
@@ -82,7 +89,7 @@ export function KpiOverviewWidget() {
         <KpiSparkline
           index={0}
           restricted={!fin}
-          label={`Revenue · ${RANGE_LABEL[range]}`}
+          label={`Revenue · ${win.label}`}
           value={fin?.revenue ?? 0}
           series={invoicedSeries}
           format={formatCurrency}
@@ -93,7 +100,7 @@ export function KpiOverviewWidget() {
         <KpiSparkline
           index={1}
           restricted={!fin}
-          label={`Cash collected · ${RANGE_LABEL[range]}`}
+          label={`Cash collected · ${win.label}`}
           value={fin?.cash_collected ?? 0}
           series={collectedSeries}
           format={formatCurrency}
