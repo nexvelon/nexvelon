@@ -19,9 +19,22 @@ import {
   type CreateMilestoneInput,
   type ProjectSchedule,
 } from "@/lib/api/schedule";
+import {
+  getProjectGantt,
+  addTaskDependency,
+  removeTaskDependency,
+  captureBaseline,
+  listBaselines,
+  type ProjectGantt,
+} from "@/lib/api/gantt";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
-import type { DbMilestoneStatus, DbScheduleMilestone } from "@/lib/types/database";
+import type {
+  DbMilestoneStatus,
+  DbScheduleMilestone,
+  DbScheduleBaseline,
+  DbDependencyType,
+} from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -71,6 +84,33 @@ export async function listMilestonesAction(scope: {
     const gate = await require("view");
     if (!gate.ok) return gate;
     return { ok: true, data: await listMilestones(scope) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// UIDG-11 — the FULL Gantt read (tasks/deps/baselines). Gated projects:view, so a
+// user who cannot view projects cannot read the schedule. The existing
+// getProjectScheduleAction (ProjectScheduleCard) is untouched.
+export async function getProjectGanttAction(
+  projectId: string
+): Promise<ActionResult<ProjectGantt>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getProjectGantt(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listBaselinesAction(
+  projectId: string
+): Promise<ActionResult<DbScheduleBaseline[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await listBaselines(projectId) };
   } catch (e) {
     return fail(e);
   }
@@ -182,6 +222,57 @@ export async function removeDependencyAction(
     const removed = await removeDependency(id);
     rp(projectId);
     return { ok: true, data: { removed } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── UIDG-11 — task dependencies + baselines (mutations gate projects:edit) ────
+
+export async function addTaskDependencyAction(
+  input: {
+    taskId: string;
+    dependsOnTaskId: string;
+    dependencyType?: DbDependencyType;
+    lagDays?: number;
+  },
+  projectId: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await addTaskDependency({ ...input, actorId: gate.actorId });
+    rp(projectId);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function removeTaskDependencyAction(
+  id: string,
+  projectId: string
+): Promise<ActionResult<{ removed: boolean }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const removed = await removeTaskDependency(id);
+    rp(projectId);
+    return { ok: true, data: { removed } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function captureBaselineAction(
+  input: { projectId: string; name: string; notes?: string | null }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await require("edit");
+    if (!gate.ok) return gate;
+    const row = await captureBaseline({ ...input, actorId: gate.actorId });
+    rp(input.projectId);
+    return { ok: true, data: { id: row.id } };
   } catch (e) {
     return fail(e);
   }

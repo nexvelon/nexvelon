@@ -1646,6 +1646,14 @@ export interface DbJobTask {
   assignee_tech_id: string | null;
   assignee_subcontractor_id: string | null;
   due_date: string | null;
+  /** UIDG-11 — scheduled Gantt bar span (nullable). Distinct from due_date (the
+   *  deadline). The read layer falls back to due_date for the bar end when null. */
+  start_date: string | null;
+  end_date: string | null;
+  /** UIDG-11 — manual %-complete for a leaf (0–100); parents derive from children. */
+  percent_complete: number;
+  /** UIDG-11 — parent task for nesting under a job (arbitrary depth). */
+  parent_id: string | null;
   /** Stored, not derived — a recorded fact about when the work finished. */
   completed_at: string | null;
   sort_order: number;
@@ -1666,6 +1674,10 @@ export type DbJobTaskInsert = {
   assignee_tech_id?: string | null;
   assignee_subcontractor_id?: string | null;
   due_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  percent_complete?: number;
+  parent_id?: string | null;
   completed_at?: string | null;
   sort_order?: number;
   source?: DbTaskSource;
@@ -2204,6 +2216,9 @@ export interface DbJob {
   /** PROJ2-20 — planned schedule (nullable). Distinct from actual completion. */
   planned_start_date: string | null;
   planned_end_date: string | null;
+  /** UIDG-11 — actual job span (nullable), for baseline variance on the job bar. */
+  actual_start_date: string | null;
+  actual_end_date: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -2212,12 +2227,20 @@ export interface DbJob {
 
 export type DbJobInsert = Omit<
   DbJob,
-  "id" | "created_at" | "updated_at" | "planned_start_date" | "planned_end_date"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "planned_start_date"
+  | "planned_end_date"
+  | "actual_start_date"
+  | "actual_end_date"
 > & {
   id?: string;
   // PROJ2-20 — optional at insert (set later via the schedule surface).
   planned_start_date?: string | null;
   planned_end_date?: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
 };
 
 // ----------------------------------------------------------------------------
@@ -2259,12 +2282,80 @@ export type DbScheduleMilestoneUpdate = Partial<
   Omit<DbScheduleMilestoneInsert, "project_id" | "job_id">
 >;
 
+/** UIDG-11 — the four Gantt dependency link types (Finish-Start, Start-Start,
+ *  Finish-Finish, Start-Finish). Shared by job- and task-level dependencies. */
+export type DbDependencyType = "FS" | "SS" | "FF" | "SF";
+
 export interface DbJobDependency {
   id: string;
   job_id: string;
   depends_on_job_id: string;
+  /** UIDG-11 — link type (default 'FS' — the pre-UIDG-11 implicit meaning). */
+  dependency_type: DbDependencyType;
+  /** UIDG-11 — lag in DAYS; negative = lead. */
+  lag_days: number;
   created_at: string;
 }
+
+// UIDG-11 (migration 0123) — task→task dependencies: typed + lagged, the primary
+// Gantt graph (bars are tasks). project_id is denormalised so a project's edges
+// load in one query.
+export interface DbTaskDependency {
+  id: string;
+  project_id: string;
+  task_id: string;
+  depends_on_task_id: string;
+  dependency_type: DbDependencyType;
+  lag_days: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DbTaskDependencyInsert = {
+  project_id: string;
+  task_id: string;
+  depends_on_task_id: string;
+  dependency_type?: DbDependencyType;
+  lag_days?: number;
+  created_by?: string | null;
+};
+
+// UIDG-11 (migration 0123) — a baseline is an immutable snapshot of the plan at a
+// point in time; schedule_baseline_tasks rows are frozen (a DB trigger blocks
+// UPDATE). Re-baselining = capturing another schedule_baselines row.
+export interface DbScheduleBaseline {
+  id: string;
+  project_id: string;
+  name: string;
+  notes: string | null;
+  captured_by: string | null;
+  captured_at: string;
+}
+
+export type DbScheduleBaselineInsert = {
+  project_id: string;
+  name: string;
+  notes?: string | null;
+  captured_by?: string | null;
+};
+
+export interface DbScheduleBaselineTask {
+  id: string;
+  baseline_id: string;
+  task_id: string;
+  start_date: string | null;
+  end_date: string | null;
+  percent_complete: number;
+  created_at: string;
+}
+
+export type DbScheduleBaselineTaskInsert = {
+  baseline_id: string;
+  task_id: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  percent_complete?: number;
+};
 
 // PROJ2-6a — a Job's line items (parts + labour), unified in one table. Labour
 // lines store hours in `quantity`, cost/hr in `unit_cost`, bill rate/hr in
