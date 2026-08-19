@@ -401,6 +401,8 @@ of the suite is also half-done; we don't ship that signal.
 
 - **Versioned clauses, templates, and SLA language.** When an operator edits an onboarding-gate T&C clause, a quote template, or SLA template language, the system snapshots the previous version. Already-sent quotes / invoices / signed SLAs retain the version they were dispatched with. Only new dispatches use the edited version. This ensures contractual integrity — a customer who signed under v1 language can't be retroactively bound to v2.
 
+- **Org working calendar as a settings dimension (2026-08-20, GANTT-CAL).** The company's working days + holidays are an org-level setting (`company_settings` key `working_calendar`; shape `{workingWeekdays, holidays}`), Admin-editable under Settings → Working Calendar, gated `settings:manage`. It is a shared scheduling primitive — the critical path, task durations, drag-to-reschedule and the resource lane all read it through the single `lib/gantt/working-calendar.ts` module. Unset falls back to a seeded default (Mon–Fri + Ontario statutory holidays), and the assumption is stated in the UI rather than applied invisibly (§2.8). A future refinement (per-resource calendars driving individual task durations) is noted in the roadmap; the org calendar is the intended default model.
+
 ---
 
 ## 8. Documentation currency

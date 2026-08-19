@@ -13,6 +13,7 @@
 // or ≥2 concurrent planned tasks (2f). Deterministic; O(P·D + T + B).
 
 import { toDayNum, fromDayNum } from "./geometry";
+import { makeWorkingCalendar, ALL_DAYS_CALENDAR, type WorkingCalendarConfig } from "./working-calendar";
 
 const MS_DAY = 86_400_000;
 const MS_HOUR = 3_600_000;
@@ -179,10 +180,18 @@ function capacityForDay(cal: TechCal | undefined, dayNum: number): number | null
 
 // ─── the computation ─────────────────────────────────────────────────────────
 
-export function computeResourceLoad(input: RlInput, from: string, to: string): ResourceLoad {
+export function computeResourceLoad(
+  input: RlInput,
+  from: string,
+  to: string,
+  calendar?: WorkingCalendarConfig
+): ResourceLoad {
   const fromDay = toDayNum(from);
   const toDay = toDayNum(to);
   const cals = buildTechCalendars(input);
+  // GANTT-CAL — org non-working days (holidays) zero a tech's KNOWN capacity, so
+  // load and scheduling agree. Default all-days → no change (calendar-day behaviour).
+  const orgCal = makeWorkingCalendar(calendar ?? ALL_DAYS_CALENDAR);
 
   // Index work by person.
   const tasksByPerson = new Map<string, RlTask[]>();
@@ -237,7 +246,10 @@ export function computeResourceLoad(input: RlInput, from: string, to: string): R
         booked += Math.max(0, Math.min(e, dayEndMs) - Math.max(s, dayStartMs)) / MS_HOUR;
       }
 
-      const capacityHours = person.kind === "tech" ? capacityForDay(cal, d) : null;
+      let capacityHours = person.kind === "tech" ? capacityForDay(cal, d) : null;
+      // A known capacity on an org holiday drops to 0 (business closed); an unknown
+      // capacity stays unknown (we still don't know their hours).
+      if (capacityHours != null && !orgCal.isWorkingDay(d)) capacityHours = 0;
       if (capacityHours != null) {
         capacityKnown = true;
         totalCapacity += capacityHours;

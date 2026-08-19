@@ -14,6 +14,7 @@
 
 import type { ProjectGantt, GanttTask, GanttJobRow } from "@/lib/api/gantt";
 import { toDayNum, fromDayNum } from "./geometry";
+import { makeWorkingCalendar, ALL_DAYS_CALENDAR, type WorkingCalendar } from "./working-calendar";
 
 export type DepType = "FS" | "SS" | "FF" | "SF";
 
@@ -81,23 +82,27 @@ function leafTasks(gantt: ProjectGantt): GanttTask[] {
   return out;
 }
 
-/** duration (inclusive days) + anchor for a task. No dates → zero-duration, no
+// GANTT-CAL — duration is now WORKING days and the anchor is a WORKING-DAY ORDINAL
+// (2c/2d). With an all-days calendar these reduce to the old calendar-day values,
+// so the default reproduces prior behaviour exactly.
+
+/** working-day duration + ordinal anchor for a task. No dates → zero-duration, no
  *  anchor. Due-only (point) → zero-duration anchored at the due day (2c). */
-function taskDurationAnchor(t: GanttTask): { dur: number; anchor: number | null } {
+function taskDurationAnchor(t: GanttTask, cal: WorkingCalendar): { dur: number; anchor: number | null } {
   if (t.bar_start) {
     const s = toDayNum(t.bar_start);
     const e = toDayNum(t.bar_end ?? t.bar_start);
-    return { dur: Math.max(0, e - s) + 1, anchor: s };
+    return { dur: cal.countWorking(s, e), anchor: cal.toOrd(s) };
   }
-  if (t.bar_end) return { dur: 0, anchor: toDayNum(t.bar_end) }; // due-only point
+  if (t.bar_end) return { dur: 0, anchor: cal.toOrd(toDayNum(t.bar_end)) }; // due-only point
   return { dur: 0, anchor: null }; // dateless
 }
 
-function jobDurationAnchor(j: GanttJobRow): { dur: number; anchor: number | null } {
+function jobDurationAnchor(j: GanttJobRow, cal: WorkingCalendar): { dur: number; anchor: number | null } {
   if (j.planned_start_date) {
     const s = toDayNum(j.planned_start_date);
     const e = toDayNum(j.planned_end_date ?? j.planned_start_date);
-    return { dur: Math.max(0, e - s) + 1, anchor: s };
+    return { dur: cal.countWorking(s, e), anchor: cal.toOrd(s) };
   }
   return { dur: 0, anchor: null };
 }
@@ -109,7 +114,7 @@ interface Network {
   hadDuration: boolean;
 }
 
-function buildNetwork(gantt: ProjectGantt): Network {
+function buildNetwork(gantt: ProjectGantt, cal: WorkingCalendar): Network {
   const nodes = new Map<string, InternalNode>();
   const edges: Edge[] = [];
 
@@ -117,7 +122,7 @@ function buildNetwork(gantt: ProjectGantt): Network {
   const leafIds = new Set(tasks.map((t) => t.id));
   let hadDuration = false;
   for (const t of tasks) {
-    const { dur, anchor } = taskDurationAnchor(t);
+    const { dur, anchor } = taskDurationAnchor(t, cal);
     if (dur > 0) hadDuration = true;
     const id = `t:${t.id}`;
     nodes.set(id, { id, taskId: t.id, dur, anchor });
@@ -138,7 +143,7 @@ function buildNetwork(gantt: ProjectGantt): Network {
   for (const j of gantt.jobs) {
     const jtasks = tasks.filter((t) => t.job_id === j.job_id);
     if (jtasks.length === 0) {
-      const { dur, anchor } = jobDurationAnchor(j);
+      const { dur, anchor } = jobDurationAnchor(j, cal);
       if (dur > 0) hadDuration = true;
       const id = `j:${j.job_id}`;
       nodes.set(id, { id, taskId: null, dur, anchor });
@@ -228,7 +233,11 @@ export function computeCriticalPath(gantt: ProjectGantt): CriticalPathResult {
     varianceDays: null,
   };
 
-  const net = buildNetwork(gantt);
+  // GANTT-CAL — the passes run in WORKING-DAY ordinal space. With no calendar the
+  // all-days calendar is the identity, reproducing calendar-day behaviour exactly.
+  const cal = makeWorkingCalendar(gantt.calendar ?? ALL_DAYS_CALENDAR);
+
+  const net = buildNetwork(gantt, cal);
   if (net.nodes.size === 0) return empty;
 
   const order = topoOrder(net);
@@ -336,16 +345,20 @@ export function computeCriticalPath(gantt: ProjectGantt): CriticalPathResult {
       if (critical) criticalTaskIds.add(n.taskId);
       if (atRisk) atRiskTaskIds.add(n.taskId);
       nodes.set(n.taskId, {
-        id, taskId: n.taskId, durationDays: n.dur,
-        es: es.get(id)!, ef: ef.get(id)!, ls: ls.get(id)!, lf: lf.get(id)!,
+        id, taskId: n.taskId, durationDays: n.dur, // working days
+        // Convert ordinals back to calendar day-numbers for callers/tests.
+        es: cal.fromOrd(es.get(id)!), ef: cal.fromOrd(ef.get(id)!),
+        ls: cal.fromOrd(ls.get(id)!), lf: cal.fromOrd(lf.get(id)!),
         totalFloat: tf, freeFloat: ff, critical, atRisk,
       });
     }
   }
 
-  const projectEndDay = anchors.length ? F - 1 : null; // inclusive finish day
-  const projectEnd = projectEndDay != null ? fromDayNum(projectEndDay) : null;
+  // F is the half-open finish ordinal → the last working day is fromOrd(F−1).
+  const projectEnd = anchors.length ? fromDayNum(cal.fromOrd(F - 1)) : null;
   const target = gantt.target_end ?? null;
+  // Variance is CALENDAR days (real elapsed time a client feels), even though the
+  // schedule is computed in working days.
   const varianceDays =
     projectEnd && target ? toDayNum(projectEnd) - toDayNum(target) : null;
 
@@ -355,7 +368,7 @@ export function computeCriticalPath(gantt: ProjectGantt): CriticalPathResult {
     nodes,
     criticalTaskIds,
     atRiskTaskIds,
-    projectStart: anchors.length ? fromDayNum(projectStartDay) : null,
+    projectStart: anchors.length ? fromDayNum(cal.fromOrd(projectStartDay)) : null,
     projectEnd,
     target,
     varianceDays,

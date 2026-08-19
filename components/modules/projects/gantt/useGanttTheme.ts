@@ -27,6 +27,8 @@ export interface GanttTheme {
   today: string;
   /** Grid lines + axis rules. */
   grid: string;
+  /** GANTT-CAL — non-working-day (weekend/holiday) column shading. */
+  nonWorking: string;
   /** Dependency arrow (normal + violated). */
   arrow: string;
   arrowViolated: string;
@@ -51,6 +53,7 @@ export function useGanttTheme(): GanttTheme {
     atRisk: withAlpha(ct.statusRed, 0.55),
     today: ct.accent,
     grid: ct.gridStroke,
+    nonWorking: withAlpha(ct.axisTick, 0.09),
     arrow: ct.axisTick,
     arrowViolated: ct.statusRed,
     text: ct.tooltipFg,

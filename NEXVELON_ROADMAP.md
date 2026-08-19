@@ -567,12 +567,20 @@ conveyed by an icon + count + hatch (not colour alone) in themed status tokens.
 
 **The Gantt arc (UIDG-11 → UIDG-14) is complete.** Deliberately still out of
 scope: **resource levelling / auto-assignment** (audit §12 q6, decided out) and
-**presentation-export templates** (a later item). One follow-up is on record from
-UIDG-13: both the critical path and the resource lane compute on **calendar
-days**, not working days — a task can be shown finishing on a weekend and capacity
-overstates non-working time. A working-day calendar (per-resource) is the natural
-next accuracy pass once tasks carry a resource calendar; tracked here so it isn't
-lost.
+**presentation-export templates** (a later item).
+
+**GANTT-CAL (delivered) — working-day scheduling closes the calendar-days
+follow-up.** The critical path, task durations, drag-to-reschedule and the
+resource lane now respect an ORG working calendar (working weekdays + holidays,
+stored in company_settings; seeded Mon–Fri + Ontario statutory holidays; Admin-
+editable under Settings → Working Calendar). One implementation
+(`lib/gantt/working-calendar.ts`, a working-day ordinal remap) is shared by all of
+them. Existing task dates are never rewritten — only the derived schedule becomes
+more accurate — and non-working days are shaded on the axis. The
+**calendar-days-vs-working-days follow-up recorded in UIDG-13/14 is now CLOSED.**
+(Lag is interpreted as working days; the per-resource calendar variant of 2a — the
+assignee's own calendar driving a task — remains a possible future refinement, but
+the org-calendar model is the intended long-term design.)
 
 ---
 

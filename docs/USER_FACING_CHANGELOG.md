@@ -116,6 +116,23 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects — Working-day scheduling (GANTT-CAL)
+
+- Project schedules now **skip weekends and holidays**. A task’s duration, the
+  critical path, the projected finish date, and each person’s capacity all count
+  only working days — so a three-day task starting Friday finishes Wednesday, not
+  Sunday, and the projected-finish date no longer lands on a weekend.
+- Weekends and holidays are **shaded** on the timeline (at day and week zoom), and
+  the Gantt shows the calendar in effect (e.g. “Mon–Fri · 9 holidays”) so the
+  weekend-skipping is never a mystery.
+- **Dragging** a task now lands it on a working day — drag across a weekend and it
+  snaps to the next working day rather than parking on a Sunday.
+- Admins can set the company’s working days and holidays under **Settings →
+  Working Calendar**. Until it’s set, the schedule uses a sensible default (Mon–Fri
+  plus Ontario statutory holidays), stated plainly on the calendar page.
+- Your existing task dates don’t move — only the computed schedule (critical path,
+  projected finish, float) becomes more accurate.
+
 ### Projects — Resource lane (UIDG-14)
 
 - The project schedule now has a collapsible **Resources** pane beneath the Gantt

@@ -7,6 +7,7 @@ import "server-only";
 // volume. day_of_week is 0=Sunday, matching the app's Date.getDay() convention.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { getWorkingCalendar } from "@/lib/settings/working-calendar-settings";
 import {
   computeResourceLoad,
   type RlInput,
@@ -140,5 +141,6 @@ export async function getProjectResourceLoad(
   }));
 
   const input: RlInput = { people, tasks, bookings, workingHours, absences };
-  return computeResourceLoad(input, from, to);
+  const calendar = await getWorkingCalendar();
+  return computeResourceLoad(input, from, to, calendar);
 }

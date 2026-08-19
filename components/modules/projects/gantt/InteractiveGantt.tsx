@@ -44,10 +44,14 @@ import {
   rowCenters,
   visibleTaskDeps,
   daysBetween,
+  toDayNum,
+  fromDayNum,
+  pxPerDay,
   ROW_HEIGHT,
   BAR_HEIGHT,
 } from "@/lib/gantt/geometry";
 import { computeCriticalPath, type CriticalPathResult, type CpNode } from "@/lib/gantt/critical-path";
+import { makeWorkingCalendar, ALL_DAYS_CALENDAR, snapDragResult, nonWorkingRuns } from "@/lib/gantt/working-calendar";
 import { useGanttTheme } from "./useGanttTheme";
 import { GitBranch } from "lucide-react";
 
@@ -205,6 +209,14 @@ function GanttCanvas(p: CanvasProps) {
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const criticalActive = showCriticalOnly && cp.meaningful && cp.ok;
 
+  // GANTT-CAL — non-working-day (weekend/holiday) shading, only where per-day
+  // columns are legible (day + week zoom, 2f).
+  const cal = useMemo(() => makeWorkingCalendar(gantt.calendar ?? ALL_DAYS_CALENDAR), [gantt.calendar]);
+  const shadeRuns = useMemo(
+    () => (zoom === "day" || zoom === "week" ? nonWorkingRuns(cal, toDayNum(range.from) - 3, toDayNum(range.to) + 3) : []),
+    [cal, zoom, range]
+  );
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(0);
@@ -281,6 +293,8 @@ function GanttCanvas(p: CanvasProps) {
           <GitBranch className="h-3.5 w-3.5" /> Critical path
         </button>
 
+        <CalendarBadge calendar={gantt.calendar} theme={t} />
+
         {/* Projected finish + variance banner (the number the operator wants). */}
         <div className="ml-auto"><FinishBanner cp={cp} theme={t} /></div>
 
@@ -346,6 +360,17 @@ function GanttCanvas(p: CanvasProps) {
             </div>
 
             <svg width={contentW} height={totalH} style={{ display: "block" }} role="img" aria-label="Project timeline">
+              {/* non-working-day shading (weekends + holidays), behind everything */}
+              {shadeRuns.map((r, i) => (
+                <rect
+                  key={i}
+                  x={dateToX(fromDayNum(r.from), origin, zoom)}
+                  y={0}
+                  width={(r.to - r.from + 1) * pxPerDay(zoom)}
+                  height={totalH}
+                  fill={t.nonWorking}
+                />
+              ))}
               <TimelineGridLines origin={origin} zoom={zoom} contentW={contentW} totalH={totalH} range={range} theme={t} />
               <TodayLine x={dateToX(gantt.today, origin, zoom)} totalH={totalH} theme={t} />
               {/* dependency arrows (visible endpoints only) */}
@@ -398,10 +423,22 @@ async function persistDates(
   }
 }
 
+// GANTT-CAL — snap a dragged/nudged result onto working days so a drag never lands
+// a task on a Sunday. A move snaps the start and carries the end by the same shift;
+// a resize snaps the dragged edge. All-days calendar → no-op.
+function snapNext(
+  p: CanvasProps,
+  next: { start: string; end: string },
+  mode: "move" | "resize-start" | "resize-end"
+): { start: string; end: string } {
+  const cal = makeWorkingCalendar(p.gantt.calendar ?? ALL_DAYS_CALENDAR);
+  return snapDragResult(cal, next, mode);
+}
+
 function commitDrag(p: CanvasProps, row: GanttRow, mode: "move" | "resize-start" | "resize-end", deltaPx: number, zoom: ZoomLevel) {
   const task = row.task;
   if (!task || !task.start_date || !task.end_date) return; // only scheduled bars drag
-  const next = applyDrag(task.start_date, task.end_date, deltaPx, zoom, mode);
+  const next = snapNext(p, applyDrag(task.start_date, task.end_date, deltaPx, zoom, mode), mode);
   if (next.start === task.start_date && next.end === task.end_date) return;
   void persistDates(p, row, next);
 }
@@ -409,11 +446,13 @@ function commitDrag(p: CanvasProps, row: GanttRow, mode: "move" | "resize-start"
 function nudge(p: CanvasProps, row: GanttRow, mode: "move" | "resize-end", dir: 1 | -1) {
   const task = row.task;
   if (!task || !task.start_date || !task.end_date) return;
-  // A keyboard nudge is exactly ONE day regardless of zoom.
-  const shifted =
+  // A keyboard nudge is exactly ONE day regardless of zoom, then snapped to a
+  // working day so nudging never parks a task on a weekend/holiday.
+  const raw =
     mode === "move"
       ? { start: addOne(task.start_date, dir), end: addOne(task.end_date, dir) }
       : { start: task.start_date, end: maxDate(task.start_date, addOne(task.end_date, dir)) };
+  const shifted = snapNext(p, raw, mode === "move" ? "move" : "resize-end");
   void persistDates(p, row, shifted);
 }
 
@@ -839,6 +878,33 @@ function MilestoneStrip({
 }
 
 // ─── Small bits ───────────────────────────────────────────────────────────────
+
+const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** GANTT-CAL — states the working calendar in effect so the schedule's weekend-
+ *  skipping is explicable (2g / §2.8). */
+function CalendarBadge({ calendar, theme }: { calendar?: { workingWeekdays: number[]; holidays: string[] }; theme: ReturnType<typeof useGanttTheme> }) {
+  if (!calendar) return null;
+  const wd = [...calendar.workingWeekdays].sort((a, b) => a - b);
+  const allDays = wd.length === 7 && calendar.holidays.length === 0;
+  // Contiguous Mon–Fri renders as a range, else a list.
+  const isMonFri = wd.length === 5 && wd.join() === "1,2,3,4,5";
+  const label = allDays
+    ? "Calendar days"
+    : isMonFri
+      ? "Mon–Fri"
+      : wd.map((d) => DOW_SHORT[d]).join(" ");
+  const hol = calendar.holidays.length;
+  return (
+    <span
+      className="hidden items-center gap-1 text-[11px] sm:inline-flex"
+      style={{ color: theme.textMuted }}
+      title={allDays ? "No working calendar set — using calendar days (weekends counted)." : `Working week: ${label}${hol ? ` · ${hol} holiday${hol === 1 ? "" : "s"}` : ""}. Schedules skip non-working days.`}
+    >
+      {label}{hol > 0 ? ` · ${hol}h` : ""}
+    </span>
+  );
+}
 
 function ToolbarBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
