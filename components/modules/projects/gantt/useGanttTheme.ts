@@ -19,6 +19,10 @@ export interface GanttTheme {
   baseline: string;
   /** Overdue / at-risk (a violated dependency, an overdue bar). */
   danger: string;
+  /** UIDG-13 — critical path (a bold bar outline; overdue stays a fill, so the two
+   *  read differently) + the near-critical / at-risk band. */
+  critical: string;
+  atRisk: string;
   /** Today line. */
   today: string;
   /** Grid lines + axis rules. */
@@ -43,6 +47,8 @@ export function useGanttTheme(): GanttTheme {
     marker: ct.accent,
     baseline: withAlpha(ct.axisTick, 0.55),
     danger: ct.statusRed,
+    critical: ct.statusRed,
+    atRisk: withAlpha(ct.statusRed, 0.55),
     today: ct.accent,
     grid: ct.gridStroke,
     arrow: ct.axisTick,

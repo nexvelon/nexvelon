@@ -116,6 +116,22 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects — Critical path & float (UIDG-13)
+
+- The schedule now shows the **critical path**: the tasks that, if they slip, push
+  out the whole project. They’re marked with a ◆ and a bold outline, and a
+  **Critical path** button dims everything else so you can see the driving chain at
+  a glance.
+- Every task shows its **float** — how many days of room it has before it starts
+  delaying the finish — in a new column and on hover. Tasks with only a day or two
+  of float are flagged as at-risk, the early warning before they turn critical.
+- The toolbar shows the **projected finish date** computed from the dependencies,
+  and — where the project has a target — whether you’re finishing early, on target,
+  or *N days late*.
+- If the schedule has no dependencies yet, it says so honestly rather than
+  pretending everything is critical; and if the dependencies form a loop, it tells
+  you instead of guessing.
+
 ### Projects — Interactive schedule (UIDG-12)
 
 - Every project now has a full **interactive Gantt** at *Project → Schedule →

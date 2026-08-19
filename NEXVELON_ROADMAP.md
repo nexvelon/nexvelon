@@ -540,9 +540,22 @@ flagged), a toggleable baseline overlay (planned vs actual), progress fills,
 milestones, a today line, and an honest empty state. All geometry is a pure,
 unit-tested lib (`lib/gantt/geometry.ts`); all date/cycle validation stays in the
 UIDG-11 data layer. Row virtualization keeps it smooth to a stated ~500-task
-ceiling. **Remaining in the arc:** **UIDG-13** critical path + slack (colour the
-critical chain, show float), and **UIDG-14** the resource lane (per-tech
-allocation under the bars). Presentation-export templates remain a later item.
+ceiling.
+
+**UIDG-13 (delivered).** Critical path + float. A pure, exhaustively-tested
+forward/backward pass (`lib/gantt/critical-path.ts`) computes earliest/latest
+dates, total + free float, the critical set and the projected finish over the
+dependency network — all four link types with lead/lag, job-level dependencies
+lifted in via a hammock decomposition, calendar-day arithmetic (stated cost:
+weekends aren't skipped), Kahn topo so a malformed cycle reports instead of
+hanging, and an honest sparse-network path (no dependencies → nothing marked
+critical). The Gantt surfaces it: critical tasks marked (◆ + bold outline, not
+colour alone; coexisting with overdue-fill and violated-arrow), a float column +
+hover, a critical-path dim toggle, at-risk flagging, and a projected-finish +
+variance-against-target banner. Read-only (no rescheduling). **Remaining in the
+arc:** **UIDG-14** the resource lane (per-tech allocation + over-allocation under
+the bars). Presentation-export templates remain a later item; resource levelling
+is explicitly out of scope.
 
 ---
 

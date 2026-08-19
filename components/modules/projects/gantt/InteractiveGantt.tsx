@@ -45,11 +45,15 @@ import {
   ROW_HEIGHT,
   BAR_HEIGHT,
 } from "@/lib/gantt/geometry";
+import { computeCriticalPath, type CriticalPathResult, type CpNode } from "@/lib/gantt/critical-path";
 import { useGanttTheme } from "./useGanttTheme";
+import { GitBranch } from "lucide-react";
 
-const GRID_W = 320;
+const GRID_W = 356;
 const HEADER_H = 44;
 const MILESTONE_H = 18;
+// Task · Start · End · % · Float (UIDG-13 added Float).
+const GRID_COLS = "1fr 58px 58px 34px 52px";
 
 interface Props {
   projectId: string;
@@ -145,6 +149,12 @@ function GanttCanvas(p: CanvasProps) {
   const rows = useMemo(() => flattenRows(gantt, p.collapsed), [gantt, p.collapsed]);
   const totalH = rows.length * ROW_HEIGHT;
 
+  // UIDG-13 — critical path + float, recomputed whenever the graph changes (incl.
+  // after a drag commit's optimistic patch). Pure + memoized.
+  const cp = useMemo<CriticalPathResult>(() => computeCriticalPath(gantt), [gantt]);
+  const [showCriticalOnly, setShowCriticalOnly] = useState(false);
+  const criticalActive = showCriticalOnly && cp.meaningful && cp.ok;
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(0);
@@ -205,12 +215,29 @@ function GanttCanvas(p: CanvasProps) {
         <ToolbarBtn label="Jump to today" onClick={jumpToday}>
           <Crosshair className="h-4 w-4" /> <span className="text-xs">Today</span>
         </ToolbarBtn>
+
+        {/* UIDG-13 — critical path toggle (only when the network can compute one). */}
+        <button
+          type="button"
+          onClick={() => setShowCriticalOnly((v) => !v)}
+          disabled={!cp.meaningful || !cp.ok}
+          aria-pressed={criticalActive}
+          title={cp.ok ? (cp.meaningful ? "Highlight the critical path" : "Add task dependencies to compute a critical path") : "Dependency loop — can't compute"}
+          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-40"
+          style={{ borderColor: t.grid, background: criticalActive ? t.rowAltBg : "transparent", color: criticalActive ? t.critical : t.text }}
+        >
+          <GitBranch className="h-3.5 w-3.5" /> Critical path
+        </button>
+
+        {/* Projected finish + variance banner (the number the operator wants). */}
+        <div className="ml-auto"><FinishBanner cp={cp} theme={t} /></div>
+
         {p.hasBaseline && (
           <button
             type="button"
             onClick={() => p.setShowBaseline(!p.showBaseline)}
             aria-pressed={p.showBaseline}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
             style={{
               borderColor: t.grid,
               background: p.showBaseline ? t.rowAltBg : "transparent",
@@ -220,7 +247,7 @@ function GanttCanvas(p: CanvasProps) {
             <Layers className="h-3.5 w-3.5" /> Baseline
           </button>
         )}
-        {!p.hasBaseline && <span className="text-muted-foreground ml-auto text-[11px]">No baseline captured</span>}
+        {!p.hasBaseline && <span className="text-muted-foreground text-[11px]">No baseline captured</span>}
       </div>
 
       {/* Scroll body — one container; sticky header + sticky-left grid keep the two
@@ -230,8 +257,8 @@ function GanttCanvas(p: CanvasProps) {
           {/* Header band (sticky top) */}
           <div className="sticky top-0 z-30 flex" style={{ height: HEADER_H, background: t.headerBg }}>
             <div className="sticky left-0 z-40 flex items-end border-r px-3 pb-1" style={{ width: GRID_W, background: t.headerBg, borderColor: t.grid }}>
-              <div className="text-muted-foreground grid w-full grid-cols-[1fr_64px_64px_40px] gap-1 text-[10px] font-medium uppercase tracking-wide">
-                <span>Task</span><span className="text-right">Start</span><span className="text-right">End</span><span className="text-right">%</span>
+              <div className="text-muted-foreground grid w-full gap-1 text-[10px] font-medium uppercase tracking-wide" style={{ gridTemplateColumns: GRID_COLS }}>
+                <span>Task</span><span className="text-right">Start</span><span className="text-right">End</span><span className="text-right">%</span><span className="text-right">Float</span>
               </div>
             </div>
             <AxisHeaderSvg origin={origin} zoom={zoom} contentW={contentW} theme={t} range={range} />
@@ -255,6 +282,8 @@ function GanttCanvas(p: CanvasProps) {
                   index={win.start + i}
                   selected={p.selected === row.id}
                   editable={p.editable}
+                  cpNode={row.task ? cp.nodes.get(row.task.id) ?? null : null}
+                  dimmed={criticalActive && row.kind === "task" && !cp.criticalTaskIds.has(row.id)}
                   onToggle={() => row.hasChildren && p.toggleCollapsed(row.id)}
                   onSelect={() => p.setSelected(row.id)}
                   onNudge={(mode, dir) => nudge(p, row, mode, dir)}
@@ -283,6 +312,8 @@ function GanttCanvas(p: CanvasProps) {
                   today={gantt.today}
                   editable={p.editable && row.kind === "task"}
                   selected={p.selected === row.id}
+                  cpNode={row.task ? cp.nodes.get(row.task.id) ?? null : null}
+                  dimmed={criticalActive && row.kind === "task" && !cp.criticalTaskIds.has(row.id)}
                   onSelect={() => p.setSelected(row.id)}
                   onDrag={(mode, deltaPx) => commitDrag(p, row, mode, deltaPx, zoom)}
                   theme={t}
@@ -362,6 +393,8 @@ function GridRow({
   index,
   selected,
   editable,
+  cpNode,
+  dimmed,
   onToggle,
   onSelect,
   onNudge,
@@ -371,6 +404,8 @@ function GridRow({
   index: number;
   selected: boolean;
   editable: boolean;
+  cpNode: CpNode | null;
+  dimmed: boolean;
   onToggle: () => void;
   onSelect: () => void;
   onNudge: (mode: "move" | "resize-end", dir: 1 | -1) => void;
@@ -378,6 +413,8 @@ function GridRow({
 }) {
   const indent = Math.min(row.depth, 4) * 12;
   const isTask = row.kind === "task";
+  const critical = !!cpNode?.critical;
+  const atRisk = !!cpNode?.atRisk;
 
   function onKeyDown(e: React.KeyboardEvent) {
     if ((e.key === "Enter" || e.key === " ") && row.hasChildren) {
@@ -397,13 +434,16 @@ function GridRow({
       aria-selected={selected}
       onFocus={onSelect}
       onKeyDown={onKeyDown}
+      data-critical={critical || undefined}
+      aria-label={critical ? `${row.label} — on the critical path` : undefined}
       className="grid items-center gap-1 border-b px-3 text-xs outline-none focus:ring-1"
       style={{
         height: ROW_HEIGHT,
-        gridTemplateColumns: "1fr 64px 64px 40px",
+        gridTemplateColumns: GRID_COLS,
         borderColor: theme.grid,
         background: selected ? theme.rowAltBg : index % 2 ? theme.rowAltBg : "transparent",
         color: theme.text,
+        opacity: dimmed ? 0.35 : 1,
         // @ts-expect-error CSS var for focus ring colour from the theme
         "--tw-ring-color": theme.today,
       }}
@@ -416,6 +456,8 @@ function GridRow({
         ) : (
           <span className="mr-1 w-3.5 shrink-0" />
         )}
+        {/* Critical marker — a non-colour signal (shape) so status isn't colour-only. */}
+        {critical && <span className="mr-1 shrink-0" style={{ color: theme.critical }} title="On the critical path" aria-hidden>◆</span>}
         <span className={`truncate ${row.kind === "job" || row.kind === "group" ? "font-medium" : ""}`} title={row.label}>
           {row.label}
         </span>
@@ -423,6 +465,13 @@ function GridRow({
       <span className="text-muted-foreground truncate text-right tabular-nums text-[11px]">{row.barStart ?? "—"}</span>
       <span className="text-muted-foreground truncate text-right tabular-nums text-[11px]">{row.barEnd ?? "—"}</span>
       <span className="text-right tabular-nums text-[11px]">{row.kind === "task" ? `${row.effectivePercent}%` : ""}</span>
+      <span
+        className="text-right tabular-nums text-[11px]"
+        style={{ color: critical ? theme.critical : atRisk ? theme.atRisk : theme.textMuted, fontWeight: critical ? 600 : 400 }}
+        title={cpNode ? (critical ? "Critical — no float" : `${cpNode.totalFloat} day(s) of float`) : undefined}
+      >
+        {cpNode ? (critical ? "Critical" : `${cpNode.totalFloat}d`) : ""}
+      </span>
     </div>
   );
 }
@@ -438,6 +487,8 @@ function TimelineRow({
   today,
   editable,
   selected,
+  cpNode,
+  dimmed,
   onSelect,
   onDrag,
   theme,
@@ -450,6 +501,8 @@ function TimelineRow({
   today: string;
   editable: boolean;
   selected: boolean;
+  cpNode: CpNode | null;
+  dimmed: boolean;
   onSelect: () => void;
   onDrag: (mode: "move" | "resize-start" | "resize-end", deltaPx: number) => void;
   theme: ReturnType<typeof useGanttTheme>;
@@ -458,6 +511,9 @@ function TimelineRow({
   const cy = y + ROW_HEIGHT / 2;
   const barY = cy - BAR_HEIGHT / 2;
   const drag = useBarDrag(editable, onDrag);
+  const critical = !!cpNode?.critical;
+  const atRisk = !!cpNode?.atRisk;
+  const groupOpacity = dimmed ? 0.3 : 1;
 
   if (g.empty) return null;
 
@@ -468,12 +524,13 @@ function TimelineRow({
   if (g.isPoint) {
     const s = 6;
     return (
-      <g onPointerDown={onSelect} style={{ cursor: "pointer" }}>
-        <title>{hoverText(row)}</title>
+      <g onPointerDown={onSelect} style={{ cursor: "pointer", opacity: groupOpacity }} data-critical={critical || undefined}>
+        <title>{hoverText(row, cpNode)}</title>
         <rect
           x={g.x - s} y={cy - s} width={s * 2} height={s * 2}
           transform={`rotate(45 ${g.x} ${cy})`}
           fill={overdue ? theme.danger : theme.marker}
+          stroke={critical ? theme.critical : "none"} strokeWidth={critical ? 2 : 0}
         />
       </g>
     );
@@ -486,16 +543,25 @@ function TimelineRow({
 
   const baselineGeom = showBaseline && baseline ? barFor(baseline.start_date, baseline.end_date) : null;
 
+  // Critical = a bold OUTLINE (overdue is a fill, a violated dep is a red arrow —
+  // so the three read differently and can coexist). At-risk = a thin dashed outline.
+  const outlineStroke = critical ? theme.critical : atRisk ? theme.atRisk : selected ? theme.today : "none";
+  const outlineW = critical ? 2 : atRisk ? 1.25 : selected ? 1.5 : 0;
+
   return (
-    <g onPointerDown={onSelect} style={{ cursor: editable ? "grab" : "pointer" }}>
-      <title>{hoverText(row)}</title>
+    <g onPointerDown={onSelect} style={{ cursor: editable ? "grab" : "pointer", opacity: groupOpacity }} data-critical={critical || undefined} data-atrisk={atRisk || undefined}>
+      <title>{hoverText(row, cpNode)}</title>
       {/* baseline overlay (thin bar behind, above the live bar) */}
       {baselineGeom && !baselineGeom.empty && !baselineGeom.isPoint && (
         <rect x={baselineGeom.x} y={barY - 6} width={baselineGeom.width} height={4} rx={2} fill={theme.baseline} data-testid="baseline-bar" />
       )}
       {/* track + progress fill */}
-      <rect x={g.x} y={barY} width={g.width} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill={theme.taskTrack} stroke={selected ? theme.today : "none"} strokeWidth={selected ? 1.5 : 0} />
+      <rect x={g.x} y={barY} width={g.width} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill={theme.taskTrack} />
       <rect x={g.x} y={barY} width={progressW} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill={fill} />
+      {/* critical / at-risk / selected outline */}
+      {outlineW > 0 && (
+        <rect x={g.x} y={barY} width={g.width} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill="none" stroke={outlineStroke} strokeWidth={outlineW} strokeDasharray={atRisk && !critical ? "3 2" : undefined} />
+      )}
       {isJob && (
         <>
           <rect x={g.x} y={barY} width={3} height={BAR_HEIGHT} fill={fill} />
@@ -535,14 +601,38 @@ function useBarDrag(editable: boolean, onDrag: (mode: "move" | "resize-start" | 
   );
 }
 
-function hoverText(row: GanttRow): string {
+function hoverText(row: GanttRow, cpNode?: CpNode | null): string {
   const t = row.task;
   const parts = [row.label];
   if (row.barStart) parts.push(`${row.barStart} → ${row.barEnd ?? row.barStart}`);
   if (row.barStart && row.barEnd) parts.push(`${daysBetween(row.barStart, row.barEnd) + 1}d`);
   if (t?.status) parts.push(`Status: ${t.status}`);
   if (row.kind === "task") parts.push(`${row.effectivePercent}%`);
+  if (cpNode) parts.push(cpNode.critical ? "Critical (no float)" : `Float: ${cpNode.totalFloat}d`);
   return parts.join(" · ");
+}
+
+// ─── Projected finish + variance banner (UIDG-13) ─────────────────────────────
+
+function FinishBanner({ cp, theme }: { cp: CriticalPathResult; theme: ReturnType<typeof useGanttTheme> }) {
+  if (!cp.ok) {
+    return <span className="text-[11px]" style={{ color: theme.danger }}>Dependency loop — can’t compute</span>;
+  }
+  if (!cp.projectEnd) return null;
+  const v = cp.varianceDays;
+  const varColor = v == null ? theme.textMuted : v > 0 ? theme.danger : theme.jobFill;
+  return (
+    <div className="text-[11px] leading-tight" style={{ color: theme.text }}>
+      <span className="text-muted-foreground">Projected finish </span>
+      <span className="font-medium tabular-nums">{cp.projectEnd}</span>
+      {v != null && (
+        <span className="ml-1 font-medium" style={{ color: varColor }}>
+          ({v === 0 ? "on target" : v > 0 ? `${v}d late` : `${-v}d early`})
+        </span>
+      )}
+      {!cp.meaningful && <span className="text-muted-foreground ml-1">· add dependencies for a critical path</span>}
+    </div>
+  );
 }
 
 // ─── Dependency arrow ─────────────────────────────────────────────────────────
