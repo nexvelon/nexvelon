@@ -646,10 +646,29 @@ export const ACTIVITY_ENTITY_TYPES = [
   "commissioning_item",
   "subcontractor",
   "subcontractor_compliance",
+  // SNAP-1 — the daily balance-snapshot capture writes a system audit row here.
+  "balance_snapshot",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 export type ActivityAction = "create" | "update" | "delete";
+
+// SNAP-1 (migration 0124) — immutable daily point-in-time balance history.
+export interface DbBalanceSnapshot {
+  id: string;
+  captured_date: string; // yyyy-mm-dd, America/Toronto day
+  metric_key: string;
+  opco: string; // 'all' = the aggregate figure the dashboard shows
+  amount: number;
+  created_at: string;
+}
+
+export type DbBalanceSnapshotInsert = {
+  captured_date: string;
+  metric_key: string;
+  opco?: string;
+  amount: number;
+};
 
 /** One field-level change inside a `changes` JSONB blob. */
 export interface ActivityChange {

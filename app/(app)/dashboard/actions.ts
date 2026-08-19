@@ -25,6 +25,13 @@ import {
 import type { MonthlyRevenuePoint } from "@/lib/api/financials";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
+import { businessDateISO } from "@/lib/format";
+import {
+  BALANCE_METRICS,
+  getBalanceHistory,
+  detectSnapshotGaps,
+  type MetricPolarity,
+} from "@/lib/api/balance-snapshots";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -65,6 +72,64 @@ export async function getDashboardKpisAction(input: {
 
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+}
+
+// SNAP-1 — period-over-period deltas + trend series for the balance KPIs, computed
+// from the daily snapshots. Only metrics the caller may READ are included (a user
+// who can't see AR never receives AR history — the same gate as the live figure).
+export interface BalanceDelta {
+  key: string;
+  /** The value at the comparison anchor, or null → not enough history (building). */
+  prior: number | null;
+  /** Ascending snapshot amounts (for a sparkline once ≥ the minimum). */
+  series: number[];
+  polarity?: MetricPolarity;
+  basis: string;
+  buildingHistory: boolean;
+}
+export interface BalanceDeltasPayload {
+  deltas: Record<string, BalanceDelta>;
+  /** Missing capture days between the first snapshot and yesterday (honest gap). */
+  missingDays: number;
+  firstDate: string | null;
+}
+
+export async function getBalanceDeltasAction(input: {
+  /** The comparison window's end date (the balance's prior anchor); null → none. */
+  compareTo: string | null;
+  basis: string;
+}): Promise<ActionResult<BalanceDeltasPayload>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me) return { ok: false, error: "You're not signed in." };
+    const role = adaptRole(me.role);
+    if (!hasPermission(role, "dashboard", "view")) {
+      return { ok: false, error: "You don't have access to the dashboard." };
+    }
+    // Gate exactly like the live figures — only readable metrics are queried.
+    const readable = BALANCE_METRICS.filter((m) => hasPermission(role, m.gate.resource, m.gate.action));
+    const today = businessDateISO();
+    const from = new Date(Date.parse(`${today}T00:00:00Z`) - 90 * 86_400_000).toISOString().slice(0, 10);
+    const history = await getBalanceHistory(readable.map((m) => m.key), from, today, input.compareTo);
+
+    const deltas: Record<string, BalanceDelta> = {};
+    for (const m of readable) {
+      const h = history.find((x) => x.key === m.key);
+      const prior = h?.priorAt ?? null;
+      deltas[m.key] = {
+        key: m.key,
+        prior,
+        series: (h?.points ?? []).map((p) => p.amount),
+        polarity: m.polarity,
+        basis: input.basis,
+        buildingHistory: prior == null,
+      };
+    }
+    const gaps = await detectSnapshotGaps();
+    return { ok: true, data: { deltas, missingDays: gaps.missing.length, firstDate: gaps.firstDate } };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 // DASH-2 — the alerts/worklists fan-out. Each block is gated by its own resource

@@ -10,10 +10,15 @@ import { hasPermission } from "@/lib/permissions";
 import { resolveDashboardLayout } from "@/lib/api/dashboard-layout";
 import { WIDGET_IDS, canSeeWidget } from "@/lib/dashboard/widgets";
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { captureIfMissing } from "@/lib/api/balance-snapshots";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  // SNAP-1 — best-effort lazy capture of today's balances (the fallback when no
+  // cron is wired). Never throws; a failure is logged and the gap stays visible.
+  await captureIfMissing();
+
   const me = await getCurrentProfile();
   const role = me ? adaptDbRole(me.role) : null;
 

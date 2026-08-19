@@ -41,6 +41,8 @@ export const FEED_RESOURCE: Record<ActivityEntityType, Resource> = {
   commissioning_item: "projects",
   subcontractor: "subcontractors",
   subcontractor_compliance: "subcontractors",
+  // SNAP-1 — the daily balance-snapshot capture audit; financial data → financials.
+  balance_snapshot: "financials",
 };
 
 // AUD-3 — human labels for each entity_type, for the feed's type column + the
@@ -66,6 +68,7 @@ export const ENTITY_TYPE_LABEL: Record<ActivityEntityType, string> = {
   commissioning_item: "Commissioning item",
   subcontractor: "Subcontractor",
   subcontractor_compliance: "Compliance document",
+  balance_snapshot: "Balance snapshot",
 };
 
 /** AUD-3 — the detail-page href for a feed row, or null when the type has no
