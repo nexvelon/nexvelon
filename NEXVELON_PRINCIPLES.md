@@ -403,6 +403,8 @@ of the suite is also half-done; we don't ship that signal.
 
 - **Org working calendar as a settings dimension (2026-08-20, GANTT-CAL).** The company's working days + holidays are an org-level setting (`company_settings` key `working_calendar`; shape `{workingWeekdays, holidays}`), Admin-editable under Settings → Working Calendar, gated `settings:manage`. It is a shared scheduling primitive — the critical path, task durations, drag-to-reschedule and the resource lane all read it through the single `lib/gantt/working-calendar.ts` module. Unset falls back to a seeded default (Mon–Fri + Ontario statutory holidays), and the assumption is stated in the UI rather than applied invisibly (§2.8). A future refinement (per-resource calendars driving individual task durations) is noted in the roadmap; the org calendar is the intended default model.
 
+- **`balance_snapshots` is the canonical home for point-in-time history (2026-08-21, SNAP-1).** Point-in-time balances (AR/AP/WIP/deposits, and future counts/per-opco figures) that need history over time are captured into the ONE `balance_snapshots` table (migration 0124) — one immutable row (§2.2) per metric per opco per America/Toronto day, `metric_key`/`opco` uncapped by any CHECK (§1) so the metric list grows by INSERT, never by a new table or a second snapshot mechanism. Any future point-in-time metric that needs a delta or trend line uses this table. Capture is service-role + idempotent (`ON CONFLICT DO NOTHING`); reads are gated in application code by the same permission as the live figure; history begins at deploy and gaps are surfaced, never smoothed (§2.8). Do not invent a parallel snapshot store for a new balance — add its metric here.
+
 ---
 
 ## 8. Documentation currency

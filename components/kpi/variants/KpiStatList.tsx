@@ -10,7 +10,8 @@
 //   ]} />
 
 import { KpiShell } from "../KpiShell";
-import type { KpiCommon } from "../types";
+import { KpiHistoryFooter } from "../KpiHistoryFooter";
+import type { KpiCommon, KpiComparison } from "../types";
 
 export interface KpiStatRow {
   label: string;
@@ -21,6 +22,11 @@ export interface KpiStatRow {
 
 export interface KpiStatListProps extends KpiCommon {
   rows: KpiStatRow[];
+  // SNAP-1 — a delta on a headline value (e.g. WIP net) / building-history / trend.
+  comparison?: KpiComparison;
+  comparisonCurrent?: number;
+  buildingHistory?: boolean;
+  series?: number[];
 }
 
 const TONE: Record<NonNullable<KpiStatRow["tone"]>, string | undefined> = {
@@ -29,7 +35,7 @@ const TONE: Record<NonNullable<KpiStatRow["tone"]>, string | undefined> = {
   bad: "var(--brand-status-red)",
 };
 
-export function KpiStatList({ rows, ...common }: KpiStatListProps) {
+export function KpiStatList({ rows, comparison, comparisonCurrent, buildingHistory, series, ...common }: KpiStatListProps) {
   const empty = common.empty ?? (rows?.length ?? 0) === 0;
   return (
     <KpiShell {...common} empty={empty}>
@@ -46,6 +52,9 @@ export function KpiStatList({ rows, ...common }: KpiStatListProps) {
           </li>
         ))}
       </ul>
+      {(comparison || buildingHistory || series) && (
+        <KpiHistoryFooter current={comparisonCurrent ?? 0} comparison={comparison} buildingHistory={buildingHistory} series={series} label={common.label} />
+      )}
     </KpiShell>
   );
 }

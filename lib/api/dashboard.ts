@@ -327,6 +327,9 @@ export async function getRecentActivity(opts: { limit?: number } = {}): Promise<
   const { data, error } = await supabase
     .from("activity_log")
     .select("id, entity_type, action, actor_id, created_at")
+    // SNAP-1 — the daily system balance-snapshot audit rows are for the audit log,
+    // not the user-facing "Recent activity" widget.
+    .neq("entity_type", "balance_snapshot")
     .order("created_at", { ascending: false })
     .limit(opts.limit ?? 15);
   if (error) throw new Error(`getRecentActivity: ${error.message}`);

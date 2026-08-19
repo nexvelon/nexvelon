@@ -26,6 +26,7 @@ import "server-only";
 // counts project_deposits instead. See getCashCollected there.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import type { BalanceClient } from "@/lib/api/balance-client";
 import { round2 } from "@/lib/quote-helpers";
 import { businessDateISO } from "@/lib/format";
 import { deriveStatusFromPayments, isOpenStatus } from "@/lib/invoice-status";
@@ -155,8 +156,8 @@ export async function getInvoiceDepositCredit(
  * Company-wide unapplied deposit money — the "Deposits held" KPI. This is cash
  * received that has not yet been applied against any invoice.
  */
-export async function getDepositsHeldTotal(): Promise<number> {
-  const supabase = await db();
+export async function getDepositsHeldTotal(client?: BalanceClient): Promise<number> {
+  const supabase = client ?? (await db());
   const [{ data: dep, error: dErr }, { data: app, error: aErr }] =
     await Promise.all([
       supabase.from("project_deposits").select("amount"),

@@ -15,6 +15,7 @@ import "server-only";
 // of (invoice, payments, today).
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import type { BalanceClient } from "@/lib/api/balance-client";
 import { round2 } from "@/lib/quote-helpers";
 import { businessDateISO } from "@/lib/format";
 import {
@@ -77,8 +78,8 @@ interface OpenInvoiceRow {
  * Load every open invoice with a positive remaining balance, already aged.
  * Shared by the summary + by-client reads so they can never disagree.
  */
-async function loadOpenAged(today: string): Promise<OpenInvoiceRow[]> {
-  const supabase = await db();
+async function loadOpenAged(today: string, client?: BalanceClient): Promise<OpenInvoiceRow[]> {
+  const supabase = client ?? (await db());
   const { data, error } = await supabase
     .from("invoices")
     .select("id, client_id, amount_due, issue_date, due_date, client:clients(name)")
@@ -128,9 +129,9 @@ export interface ArAgingSummary {
   asOf: string;
 }
 
-export async function getArAgingSummary(): Promise<ArAgingSummary> {
+export async function getArAgingSummary(client?: BalanceClient): Promise<ArAgingSummary> {
   const asOf = businessDateISO();
-  const rows = await loadOpenAged(asOf);
+  const rows = await loadOpenAged(asOf, client);
 
   const buckets = emptyBuckets();
   let total = 0;

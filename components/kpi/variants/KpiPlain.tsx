@@ -7,12 +7,17 @@
 import { KpiShell } from "../KpiShell";
 import { KpiValue } from "../KpiValue";
 import { DeltaPill } from "../DeltaPill";
-import type { KpiCommon, DeltaSpec } from "../types";
+import { KpiHistoryFooter } from "../KpiHistoryFooter";
+import type { KpiCommon, DeltaSpec, KpiComparison } from "../types";
 
 export interface KpiPlainProps extends KpiCommon, Partial<DeltaSpec> {
   value: number;
   format: (n: number) => string;
   footer?: React.ReactNode;
+  // SNAP-1 — snapshot-driven delta / building-history / trend.
+  comparison?: KpiComparison;
+  buildingHistory?: boolean;
+  series?: number[];
 }
 
 export function KpiPlain({
@@ -22,13 +27,18 @@ export function KpiPlain({
   deltaFormat,
   polarity,
   footer,
+  comparison,
+  buildingHistory,
+  series,
   ...common
 }: KpiPlainProps) {
   return (
     <KpiShell {...common}>
       <KpiValue value={value} format={format} />
-      {delta !== undefined && (
-        <DeltaPill delta={delta} deltaFormat={deltaFormat} polarity={polarity} />
+      {comparison || buildingHistory || series ? (
+        <KpiHistoryFooter current={value} comparison={comparison} buildingHistory={buildingHistory} series={series} label={common.label} />
+      ) : (
+        delta !== undefined && <DeltaPill delta={delta} deltaFormat={deltaFormat} polarity={polarity} />
       )}
       {footer && <div className="mt-auto">{footer}</div>}
     </KpiShell>

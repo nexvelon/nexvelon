@@ -582,6 +582,21 @@ more accurate — and non-working days are shaded on the axis. The
 assignee's own calendar driving a task — remains a possible future refinement, but
 the org-calendar model is the intended long-term design.)
 
+**SNAP-1 (delivered) — balance snapshots.** UIDG-6B could only apply deltas to
+Revenue and Cash because AR/AP/WIP/deposits are live point-in-time balances with
+no history to compare against. SNAP-1 captures each balance daily
+(`balance_snapshots`, migration 0124 — immutable per §2.2, row-per-metric-per-opco-
+per-day, America/Toronto boundary), so those four KPIs now carry period-over-period
+deltas (with per-metric polarity) and, once ~a week of history exists, trend
+sparklines. History begins at deploy (no back-fill); a sparse window reads "building
+history" and a missed capture day is detected, not smoothed. Capture runs via a
+secured cron endpoint (`/api/cron/capture-balance-snapshots`, Vercel Cron in
+`vercel.json`) with a lazy first-dashboard-load fallback. **This is the canonical
+home for point-in-time history** — future point-in-time metrics (per-opco balances,
+counts, etc.) add a row to this table, never a new one. **Unblocks:** per-opco
+balance trends (the `opco` dimension is already provisioned) and count trend lines,
+both pure INSERTs with no migration.
+
 ---
 
 ## Open architectural decisions awaiting design

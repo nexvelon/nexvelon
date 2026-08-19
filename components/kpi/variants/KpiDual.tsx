@@ -9,7 +9,8 @@
 
 import { KpiShell } from "../KpiShell";
 import { KpiValue } from "../KpiValue";
-import type { KpiCommon } from "../types";
+import { KpiHistoryFooter } from "../KpiHistoryFooter";
+import type { KpiCommon, KpiComparison } from "../types";
 
 interface Metric {
   label: string;
@@ -21,6 +22,10 @@ interface Metric {
 export interface KpiDualProps extends KpiCommon {
   primary: Metric;
   secondary: Metric;
+  // SNAP-1 — snapshot-driven delta on the PRIMARY value / building-history / trend.
+  comparison?: KpiComparison;
+  buildingHistory?: boolean;
+  series?: number[];
 }
 
 const TONE: Record<NonNullable<Metric["tone"]>, string | undefined> = {
@@ -29,7 +34,7 @@ const TONE: Record<NonNullable<Metric["tone"]>, string | undefined> = {
   bad: "var(--brand-status-red)",
 };
 
-export function KpiDual({ primary, secondary, ...common }: KpiDualProps) {
+export function KpiDual({ primary, secondary, comparison, buildingHistory, series, ...common }: KpiDualProps) {
   return (
     <KpiShell {...common} ariaLabel={`${common.label}. ${primary.label} ${primary.format(primary.value)}, ${secondary.label} ${secondary.format(secondary.value)}`}>
       <div className="mt-1 flex items-stretch gap-4">
@@ -48,6 +53,9 @@ export function KpiDual({ primary, secondary, ...common }: KpiDualProps) {
           </div>
         </div>
       </div>
+      {(comparison || buildingHistory || series) && (
+        <KpiHistoryFooter current={primary.value} comparison={comparison} buildingHistory={buildingHistory} series={series} label={common.label} />
+      )}
     </KpiShell>
   );
 }

@@ -116,6 +116,23 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard — Balance history & deltas (SNAP-1)
+
+- The balance tiles — **AR**, **AP**, **deposits held**, and **WIP** — now show how
+  they’ve **changed** since the comparison period (e.g. “+8% vs same days last
+  month”), coloured for whether that change is good or bad for your cash position.
+  Rising receivables and payables read as a caution; more deposits on hand and a
+  healthier WIP position read as good.
+- History starts the day this ships — the app takes a daily snapshot of each
+  balance from now on. Until there’s a prior period to compare against, a tile
+  shows **“Building history…”** rather than a misleading number, and trend
+  sparklines appear once about a week of history exists.
+- Nothing is back-filled (past balances can’t be reconstructed), and a day the
+  snapshot didn’t run is recorded as a gap rather than smoothed over — the trend
+  never silently lies.
+- You only see history for balances you can already see: the same access rules as
+  the live figures apply.
+
 ### Projects — Working-day scheduling (GANTT-CAL)
 
 - Project schedules now **skip weekends and holidays**. A task’s duration, the

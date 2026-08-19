@@ -37,6 +37,7 @@ import "server-only";
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import type { BalanceClient } from "@/lib/api/balance-client";
 import { round2 } from "@/lib/quote-helpers";
 import { getProjectCostRollup } from "@/lib/api/project-cost-rollup";
 import { getJobById } from "@/lib/api/projects";
@@ -236,8 +237,8 @@ export interface WipPortfolio {
 const PROJECT_ACTIVE_STATUSES = ["active", "on_hold", "substantially_complete"] as const;
 
 /** One row per active project — for the "am I financing their jobs" dashboard. */
-export async function getWipPortfolio(): Promise<WipPortfolio> {
-  const supabase = await db();
+export async function getWipPortfolio(client?: BalanceClient): Promise<WipPortfolio> {
+  const supabase = client ?? (await db());
   const { data, error } = await supabase
     .from("projects")
     .select("id, project_number, title, status")

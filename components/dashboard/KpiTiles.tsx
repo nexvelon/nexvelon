@@ -38,6 +38,19 @@ function useTileState() {
 
 const NEEDS_RANGE = "Set a date range";
 
+/** SNAP-1 — build the snapshot-driven delta props for a balance tile. Returns a
+ *  ComparisonDelta when a prior snapshot exists, else flags "building history". */
+function useBalanceHistory(metricKey: string) {
+  const { balances } = useKpiData();
+  const d = balances?.deltas?.[metricKey] ?? null;
+  if (!d) return { comparison: undefined, buildingHistory: false, series: undefined as number[] | undefined };
+  return {
+    comparison: d.prior != null ? { prior: d.prior, basis: d.basis, polarity: d.polarity } : undefined,
+    buildingHistory: d.buildingHistory,
+    series: d.series,
+  };
+}
+
 export function KpiRevenueTile() {
   const { win, kpi, loading, invalid } = useTileState();
   const { trend } = useKpiData();
@@ -83,6 +96,7 @@ export function KpiCashTile() {
 export function KpiArTile() {
   const { kpi, loading, invalid } = useTileState();
   const fin = kpi?.financial ?? null;
+  const hist = useBalanceHistory("ar_outstanding");
   return (
     <KpiDual
       restricted={!loading && !invalid && !fin}
@@ -92,6 +106,9 @@ export function KpiArTile() {
       href="/invoices"
       primary={{ label: "Outstanding", value: fin?.ar_outstanding ?? 0, format: formatCurrency }}
       secondary={{ label: "Overdue", value: fin?.ar_overdue ?? 0, format: formatCurrency, tone: (fin?.ar_overdue ?? 0) > 0 ? "bad" : "default" }}
+      comparison={fin ? hist.comparison : undefined}
+      buildingHistory={!!fin && hist.buildingHistory}
+      series={fin ? hist.series : undefined}
     />
   );
 }
@@ -99,6 +116,7 @@ export function KpiArTile() {
 export function KpiApTile() {
   const { kpi, loading, invalid } = useTileState();
   const fin = kpi?.financial ?? null;
+  const hist = useBalanceHistory("ap_outstanding");
   return (
     <KpiDual
       restricted={!loading && !invalid && !fin}
@@ -108,6 +126,9 @@ export function KpiApTile() {
       href="/financials"
       primary={{ label: "Outstanding", value: fin?.ap_outstanding ?? 0, format: formatCurrency }}
       secondary={{ label: "Overdue", value: fin?.ap_overdue ?? 0, format: formatCurrency, tone: (fin?.ap_overdue ?? 0) > 0 ? "bad" : "default" }}
+      comparison={fin ? hist.comparison : undefined}
+      buildingHistory={!!fin && hist.buildingHistory}
+      series={fin ? hist.series : undefined}
     />
   );
 }
@@ -115,6 +136,7 @@ export function KpiApTile() {
 export function KpiDepositsTile() {
   const { kpi, loading, invalid } = useTileState();
   const fin = kpi?.financial ?? null;
+  const hist = useBalanceHistory("deposits_held");
   return (
     <KpiPlain
       restricted={!loading && !invalid && !fin}
@@ -124,6 +146,9 @@ export function KpiDepositsTile() {
       format={formatCurrency}
       icon={Wallet}
       href="/financials"
+      comparison={fin ? hist.comparison : undefined}
+      buildingHistory={!!fin && hist.buildingHistory}
+      series={fin ? hist.series : undefined}
     />
   );
 }
@@ -163,6 +188,7 @@ export function KpiOpenQuotesTile() {
 export function KpiWipTile() {
   const { kpi, loading, invalid } = useTileState();
   const finEdit = kpi?.financial_edit ?? null;
+  const hist = useBalanceHistory("wip_net");
   return (
     <KpiStatList
       restricted={!loading && !invalid && !finEdit}
@@ -175,6 +201,10 @@ export function KpiWipTile() {
         { label: "Overbilled", value: finEdit?.wip_overbilled ?? 0, format: formatCurrency, tone: "bad" },
         { label: "Underbilled", value: Math.abs(finEdit?.wip_underbilled ?? 0), format: formatCurrency, tone: "good" },
       ]}
+      comparisonCurrent={finEdit?.wip_net ?? 0}
+      comparison={finEdit ? hist.comparison : undefined}
+      buildingHistory={!!finEdit && hist.buildingHistory}
+      series={finEdit ? hist.series : undefined}
     />
   );
 }

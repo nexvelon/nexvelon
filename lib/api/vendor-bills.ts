@@ -15,6 +15,7 @@ import "server-only";
 // makes billed_cost land on the right Job in the cost rollup.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import type { BalanceClient } from "@/lib/api/balance-client";
 import { round2 } from "@/lib/quote-helpers";
 import { logActivity } from "@/lib/api/activity-log";
 import { daysBetween } from "@/lib/aging-buckets";
@@ -280,8 +281,8 @@ export interface ApSummary {
 }
 
 /** Overview KPIs: what we owe, and how much of it is late. */
-export async function getApSummary(today: string): Promise<ApSummary> {
-  const supabase = await db();
+export async function getApSummary(today: string, client?: BalanceClient): Promise<ApSummary> {
+  const supabase = client ?? (await db());
   const { data, error } = await supabase
     .from("vendor_bills")
     .select("id, total, bill_date, due_date, status")
