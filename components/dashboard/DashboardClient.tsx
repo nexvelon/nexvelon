@@ -9,25 +9,27 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Pencil, Plus, RotateCcw, Building2 } from "lucide-react";
+import { Check, Loader2, Pencil, Plus, RotateCcw, Building2, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RangePicker } from "@/components/modules/dashboard/RangePicker";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ApplyDefaultDialog } from "@/components/settings/ApplyDefaultDialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { DashboardRangeProvider } from "./range-context";
+import { KpiDataProvider } from "./KpiDataProvider";
+import { WidgetCatalog } from "./WidgetCatalog";
+import { TemplatePicker } from "./TemplatePicker";
 import { resolveWindow } from "@/lib/dashboard/range";
 import { DashboardGrid } from "./DashboardGrid";
-import { WIDGET_META, type LayoutEntry, type WidgetId } from "@/lib/dashboard/widgets";
+import {
+  WIDGET_META,
+  KPI_TILE_IDS,
+  type DashboardLayout,
+  type LayoutEntry,
+  type WidgetId,
+} from "@/lib/dashboard/widgets";
+import type { DashboardTemplate } from "@/lib/dashboard/templates";
 import {
   saveUserLayoutAction,
   resetUserLayoutAction,
@@ -84,8 +86,13 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Org-default dialog state (admin only).
-  const [dialog, setDialog] = useState<{ count: number } | null>(null);
+  // UIDG-10 — catalog + template pickers.
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  // Org-default dialog state (admin only). Carries the layout being pushed out —
+  // the current arrangement (Save as company default) OR a chosen template.
+  const [dialog, setDialog] = useState<{ count: number; layout: DashboardLayout } | null>(null);
   const [pendingOrg, startOrg] = useTransition();
 
   const now = new Date();
@@ -96,6 +103,13 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
   const removed = useMemo(
     () => visibleWidgetIds.filter((id) => !layout.some((w) => w.id === id)),
     [visibleWidgetIds, layout]
+  );
+  const placedIds = useMemo(() => new Set(layout.map((w) => w.id)), [layout]);
+  // The shared KPI fetch runs only when at least one KPI tile is on the dashboard
+  // (2a — a layout with no tiles fires no KPI query).
+  const hasKpiTiles = useMemo(
+    () => layout.some((w) => (KPI_TILE_IDS as WidgetId[]).includes(w.id)),
+    [layout]
   );
 
   // Persist a committed change (debounced so rapid resize clicks coalesce).
@@ -123,21 +137,38 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
     });
   }
 
-  function saveAsOrgDefault() {
+  // UIDG-10 — add a widget from the catalog: appended at its default size, then
+  // persisted. The duplicate rule (2e) is enforced here and by validateLayout.
+  function addWidget(id: WidgetId) {
+    if (layout.some((w) => w.id === id)) return;
+    persist([...layout, { id, colSpan: WIDGET_META[id].defaultCols }]);
+  }
+
+  // UIDG-10 — apply a template to MY layout. Destructive (confirmed in the picker).
+  // Reflows around the widgets I'm permitted to see (Step 6) — no gaps.
+  function applyTemplate(template: DashboardTemplate) {
+    const visible = new Set(visibleWidgetIds);
+    const next = template.layout.widgets.filter((w) => visible.has(w.id));
+    persist(next);
+    toast.success(`Applied the ${template.name} template.`);
+  }
+
+  // Org-default: open the confirm dialog (or apply straight away when no personal
+  // overrides exist) for a specific target layout — the current arrangement or a
+  // chosen template. The stored org default stays UNFILTERED so each user reflows
+  // it against their own permissions on resolve.
+  function beginOrgDefault(target: DashboardLayout) {
     startOrg(async () => {
       const c = await countLayoutOverridesAction();
       const count = c.ok ? c.data.count : 0;
-      if (count === 0) {
-        applyOrgDefault(false);
-      } else {
-        setDialog({ count });
-      }
+      if (count === 0) commitOrgDefault(target, false);
+      else setDialog({ count, layout: target });
     });
   }
 
-  function applyOrgDefault(applyToEveryone: boolean) {
+  function commitOrgDefault(target: DashboardLayout, applyToEveryone: boolean) {
     startOrg(async () => {
-      const res = await setOrgDefaultLayoutAction({ widgets: layout }, applyToEveryone);
+      const res = await setOrgDefaultLayoutAction(target, applyToEveryone);
       setDialog(null);
       if (!res.ok) {
         toast.error(res.error);
@@ -208,30 +239,27 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
           <span className="text-muted-foreground text-xs">
             Drag the grip to reorder · use −/+ to resize · × to remove
           </span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <SaveIndicator state={saveState} />
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                disabled={removed.length === 0}
-                className="border-brand-navy/15 text-brand-charcoal hover:bg-brand-gold/10 inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium disabled:opacity-40"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add widget
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="font-serif">Removed widgets</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {removed.map((id) => (
-                  <DropdownMenuItem
-                    key={id}
-                    onClick={() =>
-                      persist([...layout, { id, colSpan: WIDGET_META[id].defaultCols }])
-                    }
-                  >
-                    {WIDGET_META[id].title}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setCatalogOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add widget
+              {removed.length > 0 && (
+                <span className="text-muted-foreground">({removed.length})</span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setTemplatesOpen(true)}
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" /> Templates
+            </Button>
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={reset} disabled={pendingOrg}>
               <RotateCcw className="h-3.5 w-3.5" /> Reset to company layout
             </Button>
@@ -240,7 +268,7 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={saveAsOrgDefault}
+                onClick={() => beginOrgDefault({ widgets: layout })}
                 disabled={pendingOrg}
               >
                 <Building2 className="h-3.5 w-3.5" /> Save as company default
@@ -257,27 +285,45 @@ export function DashboardClient({ initialLayout, visibleWidgetIds, canManageOrg 
       )}
 
       <DashboardRangeProvider value={win}>
-        <DashboardGrid
-          layout={layout}
-          editMode={editable && editMode}
-          onReorder={persist}
-          onRemove={(id) => persist(layout.filter((w) => w.id !== id))}
-          onResize={(id, colSpan) =>
-            persist(layout.map((w) => (w.id === id ? { ...w, colSpan } : w)))
-          }
-        />
+        <KpiDataProvider active={hasKpiTiles}>
+          <DashboardGrid
+            layout={layout}
+            editMode={editable && editMode}
+            onReorder={persist}
+            onRemove={(id) => persist(layout.filter((w) => w.id !== id))}
+            onResize={(id, colSpan) =>
+              persist(layout.map((w) => (w.id === id ? { ...w, colSpan } : w)))
+            }
+          />
+        </KpiDataProvider>
       </DashboardRangeProvider>
+
+      <WidgetCatalog
+        open={catalogOpen}
+        onOpenChange={setCatalogOpen}
+        visibleWidgetIds={visibleWidgetIds}
+        placedIds={placedIds}
+        onAdd={addWidget}
+      />
+
+      <TemplatePicker
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        canManageOrg={canManageOrg}
+        onApply={applyTemplate}
+        onSetOrgDefault={(t) => beginOrgDefault(t.layout)}
+      />
 
       {dialog && (
         <ApplyDefaultDialog
           open
           onOpenChange={(o) => !o && setDialog(null)}
           subject="dashboard layout"
-          targetName="your current layout"
+          targetName="this layout"
           affectedCount={dialog.count}
           pending={pendingOrg}
-          onApplyToEveryone={() => applyOrgDefault(true)}
-          onKeepChoices={() => applyOrgDefault(false)}
+          onApplyToEveryone={() => commitOrgDefault(dialog.layout, true)}
+          onKeepChoices={() => commitOrgDefault(dialog.layout, false)}
         />
       )}
     </div>

@@ -52,9 +52,13 @@ export function WidgetFrame({
   return (
     <div className="flex h-full flex-col">
       <div className="text-muted-foreground mb-1 flex items-center justify-end gap-1 text-[11px]">
-        <span className="mr-auto hidden sm:inline" aria-hidden>
-          Updated {formatDistanceToNowStrict(fetchedAt, { addSuffix: true })}
-        </span>
+        {/* The freshness stamp pairs with refresh — only shown where the widget
+            can actually be refreshed (KPI tiles read a shared snapshot). */}
+        {meta.chrome.refresh && (
+          <span className="mr-auto hidden sm:inline" aria-hidden>
+            Updated {formatDistanceToNowStrict(fetchedAt, { addSuffix: true })}
+          </span>
+        )}
         {meta.chrome.refresh && (
           <button
             type="button"
@@ -84,8 +88,12 @@ export function WidgetFrame({
             <MoreHorizontal className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setExpanded(true)}>Expand</DropdownMenuItem>
-            <DropdownMenuItem onClick={refresh}>Refresh</DropdownMenuItem>
+            {meta.chrome.expand && (
+              <DropdownMenuItem onClick={() => setExpanded(true)}>Expand</DropdownMenuItem>
+            )}
+            {meta.chrome.refresh && (
+              <DropdownMenuItem onClick={refresh}>Refresh</DropdownMenuItem>
+            )}
             <DropdownMenuItem className="text-destructive" onClick={() => onRemove(id)}>
               Remove from dashboard
             </DropdownMenuItem>

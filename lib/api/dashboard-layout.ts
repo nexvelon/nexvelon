@@ -16,6 +16,7 @@ import {
   BUILT_IN_LAYOUT,
   validateLayout,
   filterLayoutForRole,
+  isPublicWidget,
   type DashboardLayout,
 } from "@/lib/dashboard/widgets";
 
@@ -59,8 +60,8 @@ export async function resolveDashboardLayout(
   } catch {
     base = BUILT_IN_LAYOUT;
   }
-  // A logged-out/roleless caller only sees always-visible widgets.
-  if (!role) return { widgets: base.widgets.filter((w) => w.id === "kpiOverview" || w.id === "alerts" || w.id === "activityFeed") };
+  // A logged-out/roleless caller only sees the ungated (public) widgets.
+  if (!role) return { widgets: base.widgets.filter((w) => isPublicWidget(w.id)) };
   return filterLayoutForRole(base, role);
 }
 

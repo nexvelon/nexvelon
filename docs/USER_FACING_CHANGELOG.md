@@ -116,6 +116,25 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Dashboard (UIDG-10)
+
+- Browse and add widgets: in **Customise**, **Add widget** opens a catalogue of
+  everything available to you, grouped and searchable, each with a short
+  description. Widgets already on your dashboard show as “Added”, and you only
+  ever see widgets you have access to.
+- Arrange individual metrics: each KPI (Revenue, Cash collected, Accounts
+  receivable, …) is now its own tile you can place, resize or remove on its own —
+  Revenue no longer has to sit next to Cash.
+- **Quick actions**: add the quick-actions bar for one-click shortcuts to the
+  create flows you can use — Create quote, Add client, Add site, Add product. You
+  only see the ones you’re allowed to perform.
+- Start from a template: **Templates** offers ready-made dashboards — Executive,
+  Sales, Operations and Finance. Applying one replaces your current arrangement
+  (you’re asked to confirm first) and automatically leaves out anything you can’t
+  see. Admins can set a template as the company default.
+- Existing dashboards are unaffected: if you never customised, your dashboard
+  looks exactly as before; if you did, your saved arrangement carries over.
+
 ### Dashboard (UIDG-9)
 
 - The date range at the top of the dashboard now drives more than the KPI tiles:
