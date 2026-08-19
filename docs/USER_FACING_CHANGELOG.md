@@ -116,6 +116,29 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects — Interactive schedule (UIDG-12)
+
+- Every project now has a full **interactive Gantt** at *Project → Schedule →
+  Open full schedule*. Tasks are the bars, grouped under collapsible job rows;
+  expand a job to see its tasks (and subtasks) or collapse it to a single summary
+  bar.
+- **Zoom** between day, week, month and quarter — long projects open at a zoom
+  that shows the whole plan, and a **Today** button jumps you back to now.
+- **Drag a task** to reschedule it: drag the middle to move it, or an edge to
+  make it longer or shorter. Changes save immediately. Prefer the keyboard? Focus
+  a task and use the arrow keys (Shift+arrow to resize).
+- **Dependencies** are drawn as arrows between tasks, with the four link types
+  (finish-to-start and the rest) and any lead/lag shown on the line; a link that’s
+  currently broken by the dates is flagged in red.
+- **Baselines**: if a baseline has been captured, toggle **Baseline** to see the
+  original plan as a thin bar against the live schedule — planned versus actual at
+  a glance.
+- Progress shows as a fill inside each bar; overdue work is highlighted; a task
+  with only a due date shows as a diamond marker. A project with no scheduled work
+  shows a clear empty state rather than a blank grid.
+- Read-only if you don’t have edit access to the project (you can still browse,
+  zoom and scroll); the compact schedule card on the project page is unchanged.
+
 ### Dashboard (UIDG-10)
 
 - Browse and add widgets: in **Customise**, **Add widget** opens a catalogue of

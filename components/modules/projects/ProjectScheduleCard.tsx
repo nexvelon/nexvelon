@@ -67,7 +67,18 @@ export function ProjectScheduleCard({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-3">
-      <p className="nx-eyebrow-soft">Schedule</p>
+      {/* UIDG-12 — this card stays the compact at-a-glance summary; the full
+          interactive Gantt (zoom, drag, dependency arrows, baselines) lives on
+          its own route where it has room. */}
+      <div className="flex items-center justify-between">
+        <p className="nx-eyebrow-soft">Schedule</p>
+        <Link
+          href={`/projects/${projectId}/schedule`}
+          className="text-brand-gold text-xs font-medium hover:underline"
+        >
+          Open full schedule →
+        </Link>
+      </div>
       <Gantt sched={sched} />
       <div className="grid gap-3 lg:grid-cols-2">
         <UpcomingMilestones sched={sched} projectId={projectId} canEdit={canEdit} onChanged={load} />

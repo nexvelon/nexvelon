@@ -531,6 +531,19 @@ jobs, dependency arrows, milestones, baseline overlay), **UIDG-13** (critical pa
 + slack, which the typed deps + durations now make computable) and **UIDG-14**
 (the resource lane). The existing read-first ProjectScheduleCard is untouched.
 
+**UIDG-12 (delivered).** The interactive Gantt ships at `/projects/[id]/schedule`
+— a hand-built themed SVG (no Gantt library): collapsible job rows with task
+children, day/week/month/quarter zoom with an adapting two-tier axis, drag-to-move
+and drag-to-resize (persisted through the gated task actions; view-only can't
+drag) plus keyboard reschedule, typed dependency arrows with lag (violations
+flagged), a toggleable baseline overlay (planned vs actual), progress fills,
+milestones, a today line, and an honest empty state. All geometry is a pure,
+unit-tested lib (`lib/gantt/geometry.ts`); all date/cycle validation stays in the
+UIDG-11 data layer. Row virtualization keeps it smooth to a stated ~500-task
+ceiling. **Remaining in the arc:** **UIDG-13** critical path + slack (colour the
+critical chain, show float), and **UIDG-14** the resource lane (per-tech
+allocation under the bars). Presentation-export templates remain a later item.
+
 ---
 
 ## Open architectural decisions awaiting design
