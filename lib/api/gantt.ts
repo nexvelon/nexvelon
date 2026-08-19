@@ -17,6 +17,8 @@ import { businessDateISO } from "@/lib/format";
 import { listJobsForProject } from "@/lib/api/projects";
 import { jobLabel } from "@/lib/api/sub-agreements";
 import { listMilestones } from "@/lib/api/schedule";
+import { getWorkingCalendar } from "@/lib/settings/working-calendar-settings";
+import type { WorkingCalendarConfig } from "@/lib/gantt/working-calendar";
 import type {
   DbJobTask,
   DbDependencyType,
@@ -138,6 +140,10 @@ export interface ProjectGantt {
   /** The project's target completion date (UIDG-13 critical-path variance), or null.
    *  Optional in the type (older literals omit it); getProjectGantt always sets it. */
   target_end?: string | null;
+  /** GANTT-CAL — the org working calendar in effect (working weekdays + holidays).
+   *  Optional in the type (older literals omit it → all-days/calendar-day
+   *  behaviour); getProjectGantt always resolves it. */
+  calendar?: WorkingCalendarConfig;
 }
 
 /**
@@ -224,23 +230,25 @@ function toGanttTree(tasks: DbJobTask[]): {
 }
 
 /**
- * The WHOLE project schedule in a FIXED number of queries (7), independent of task
+ * The WHOLE project schedule in a FIXED number of queries (8), independent of task
  * / dependency / baseline count — NOT one per task:
  *   1 project_jobs · 2 job_tasks · 3 task_dependencies · 4 job_dependencies
- *   5 schedule_milestones · 6 projects (fallback dates) · 7 schedule_baselines.
+ *   5 schedule_milestones · 6 projects (fallback dates) · 7 schedule_baselines ·
+ *   8 working_calendar (GANTT-CAL org calendar, a company_settings read).
  * Baseline task snapshots load lazily (getBaselineTasks), not here.
  */
 export async function getProjectGantt(projectId: string): Promise<ProjectGantt> {
   const supabase = await db();
   const today = businessDateISO();
 
-  const [jobs, taskRes, taskDepRes, milestones, projRes, baselineRes] = await Promise.all([
+  const [jobs, taskRes, taskDepRes, milestones, projRes, baselineRes, calendar] = await Promise.all([
     listJobsForProject(projectId),
     supabase.from("job_tasks").select("*").eq("project_id", projectId).order("sort_order", { ascending: true }),
     supabase.from("task_dependencies").select("*").eq("project_id", projectId),
     listMilestones({ projectId }),
     supabase.from("projects").select("start_date, target_completion, actual_completion").eq("id", projectId).maybeSingle(),
     supabase.from("schedule_baselines").select("*").eq("project_id", projectId).order("captured_at", { ascending: false }),
+    getWorkingCalendar(),
   ]);
   if (taskRes.error) throw new Error(`getProjectGantt/tasks: ${taskRes.error.message}`);
   if (taskDepRes.error) throw new Error(`getProjectGantt/taskDeps: ${taskDepRes.error.message}`);
@@ -316,6 +324,7 @@ export async function getProjectGantt(projectId: string): Promise<ProjectGantt> 
     baselines: (baselineRes.data ?? []) as DbScheduleBaseline[],
     range: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     target_end: ((projRes.data ?? {}) as { target_completion?: string | null }).target_completion ?? null,
+    calendar: calendar as WorkingCalendarConfig,
   };
 }
 

@@ -23,6 +23,12 @@ import {
   setPoSenderEmail,
   setPoSenderName,
 } from "@/lib/settings/po-sender";
+import {
+  getWorkingCalendar,
+  setWorkingCalendar,
+  hasConfiguredCalendar,
+} from "@/lib/settings/working-calendar-settings";
+import type { WorkingCalendarConfig } from "@/lib/gantt/working-calendar";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -175,6 +181,34 @@ export async function setTierDisclaimerAction(
     await setSetting(TIER_DISCRETION_DISCLAIMER_KEY, value);
     revalidatePath("/settings");
     return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// GANTT-CAL — the org working calendar (working weekdays + holidays) that drives
+// scheduling. Read open (schedules read it); write requireAdmin-gated. `configured`
+// distinguishes the seeded default from an explicit org choice (§2.8).
+export async function getWorkingCalendarAction(): Promise<
+  ActionResult<{ config: WorkingCalendarConfig; configured: boolean }>
+> {
+  try {
+    const [config, configured] = await Promise.all([getWorkingCalendar(), hasConfiguredCalendar()]);
+    return { ok: true, data: { config, configured } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setWorkingCalendarAction(
+  config: WorkingCalendarConfig
+): Promise<ActionResult<WorkingCalendarConfig>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const saved = await setWorkingCalendar(config); // validates; throws on nonsense
+    revalidatePath("/settings");
+    return { ok: true, data: saved };
   } catch (e) {
     return fail(e);
   }

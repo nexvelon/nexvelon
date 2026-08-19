@@ -127,9 +127,11 @@ describe("getProjectGantt", () => {
     ];
   });
 
-  it("loads the whole project in a FIXED 7 queries (not per-task)", async () => {
+  it("loads the whole project in a FIXED 8 queries (not per-task)", async () => {
+    // GANTT-CAL added the org working-calendar read (getSetting) → 7 + 1 = 8,
+    // still constant, independent of task/dependency/baseline count.
     await getProjectGantt("p1");
-    expect(h.queryCount).toBe(7);
+    expect(h.queryCount).toBe(8);
   });
 
   it("nests tasks under jobs, applies the due-date bar fallback, and rolls up %", async () => {

@@ -36,6 +36,8 @@ import { TechsPane } from "@/components/modules/settings/TechsPane";
 import { LabourPane } from "@/components/modules/settings/LabourPane";
 import { CostCodesPane } from "@/components/modules/settings/CostCodesPane";
 import { PurchaseOrderEmailPane } from "@/components/modules/settings/PurchaseOrderEmailPane";
+import { WorkingCalendarPane } from "@/components/modules/settings/WorkingCalendarPane";
+import { CalendarClock } from "lucide-react";
 import {
   ApiWebhooks,
   AuditCompliance,
@@ -76,6 +78,7 @@ const SECTIONS: Section[] = [
   { key: "labour", label: "Labour", description: "Default labour sell rate that prefills new quote labour lines.", icon: HardHat },
   { key: "cost-codes", label: "Cost Codes", description: "Cost taxonomy for estimate-vs-actual by code on jobs.", icon: Hash },
   { key: "project", label: "Project Defaults", description: "Default phases, commissioning templates by system type.", icon: FolderKanban },
+  { key: "working-calendar", label: "Working Calendar", description: "Company working days + holidays that project schedules skip.", icon: CalendarClock, adminOnly: true },
   { key: "numbering", label: "Numbering Schemes", description: "Editable patterns for quotes, projects, invoices, POs.", icon: Hash },
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
   { key: "integrations", label: "Integrations", description: "QuickBooks, Xero, Stripe, Twilio, Genetec, Avigilon, ICT…", icon: Plug },
@@ -176,6 +179,7 @@ export default function SettingsPage() {
             {active === "labour" && <LabourPane />}
             {active === "cost-codes" && <CostCodesPane />}
             {active === "po-email" && isAdmin && <PurchaseOrderEmailPane />}
+            {active === "working-calendar" && isAdmin && <WorkingCalendarPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
             {active === "tax" && <TaxCurrency />}
