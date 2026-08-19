@@ -25,6 +25,7 @@ import {
   removeTaskDependency,
   captureBaseline,
   listBaselines,
+  getBaselineTasks,
   type ProjectGantt,
 } from "@/lib/api/gantt";
 import { getCurrentProfile } from "@/lib/auth/profile";
@@ -33,6 +34,7 @@ import type {
   DbMilestoneStatus,
   DbScheduleMilestone,
   DbScheduleBaseline,
+  DbScheduleBaselineTask,
   DbDependencyType,
 } from "@/lib/types/database";
 
@@ -111,6 +113,18 @@ export async function listBaselinesAction(
     const gate = await require("view");
     if (!gate.ok) return gate;
     return { ok: true, data: await listBaselines(projectId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function getBaselineTasksAction(
+  baselineId: string
+): Promise<ActionResult<DbScheduleBaselineTask[]>> {
+  try {
+    const gate = await require("view");
+    if (!gate.ok) return gate;
+    return { ok: true, data: await getBaselineTasks(baselineId) };
   } catch (e) {
     return fail(e);
   }

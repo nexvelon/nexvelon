@@ -1,0 +1,757 @@
+"use client";
+
+// UIDG-12 — the interactive Gantt. Hand-built SVG (no Gantt library, Jay's call),
+// fully themed via useGanttTheme (→ useChartTheme → the active theme; no hardcoded
+// colour). Bars are TASKS with collapsible job parents. Zoom day/week/month/
+// quarter; drag to move/resize (persisted through the gated action layer — view-
+// only can't drag); typed dependency arrows with lag; a toggleable baseline
+// overlay (planned vs actual). All geometry is the pure lib (lib/gantt/geometry);
+// all date/cycle validation is the UIDG-11 data layer — this file only renders and
+// wires drags to the gated actions.
+
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  Crosshair,
+  Layers,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import { getProjectGanttAction, getBaselineTasksAction } from "@/app/(app)/projects/schedule-actions";
+import { updateTaskAction } from "@/app/(app)/projects/task-actions";
+import type { ProjectGantt } from "@/lib/api/gantt";
+import type { DbScheduleBaselineTask } from "@/lib/types/database";
+import {
+  ZOOM_LEVELS,
+  type ZoomLevel,
+  type GanttRow,
+  chooseInitialZoom,
+  axisOrigin,
+  contentWidth,
+  dateToX,
+  barGeom,
+  flattenRows,
+  applyDrag,
+  isDependencyViolated,
+  arrowGeom,
+  axisHeader,
+  visibleRowRange,
+  rowCenters,
+  visibleTaskDeps,
+  daysBetween,
+  ROW_HEIGHT,
+  BAR_HEIGHT,
+} from "@/lib/gantt/geometry";
+import { useGanttTheme } from "./useGanttTheme";
+
+const GRID_W = 320;
+const HEADER_H = 44;
+const MILESTONE_H = 18;
+
+interface Props {
+  projectId: string;
+  canEdit: boolean;
+  /** Below desktop the Gantt is read-only (no drag / keyboard reschedule). */
+  interactive?: boolean;
+}
+
+export function InteractiveGantt({ projectId, canEdit, interactive = true }: Props) {
+  const [gantt, setGantt] = useState<ProjectGantt | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [zoom, setZoom] = useState<ZoomLevel>("week");
+  const [collapsed, toggleCollapsed] = useCollapsed(projectId);
+  const [showBaseline, setShowBaseline] = useState(false);
+  const [baselineTasks, setBaselineTasks] = useState<Map<string, DbScheduleBaselineTask> | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const editable = canEdit && interactive;
+
+  const load = useCallback(() => {
+    getProjectGanttAction(projectId).then((res) => {
+      setLoaded(true);
+      if (res.ok) {
+        setGantt(res.data);
+        setZoom((z) => (z === "week" && res.data.range ? chooseInitialZoom(res.data.range) : z));
+      }
+    });
+  }, [projectId]);
+  useEffect(load, [load]);
+
+  // Baseline overlay: lazily load the most recent baseline's task snapshot.
+  useEffect(() => {
+    if (!showBaseline || !gantt || gantt.baselines.length === 0 || baselineTasks) return;
+    getBaselineTasksAction(gantt.baselines[0].id).then((res) => {
+      if (res.ok) setBaselineTasks(new Map(res.data.map((t) => [t.task_id, t])));
+    });
+  }, [showBaseline, gantt, baselineTasks]);
+
+  if (!loaded) {
+    return <div className="text-muted-foreground p-8 text-sm">Loading schedule…</div>;
+  }
+  if (!gantt || !gantt.range || (gantt.jobs.length === 0 && gantt.project_tasks.length === 0)) {
+    return <EmptyState />;
+  }
+
+  return (
+    <GanttCanvas
+      gantt={gantt}
+      zoom={zoom}
+      setZoom={setZoom}
+      collapsed={collapsed}
+      toggleCollapsed={toggleCollapsed}
+      showBaseline={showBaseline}
+      setShowBaseline={setShowBaseline}
+      hasBaseline={gantt.baselines.length > 0}
+      baselineTasks={baselineTasks}
+      selected={selected}
+      setSelected={setSelected}
+      editable={editable}
+      projectId={projectId}
+      onChanged={load}
+      applyOptimistic={setGantt}
+    />
+  );
+}
+
+// ─── The canvas (split pane + virtualized rows + SVG timeline) ────────────────
+
+interface CanvasProps {
+  gantt: ProjectGantt;
+  zoom: ZoomLevel;
+  setZoom: (z: ZoomLevel) => void;
+  collapsed: ReadonlySet<string>;
+  toggleCollapsed: (id: string) => void;
+  showBaseline: boolean;
+  setShowBaseline: (v: boolean) => void;
+  hasBaseline: boolean;
+  baselineTasks: Map<string, DbScheduleBaselineTask> | null;
+  selected: string | null;
+  setSelected: (id: string | null) => void;
+  editable: boolean;
+  projectId: string;
+  onChanged: () => void;
+  applyOptimistic: (g: ProjectGantt) => void;
+}
+
+function GanttCanvas(p: CanvasProps) {
+  const t = useGanttTheme();
+  const { gantt, zoom } = p;
+  const range = gantt.range!;
+  const origin = useMemo(() => axisOrigin(range), [range]);
+  const contentW = useMemo(() => contentWidth(range, zoom), [range, zoom]);
+  const rows = useMemo(() => flattenRows(gantt, p.collapsed), [gantt, p.collapsed]);
+  const totalH = rows.length * ROW_HEIGHT;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setViewportH(el.clientHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Jump to today on first data.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && gantt.today) el.scrollLeft = Math.max(0, dateToX(gantt.today, origin, zoom) - 240);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gantt.project_id]);
+
+  // Virtualize only when a real height is known (tests / SSR render all rows).
+  const win = viewportH > 0 ? visibleRowRange(scrollTop, viewportH, rows.length) : { start: 0, end: rows.length };
+  const visibleRows = rows.slice(win.start, win.end);
+  const visibleIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
+
+  const centers = useMemo(() => rowCenters(rows), [rows]);
+  const deps = useMemo(() => visibleTaskDeps(gantt.task_dependencies, visibleIds), [gantt.task_dependencies, visibleIds]);
+  const barFor = useCallback(
+    (start: string | null, end: string | null) => barGeom(start, end, origin, zoom),
+    [origin, zoom]
+  );
+
+  function onScroll(e: React.UIEvent<HTMLDivElement>) {
+    setScrollTop(e.currentTarget.scrollTop);
+  }
+
+  function jumpToday() {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = Math.max(0, dateToX(gantt.today, origin, zoom) - 240);
+  }
+
+  const zoomIdx = ZOOM_LEVELS.indexOf(zoom);
+
+  return (
+    <div className="bg-card flex h-[70vh] min-h-[420px] flex-col rounded-lg border" style={{ borderColor: t.grid }}>
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 border-b px-3 py-2" style={{ borderColor: t.grid }}>
+        <div className="flex items-center gap-1">
+          <ToolbarBtn label="Zoom out" disabled={zoomIdx >= ZOOM_LEVELS.length - 1} onClick={() => p.setZoom(ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, zoomIdx + 1)])}>
+            <ZoomOut className="h-4 w-4" />
+          </ToolbarBtn>
+          <span className="text-muted-foreground w-14 text-center text-xs capitalize">{zoom}</span>
+          <ToolbarBtn label="Zoom in" disabled={zoomIdx <= 0} onClick={() => p.setZoom(ZOOM_LEVELS[Math.max(0, zoomIdx - 1)])}>
+            <ZoomIn className="h-4 w-4" />
+          </ToolbarBtn>
+        </div>
+        <ToolbarBtn label="Jump to today" onClick={jumpToday}>
+          <Crosshair className="h-4 w-4" /> <span className="text-xs">Today</span>
+        </ToolbarBtn>
+        {p.hasBaseline && (
+          <button
+            type="button"
+            onClick={() => p.setShowBaseline(!p.showBaseline)}
+            aria-pressed={p.showBaseline}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+            style={{
+              borderColor: t.grid,
+              background: p.showBaseline ? t.rowAltBg : "transparent",
+              color: t.text,
+            }}
+          >
+            <Layers className="h-3.5 w-3.5" /> Baseline
+          </button>
+        )}
+        {!p.hasBaseline && <span className="text-muted-foreground ml-auto text-[11px]">No baseline captured</span>}
+      </div>
+
+      {/* Scroll body — one container; sticky header + sticky-left grid keep the two
+          panes aligned with zero manual scroll-syncing. */}
+      <div ref={scrollRef} onScroll={onScroll} className="relative flex-1 overflow-auto" data-testid="gantt-scroll">
+        <div style={{ width: GRID_W + contentW, height: HEADER_H + MILESTONE_H + totalH, position: "relative" }}>
+          {/* Header band (sticky top) */}
+          <div className="sticky top-0 z-30 flex" style={{ height: HEADER_H, background: t.headerBg }}>
+            <div className="sticky left-0 z-40 flex items-end border-r px-3 pb-1" style={{ width: GRID_W, background: t.headerBg, borderColor: t.grid }}>
+              <div className="text-muted-foreground grid w-full grid-cols-[1fr_64px_64px_40px] gap-1 text-[10px] font-medium uppercase tracking-wide">
+                <span>Task</span><span className="text-right">Start</span><span className="text-right">End</span><span className="text-right">%</span>
+              </div>
+            </div>
+            <AxisHeaderSvg origin={origin} zoom={zoom} contentW={contentW} theme={t} range={range} />
+          </div>
+
+          {/* Milestone strip (sticky just below the header) */}
+          <div className="sticky z-20 flex" style={{ top: HEADER_H, height: MILESTONE_H }}>
+            <div className="sticky left-0 z-30 border-r" style={{ width: GRID_W, height: MILESTONE_H, background: t.headerBg, borderColor: t.grid }} />
+            <MilestoneStrip gantt={gantt} origin={origin} zoom={zoom} contentW={contentW} theme={t} />
+          </div>
+
+          {/* Body: sticky-left grid + timeline svg */}
+          <div className="flex" style={{ minHeight: totalH }}>
+            <div className="sticky left-0 z-10 border-r" style={{ width: GRID_W, background: t.headerBg, borderColor: t.grid }}>
+              {/* virtualization spacers keep scroll height correct */}
+              <div style={{ height: win.start * ROW_HEIGHT }} />
+              {visibleRows.map((row, i) => (
+                <GridRow
+                  key={row.id}
+                  row={row}
+                  index={win.start + i}
+                  selected={p.selected === row.id}
+                  editable={p.editable}
+                  onToggle={() => row.hasChildren && p.toggleCollapsed(row.id)}
+                  onSelect={() => p.setSelected(row.id)}
+                  onNudge={(mode, dir) => nudge(p, row, mode, dir)}
+                  theme={t}
+                />
+              ))}
+              <div style={{ height: (rows.length - win.end) * ROW_HEIGHT }} />
+            </div>
+
+            <svg width={contentW} height={totalH} style={{ display: "block" }} role="img" aria-label="Project timeline">
+              <TimelineGridLines origin={origin} zoom={zoom} contentW={contentW} totalH={totalH} range={range} theme={t} />
+              <TodayLine x={dateToX(gantt.today, origin, zoom)} totalH={totalH} theme={t} />
+              {/* dependency arrows (visible endpoints only) */}
+              {deps.map((d) => (
+                <DepArrow key={d.id} dep={d} rows={rows} centers={centers} barFor={barFor} zoom={zoom} theme={t} />
+              ))}
+              {/* bars for visible rows */}
+              {visibleRows.map((row, i) => (
+                <TimelineRow
+                  key={row.id}
+                  row={row}
+                  y={(win.start + i) * ROW_HEIGHT}
+                  barFor={barFor}
+                  showBaseline={p.showBaseline}
+                  baseline={p.baselineTasks?.get(row.id) ?? null}
+                  today={gantt.today}
+                  editable={p.editable && row.kind === "task"}
+                  selected={p.selected === row.id}
+                  onSelect={() => p.setSelected(row.id)}
+                  onDrag={(mode, deltaPx) => commitDrag(p, row, mode, deltaPx, zoom)}
+                  theme={t}
+                />
+              ))}
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Persisting a drag / keyboard nudge through the gated action layer ────────
+
+async function persistDates(
+  p: CanvasProps,
+  row: GanttRow,
+  next: { start: string; end: string }
+) {
+  const task = row.task;
+  if (!task) return;
+  // Optimistic: patch the local tree so the bar moves immediately.
+  const patched = patchTaskDates(p.gantt, task.id, next.start, next.end);
+  p.applyOptimistic(patched);
+  const res = await updateTaskAction(task.id, p.projectId, { startDate: next.start, endDate: next.end }, task.job_id);
+  if (!res.ok) {
+    toast.error(res.error);
+    p.onChanged(); // revert to server truth
+  }
+}
+
+function commitDrag(p: CanvasProps, row: GanttRow, mode: "move" | "resize-start" | "resize-end", deltaPx: number, zoom: ZoomLevel) {
+  const task = row.task;
+  if (!task || !task.start_date || !task.end_date) return; // only scheduled bars drag
+  const next = applyDrag(task.start_date, task.end_date, deltaPx, zoom, mode);
+  if (next.start === task.start_date && next.end === task.end_date) return;
+  void persistDates(p, row, next);
+}
+
+function nudge(p: CanvasProps, row: GanttRow, mode: "move" | "resize-end", dir: 1 | -1) {
+  const task = row.task;
+  if (!task || !task.start_date || !task.end_date) return;
+  // A keyboard nudge is exactly ONE day regardless of zoom.
+  const shifted =
+    mode === "move"
+      ? { start: addOne(task.start_date, dir), end: addOne(task.end_date, dir) }
+      : { start: task.start_date, end: maxDate(task.start_date, addOne(task.end_date, dir)) };
+  void persistDates(p, row, shifted);
+}
+
+function addOne(iso: string, dir: 1 | -1): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + dir * 86_400_000).toISOString().slice(0, 10);
+}
+function maxDate(a: string, b: string): string {
+  return a > b ? a : b;
+}
+
+function patchTaskDates(g: ProjectGantt, taskId: string, start: string, end: string): ProjectGantt {
+  const walk = (t: ProjectGantt["jobs"][number]["tasks"][number]): typeof t => {
+    if (t.id === taskId) {
+      return { ...t, start_date: start, end_date: end, bar_start: start, bar_end: end, is_point: false, has_no_dates: false, children: t.children.map(walk) };
+    }
+    return { ...t, children: t.children.map(walk) };
+  };
+  return {
+    ...g,
+    jobs: g.jobs.map((j) => ({ ...j, tasks: j.tasks.map(walk) })),
+    project_tasks: g.project_tasks.map(walk),
+  };
+}
+
+// ─── Left grid row ────────────────────────────────────────────────────────────
+
+function GridRow({
+  row,
+  index,
+  selected,
+  editable,
+  onToggle,
+  onSelect,
+  onNudge,
+  theme,
+}: {
+  row: GanttRow;
+  index: number;
+  selected: boolean;
+  editable: boolean;
+  onToggle: () => void;
+  onSelect: () => void;
+  onNudge: (mode: "move" | "resize-end", dir: 1 | -1) => void;
+  theme: ReturnType<typeof useGanttTheme>;
+}) {
+  const indent = Math.min(row.depth, 4) * 12;
+  const isTask = row.kind === "task";
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if ((e.key === "Enter" || e.key === " ") && row.hasChildren) {
+      e.preventDefault();
+      onToggle();
+      return;
+    }
+    if (!editable || !isTask) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); onNudge(e.shiftKey ? "resize-end" : "move", -1); }
+    if (e.key === "ArrowRight") { e.preventDefault(); onNudge(e.shiftKey ? "resize-end" : "move", 1); }
+  }
+
+  return (
+    <div
+      role="row"
+      tabIndex={0}
+      aria-selected={selected}
+      onFocus={onSelect}
+      onKeyDown={onKeyDown}
+      className="grid items-center gap-1 border-b px-3 text-xs outline-none focus:ring-1"
+      style={{
+        height: ROW_HEIGHT,
+        gridTemplateColumns: "1fr 64px 64px 40px",
+        borderColor: theme.grid,
+        background: selected ? theme.rowAltBg : index % 2 ? theme.rowAltBg : "transparent",
+        color: theme.text,
+        // @ts-expect-error CSS var for focus ring colour from the theme
+        "--tw-ring-color": theme.today,
+      }}
+    >
+      <span className="flex min-w-0 items-center" style={{ paddingLeft: indent }}>
+        {row.hasChildren ? (
+          <button type="button" onClick={onToggle} aria-label={row.collapsed ? `Expand ${row.label}` : `Collapse ${row.label}`} className="mr-1 shrink-0">
+            {row.collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        ) : (
+          <span className="mr-1 w-3.5 shrink-0" />
+        )}
+        <span className={`truncate ${row.kind === "job" || row.kind === "group" ? "font-medium" : ""}`} title={row.label}>
+          {row.label}
+        </span>
+      </span>
+      <span className="text-muted-foreground truncate text-right tabular-nums text-[11px]">{row.barStart ?? "—"}</span>
+      <span className="text-muted-foreground truncate text-right tabular-nums text-[11px]">{row.barEnd ?? "—"}</span>
+      <span className="text-right tabular-nums text-[11px]">{row.kind === "task" ? `${row.effectivePercent}%` : ""}</span>
+    </div>
+  );
+}
+
+// ─── Timeline row (bar / point / job summary + baseline overlay + drag) ───────
+
+function TimelineRow({
+  row,
+  y,
+  barFor,
+  showBaseline,
+  baseline,
+  today,
+  editable,
+  selected,
+  onSelect,
+  onDrag,
+  theme,
+}: {
+  row: GanttRow;
+  y: number;
+  barFor: (s: string | null, e: string | null) => ReturnType<typeof barGeom>;
+  showBaseline: boolean;
+  baseline: DbScheduleBaselineTask | null;
+  today: string;
+  editable: boolean;
+  selected: boolean;
+  onSelect: () => void;
+  onDrag: (mode: "move" | "resize-start" | "resize-end", deltaPx: number) => void;
+  theme: ReturnType<typeof useGanttTheme>;
+}) {
+  const g = barFor(row.barStart, row.barEnd);
+  const cy = y + ROW_HEIGHT / 2;
+  const barY = cy - BAR_HEIGHT / 2;
+  const drag = useBarDrag(editable, onDrag);
+
+  if (g.empty) return null;
+
+  // Overdue: end before today and not done.
+  const overdue = !!row.barEnd && row.barEnd < today && row.status !== "done" && row.kind === "task";
+
+  // Point marker (due-date-only task) → a diamond.
+  if (g.isPoint) {
+    const s = 6;
+    return (
+      <g onPointerDown={onSelect} style={{ cursor: "pointer" }}>
+        <title>{hoverText(row)}</title>
+        <rect
+          x={g.x - s} y={cy - s} width={s * 2} height={s * 2}
+          transform={`rotate(45 ${g.x} ${cy})`}
+          fill={overdue ? theme.danger : theme.marker}
+        />
+      </g>
+    );
+  }
+
+  const isJob = row.kind === "job";
+  const fill = isJob ? theme.jobFill : overdue ? theme.danger : theme.taskFill;
+  const pct = row.kind === "task" ? row.effectivePercent : 0;
+  const progressW = (g.width * Math.min(100, Math.max(0, pct))) / 100;
+
+  const baselineGeom = showBaseline && baseline ? barFor(baseline.start_date, baseline.end_date) : null;
+
+  return (
+    <g onPointerDown={onSelect} style={{ cursor: editable ? "grab" : "pointer" }}>
+      <title>{hoverText(row)}</title>
+      {/* baseline overlay (thin bar behind, above the live bar) */}
+      {baselineGeom && !baselineGeom.empty && !baselineGeom.isPoint && (
+        <rect x={baselineGeom.x} y={barY - 6} width={baselineGeom.width} height={4} rx={2} fill={theme.baseline} data-testid="baseline-bar" />
+      )}
+      {/* track + progress fill */}
+      <rect x={g.x} y={barY} width={g.width} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill={theme.taskTrack} stroke={selected ? theme.today : "none"} strokeWidth={selected ? 1.5 : 0} />
+      <rect x={g.x} y={barY} width={progressW} height={BAR_HEIGHT} rx={isJob ? 2 : 4} fill={fill} />
+      {isJob && (
+        <>
+          <rect x={g.x} y={barY} width={3} height={BAR_HEIGHT} fill={fill} />
+          <rect x={g.x + g.width - 3} y={barY} width={3} height={BAR_HEIGHT} fill={fill} />
+        </>
+      )}
+      {/* drag zones (editable tasks only) */}
+      {editable && (
+        <>
+          <rect x={g.x + 5} y={barY} width={Math.max(0, g.width - 10)} height={BAR_HEIGHT} fill="transparent" style={{ cursor: "grab" }} onPointerDown={(e) => drag(e, "move")} data-testid="drag-move" />
+          <rect x={g.x} y={barY} width={5} height={BAR_HEIGHT} fill="transparent" style={{ cursor: "ew-resize" }} onPointerDown={(e) => drag(e, "resize-start")} />
+          <rect x={g.x + g.width - 5} y={barY} width={5} height={BAR_HEIGHT} fill="transparent" style={{ cursor: "ew-resize" }} onPointerDown={(e) => drag(e, "resize-end")} />
+        </>
+      )}
+    </g>
+  );
+}
+
+function useBarDrag(editable: boolean, onDrag: (mode: "move" | "resize-start" | "resize-end", deltaPx: number) => void) {
+  return useCallback(
+    (e: React.PointerEvent, mode: "move" | "resize-start" | "resize-end") => {
+      if (!editable) return;
+      e.stopPropagation();
+      const startX = e.clientX;
+      const move = (ev: PointerEvent) => {
+        void ev;
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        onDrag(mode, ev.clientX - startX);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [editable, onDrag]
+  );
+}
+
+function hoverText(row: GanttRow): string {
+  const t = row.task;
+  const parts = [row.label];
+  if (row.barStart) parts.push(`${row.barStart} → ${row.barEnd ?? row.barStart}`);
+  if (row.barStart && row.barEnd) parts.push(`${daysBetween(row.barStart, row.barEnd) + 1}d`);
+  if (t?.status) parts.push(`Status: ${t.status}`);
+  if (row.kind === "task") parts.push(`${row.effectivePercent}%`);
+  return parts.join(" · ");
+}
+
+// ─── Dependency arrow ─────────────────────────────────────────────────────────
+
+function DepArrow({
+  dep,
+  rows,
+  centers,
+  barFor,
+  zoom,
+  theme,
+}: {
+  dep: { id: string; task_id: string; depends_on_task_id: string; dependency_type: string; lag_days: number };
+  rows: GanttRow[];
+  centers: Map<string, number>;
+  barFor: (s: string | null, e: string | null) => ReturnType<typeof barGeom>;
+  zoom: ZoomLevel;
+  theme: ReturnType<typeof useGanttTheme>;
+}) {
+  const predRow = rows.find((r) => r.id === dep.depends_on_task_id);
+  const succRow = rows.find((r) => r.id === dep.task_id);
+  if (!predRow || !succRow) return null;
+  const pb = barFor(predRow.barStart, predRow.barEnd);
+  const sb = barFor(succRow.barStart, succRow.barEnd);
+  if (pb.empty || sb.empty) return null;
+  const predCy = centers.get(dep.depends_on_task_id)!;
+  const succCy = centers.get(dep.task_id)!;
+  const a = arrowGeom(dep, { x: pb.x, width: pb.width, cy: predCy }, { x: sb.x, width: sb.width, cy: succCy }, zoom);
+
+  const violated = isDependencyViolated(
+    dep,
+    { start: predRow.barStart, end: predRow.barEnd },
+    { start: succRow.barStart, end: succRow.barEnd }
+  );
+  const color = violated ? theme.arrowViolated : theme.arrow;
+
+  return (
+    <g data-testid={`dep-${dep.dependency_type}`} data-violated={violated}>
+      <path d={a.path} fill="none" stroke={color} strokeWidth={1.25} markerEnd="url(#gantt-arrow)" opacity={0.85} />
+      <defs>
+        <marker id="gantt-arrow" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill={color} />
+        </marker>
+      </defs>
+      {a.lag && (
+        <>
+          <line x1={a.lag.x1} y1={a.lag.y} x2={a.lag.x2} y2={a.lag.y} stroke={color} strokeDasharray="2 2" strokeWidth={1.25} />
+          <text x={(a.lag.x1 + a.lag.x2) / 2} y={a.lag.y - 3} textAnchor="middle" fontSize={9} fill={theme.textMuted}>
+            {a.lag.label}
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
+// ─── Axis, grid lines, today, milestones ──────────────────────────────────────
+
+function AxisHeaderSvg({
+  origin,
+  zoom,
+  contentW,
+  theme,
+  range,
+}: {
+  origin: string;
+  zoom: ZoomLevel;
+  contentW: number;
+  theme: ReturnType<typeof useGanttTheme>;
+  range: { from: string; to: string };
+}) {
+  // Render the whole span's header (bounded to the padded range) — the browser
+  // clips to the viewport; virtualizing header ticks is unnecessary at these counts.
+  const h = axisHeader(origin, zoom, addDaysISO(range.from, -3), addDaysISO(range.to, 3));
+  return (
+    <svg width={contentW} height={HEADER_H} style={{ display: "block" }} aria-hidden>
+      {h.top.map((tk, i) => (
+        <g key={`t${i}`}>
+          <line x1={tk.x} y1={0} x2={tk.x} y2={HEADER_H} stroke={theme.grid} />
+          <text x={tk.x + 4} y={14} fontSize={10} fill={theme.textMuted} fontWeight={600}>{tk.label}</text>
+        </g>
+      ))}
+      {h.unit.map((tk, i) => (
+        <g key={`u${i}`}>
+          <line x1={tk.x} y1={20} x2={tk.x} y2={HEADER_H} stroke={theme.grid} opacity={0.6} />
+          <text x={tk.x + 3} y={36} fontSize={10} fill={theme.textMuted}>{tk.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function TimelineGridLines({
+  origin,
+  zoom,
+  contentW,
+  totalH,
+  range,
+  theme,
+}: {
+  origin: string;
+  zoom: ZoomLevel;
+  contentW: number;
+  totalH: number;
+  range: { from: string; to: string };
+  theme: ReturnType<typeof useGanttTheme>;
+}) {
+  const h = axisHeader(origin, zoom, addDaysISO(range.from, -3), addDaysISO(range.to, 3));
+  return (
+    <g aria-hidden>
+      {h.unit.map((tk, i) => (
+        <line key={i} x1={tk.x} y1={0} x2={tk.x} y2={totalH} stroke={theme.grid} opacity={0.25} />
+      ))}
+      <rect x={0} y={0} width={contentW} height={0} fill="none" />
+    </g>
+  );
+}
+
+function TodayLine({ x, totalH, theme }: { x: number; totalH: number; theme: ReturnType<typeof useGanttTheme> }) {
+  return <line x1={x} y1={0} x2={x} y2={totalH} stroke={theme.today} strokeWidth={1.5} strokeDasharray="4 3" data-testid="today-line" />;
+}
+
+function MilestoneStrip({
+  gantt,
+  origin,
+  zoom,
+  contentW,
+  theme,
+}: {
+  gantt: ProjectGantt;
+  origin: string;
+  zoom: ZoomLevel;
+  contentW: number;
+  theme: ReturnType<typeof useGanttTheme>;
+}) {
+  return (
+    <svg width={contentW} height={MILESTONE_H} style={{ display: "block", background: theme.headerBg }} aria-hidden>
+      {gantt.milestones.map((m) => {
+        const x = dateToX(m.target_date, origin, zoom);
+        const cy = MILESTONE_H / 2;
+        const s = 5;
+        const met = m.status === "met";
+        return (
+          <g key={m.id}>
+            <title>{`${m.title} · ${m.target_date}${met ? " · met" : ""}`}</title>
+            <rect x={x - s} y={cy - s} width={s * 2} height={s * 2} transform={`rotate(45 ${x} ${cy})`} fill={met ? theme.jobFill : theme.marker} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── Small bits ───────────────────────────────────────────────────────────────
+
+function ToolbarBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+  return (
+    <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} className="text-muted-foreground hover:text-brand-navy inline-flex items-center gap-1 rounded-md p-1.5 disabled:opacity-40">
+      {children}
+    </button>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="bg-card flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-[var(--border)] p-8 text-center">
+      <CalendarClock className="text-muted-foreground mb-3 h-8 w-8" />
+      <p className="text-brand-navy font-serif text-lg">No scheduled work yet</p>
+      <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+        Add tasks with start and end dates to a job, and they’ll appear here as a schedule you can zoom, reorder and track against a baseline.
+      </p>
+    </div>
+  );
+}
+
+function addDaysISO(iso: string, days: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+// ─── Per-session collapse persistence ─────────────────────────────────────────
+
+function useCollapsed(projectId: string): [ReadonlySet<string>, (id: string) => void] {
+  const key = `gantt-collapsed-${projectId}`;
+  const [, force] = useReducer((n) => n + 1, 0);
+  const ref = useRef<Set<string> | null>(null);
+  if (ref.current === null) {
+    ref.current = new Set();
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.sessionStorage.getItem(key);
+        if (raw) ref.current = new Set(JSON.parse(raw) as string[]);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  const toggle = useCallback(
+    (id: string) => {
+      const s = ref.current!;
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      try {
+        window.sessionStorage.setItem(key, JSON.stringify([...s]));
+      } catch {
+        /* ignore */
+      }
+      force();
+    },
+    [key]
+  );
+  return [ref.current, toggle];
+}
