@@ -45,16 +45,16 @@ beforeEach(() => {
 describe("resolveDashboardLayout — precedence + inherit", () => {
   it("uses the user's saved layout when present", async () => {
     h.userRow = { dashboard_layout: { widgets: [{ id: "activityFeed", colSpan: 6 }, { id: "alerts", colSpan: 12 }] } };
-    h.orgRaw = JSON.stringify({ widgets: [{ id: "kpiOverview", colSpan: 12 }] });
+    h.orgRaw = JSON.stringify({ widgets: [{ id: "kpiRevenue", colSpan: 4 }] });
     const out = await resolveDashboardLayout("u1", "Admin");
     expect(out.widgets.map((w) => w.id)).toEqual(["activityFeed", "alerts"]);
   });
 
   it("falls through to the org default when the user has no layout (NULL = inherit)", async () => {
     h.userRow = { dashboard_layout: null }; // NULL, not copied
-    h.orgRaw = JSON.stringify({ widgets: [{ id: "kpiOverview", colSpan: 12 }, { id: "activityFeed", colSpan: 6 }] });
+    h.orgRaw = JSON.stringify({ widgets: [{ id: "kpiRevenue", colSpan: 4 }, { id: "activityFeed", colSpan: 6 }] });
     const out = await resolveDashboardLayout("u1", "Admin");
-    expect(out.widgets.map((w) => w.id)).toEqual(["kpiOverview", "activityFeed"]);
+    expect(out.widgets.map((w) => w.id)).toEqual(["kpiRevenue", "activityFeed"]);
   });
 
   it("falls through to the built-in default when neither is set", async () => {
@@ -65,12 +65,14 @@ describe("resolveDashboardLayout — precedence + inherit", () => {
   it("permission-filters the resolved layout (a role that can't see a widget never gets it)", async () => {
     h.orgRaw = JSON.stringify(BUILT_IN_LAYOUT);
     const out = await resolveDashboardLayout("u1", "Technician");
-    // Technician cannot view financials → revenueTrend/topClients are gone.
+    // Technician cannot view financials → revenueTrend/topClients + the financial
+    // KPI tiles are gone.
     expect(out.widgets.map((w) => w.id)).not.toContain("revenueTrend");
     expect(out.widgets.map((w) => w.id)).not.toContain("topClients");
+    expect(out.widgets.map((w) => w.id)).not.toContain("kpiRevenue");
     // …but the always-visible ones remain.
-    expect(out.widgets.map((w) => w.id)).toContain("kpiOverview");
     expect(out.widgets.map((w) => w.id)).toContain("activityFeed");
+    expect(out.widgets.map((w) => w.id)).toContain("alerts");
   });
 
   it("getUserLayout drops unknown widget ids from a stored layout", async () => {
@@ -105,7 +107,7 @@ describe("setOrgDefaultLayoutAction — gating, audit, non-destructive", () => {
     h.insertAudit.mockClear();
   });
 
-  const LAYOUT = { widgets: [{ id: "kpiOverview" as const, colSpan: 12 }] };
+  const LAYOUT = { widgets: [{ id: "alerts" as const, colSpan: 12 }] };
 
   it("denies a role without settings:manage and writes nothing", async () => {
     h.profile = { id: "u2", role: "Technician", email: "t@x.co", display_name: "Tim", first_name: null, last_name: null };
