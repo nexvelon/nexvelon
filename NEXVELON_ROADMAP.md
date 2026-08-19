@@ -517,6 +517,20 @@ assignment, style templates); and a broad chart + component library drawn from
 51 reference screenshots. Honors the no-paid-subscription and honest-data
 (§2.8) constraints. First chunk when triggered: **the read-only audit spec.**
 
+**Progress (arc underway).** The theming pass, the dashboard arc (UIDG-5/6/6B →
+8/9/10: chart + KPI layers, drag-and-drop layout, per-widget chrome + honest
+range wiring, and the widget catalog + templates + quick actions) have shipped.
+The **Gantt** now has its foundation: **UIDG-11 (migration 0123)** lands the
+schema a real Gantt needs — task-level `start_date`/`end_date`/`percent_complete`/
+`parent_id`, typed (`FS`/`SS`/`FF`/`SF`) + lagged dependencies at BOTH the job and
+task level (new `task_dependencies` table), job `actual_*` dates, and immutable
+baseline snapshots (`schedule_baselines` + `schedule_baseline_tasks`), plus the
+typed read/write data layer (`lib/api/gantt.ts`) with cycle/lag/percent
+validation. This UNBLOCKS **UIDG-12** (the Gantt UI — collapsible task bars under
+jobs, dependency arrows, milestones, baseline overlay), **UIDG-13** (critical path
++ slack, which the typed deps + durations now make computable) and **UIDG-14**
+(the resource lane). The existing read-first ProjectScheduleCard is untouched.
+
 ---
 
 ## Open architectural decisions awaiting design

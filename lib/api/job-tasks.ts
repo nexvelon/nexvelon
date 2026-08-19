@@ -38,7 +38,12 @@ export type TaskErrorCode =
   | "not_found"
   | "invalid_title"
   | "invalid_assignee"
-  | "job_mismatch";
+  | "job_mismatch"
+  // UIDG-11 — Gantt scheduling fields.
+  | "invalid_dates"
+  | "invalid_percent"
+  | "invalid_parent"
+  | "would_create_cycle";
 
 export class TaskError extends Error {
   code: TaskErrorCode;
@@ -142,6 +147,12 @@ export interface CreateTaskInput {
   assigneeTechId?: string | null;
   assigneeSubcontractorId?: string | null;
   dueDate?: string | null;
+  // UIDG-11 — Gantt scheduling fields (all optional; a task with none renders as a
+  // point at its due date, not a bar).
+  startDate?: string | null;
+  endDate?: string | null;
+  percentComplete?: number;
+  parentId?: string | null;
   actorId?: string | null;
 }
 
@@ -163,6 +174,24 @@ function assertAssignee(techId?: string | null, subId?: string | null): void {
       "invalid_assignee",
       "A task can be assigned to a technician or a subcontractor, not both."
     );
+  }
+}
+
+// ─── UIDG-11 — Gantt field validators (the DB mirrors these as CHECKs; these give
+//     a clean error before the write and are the single home UIDG-12 reuses) ────
+
+/** end >= start when both are set. Mirrors job_tasks_date_order_check. */
+export function assertTaskDates(start?: string | null, end?: string | null): void {
+  if (start && end && end < start) {
+    throw new TaskError("invalid_dates", "A task's end date can't be before its start date.");
+  }
+}
+
+/** percent_complete ∈ [0, 100]. Mirrors job_tasks_percent_range_check. */
+export function assertPercent(pct?: number | null): void {
+  if (pct === undefined || pct === null) return;
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    throw new TaskError("invalid_percent", "Percent complete must be between 0 and 100.");
   }
 }
 
@@ -188,6 +217,10 @@ async function nextSortOrder(
 export async function createTask(input: CreateTaskInput): Promise<DbJobTask> {
   const title = assertTitle(input.title);
   assertAssignee(input.assigneeTechId, input.assigneeSubcontractorId);
+  // UIDG-11 — validate the scheduling fields before the write (DB CHECKs mirror
+  // these; a new task can't close a parent cycle, so no ancestor walk here).
+  assertTaskDates(input.startDate, input.endDate);
+  assertPercent(input.percentComplete);
 
   const supabase = await db();
 
@@ -199,6 +232,11 @@ export async function createTask(input: CreateTaskInput): Promise<DbJobTask> {
     if (job.project_id !== input.projectId) {
       throw new TaskError("job_mismatch", "That job doesn't belong to this project.");
     }
+  }
+
+  // A parent must exist and be in the same project (cross-table — no DB CHECK).
+  if (input.parentId) {
+    await assertParentEligible(supabase, input.parentId, input.projectId);
   }
 
   const sort_order = await nextSortOrder(
@@ -217,6 +255,10 @@ export async function createTask(input: CreateTaskInput): Promise<DbJobTask> {
     assignee_tech_id: input.assigneeTechId ?? null,
     assignee_subcontractor_id: input.assigneeSubcontractorId ?? null,
     due_date: input.dueDate ?? null,
+    start_date: input.startDate ?? null,
+    end_date: input.endDate ?? null,
+    percent_complete: input.percentComplete ?? 0,
+    parent_id: input.parentId ?? null,
     sort_order,
     source: "internal",
     created_by: input.actorId ?? null,
@@ -248,9 +290,16 @@ export interface UpdateTaskPatch {
   assigneeTechId?: string | null;
   assigneeSubcontractorId?: string | null;
   dueDate?: string | null;
+  // UIDG-11 — Gantt scheduling fields. Re-parenting goes via setTaskParent (it
+  // needs the ancestor-cycle guard), NOT here.
+  startDate?: string | null;
+  endDate?: string | null;
+  percentComplete?: number;
 }
 
-/** Edit a task's fields. Empty-diff no-op (§2.8). Status goes via setTaskStatus. */
+/** Edit a task's fields. Empty-diff no-op (§2.8). Status goes via setTaskStatus,
+ *  re-parenting via setTaskParent. Validates dates/percent against the current row
+ *  so a partial patch (only start, only end) is still checked as a pair. */
 export async function updateTask(
   id: string,
   patch: UpdateTaskPatch,
@@ -263,6 +312,12 @@ export async function updateTask(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.priority !== undefined) update.priority = patch.priority;
   if (patch.dueDate !== undefined) update.due_date = patch.dueDate;
+  if (patch.startDate !== undefined) update.start_date = patch.startDate;
+  if (patch.endDate !== undefined) update.end_date = patch.endDate;
+  if (patch.percentComplete !== undefined) {
+    assertPercent(patch.percentComplete);
+    update.percent_complete = patch.percentComplete;
+  }
   // Assignee is set as a PAIR so switching kind clears the other side.
   if (
     patch.assigneeTechId !== undefined ||
@@ -283,6 +338,12 @@ export async function updateTask(
     .maybeSingle();
   if (beforeErr) throw new Error(`updateTask/before: ${beforeErr.message}`);
   if (!before) throw new TaskError("not_found", "Task not found.");
+
+  // Validate the effective start/end PAIR (a patch may set only one side).
+  const cur = before as DbJobTask;
+  const effStart = update.start_date !== undefined ? (update.start_date as string | null) : cur.start_date;
+  const effEnd = update.end_date !== undefined ? (update.end_date as string | null) : cur.end_date;
+  assertTaskDates(effStart, effEnd);
 
   // §2.8 — nothing to change: don't write, don't bump updated_at.
   if (Object.keys(update).length === 0) {
@@ -310,6 +371,107 @@ export async function updateTask(
       entityLabel: row.title,
     });
   }
+  return row;
+}
+
+// ─── UIDG-11 — re-parenting (arbitrary nesting, cycle-guarded) ────────────────
+
+/** A parent must exist and live in the same project (cross-table — no DB CHECK). */
+async function assertParentEligible(
+  supabase: Awaited<ReturnType<typeof db>>,
+  parentId: string,
+  projectId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("job_tasks")
+    .select("id, project_id")
+    .eq("id", parentId)
+    .maybeSingle();
+  if (error) throw new Error(`assertParentEligible: ${error.message}`);
+  if (!data) throw new TaskError("invalid_parent", "The parent task doesn't exist.");
+  if ((data as { project_id: string }).project_id !== projectId) {
+    throw new TaskError("invalid_parent", "A task's parent must be in the same project.");
+  }
+}
+
+/**
+ * Set (or clear) a task's parent, enforcing acyclicity beyond depth-1 (the DB
+ * CHECK bars only self-parenting). A cycle forms when the task is ALREADY an
+ * ancestor of the proposed parent — so walk UP from the parent; if we reach the
+ * task, reject with a message naming the loop. One query loads the project's
+ * (id, parent_id, title) tree; the walk is in-memory.
+ */
+export async function setTaskParent(
+  id: string,
+  parentId: string | null,
+  actorId: string | null
+): Promise<DbJobTask> {
+  const supabase = await db();
+  if (parentId && parentId === id) {
+    throw new TaskError("invalid_parent", "A task can't be its own parent.");
+  }
+
+  const { data: taskRow, error: tErr } = await supabase
+    .from("job_tasks")
+    .select("id, project_id, parent_id, title")
+    .eq("id", id)
+    .maybeSingle();
+  if (tErr) throw new Error(`setTaskParent/load: ${tErr.message}`);
+  if (!taskRow) throw new TaskError("not_found", "Task not found.");
+  const task = taskRow as { id: string; project_id: string; parent_id: string | null; title: string };
+
+  if (parentId) {
+    await assertParentEligible(supabase, parentId, task.project_id);
+
+    const { data: treeRows, error: treeErr } = await supabase
+      .from("job_tasks")
+      .select("id, parent_id, title")
+      .eq("project_id", task.project_id);
+    if (treeErr) throw new Error(`setTaskParent/tree: ${treeErr.message}`);
+    const tree = new Map<string, { parent: string | null; title: string }>();
+    for (const r of (treeRows ?? []) as { id: string; parent_id: string | null; title: string }[]) {
+      tree.set(r.id, { parent: r.parent_id, title: r.title });
+    }
+
+    const chain: string[] = [];
+    const seen = new Set<string>();
+    let cur: string | null = parentId;
+    while (cur) {
+      chain.push(cur);
+      if (cur === id) {
+        const nameOf = (t: string) => tree.get(t)?.title ?? t;
+        const loop = [...chain].reverse().map(nameOf); // [task … parent]
+        loop.push(loop[0]); // … → task (closes the loop)
+        throw new TaskError("would_create_cycle", `That parent would create a loop: ${loop.join(" → ")}.`);
+      }
+      if (seen.has(cur)) break;
+      seen.add(cur);
+      cur = tree.get(cur)?.parent ?? null;
+    }
+  }
+
+  // §2.8 — no-op when unchanged.
+  if ((task.parent_id ?? null) === (parentId ?? null)) {
+    const full = await getTaskById(id);
+    return full as unknown as DbJobTask;
+  }
+
+  const { data, error } = await supabase
+    .from("job_tasks")
+    .update({ parent_id: parentId, updated_by: actorId })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(`setTaskParent: ${error.message}`);
+
+  const row = data as DbJobTask;
+  await logActivity(
+    "job_task",
+    id,
+    "update",
+    { parent_id: { from: task.parent_id, to: parentId } },
+    { parentType: "project", parentId: row.project_id, entityLabel: row.title }
+  );
   return row;
 }
 
