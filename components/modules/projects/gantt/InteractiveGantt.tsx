@@ -20,8 +20,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { getProjectGanttAction, getBaselineTasksAction } from "@/app/(app)/projects/schedule-actions";
+import { getProjectGanttAction, getBaselineTasksAction, getProjectResourceLoadAction } from "@/app/(app)/projects/schedule-actions";
 import { updateTaskAction } from "@/app/(app)/projects/task-actions";
+import type { ResourceLoad } from "@/lib/gantt/resource-load";
+import { ResourcePane, type HScrollSync } from "./ResourcePane";
 import type { ProjectGantt } from "@/lib/api/gantt";
 import type { DbScheduleBaselineTask } from "@/lib/types/database";
 import {
@@ -70,6 +72,10 @@ export function InteractiveGantt({ projectId, canEdit, interactive = true }: Pro
   const [showBaseline, setShowBaseline] = useState(false);
   const [baselineTasks, setBaselineTasks] = useState<Map<string, DbScheduleBaselineTask> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // UIDG-14 — resource lane. Fetched once the range is known; "denied" when the
+  // caller lacks scheduling:view (the pane then isn't offered).
+  const [resource, setResource] = useState<ResourceLoad | null>(null);
+  const [resourceDenied, setResourceDenied] = useState(false);
 
   const editable = canEdit && interactive;
 
@@ -92,6 +98,37 @@ export function InteractiveGantt({ projectId, canEdit, interactive = true }: Pro
     });
   }, [showBaseline, gantt, baselineTasks]);
 
+  // Resource load over the project's window (gated scheduling:view server-side).
+  const range = gantt?.range ?? null;
+  useEffect(() => {
+    if (!range) return;
+    getProjectResourceLoadAction(projectId, range.from, range.to).then((res) => {
+      if (res.ok) setResource(res.data);
+      else setResourceDenied(true);
+    });
+  }, [projectId, range?.from, range?.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Horizontal-scroll sync between the Gantt and the resource pane (they share the
+  // time axis + zoom). A tiny pub/sub over the two scroll containers.
+  const panesRef = useRef<Set<HTMLElement>>(new Set());
+  const syncingRef = useRef(false);
+  const hsync = useMemo<HScrollSync>(
+    () => ({
+      attach: (el) => {
+        if (el) panesRef.current.add(el);
+      },
+      broadcast: (left, from) => {
+        if (syncingRef.current) return;
+        syncingRef.current = true;
+        panesRef.current.forEach((el) => {
+          if (el !== from && el.scrollLeft !== left) el.scrollLeft = left;
+        });
+        syncingRef.current = false;
+      },
+    }),
+    []
+  );
+
   if (!loaded) {
     return <div className="text-muted-foreground p-8 text-sm">Loading schedule…</div>;
   }
@@ -100,23 +137,35 @@ export function InteractiveGantt({ projectId, canEdit, interactive = true }: Pro
   }
 
   return (
-    <GanttCanvas
-      gantt={gantt}
-      zoom={zoom}
-      setZoom={setZoom}
-      collapsed={collapsed}
-      toggleCollapsed={toggleCollapsed}
-      showBaseline={showBaseline}
-      setShowBaseline={setShowBaseline}
-      hasBaseline={gantt.baselines.length > 0}
-      baselineTasks={baselineTasks}
-      selected={selected}
-      setSelected={setSelected}
-      editable={editable}
-      projectId={projectId}
-      onChanged={load}
-      applyOptimistic={setGantt}
-    />
+    <div className="space-y-3">
+      <GanttCanvas
+        gantt={gantt}
+        zoom={zoom}
+        setZoom={setZoom}
+        collapsed={collapsed}
+        toggleCollapsed={toggleCollapsed}
+        showBaseline={showBaseline}
+        setShowBaseline={setShowBaseline}
+        hasBaseline={gantt.baselines.length > 0}
+        baselineTasks={baselineTasks}
+        selected={selected}
+        setSelected={setSelected}
+        editable={editable}
+        projectId={projectId}
+        onChanged={load}
+        applyOptimistic={setGantt}
+        hsync={hsync}
+      />
+      {!resourceDenied && gantt.range && (
+        <ResourcePane
+          load={resource}
+          range={gantt.range}
+          zoom={zoom}
+          gridW={GRID_W}
+          hsync={hsync}
+        />
+      )}
+    </div>
   );
 }
 
@@ -138,6 +187,7 @@ interface CanvasProps {
   projectId: string;
   onChanged: () => void;
   applyOptimistic: (g: ProjectGantt) => void;
+  hsync: HScrollSync;
 }
 
 function GanttCanvas(p: CanvasProps) {
@@ -162,12 +212,13 @@ function GanttCanvas(p: CanvasProps) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    p.hsync.attach(el);
     const measure = () => setViewportH(el.clientHeight);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [p.hsync]);
 
   // Jump to today on first data.
   useEffect(() => {
@@ -190,6 +241,7 @@ function GanttCanvas(p: CanvasProps) {
 
   function onScroll(e: React.UIEvent<HTMLDivElement>) {
     setScrollTop(e.currentTarget.scrollTop);
+    p.hsync.broadcast(e.currentTarget.scrollLeft, e.currentTarget);
   }
 
   function jumpToday() {

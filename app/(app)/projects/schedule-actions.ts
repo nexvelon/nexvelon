@@ -28,6 +28,8 @@ import {
   getBaselineTasks,
   type ProjectGantt,
 } from "@/lib/api/gantt";
+import { getProjectResourceLoad } from "@/lib/api/resources";
+import type { ResourceLoad } from "@/lib/gantt/resource-load";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action } from "@/lib/permissions";
 import type {
@@ -125,6 +127,26 @@ export async function getBaselineTasksAction(
     const gate = await require("view");
     if (!gate.ok) return gate;
     return { ok: true, data: await getBaselineTasks(baselineId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// UIDG-14 — the resource lane. Gated scheduling:view (it exposes tech capacity,
+// absences and dispatch bookings — scheduling-domain data — NOT project-domain), so
+// a project viewer without scheduling access sees the Gantt but not this pane.
+export async function getProjectResourceLoadAction(
+  projectId: string,
+  from: string,
+  to: string
+): Promise<ActionResult<ResourceLoad>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me) return { ok: false, error: "You're not signed in." };
+    if (!hasPermission(adaptRole(me.role), "scheduling", "view")) {
+      return { ok: false, error: "You don't have permission to view scheduling." };
+    }
+    return { ok: true, data: await getProjectResourceLoad(projectId, from, to) };
   } catch (e) {
     return fail(e);
   }

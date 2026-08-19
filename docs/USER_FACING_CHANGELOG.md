@@ -116,6 +116,24 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Projects — Resource lane (UIDG-14)
+
+- The project schedule now has a collapsible **Resources** pane beneath the Gantt
+  that lines up with the same timeline: one row per person assigned to the work,
+  with a per-day strip showing how loaded they are.
+- It shows both what’s **planned** (from task assignees) and what’s **booked**
+  (from the dispatch board), labelled plainly, and counts **this project only**
+  against each person’s full working hours — so a day where someone is booked
+  beyond their capacity, or given two overlapping tasks at once, is flagged as
+  **over-allocated** (with an icon and a day count, not just a colour).
+- Each person shows their overall utilisation for the window. A technician with no
+  working hours set up reads as **“no capacity set”** rather than a misleading 0%,
+  and subcontractors show their task load with **“capacity not tracked.”** Hover
+  any day to see exactly which tasks and hours are driving it.
+- The pane only appears for people with scheduling access, and only lists people
+  who actually have work in view — an empty window says **“nothing assigned”**
+  instead of a wall of zeroes.
+
 ### Projects — Critical path & float (UIDG-13)
 
 - The schedule now shows the **critical path**: the tasks that, if they slip, push

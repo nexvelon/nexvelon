@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
 vi.mock("@/app/(app)/projects/schedule-actions", () => ({
   getProjectGanttAction: async () => ({ ok: true as const, data: h.gantt }),
   getBaselineTasksAction: async () => ({ ok: true as const, data: [] }),
+  getProjectResourceLoadAction: async () => ({ ok: false as const, error: "no scheduling access in test" }),
 }));
 vi.mock("@/app/(app)/projects/task-actions", () => ({ updateTaskAction: vi.fn(async () => ({ ok: true, data: { id: "t" } })) }));
 vi.mock("@/components/charts/useChartTheme", () => ({
