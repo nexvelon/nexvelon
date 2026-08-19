@@ -135,6 +135,9 @@ export interface ProjectGantt {
   milestones: DbScheduleMilestone[];
   baselines: DbScheduleBaseline[];
   range: { from: string; to: string } | null;
+  /** The project's target completion date (UIDG-13 critical-path variance), or null.
+   *  Optional in the type (older literals omit it); getProjectGantt always sets it. */
+  target_end?: string | null;
 }
 
 /**
@@ -312,6 +315,7 @@ export async function getProjectGantt(projectId: string): Promise<ProjectGantt> 
     milestones,
     baselines: (baselineRes.data ?? []) as DbScheduleBaseline[],
     range: minDate && maxDate ? { from: minDate, to: maxDate } : null,
+    target_end: ((projRes.data ?? {}) as { target_completion?: string | null }).target_completion ?? null,
   };
 }
 
