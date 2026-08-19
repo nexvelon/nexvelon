@@ -552,10 +552,27 @@ hanging, and an honest sparse-network path (no dependencies → nothing marked
 critical). The Gantt surfaces it: critical tasks marked (◆ + bold outline, not
 colour alone; coexisting with overdue-fill and violated-arrow), a float column +
 hover, a critical-path dim toggle, at-risk flagging, and a projected-finish +
-variance-against-target banner. Read-only (no rescheduling). **Remaining in the
-arc:** **UIDG-14** the resource lane (per-tech allocation + over-allocation under
-the bars). Presentation-export templates remain a later item; resource levelling
-is explicitly out of scope.
+variance-against-target banner. Read-only (no rescheduling).
+
+**UIDG-14 (delivered) — the resource lane closes the Gantt arc.** A collapsible
+pane below the Gantt (sharing its time axis, scroll and zoom) shows per-person,
+per-day allocation against capacity, with over-allocation flagged. Pure,
+unit-tested computation (`lib/gantt/resource-load.ts`): PLANNED load from task
+assignees (a concurrency count — tasks carry no hours, so none is fabricated) and
+BOOKED load from dispatch assignments (real hours); capacity from
+`tech_working_hours` minus approved `tech_absences` (a tech with no pattern reads
+"no capacity set", never 0); subcontractors appear with capacity "not tracked".
+Project-scoped and labelled as such; gated `scheduling:view`. Over-allocation is
+conveyed by an icon + count + hatch (not colour alone) in themed status tokens.
+
+**The Gantt arc (UIDG-11 → UIDG-14) is complete.** Deliberately still out of
+scope: **resource levelling / auto-assignment** (audit §12 q6, decided out) and
+**presentation-export templates** (a later item). One follow-up is on record from
+UIDG-13: both the critical path and the resource lane compute on **calendar
+days**, not working days — a task can be shown finishing on a weekend and capacity
+overstates non-working time. A working-day calendar (per-resource) is the natural
+next accuracy pass once tasks carry a resource calendar; tracked here so it isn't
+lost.
 
 ---
 
