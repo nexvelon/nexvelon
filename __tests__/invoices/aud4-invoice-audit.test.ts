@@ -102,8 +102,18 @@ beforeEach(() => {
   h.invoiceRow = { ...FULL_ISSUED };
 });
 
-function lastCall() {
-  return logActivity.mock.calls[logActivity.mock.calls.length - 1];
+// The spy is untyped (vi.fn); surface each call as a positional tuple for the
+// assertions: [entityType, entityId, action, changes, ctx].
+type AuditCall = [
+  string,
+  string,
+  string,
+  Record<string, { from: unknown; to: unknown }>,
+  Record<string, unknown>,
+];
+function lastCall(): AuditCall {
+  const calls = logActivity.mock.calls as unknown as AuditCall[];
+  return calls[calls.length - 1];
 }
 
 describe("AUD-4 — invoice audit rows", () => {
@@ -183,8 +193,8 @@ describe("AUD-4 — invoice audit rows", () => {
     await addManualLine("inv-1", { description: "Labour", quantity: 2, unit_price: 100 });
     await recordPayment({ invoiceId: "inv-1", amount: 200, method: "eft", paidAt: "2026-09-24" });
     const forbidden = /unit_cost|margin|internalNotes|internal_notes|avgCost|quoteDefaultMargin/i;
-    for (const call of logActivity.mock.calls) {
-      const changes = call[3] as Record<string, unknown>;
+    for (const call of logActivity.mock.calls as unknown as unknown[][]) {
+      const changes = (call[3] ?? {}) as Record<string, unknown>;
       for (const key of Object.keys(changes)) {
         expect(key).not.toMatch(forbidden);
         expect(JSON.stringify(changes[key])).not.toMatch(forbidden);

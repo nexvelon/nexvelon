@@ -36,7 +36,8 @@ import {
 } from "@/lib/rma-labels";
 import { CreateRmaDialog } from "@/components/modules/rmas/CreateRmaDialog";
 import type { RmaListRow } from "@/lib/api/rmas";
-import type { DbVendor, DbRmaStatus, DbRmaReason } from "@/lib/types/database";
+import type { DbRmaStatus, DbRmaReason } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 const STATUS_FILTERS: (DbRmaStatus | "all")[] = [
   "all",
@@ -54,7 +55,7 @@ export function RmaListView({
   vendors,
 }: {
   rmas: RmaListRow[];
-  vendors: DbVendor[];
+  vendors: VendorRead[];
 }) {
   const router = useRouter();
   const { role } = useRole();

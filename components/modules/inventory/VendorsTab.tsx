@@ -8,9 +8,9 @@
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import type { DbVendor } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
-export function VendorsTab({ vendors }: { vendors: DbVendor[] }) {
+export function VendorsTab({ vendors }: { vendors: VendorRead[] }) {
   const active = vendors.filter((v) => v.is_active);
 
   if (vendors.length === 0) {
@@ -43,9 +43,9 @@ export function VendorsTab({ vendors }: { vendors: DbVendor[] }) {
                 <h3 className="text-brand-navy font-serif text-lg leading-tight">
                   {v.name}
                 </h3>
-                {v.account_number ? (
-                  <p className="text-muted-foreground text-[11px]">
-                    {v.account_number}
+                {v.has_account_number ? (
+                  <p className="text-muted-foreground text-[11px]" title="Account number — hidden">
+                    Acct ••••••••
                   </p>
                 ) : null}
               </div>

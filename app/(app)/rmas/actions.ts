@@ -31,7 +31,7 @@ import { sendRmaEmail } from "@/lib/auth/email";
 import { getPoSenderFrom } from "@/lib/settings/po-sender";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
-import type { DbVendor } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -59,7 +59,7 @@ async function requireInventoryView(): Promise<string | null> {
 
 // ── Reads (for the create dialog / list) ─────────────────────────────────────
 
-export async function listVendorsForRmaAction(): Promise<DbVendor[]> {
+export async function listVendorsForRmaAction(): Promise<VendorRead[]> {
   return getVendors();
 }
 

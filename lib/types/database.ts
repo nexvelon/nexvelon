@@ -1379,7 +1379,13 @@ export interface DbVendor {
   province: string | null;
   postal_code: string | null;
   country: string | null;
+  // SEC-2 — legacy plaintext column, retained only until the backfill + drop
+  // migration completes. Reads NEVER expose it; writes NEVER populate it.
   account_number: string | null;
+  // SEC-2 — the account number encrypted at rest (AES-256-GCM envelope). Only
+  // ever decrypted server-side behind a permission check in a single-record
+  // reveal; never returned in a list/detail/export/PDF payload.
+  account_number_encrypted: string | null;
   payment_terms: string | null;
   notes: string | null;
   is_active: boolean;

@@ -33,7 +33,8 @@ import {
   searchReturnableStockAction,
 } from "@/app/(app)/rmas/actions";
 import type { ReturnableStockRow } from "@/lib/api/rmas";
-import type { DbVendor, DbRmaReason } from "@/lib/types/database";
+import type { DbRmaReason } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 interface PickedLine {
   row: ReturnableStockRow;
@@ -48,7 +49,7 @@ export function CreateRmaDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  vendors: DbVendor[];
+  vendors: VendorRead[];
   onCreated: (rmaId: string) => void;
 }) {
   const [vendorId, setVendorId] = useState("");

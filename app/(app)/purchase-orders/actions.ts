@@ -100,14 +100,17 @@ export async function listPurchaseOrdersAction(): Promise<
   }
 }
 
-// PO-2 — assemble the props for the PO PDF preview. Gated on inventory:view
-// (a preview is a read of PO data the caller can already see); the UI restricts
-// the button itself to admins.
+// PO-2 / SEC-2 — assemble the props for the PO PDF. A purchase order IS a cost
+// document by nature: unit costs, line totals, subtotal, tax and grand total are
+// its primary content. Rather than field-strip a document whose purpose is cost,
+// gate the WHOLE document on inventory:viewCost — a caller who cannot see costs
+// on screen cannot generate the cost document either. (Was inventory:view, which
+// let any inventory-view role pull full costs via this action.)
 export async function getPurchaseOrderPdfPropsAction(
   id: string
 ): Promise<ActionResult<PurchaseOrderDocumentProps>> {
   try {
-    const gate = await requireInventory("view");
+    const gate = await requireInventory("viewCost");
     if (gate) return gate;
     return { ok: true, data: await buildPurchaseOrderPdfProps(id) };
   } catch (e) {
@@ -115,10 +118,16 @@ export async function getPurchaseOrderPdfPropsAction(
   }
 }
 
+// SEC-2 — the PO detail carries per-line unit_cost + totals (it is the purchase
+// order document). This action was UNGATED, so any authenticated caller could
+// read full costs. Gate it on inventory:viewCost, consistent with the PDF and
+// the SEC-1 list redaction — a PO is a cost document, gated whole.
 export async function getPurchaseOrderAction(
   id: string
 ): Promise<ActionResult<PurchaseOrderDetail>> {
   try {
+    const gate = await requireInventory("viewCost");
+    if (gate) return gate;
     const detail = await getPurchaseOrderById(id);
     if (!detail) return { ok: false, error: "Purchase order not found" };
     return { ok: true, data: detail };
