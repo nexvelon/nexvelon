@@ -16,432 +16,97 @@
 
 ---
 
-> **Session marker (2026-06-25): Session AE complete.** The POLISH-N polish
-> arc on Clients / Sites / Contacts wrapped (PRs #252–#273; migrations applied
-> through 0075, next 0076). See `NEXVELON_SESSION_AE_HANDOFF.md`. **Strategic
-> intent below is unchanged** — the module sequence and v1 acceptance bars
-> still stand; the polish arc was operator-directed surface work on the
-> already-shipped Clients/Sites/Contacts builder, not a change to this plan.
+> **Resync marker (2026-09-24): REALITY-1 build-state audit.** The original
+> sequence below (feature audit → permissions → Quotes → Projects → Inventory →
+> Vendors → Invoices → Subcontractors → Financials → Scheduling → Reports) has
+> **all shipped** and was removed per this file's own rule ("when an item ships,
+> DELETE it here"). The authoritative built-vs-designed reconciliation is now
+> **`docs/BUILD_STATE_AUDIT.md`** (HEAD `f69b815`, PR #388, migration 0124). Every
+> capability that was *designed but not built* has been carried into the "Remaining
+> work" list below — nothing was dropped. Read the audit for the evidence, the
+> permissions gap, and the debt register behind these items.
 
 ---
 
-## Sequence (in order — do not re-order without an explicit decision)
-
-1. **Comprehensive feature audit + sidebar expansion** *(next scoping
-   pass, before any module build)*
-2. **Permissions module — design pass**
-3. **Permissions module — build**
-4. **Quotes v1**
-5. **Projects v1**
-6. **Inventory v1**
-7. **Vendors v1**
-8. **Invoices v1**
-9. **Subcontractors v1**
-10. **Financials v1**
-11. **Scheduling v1**
-12. **Reports v1** *(parallel-able after at least Quotes + Projects
-    ship — needs real data to surface)*
-
-Each module ships fully per §6 of `NEXVELON_PRINCIPLES.md`. No
-"module lite." If a v1 can't meet the bar, it stays in this file.
-
----
-
-## 1. Comprehensive feature audit + sidebar expansion
-
-**What:** A scoping pass across the entire suite before the permissions module is designed. Walk every module surface, enumerate the actions a real security-systems integrator needs, surface anything the current navigation hides or fragments.
-
-**🏁 COMPLETE as of Session O (2026-05-12):** All 13 of 13 modules walked through Sessions C-O. `NEXVELON_FEATURE_AUDIT.md` v0.14 is the final audit document. Total: ~1260 cumulative actions, 76 permissions design implications, ~594 acceptance criteria, 13 cross-cutting commitments locked (§0.4 #1-13), 140+ owned tables across all modules, 80 status surfaces with behavior bindings. M13 (Reports): ~55 actions, 7 new tables, 4 status surfaces, ~40 standard library cross-module reports across 7 categories, operator-defined custom reports via copy-and-modify (full builder Phase 2), scheduled delivery via email + in-app, saved report snapshots immutable per §0.4 #10, permission-aware queries end-to-end, multi-language (en + fr), eight-layer print on sensitive reports, source-back traceability for financial reports. Audit file management: v0.14 condenses M1-M12 sections to headline stats; full content preserved in git history at noted commit hashes. **Next phase: Permissions module design pass (item 2).**
-
-**Why first:** Permissions design depends on the action vocabulary. Designing the ACL before knowing the full set of actions guarantees a retrofit later — exactly the migration cost `NEXVELON_PRINCIPLES.md` §1 (data preservation) is designed to avoid.
-
-**Deliverable:** `NEXVELON_FEATURE_AUDIT.md` — fully populated with all 13 module sections + the consolidated action vocabulary + final sidebar tree + module dependency graph + cumulative permissions design implications + cumulative acceptance criteria.
-
----
-
-## 2. Permissions module — design pass
-
-**🏁 COMPLETE as of Session Z (2026-05-12):** All 11 of 11 design passes locked. `NEXVELON_PERMISSIONS_DESIGN.md` v0.11 — final version. Full pass content preserved in git history at commits: Pass 1 (9008fad), Pass 2 (1bafbd4), Pass 3 (ff08703), Pass 4 (de1905f), Pass 5 (904bfe5), Pass 6 (3c21e58), Pass 7 (41734b6), Pass 8 (c090599), Pass 9 (7eb540e), Pass 10 (215ee01), Pass 11 (this commit). Design phase totals: ~1260 actions catalogued, 14+ database tables across 5 groups, 3 runtime resolution algorithms (<5ms p99), 47-flag field visibility catalog, 80 status surfaces with polymorphic bindings, 8 append-only ledgers, request-admin-access workflow with 4 types, permissions editor UI with 6 sections, 4-cache architecture, all 13 §0.4 cross-cutting commitments fully enforcement-mapped, 56-step migration order in 6-phase rollout plan, 32 audit event types, ~54 integration test scenarios. Design phase formally closes; ready for build phase activation.
-
-**What:** A written design doc for the per-user, per-feature ACL
-described in `NEXVELON_PRINCIPLES.md` §2. Covers the data model,
-storage model for per-user overrides, three UI states
-(hidden/disabled/interactive), Admin override UX, and field-level
-permission storage (per §6 of PRINCIPLES).
-
-**Why ahead of build:** the permissions data model is the substrate
-every other module sits on. Getting it wrong means every subsequent
-module ships against a moving target. Design first, get sign-off,
-build second.
-
-**Deliverable:** A doc (`NEXVELON_PERMISSIONS_DESIGN.md`) covering:
-DB schema (likely `permissions` + `user_permission_overrides` +
-`field_permissions`), API contract (`assertCan`, `useCan`,
-`useFieldCan`), middleware integration, sidebar disabled-state
-rendering, audit-log shape for permission grants/revokes, and the
-migration strategy for replacing the current static `lib/permissions
-.ts` matrix.
-
-**Inputs from Session C** (in addition to the audit's action vocabulary):
-- Ten-dimensional control model (role / per-user / data scope / field / action / approval / system / UI / audit / lookup mgmt)
-- Contractual integrity exception for `clients:overrideSlaResponseTime` (cannot be granted via per-user override)
-- Eight-layer print protection requirements
-- Per-action "audit reads" opt-in flag (for `sites:viewAccess` and similar high-sensitivity reads)
-- Time-bounded grants with `expires_at` auto-revocation
-- Approval delegation framework with value caps + time bounds
-- Field-level encryption-at-rest for sensitive fields (gate codes, bank account numbers) via pgcrypto + Supabase Vault
-- Three-state per-tab gating on detail pages (hidden / disabled / interactive)
-
-**Inputs from Session D** (additions from Module 2 walk):
-- Effective-permissions caching pattern (sub-10ms checks via `effective_permissions_cache` jsonb column)
-- Request-admin-access workflow with auto-expiry
-- Six-tab permissions editor structure per `/employees/[id]/permissions`
-- Certification-driven scheduling auto-match with critical flag
-- Multi-territory model (Primary/Secondary/Relocation per Salesforce pattern)
-- Resource Absences with approval workflow + scheduling block
-- Phase 2 deferrals locked: SSO/SAML, API tokens, role hierarchy, multi-company, crews, two-tier permissions
-
-**Inputs from Session E** (additions from Module 3 walk):
-- Settings as configuration spine (Module 3) — defines which lookups, templates, workflow rules, security policies are operator-editable
-- 27 cumulative permissions design implications
-- Settings change preview pattern for behavior-binding changes
-- API key scoped permissions model (each key carries action allowlist)
-- OAuth token encryption-at-rest pattern in Supabase Vault
-- Workflow rule versioning (already-running executions carry rule version)
-- Per-user display format override pattern
-
-**Inputs from Session F** (additions from Module 4 walk):
-- UI presentation as 10th dimension of permission (sidebar + dashboard layout + landing page)
-- Three-way widget visibility gate pattern
-- Per-user dashboard layout customization with role default override
-- Code-defined widget catalog (operators don't add new widget types at v1)
-- Per-user landing page choice
-- Permission-aware widget data queries with drill-through respecting source-module permissions
-
-**Inputs from Session G** (additions from Module 5 walk):
-- Field-level margin visibility pattern (separating who-can-do from what-they-see)
-- Value + discount threshold approval routing with AND logic
-- Immutable snapshot pattern at quote send time
-- Online portal signed URL scoped to single quote (not general access tokens)
-- Append-only acceptance records with one-way signature hash
-- Quote → Project conversion lock pattern (source becomes read-only)
-- Per-cost-centre tax code support (Canadian split-tax compliance)
-
-**Inputs from Session H** (additions from Module 6 walk):
-- Three-state costing pattern (Estimated/Committed/Actual) with real-time forecast
-- Change order amendment versioning tied to original quote_terms_snapshot
-- Commissioning record immutability with one-way photo evidence hash
-- Handover warranty term snapshot at sign-off
-- Project document customer-facing visibility flag for portal access
-- Lien deadline tracking integration with AR/Financials
-- Project margin visibility field-level pattern (A/PM default; SR per-user override)
-
-**Inputs from Session I** (additions from Module 7 walk):
-- Append-only ledger pattern (no UPDATE/DELETE; reversals create new entries)
-- Serial number append-only history pattern
-- FIFO layer immutability for cost integrity
-- Multi-location stock visibility scoping (Tech sees own truck/van only)
-- Vendor catalog sync conflict resolution as permission-gated action
-- Photo evidence capture pattern for receive flows (extending commissioning pattern)
-- PO approval threshold separate from quote/CO thresholds
-- Project-reserved stock locking enforcement at quote acceptance
-
-**Inputs from Session J** (additions from Module 8 walk):
-- Banking encryption-at-rest with audit-on-read pattern extends from M1 clients to M8 vendors
-- T5018 YTD as gated field requiring A/Acc only (tax-sensitive)
-- Auto-degrade workflow pattern (performance triggers preferred-status removal)
-- Vendor-side T&C composition extending clause-per-gate pattern from clients
-- Cross-link flag pattern (is_also_contractor) for entities serving dual roles
-- Insurance/WSIB expiry auto-block-PO pattern (regulatory compliance enforcement)
-- Vendor consolidated billing pattern for AP
-
-**Inputs from Session K** (additions from Module 9 walk):
-- Separation of duties enforcement pattern (AP bill creator ≠ approver; payment run creator ≠ approver) — new cross-cutting commitment §0.4 #11
-- Invoice state machine with field-level lock per state (Draft / Pending Approval / Approved / Sent / Paid)
-- Customer payment portal signed URL pattern (scoped to single invoice, no login)
-- Late fee waiver gated to A/Acc with reason capture
-- AR aging role-scoped visibility (A/Acc all; PM project-scoped; SR client-scoped)
-- 3-way match manual override with reason capture pattern
-- Recurring invoice template linked to Service Contract pattern
-- Multi-currency invoice with exchange rate snapshot pattern
-- Customer credit balance accumulation pattern
-
-**Inputs from Session L** (additions from Module 10 walk):
-- Regulatory expiry auto-block enforcement pattern (insurance + WSIB) as new cross-cutting commitment §0.4 #12
-- Manual override of regulatory block requires A approval + reason + audit
-- Worker manifest project-scoped visibility (PM sees own project workers only)
-- Labor rate snapshot at WO creation for legal durability (extends M5/M8 snapshot pattern)
-- Skill + territory + availability matching algorithm pattern
-- Cross-link banking sync pattern between dual-role entities (vendor + contractor)
-- Worker cert verification with individual cert tracking per worker
-
-**Inputs from Session M** (additions from Module 11 walk):
-- GL period locking as new versioning/snapshot pattern (§0.4 #8 extended) — GL entries within locked period cannot be edited
-- Source-back traceability permission-aware drill-back pattern (GL line shows source but drill-back respects target-module permissions)
-- Hard close dual approval pattern (A + Acc co-sign per §0.4 #11 extended)
-- Manual GL entry separation of duties pattern (creator ≠ poster)
-- Bank balance field-level visibility pattern
-- Tax filing PDF eight-layer protection
-- Cross-currency revaluation handling pattern
-
-**Inputs from Session N** (additions from Module 12 walk):
-- Certification expiry auto-block extends §0.4 #12 from PO/WO creation to appointment scheduling
-- SLA response time auto-enforcement pattern (75%/90%/100% threshold alerts)
-- Per-site response time precedence consistent with M1 (site SLA > site response > client response > tier default)
-- Cross-resource polymorphic scheduling pattern
-- Geolocation privacy retention pattern (§0.4 #13 — 30-day default operator-configurable)
-- Mobile clock-in linking pattern (geolocation + project + phase + cost-centre)
-- Schedule change log append-only pattern (extends §0.4 #10)
-- Emergency dispatch override audit pattern
-- Schedule view scoping per role (Tech own; PM team+projects; Dispatcher all; SR client-scoped; A all)
-
-**Inputs from Session O** (additions from Module 13 walk):
-- Three layers of reporting (M4 Dashboard / M11 Financials / M13 Reports) with distinct permission models
-- Permission-aware report queries pattern (each report respects executing user's data scopes + field visibility)
-- Cross-user data in reports gated (explicit grant required)
-- Scheduled report subscription audit pattern (every recipient + delivery captured)
-- Saved report snapshots immutable per §0.4 #10
-- Multi-language report rendering pattern
-- Source-back traceability for financial reports
-
----
-
-## 3. Permissions module — build
-
-**🚧 IN PROGRESS as of Session Z (2026-05-12):** Build phase opens. First step: Phase 1 from `NEXVELON_PERMISSIONS_DESIGN.md` v0.11 §12.1 (Foundation: deploy ~23 new permissions tables + 8 append-only ledgers + all backfill scripts for existing user/role data; feature flags off; system dormant; verify backfill correctness). Subsequent phases: Phase 2 (Algorithm online — cohort A), Phase 3 (Field visibility + scopes — cohort B), Phase 4 (Cross-cutting constraints — cohort C), Phase 5 (Editor + requests — cohort D), Phase 6 (Full activation + cutover — global). Total build: 6 phases over ~12-16 weeks per Pass 11 plan.
-
-**What:** Implement the design from item 2. Migration `0005_perms_
-schema.sql`, `lib/api/permissions.ts`, `lib/permissions.ts` rewrite
-to read from DB (with an in-memory cache to avoid per-request DB hits),
-server-action gates (`assertCan(user, "quotes:create")`), route-level
-gates (middleware or layout), client hooks (`useCan`, `useFieldCan`),
-and the Admin override UI in `/users/[id]/permissions`.
-
-**v1 acceptance:** Every gate from the static matrix is replicated
-on the DB-backed version with no behaviour regression. The
-override UI lets an Admin hand a specific user a specific grant
-inside a specific resource without role promotion. Three UI states
-are exercised on the existing surfaces (`/users`, `/financials`,
-`/settings`). Full audit coverage on every grant / revoke.
-
----
-
-## 4. Quotes v1
-
-**What:** First "real" business module beyond clients/users. The
-revenue surface — quote drafting, multi-section line items,
-margin/internal toggles, send via PDF, convert-to-project, full
-audit trail.
-
-**v1 must include:** Migration with `quotes`, `quote_sections`,
-`quote_line_items` tables (schema sketched in
-`NEXVELON_SESSION_A_HANDOFF.md` §12). Server actions for create /
-update / send / approve / reject / convert / soft-delete. Custom
-fields on quote AND line item per `NEXVELON_PRINCIPLES.md` §6.
-Status as a lookup table (Draft / Sent / Approved / Rejected /
-Expired / Converted seeded; operator can rename/retire). Permission
-gates wired (`quotes:create`, `quotes:viewMargin`, `quotes:approve`,
-`quotes:convert`, `quotes:viewInternal`). PDF export reads from
-company-profile DB table (built incidentally — see deferred
-decisions). Beats the Sedona Office / Wisetrack / simPRO reference
-floor on margin clarity and convert-to-project friction.
-
-Additional from Session C:
-- **Onboarding gate auto-injection into T&C** — clause-per-gate composition assembling required-gate clauses into the quote T&C section. Versioned per dispatch.
-- **Eight-layer print protection** for quote PDFs.
-- **SLA reference in T&C** — quotes for clients with active site SLAs auto-reference the SLA name and effective dates in T&C.
-- **Quote approval workflow** with status flow Draft → Pending Approval → Approved → Sent → Binding (via onboarding gate fulfillment).
-- **Per-quote line-item permissions** — `quotes:viewMargin`, `quotes:viewCost` are field-level gates.
-
-**Detailed scope from Session G** — see `NEXVELON_FEATURE_AUDIT.md` §5 for the complete spec:
-
-- **Three quote types** (§5.1): Service Quote (one-off → job), Project Quote (multi-milestone → Project), Service Contract Quote (recurring → service_contracts row in M1).
-- **~85 actions** across 11 categories (§5.5): lifecycle (25), margin/cost (5 field-gated), line items, pricebook, assemblies, cost centers, templates, tracking, output, communication, bulk.
-- **12 new owned tables** (§5.4): `quotes`, `quote_line_items`, `quote_taxes`, `quote_discounts`, `quote_revisions`, `quote_approvals`, `quote_views`, `quote_acceptance_records` (append-only), `quote_terms_snapshots` (versioned), `quote_templates`, `pricebook_items` + `pricebook_categories`, `pre_built_assemblies`, `cost_centers`.
-- **5 status lookup tables** (§5.4): `quote_statuses` (13 seeded values incl. Draft / Pending Approval / Approved / Sent / Viewed / Negotiating / Accepted/Signed / Binding / Rejected / Withdrawn / Expired / Converted to Project / Archived), `approval_statuses`, `quote_revision_reasons`, `quote_types`, `cost_center_defaults`.
-- **Online portal at `/q/[token]`** (§5.6) — client-facing signed URL, 90-day expiry, no login required, revoked on acceptance, e-signature via touch (draw) or desktop (type + attest).
-- **Immutable send snapshots** (§5.12 #33) — line items + pricing + T&C captured at send time in `quote_terms_snapshots`. Revisions create new snapshots. Legal durability per PRINCIPLES §0.4 #8.
-- **Eight-layer print protection on revenue PDFs** (§5.6) — server-side gen only, force-reauth, watermark (operator + timestamp), audit row, 24h signed URL, print event capture, embedded metadata, no bulk export.
-- **T&C auto-composition** (§5.6) — composed from client's onboarding gates (M1 commitment honored); each clause tagged with source attribution; editable with audit; re-composable if client gates change post-creation.
-- **Value + discount threshold approval routing** (§5.13 #1-2; §5.12 #32) — combined AND logic; configurable per role in Settings. Defaults: <$5k self-approve, $5-25k→PM, $25-50k→PM+margin review (gates if margin <15%), >$50k→Admin. Discount: <10% self, 10-25%→PM, >25%→Admin.
-- **Per-cost-centre tax codes** (§5.13 #9) — Canadian split-tax compliance (Equipment/Labor/Materials lines can carry different tax codes per BC GST+PST vs ON HST scenarios).
-- **Holdback in quote totals** (§5.14 #8) — Ontario Construction Act default (10%/Excl/45 from client config); quote shows immediate due + holdback released later.
-- **Field-level margin visibility** (§5.7, §5.12 #31) — A/PM default; SR per-user override only. `quotes:viewMargin` is visibility flag, not action.
-- **Quote → Project conversion** (§5.12 #35) — locks source quote (read-only post-conversion); revisions blocked; new quote required for post-acceptance changes; sets `originating_quote_id` FK on project.
-- **Pre-built assemblies + cost centres + pricebook** (§5.6) — simPRO pattern; bundled line items, grouped subtotals on PDF, master catalog with vendor sync.
-- **Append-only acceptance records** (§5.12 #37) — signature image stored with one-way hash; no update, only read.
-- **52 acceptance criteria** (§5.14) — covering creation, approval workflow, send & track, conversion, versioning, pricing/discount/tax/holdback, permissions, eight-layer print, performance.
-
----
-
-## 5. Projects v1
-
-**What:** The delivery surface — projects, tasks, schedule rollup,
-materials, commissioning, zone lists, documents, financials tab,
-time + labor. The detail UI is largely already designed; this
-session wires it to real DB.
-
-**v1 must include:** Migration with `projects`, `project_tasks`,
-`project_materials`, `project_zones`, `project_documents`,
-`project_time_entries`. Server actions, custom fields, status lookup,
-permission gates, audit. Quotes → Projects conversion wired
-end-to-end (single click; `quote_id` becomes `project.source_quote_id`
-with materials and pricing carried over). Beats the ServiceTrade /
-Salesforce Field Service / simPRO reference floor on cross-module
-continuity.
-
----
-
-## 6. Inventory v1
-
-**🚀 UPCOMING SPRINT as of Session AD (2026-05-22):** The Quote, Client,
-Sites, and Contacts builder surfaces are complete. Session AC shipped
-PRs #53–#63 (see `NEXVELON_SESSION_AC_HANDOFF.md`); Session AD shipped
-PRs #65–#68 — the CL-5 trilogy (CL-5a client form cleanup, CL-5b mailing
-address, CL-5c dynamic multi-phone contacts). The latest authoritative
-handoff is `NEXVELON_SESSION_AD_HANDOFF.md` — its §5 details the **CL-6
-sprint** (8 PRs: client polish, contact-type expansion, Excel
-single-sheet, full-screen client/site forms, site schema expansion, site
-attachments, activity log) which runs **before** Inventory. Migrations
-0012–0017 are consumed by the CL-5 + CL-6 sprints, so the INV-1 migration
-number below is renumbered to the next free slot (≈0018) when that work
-begins. Inventory remains the sprint after CL-6. It
-implements the specific-identification per-lot cost model locked in §2.4
-of the AC handoff (each `inventory_lot` carries its own `unit_cost`;
-allocations snapshot `unit_cost_locked` at allocation time per the
-Snapshot Principle). Broken into six chunks:
-- **INV-1** — Schema migration 0012: five tables (`product_categories`,
-  `vendors`, `products`, `inventory_lots`, `inventory_allocations`) +
-  seed + paired smoke SQL. Phase 1 inspect first to map the current
-  `/inventory` placeholder.
-- **INV-2** — Products catalog page: proper `/inventory` UI (table +
-  filters + `ProductFormDrawer`; Categories + Vendors panes).
-- **INV-3** — Receive flow: PO → one `inventory_lot` per receipt
-  (qty + unit_cost + optional PO number + received_at).
-- **INV-4** — Allocation with lot-picker: choose a lot (or FIFO-default);
-  `unit_cost_locked` snapshotted; lot `qty_remaining` decrements.
-- **INV-5** — Physical counts / adjustments (theft, damage, write-offs,
-  recounts) + adjustment audit log.
-- **INV-6** — "From catalog" button in the Quote builder line-item row —
-  the integration point wiring inventory into quotes.
-
-Phase 1 of INV-1 must first resolve: flat vs. hierarchical categories;
-vendor scope (name+contact vs. full PO-history module); SKU vs.
-part_number (one field or two); partial-receipt support; single- vs.
-multi-warehouse.
-
-**What:** The stock surface — products, warehouse locations,
-allocations (to projects), stock movements ledger, low-stock alerts,
-per-vendor reorder rules. Vendors are referenced here but get their
-own module next (item 7).
-
-**v1 must include:** Migration with `products`, `product_locations`,
-`stock_allocations`, `stock_movements`, `low_stock_rules`. Custom
-fields on product (per `PRINCIPLES.md` §6 — manufacturers want SKU
-variants, license keys, serial numbers). Movement ledger is the
-real audit trail; every adjustment writes a row with reason +
-operator + before/after qty. Allocation against project is a
-typed link to the Projects module. Beats the Anixter / Best Buy
-distributor portal / simPRO reference floor on the one-screen
-low-stock + on-order view.
-
----
-
-## 7. Vendors v1
-
-**What:** A dedicated module for the suppliers Nexvelon buys from
-(ADI, Anixter, Wesco, CDW, Provo, …). Currently a `Vendor` type
-exists in code but no first-class module. Splits out from the
-Inventory + Financials surfaces.
-
-**v1 must include:** Migration with `vendors`, `vendor_contacts`,
-`vendor_terms`. Lifecycle: Active / On Hold / Terminated (lookup
-table). Cross-references: every product references a primary vendor;
-every invoice/bill from a vendor references the vendor. PO module
-sits here logically — purchase orders to a vendor draw from quote
-line items + inventory reorder rules. Custom fields per §6.
-
----
-
-## 8. Invoices v1
-
-**What:** AR side of Financials — quotes that converted now produce
-invoices, invoices get sent, paid, reconciled. Includes overdue
-tracking and bookkeeping handoff to QuickBooks (the integration
-target, not replacement, per §3).
-
-**v1 must include:** Migration with `invoices`, `invoice_line_items`,
-`payments`. Status lookup (Draft / Sent / Paid / Overdue / Void).
-Convert-from-project workflow. PDF export with the same letterhead
-component used by quotes (see deferred decision: company-profile
-DB table). QuickBooks Online sync hook (write-only at v1; pull comes
-in v2). Permission gates incl. `invoices:viewMargin`,
-`invoices:approveWriteOff`.
-
----
-
-## 9. Subcontractors v1
-
-**What:** The subcontractor management surface — separate from
-employees, separate from vendors. Tracks insurance + WSIB expiry,
-trade qualifications, paid YTD. Subs get assigned to project tasks
-the same way employees do.
-
-**v1 must include:** Migration with `subcontractors`,
-`subcontractor_qualifications`, `subcontractor_assignments`.
-Hard-block on assignment when insurance/WSIB is expired
-(per `NEXVELON_PRINCIPLES.md` §3 — the bar to beat the reference
-floor). Status lookup. Custom fields. Audit on every assignment.
-
----
-
-## 10. Financials v1
-
-**What:** The bookkeeping + analytics surface. P&L, balance sheet,
-cash flow, AR/AP aging — all derived from the operational tables
-shipped by items 4 + 5 + 6 + 7 + 8 + 9. QuickBooks Online sync as
-the integration backbone.
-
-**v1 must include:** Real derivation engine pulling from the modules
-above (no mock-data fallback). Period-by-period comparisons (MTD /
-QTD / YTD vs. prior). HST/GST collected + paid reporting. Margin
-breakdown per client tier. Pre-existing financials/Tabs.tsx ESLint
-warnings (5 of them, Session A constraint) get fixed as part of
-this module's wiring.
-
----
-
-## 11. Scheduling v1
-
-**What:** The dispatch surface — calendar view, technician swimlanes,
-job assignment with capacity + certification matching. Replaces the
-mock-data scheduling page.
-
-**v1 must include:** Migration with `schedule_jobs`,
-`schedule_assignments`, `tech_certifications`. Job creation from
-project tasks OR ad-hoc. Drag-to-assign in the calendar view.
-Hard-block on assignment when a tech doesn't carry the required
-panel certification (Kantech, Genetec, C-CURE, etc.) — the §3 bar
-above ServiceFusion / Jobber / simPRO. Custom fields on job. Audit
-on every assignment change. Route + capacity optimisation deferred
-to v2.
-
----
-
-## 12. Reports v1
-
-**What:** Cross-module analytics + custom dashboards + scheduled
-email deliveries + PDF/CSV/Excel exports. The current
-`/reports` page is a deliberate Coming Soon shell (commit
-`91677d6`). Wires once enough modules have real data.
-
-**v1 must include:** A report-definition data model (reports are
-data, not code — operators add/edit them in Settings). Cross-
-module joins (pipeline through invoiced revenue, margin by client
-tier, tech utilization vs. budgeted hours). Scheduled email
-deliveries via a cron + Resend pipeline. Export to PDF, CSV, and
-live Excel workbooks. Permission gates per report (sensitive
-reports — margin, payroll — hidden from non-managers).
+## Remaining work (ordered)
+
+Tiers + reasoning + evidence are in `docs/BUILD_STATE_AUDIT.md` §6–§7. **(M)** = needs
+a migration (additive-only per `NEXVELON_PRINCIPLES.md` §1, applied manually by Jay).
+Each line is scoped to a single Claude Code paste.
+
+### P0 — correctness / security (do first)
+
+- **SEC-1 — server-strip field-gated data.** Inventory `unit_cost`, quote margin,
+  and internal notes are hidden client-side only while the server returns them
+  (`inventory/actions.ts` gates reads on `inventory:view`; `viewCost` lives in
+  `StockTab.tsx:49` et al). Redact these in the server reads by permission,
+  mirroring the WIP `canSeeCost` pattern; test that a non-`viewCost` payload omits
+  cost. *No migration.*
+- **AUD-4 — invoice audit trail.** `lib/api/invoices.ts` + `invoices/actions.ts`
+  write zero `activity_log` rows (§5 gap). Add `logActivity("invoice", …)` on
+  create / update / line-edit / payment with readable labels (AUD-2B rule). *No
+  migration.*
+
+### P1 — designed, materially absent, commercially matters
+
+- **FIN-TAX-1 — holdback HST treatment.** Resolve the unresolved tax question at
+  `lib/api/invoices.ts:15`; correct the figure + test. *No migration.*
+- **REP-5 — Reports platform** *(carries forward the designed M13 scope)*. Today
+  ~14 static reports render; build the report-definition data model, a copy-modify
+  **custom builder**, **scheduled email/PDF delivery** (reuse the SNAP-1 cron
+  pattern), subscriptions, and immutable saved snapshots — the ~7 designed report
+  tables. **(M)**
+- **FIFO-1 — inventory FIFO valuation** (§0.4 #8 locked commitment; zero code
+  today). **(M)**
+- **QBO-1 — accounting export** (QuickBooks/Xero/Sage 50; §3's integration
+  backbone; label-only today). Write-only QuickBooks first. **(M)**
+- **QUOTE-PORTAL-1 — client quote portal `/q/[token]`** *(designed §5)*:
+  signed-URL e-acceptance (no login), append-only acceptance records, and immutable
+  send snapshots. **(M)**
+- **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
+
+### P2 — polish / designed-but-deferred
+
+- **Permissions dimensions 2–10** *(the rest of `NEXVELON_PERMISSIONS_DESIGN.md`
+  v0.11 — carried forward)*: data scopes, time-bounded grants (`expires_at`),
+  request-admin-access workflow, approval delegation with value caps,
+  audit-on-read, eight-layer print protection, encryption-at-rest (gate codes /
+  bank numbers), and persistent effective-permissions caching. Sequence per the
+  v0.11 six-phase plan when commercially triggered. **(M each)**
+- **PERM-HYGIENE — drop dormant `0005`/`0006`** (~21 dead, unreferenced tables) and
+  reconcile the `user_permission_overrides` schema collision (`0006` vs live
+  `0115`). **(M)** — needs the §8 Q4 decision (drops tables).
+- **Clients — SLA engine + client-level holdback config**; the **Contracts tab**
+  (placeholder at `ClientDetailView.tsx:406`); a dedicated `/contacts` detail
+  route. **(M)**
+- **Settings — Workflow Rules engine** (§6 Phase-2 commitment), **email/PDF
+  template editors**, and real wiring for the Notifications / API-Webhooks stubs.
+- **Users — employee HR surface** (certifications, territories) beyond techs.
+- **Scheduling — SLA auto-enforcement, cert-expiry auto-block on booking, mobile
+  geolocation clock-in.**
+- **Subcontractors — skill+territory matching; lien-deadline tracking.**
+- **Vendors — banking encryption-at-rest; performance auto-degrade + stored score.**
+- **Projects — ULC verification in commissioning; handover-package flow.**
+- **Dashboard — remaining role templates (4→6) + widget-catalogue breadth.**
+- **Bug/polish batch** — QuoteHistoryPanel → shared `formatActivityValue`
+  (`QuoteHistoryPanel.tsx:58`); activity UUID→human-label registry
+  (`format-activity-value.ts:17`); BrandingThemes' 3 "preview only" controls;
+  Clients Export (`ClientsView.tsx:353`); quote letterhead; ProjectEditForm PM
+  picker (`ProjectEditForm.tsx:8`); hardcoded-hex cleanup (`po-status.tsx`,
+  inline brand-gold); document the Turbopack-only build.
+- **UI-arc deferred items** — tracked in the *UI/Dashboard/Gantt initiative*
+  section below: base primitives (switch / slider / stepper / date-picker /
+  calendar), exotic chart forms, presentation-timeline export, per-widget range
+  override, per-opco balance trends, count trend lines, per-resource calendars,
+  resource levelling / auto-assignment.
+
+### P3 — catalogued only, no near-term intent
+
+- **Deferred modules — Expenses / Receipt OCR / Payroll-HR** (see below).
+- **Training package** (Jay-triggered; see below).
+- **Permissions Phase-2 deferrals** — multi-tenant per-tenant rollout, SSO/SAML,
+  API tokens, role hierarchy, crews.
+- Dead entity-type cleanup (`inventory_product` never emitted).
 
 ---
 
