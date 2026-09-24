@@ -2569,9 +2569,13 @@ export interface DbInvoice {
   // 'master_part_number' | 'part_number' | 'name' | 'description'. Default {name}.
   line_identifier_fields: string[];
   // FIN-9 (migration 0094): true on an invoice that COLLECTS a holdback release.
-  // Such invoices carry no holdback of their own and are tax-exempt (HST was
-  // already charged on the original invoices' full subtotal).
+  // Under the charged_upfront treatment such invoices are tax-exempt (HST was
+  // already charged on the original invoices' full subtotal); under
+  // deferred_to_release they are taxable and carry the holdback's HST.
   is_holdback_release: boolean;
+  // FIN-TAX-1 (migration 0127): the holdback HST treatment this invoice was
+  // computed under (snapshot, §2.2). NULL = legacy = charged_upfront.
+  holdback_hst_treatment: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

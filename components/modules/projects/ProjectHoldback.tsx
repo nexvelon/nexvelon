@@ -3,7 +3,8 @@
 // FIN-9 — the holdback card on the project page. Shows retained holdback, the
 // substantial-completion date, the 60-day countdown to release eligibility, and
 // the action ladder: set up a release once the project is substantially
-// complete, then release it (generating a tax-exempt invoice) once the clock is
+// complete, then release it (generating an invoice — tax-exempt or taxable per
+// the FIN-TAX-1 holdback HST treatment) once the clock is
 // up. financials:edit gates the actions; the figures are visible at
 // financials:view (retained is money owed to us).
 
@@ -28,6 +29,11 @@ import {
   releaseHoldbackAction,
 } from "@/app/(app)/financials/actions";
 import type { ProjectHoldbackStatus } from "@/lib/api/holdback";
+import { getHoldbackHstTreatmentAction } from "@/app/(app)/settings/company-settings-actions";
+import {
+  HOLDBACK_HST_TREATMENT_META,
+  type HoldbackHstTreatment,
+} from "@/lib/tax/holdback-hst";
 import { formatCurrency } from "@/lib/format";
 
 export function ProjectHoldback({ projectId }: { projectId: string }) {
@@ -35,6 +41,7 @@ export function ProjectHoldback({ projectId }: { projectId: string }) {
   const canEdit = hasPermission(role, "financials", "edit");
 
   const [status, setStatus] = useState<ProjectHoldbackStatus | null>(null);
+  const [treatment, setTreatment] = useState<HoldbackHstTreatment | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -46,6 +53,11 @@ export function ProjectHoldback({ projectId }: { projectId: string }) {
     });
   };
   useEffect(load, [projectId]);
+  useEffect(() => {
+    getHoldbackHstTreatmentAction().then((res) => {
+      if (res.ok) setTreatment(res.data);
+    });
+  }, []);
 
   const handleSetup = () =>
     startTransition(async () => {
@@ -82,6 +94,21 @@ export function ProjectHoldback({ projectId }: { projectId: string }) {
   return (
     <Card className="bg-card space-y-3 p-4 shadow-sm">
       <h3 className="text-brand-navy font-serif text-lg">Statutory holdback</h3>
+
+      {/* FIN-TAX-1 — state how the release invoice will be taxed, so the basis is
+          visible before anyone clicks Release. */}
+      {treatment && (
+        <p className="text-muted-foreground text-xs">
+          HST treatment:{" "}
+          <span className="text-brand-charcoal font-medium">
+            {HOLDBACK_HST_TREATMENT_META[treatment].label}
+          </span>{" "}
+          —{" "}
+          {treatment === "charged_upfront"
+            ? "the release invoice will be tax-exempt (HST was collected on the original invoices)."
+            : "the release invoice will be taxable and carry the HST on the released holdback."}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
         <Figure label="Retained" value={formatCurrency(status.retained)} strong />

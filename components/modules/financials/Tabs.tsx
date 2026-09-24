@@ -57,6 +57,11 @@ import {
   exportArAgingCsvAction,
   listFinancialInvoicesAction,
 } from "@/app/(app)/financials/actions";
+import { getHoldbackHstTreatmentAction } from "@/app/(app)/settings/company-settings-actions";
+import {
+  HOLDBACK_HST_TREATMENT_META,
+  type HoldbackHstTreatment,
+} from "@/lib/tax/holdback-hst";
 import type {
   FinInvoiceListRow,
   MonthlyRevenuePoint,
@@ -721,12 +726,18 @@ export function TaxTab({ from, to }: TabProps) {
 
   const [collected, setCollected] = useState<TaxCollectedSummary | null>(null);
   const [position, setPosition] = useState<HstNetPosition | null>(null);
+  const [treatment, setTreatment] = useState<HoldbackHstTreatment | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let active = true;
     setError(null);
+    // FIN-TAX-1 — the org's current holdback HST treatment, shown so the return's
+    // basis is visible (each invoice's own snapshot is what actually feeds it).
+    getHoldbackHstTreatmentAction().then((res) => {
+      if (active && res.ok) setTreatment(res.data);
+    });
     // Collected-only stays view-tier (FIN-1); the net position is edit-tier.
     getTaxCollectedSummaryAction({ from, to }).then((res) => {
       if (!active) return;
@@ -762,6 +773,18 @@ export function TaxTab({ from, to }: TabProps) {
 
   return (
     <div className="space-y-6">
+      {/* FIN-TAX-1 — state the holdback HST treatment so the return's basis is
+          visible (a number whose basis is invisible is a number nobody can check). */}
+      {treatment && (
+        <div className="rounded-md border border-[var(--border)] bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <span className="text-brand-charcoal font-medium">
+            Holdback HST: {HOLDBACK_HST_TREATMENT_META[treatment].label}.
+          </span>{" "}
+          {HOLDBACK_HST_TREATMENT_META[treatment].short} HST collected is summed
+          from each invoice&rsquo;s own recorded tax, so the return matches what was
+          charged. Admins set the treatment under Settings → Tax &amp; Currency.
+        </div>
+      )}
       {/* FIN-7 — per-opco net position. Integrated Solutions and Guardian are
           separate corporations with separate HST numbers filing separate
           returns, so each gets its own card and the two are never blended into
