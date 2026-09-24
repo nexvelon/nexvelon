@@ -75,7 +75,7 @@ export interface ProductOption {
   id: string;
   sku: string;
   name: string;
-  cost: number;
+  cost: number | null; // SEC-1 — null when the caller lacks inventory:viewCost
   // CAT-3b: for the category / sub-category line-picker filter.
   category?: string;
   subcategory?: string;

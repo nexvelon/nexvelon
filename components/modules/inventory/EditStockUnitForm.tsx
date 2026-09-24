@@ -41,7 +41,10 @@ export function EditStockUnitForm({
 }: {
   productId: string;
   trackingMode: InventoryTrackingMode;
-  unit: DbInventoryStock;
+  // SEC-1 — per-lot cost may be redacted to null on the wire. This edit form is
+  // only reachable by inventory:edit users, who always hold inventory:viewCost,
+  // so unit_cost is present at runtime; the null guard below is belt-and-braces.
+  unit: Omit<DbInventoryStock, "unit_cost"> & { unit_cost: number | null };
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
@@ -49,7 +52,9 @@ export function EditStockUnitForm({
   const isSerialized = trackingMode === "serialized";
 
   const [serialNumber, setSerialNumber] = useState(unit.serial_number ?? "");
-  const [unitCost, setUnitCost] = useState(String(unit.unit_cost));
+  const [unitCost, setUnitCost] = useState(
+    unit.unit_cost != null ? String(unit.unit_cost) : ""
+  );
   const [quantity, setQuantity] = useState(String(unit.quantity));
   const [location, setLocation] = useState(unit.location ?? "");
   const [poNumber, setPoNumber] = useState(unit.po_number ?? "");

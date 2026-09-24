@@ -107,7 +107,7 @@ export function InventoryPageClient({
   // INV-1b — all stat cards now compute from real data (were partly mock).
   const stats = useMemo(() => {
     const stockValue = products.reduce(
-      (s, p) => s + p.stock * (p.avgCost ?? p.cost),
+      (s, p) => s + p.stock * (p.avgCost ?? p.cost ?? 0),
       0
     );
     const lowStock = products.filter((p) => p.stock <= p.reorderPoint).length;

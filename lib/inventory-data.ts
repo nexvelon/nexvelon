@@ -183,7 +183,7 @@ export const VENDOR_DIRECTORY: VendorInfo[] = [];
 // inventory page can feed them RSC-fetched real products (lib/api/products.ts)
 // instead of the emptied mock array. Pure functions over the passed-in list.
 export function totalStockValue(items: Product[]): number {
-  return items.reduce((s, p) => s + p.stock * p.cost, 0);
+  return items.reduce((s, p) => s + p.stock * (p.cost ?? 0), 0);
 }
 
 export function lowStockCount(items: Product[]): number {

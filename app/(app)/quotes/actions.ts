@@ -30,10 +30,12 @@ import { getProjectRow } from "@/lib/api/projects";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/permissions";
 import { diffQuote } from "@/lib/quote-audit-diff";
-import { newId } from "@/lib/quote-helpers";
+import { newId, round2 } from "@/lib/quote-helpers";
+import { getProductRowById } from "@/lib/api/products";
 import { businessDateISO } from "@/lib/format";
 import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
-import type { Client, Quote, Site } from "@/lib/types";
+import { redactQuote, resolveFieldGates } from "@/lib/permissions/field-redaction";
+import type { BuilderLineItem, Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
@@ -56,7 +58,10 @@ export async function listQuotesAction(): Promise<ActionResult<Quote[]>> {
     // pipeline report) both sit behind quotes access, so require quotes:view.
     const gate = await requireQuotesPermission("view");
     if (!gate.ok) return gate;
-    return { ok: true, data: await listQuotes() };
+    // SEC-1 — strip cost/margin/internal from the wire per the caller's gates.
+    const quotes = await listQuotes();
+    const gates = await resolveFieldGates();
+    return { ok: true, data: quotes.map((q) => redactQuote(q, gates)) };
   } catch (e) {
     return fail(e);
   }
@@ -66,7 +71,13 @@ export async function getQuoteByIdAction(
   id: string
 ): Promise<ActionResult<Quote | null>> {
   try {
-    return { ok: true, data: await getQuoteById(id) };
+    // SEC-1 — this fed the builder & detail view fully unredacted (RLS-only).
+    // Strip cost/margin/internal per the caller's gates. A redacted caller can
+    // still edit; upsertQuoteAction restores the values from the prior blob.
+    const quote = await getQuoteById(id);
+    if (!quote) return { ok: true, data: null };
+    const gates = await resolveFieldGates();
+    return { ok: true, data: redactQuote(quote, gates) };
   } catch (e) {
     return fail(e);
   }
@@ -131,6 +142,87 @@ async function validateIntendedTarget(quote: Quote): Promise<string | null> {
   return null;
 }
 
+/**
+ * SEC-1 — a caller without quotes:viewMargin / quotes:viewInternal receives a
+ * quote whose cost, margin, internal notes, and labour tech-names were nulled on
+ * read. If they save, those nulls would clobber the real values in the jsonb
+ * blob. Restore them here, server-side, from the prior row (matched by line id).
+ * A genuinely NEW product line re-derives its cost from the product default so
+ * the persisted cost stays truthful (never a fabricated zero, §2.8).
+ */
+async function restoreRedactedQuoteFields(
+  incoming: Quote,
+  prior: Quote | null,
+  gates: { quoteMargin: boolean; quoteInternal: boolean }
+): Promise<Quote> {
+  if (gates.quoteMargin && gates.quoteInternal) return incoming;
+
+  // Index prior section lines by id for O(1) restore.
+  const priorById = new Map<string, BuilderLineItem>();
+  for (const section of prior?.sections ?? []) {
+    for (const item of section.items) priorById.set(item.id, item);
+  }
+
+  // Re-derive cost for brand-new product lines (no prior) from the catalog.
+  const newProductIds = new Set<string>();
+  if (!gates.quoteMargin) {
+    for (const section of incoming.sections ?? []) {
+      for (const item of section.items) {
+        if (!priorById.has(item.id) && item.productId) {
+          newProductIds.add(item.productId);
+        }
+      }
+    }
+  }
+  const productCost = new Map<string, number | null>();
+  await Promise.all(
+    [...newProductIds].map(async (pid) => {
+      const row = await getProductRowById(pid);
+      productCost.set(pid, row?.default_unit_cost ?? null);
+    })
+  );
+
+  const sections = incoming.sections?.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      let next = item;
+      if (!gates.quoteMargin) {
+        const priorItem = priorById.get(item.id);
+        // The real cost: kept from the prior blob for an existing line, or
+        // re-derived from the catalog default for a brand-new product line.
+        const cost = priorItem
+          ? priorItem.unitCost
+          : item.productId
+            ? productCost.get(item.productId) ?? null
+            : next.unitCost; // non-product new line: no cost source, keep as-is
+        // Recompute margin from the real cost and the (possibly edited) selling
+        // price so it stays truthful — the redacted caller can change price but
+        // never saw cost/margin. Fall back to the prior margin when price is 0.
+        const margin =
+          cost != null && item.unitPrice > 0
+            ? round2(((item.unitPrice - cost) / item.unitPrice) * 100)
+            : priorItem?.margin ?? next.margin;
+        next = { ...next, unitCost: cost, margin };
+      }
+      if (!gates.quoteInternal) {
+        const priorItem = priorById.get(item.id);
+        const priorTech = priorItem?.labour?.techName;
+        if (next.labour && priorTech != null) {
+          next = { ...next, labour: { ...next.labour, techName: priorTech } };
+        }
+      }
+      return next;
+    }),
+  }));
+
+  return {
+    ...incoming,
+    ...(sections ? { sections } : {}),
+    // Restore the PM-only internal notes the redacted caller never received.
+    ...(gates.quoteInternal ? {} : { internalNotes: prior?.internalNotes }),
+  };
+}
+
 export async function upsertQuoteAction(
   quote: Quote
 ): Promise<ActionResult<Quote>> {
@@ -138,6 +230,12 @@ export async function upsertQuoteAction(
     // AUDIT-1: capture the prior row BEFORE the upsert so we can detect a
     // first-create and status transitions.
     const prior = await getQuoteById(quote.id);
+
+    // SEC-1 — a redacted caller (no viewMargin/viewInternal) never received the
+    // real cost/margin/internal fields; restore them from `prior` so their save
+    // cannot clobber the blob with the nulls we sent them.
+    const gates = await resolveFieldGates();
+    quote = await restoreRedactedQuoteFields(quote, prior, gates);
 
     // PROJ2-5 — reject an inconsistent intended conversion target before write.
     const targetError = await validateIntendedTarget(quote);
@@ -211,7 +309,9 @@ export async function upsertQuoteAction(
       console.error("[quote_audit_log] event logging failed:", auditErr);
     }
 
-    return { ok: true, data: saved };
+    // SEC-1 — the write restored the real cost/margin/internal fields; strip
+    // them again on the way back so a redacted caller never sees them echoed.
+    return { ok: true, data: redactQuote(saved, gates) };
   } catch (e) {
     return fail(e);
   }

@@ -276,7 +276,7 @@ function PORow({
             <p className="text-muted-foreground mt-0.5 truncate text-[11px]">
               {po.line_count} line{po.line_count === 1 ? "" : "s"} ·{" "}
               <span className="text-brand-charcoal font-medium">
-                {formatCurrency(po.total)}
+                {po.total != null ? formatCurrency(po.total) : "—"}
               </span>
               {po.order_date ? ` · ordered ${po.order_date}` : ""}
               {po.expected_date ? ` · expected ${po.expected_date}` : ""}

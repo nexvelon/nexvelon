@@ -21,14 +21,16 @@ export interface AllocationStockRow {
   productName: string;
   sku: string;
   quantity: number;
-  unitCost: number;
+  // SEC-1 — null on the wire when the caller lacks inventory:viewCost (never
+  // zeroed, §2.8). A real number for cost-trusted callers.
+  unitCost: number | null;
 }
 
 export interface AllocationCostCenter {
   costCenterId: string;
   costCenterName: string; // "<cc_number> · <name>"
   stockRows: AllocationStockRow[];
-  subtotal: number; // Σ quantity × unit_cost
+  subtotal: number | null; // Σ quantity × unit_cost; null if cost redacted
 }
 
 export interface AllocationsByProject {
@@ -38,7 +40,7 @@ export interface AllocationsByProject {
   clientId: string;
   clientName: string;
   costCenters: AllocationCostCenter[];
-  projectTotal: number;
+  projectTotal: number | null; // null if cost redacted
 }
 
 // Shape of one embedded stock row from the query below.
@@ -132,8 +134,10 @@ export async function listStockAllocations(): Promise<AllocationsByProject[]> {
       unitCost,
     });
     const line = qty * unitCost;
-    center.subtotal += line;
-    p.projectTotal += line;
+    // Accumulators start at 0; the ?? 0 satisfies the now-nullable field type
+    // (null is only ever assigned later, at the SEC-1 redaction boundary).
+    center.subtotal = (center.subtotal ?? 0) + line;
+    p.projectTotal = (p.projectTotal ?? 0) + line;
   }
 
   // Strip the internal map; sort by project label, cost centers already ordered.

@@ -811,11 +811,13 @@ export async function consumeStock(
 export type AgingBucket = "0-30" | "31-60" | "61-90" | "90+" | "Unknown";
 
 export interface InventoryReportData {
-  totalValuation: number;
-  valuationByCategory: { category: string; value: number; units: number }[];
-  aging: { bucket: AgingBucket; units: number; value: number }[];
+  // SEC-1 — every cost-derived value is null on the wire when the caller lacks
+  // inventory:viewCost (never zeroed, §2.8); unit counts always render.
+  totalValuation: number | null;
+  valuationByCategory: { category: string; value: number | null; units: number }[];
+  aging: { bucket: AgingBucket; units: number; value: number | null }[];
   /** Turnover PROXY — units/value marked consumed|retired in the last 90 days. */
-  consumption90d: { value: number; units: number };
+  consumption90d: { value: number | null; units: number };
 }
 
 // Supabase embeds a to-one relationship as an object, but the generated types

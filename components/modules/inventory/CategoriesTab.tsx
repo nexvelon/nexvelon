@@ -55,7 +55,7 @@ export function CategoriesTab({
         acc.get(key) ?? { label, items: [], units: 0, value: 0 };
       g.items.push(p);
       g.units += p.stock;
-      g.value += p.stock * (p.avgCost ?? p.cost);
+      g.value += p.stock * (p.avgCost ?? p.cost ?? 0);
       acc.set(key, g);
     }
 

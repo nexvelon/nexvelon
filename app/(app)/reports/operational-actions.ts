@@ -10,7 +10,8 @@ import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 import { getSalesPipeline } from "@/lib/api/reports/pipeline";
 import { getLabourUtilizationReport } from "@/lib/api/reports/labour-utilization";
 import { getVendorSpendReport } from "@/lib/api/reports/vendor-spend";
-import { getInventoryReportData } from "@/lib/api/products";
+import { getInventoryReportData, type InventoryReportData } from "@/lib/api/products";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 import { getBusinessSnapshot } from "@/lib/api/reports/business-snapshot";
 import {
   pipelineDataset,
@@ -90,8 +91,27 @@ async function buildDataset(
       return vendorSpendDataset(
         await getVendorSpendReport({ from: params.from, to: params.to, limit: params.limit })
       );
-    case "inventory-valuation":
-      return inventoryValuationDataset(await getInventoryReportData());
+    case "inventory-valuation": {
+      // SEC-1 — the report is accessible at inventory:view, but its cost-derived
+      // VALUE columns require inventory:viewCost. Redact to null (never zeroed
+      // §2.8) for callers without it, so both the on-screen report and the
+      // CSV/XLSX/PDF export honour the redaction.
+      const report = await getInventoryReportData();
+      const { inventoryCost } = await resolveFieldGates();
+      const safe: InventoryReportData = inventoryCost
+        ? report
+        : {
+            ...report,
+            totalValuation: null,
+            valuationByCategory: report.valuationByCategory.map((c) => ({
+              ...c,
+              value: null,
+            })),
+            aging: report.aging.map((a) => ({ ...a, value: null })),
+            consumption90d: { ...report.consumption90d, value: null },
+          };
+      return inventoryValuationDataset(safe);
+    }
     case "business-snapshot":
       return businessSnapshotDataset(await getBusinessSnapshot());
   }

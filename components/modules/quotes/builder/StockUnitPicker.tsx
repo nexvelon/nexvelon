@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { listStockForProductAction } from "@/app/(app)/inventory/actions";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import type { DbInventoryStock } from "@/lib/types/database";
+import type { RedactedStock } from "@/app/(app)/inventory/actions";
 
 interface CostGroup {
   unitCost: number;
@@ -44,7 +44,7 @@ export function StockUnitPicker({
   onPin: (stockUnitId: string, unitCost: number) => void;
   onUnpin: () => void;
 }) {
-  const [units, setUnits] = useState<DbInventoryStock[]>([]);
+  const [units, setUnits] = useState<RedactedStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 

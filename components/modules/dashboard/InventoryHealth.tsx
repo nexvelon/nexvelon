@@ -43,14 +43,27 @@ export function InventoryHealth() {
                   seriesColor (distinct past 5 categories — the old palette[i %]
                   made the 6th category identical to the 1st), tooltip is themed,
                   and the total moves into the donut centre. */}
-              <DonutChart
-                summary="Inventory value by category"
-                height={150}
-                data={data.by_category.map((c) => ({ name: c.category, value: c.value }))}
-                valueFormatter={formatCurrency}
-                centerCaption="total"
-                emptyMessage="No stock on hand."
-              />
+              {/* SEC-1 — the server nulls every category value when the caller
+                  lacks inventory:viewCost; show a restricted note rather than a
+                  valueless donut. */}
+              {data.by_category.length > 0 &&
+              data.by_category.every((c) => c.value === null) ? (
+                <div className="text-muted-foreground flex items-center gap-2 py-8 text-xs">
+                  <Lock className="h-3.5 w-3.5" /> Cost access required.
+                </div>
+              ) : (
+                <DonutChart
+                  summary="Inventory value by category"
+                  height={150}
+                  data={data.by_category.map((c) => ({
+                    name: c.category,
+                    value: c.value ?? 0,
+                  }))}
+                  valueFormatter={formatCurrency}
+                  centerCaption="total"
+                  emptyMessage="No stock on hand."
+                />
+              )}
             </div>
 
             {/* Low stock */}

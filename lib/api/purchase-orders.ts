@@ -49,7 +49,9 @@ async function db() {
 /** A list row: the header + vendor name + computed total + line count. */
 export interface PurchaseOrderListRow extends DbPurchaseOrder {
   vendor_name: string;
-  total: number;
+  // SEC-1 — Σ qty×unit_cost; null on the wire when the caller lacks
+  // inventory:viewCost (never zeroed, §2.8).
+  total: number | null;
   line_count: number;
 }
 

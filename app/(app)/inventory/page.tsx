@@ -13,20 +13,57 @@ import { getVendors } from "@/lib/api/vendors";
 import { listCategories } from "@/lib/api/categories";
 import { listRecentMovements } from "@/lib/api/stock-movements";
 import { listStockAllocations } from "@/lib/api/inventory-allocations";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 import { InventoryPageClient } from "./InventoryPageClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const [products, purchaseOrders, vendors, categories, movements, allocations] =
-    await Promise.all([
-      listProducts(),
-      getPurchaseOrders(),
-      getVendors(),
-      listCategories(),
-      listRecentMovements({ limit: 200 }),
-      listStockAllocations(),
-    ]);
+  const [
+    productsRaw,
+    purchaseOrdersRaw,
+    vendors,
+    categories,
+    movements,
+    allocationsRaw,
+    gates,
+  ] = await Promise.all([
+    listProducts(),
+    getPurchaseOrders(),
+    getVendors(),
+    listCategories(),
+    listRecentMovements({ limit: 200 }),
+    listStockAllocations(),
+    resolveFieldGates(),
+  ]);
+
+  // SEC-1 — strip cost / value / margin from the wire when the caller lacks
+  // inventory:viewCost. Redaction is null (never zeroed, §2.8); the client tabs
+  // also hide these behind `showCost` (defence in depth). Applies to the product
+  // catalog, PO totals, and the per-project allocation rollups.
+  const products = gates.inventoryCost
+    ? productsRaw
+    : productsRaw.map((p) => ({
+        ...p,
+        cost: null,
+        avgCost: null,
+        quoteDefaultMargin: null,
+      }));
+  const purchaseOrders = gates.inventoryCost
+    ? purchaseOrdersRaw
+    : purchaseOrdersRaw.map((po) => ({ ...po, total: null }));
+  const allocations = gates.inventoryCost
+    ? allocationsRaw
+    : allocationsRaw.map((proj) => ({
+        ...proj,
+        projectTotal: null,
+        costCenters: proj.costCenters.map((cc) => ({
+          ...cc,
+          subtotal: null,
+          stockRows: cc.stockRows.map((r) => ({ ...r, unitCost: null })),
+        })),
+      }));
+
   return (
     <InventoryPageClient
       products={products}

@@ -388,15 +388,19 @@ export function lineItemTotal(li: BuilderLineItem): number {
 }
 
 export function lineItemCost(li: BuilderLineItem): number {
-  return li.qty * li.unitCost;
+  // SEC-1 — cost is null for callers without quotes:viewMargin; treat as 0 for
+  // the (hidden) cost/profit rollup. The real value is restored on save.
+  return li.qty * (li.unitCost ?? 0);
 }
 
 // cost / margin → unitPrice (holds the margin the user set).
 export function recalcLineItem(li: BuilderLineItem): BuilderLineItem {
+  const cost = li.unitCost ?? 0;
+  const margin = li.margin ?? 0;
   const unitPrice =
-    li.margin >= 100
-      ? li.unitCost // guard against div-by-zero
-      : round2(li.unitCost / (1 - li.margin / 100));
+    margin >= 100
+      ? cost // guard against div-by-zero
+      : round2(cost / (1 - margin / 100));
   return { ...li, unitPrice };
 }
 
@@ -408,7 +412,9 @@ export function recalcMarginFromPrice(
   newUnitPrice: number
 ): BuilderLineItem {
   const price = round2(newUnitPrice);
-  const margin = price > 0 ? round2((1 - li.unitCost / price) * 100) : 0;
+  // SEC-1 — cost may be null (redacted); the derived margin is hidden from such
+  // callers and restored on save, so a 0-cost fallback here is inert.
+  const margin = price > 0 ? round2((1 - (li.unitCost ?? 0) / price) * 100) : 0;
   return { ...li, unitPrice: price, margin };
 }
 
@@ -457,7 +463,7 @@ export function ensureSections(q: Quote): QuoteSection[] {
       unitCost: product?.cost ?? 0,
       // Derive margin% = (price − cost) / price × 100 (QB-2 margin model)
       margin:
-        product && it.unitPrice > 0
+        product && product.cost != null && it.unitPrice > 0
           ? round2(((it.unitPrice - product.cost) / it.unitPrice) * 100)
           : 0,
       unitPrice: it.unitPrice,

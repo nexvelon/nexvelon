@@ -118,7 +118,7 @@ export function PurchaseOrdersTab({
                   </TableCell>
                   {showCost && (
                     <TableCell className="text-brand-charcoal text-right text-sm font-semibold tabular-nums">
-                      {formatCurrency(Number(po.total ?? 0))}
+                      {po.total != null ? formatCurrency(Number(po.total)) : "—"}
                     </TableCell>
                   )}
                   <TableCell>

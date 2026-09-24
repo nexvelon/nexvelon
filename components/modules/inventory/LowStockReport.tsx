@@ -63,7 +63,7 @@ export function LowStockReport({ showCost }: { showCost: boolean }) {
             product: p,
             shortfall,
             suggestedQty,
-            estCost: suggestedQty * p.cost,
+            estCost: suggestedQty * (p.cost ?? 0),
           };
         })
         // Most urgent first: largest shortfall, then lowest on-hand.
@@ -147,7 +147,7 @@ export function LowStockReport({ showCost }: { showCost: boolean }) {
                             onHand: p.stock,
                             reorderPoint: p.reorderPoint,
                             suggestedQty,
-                            defaultCost: p.cost,
+                            defaultCost: p.cost ?? 0,
                           })
                         }
                       >

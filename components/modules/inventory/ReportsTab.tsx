@@ -81,15 +81,18 @@ export function ReportsTab() {
     );
   }
 
+  // SEC-1 — value is null when cost is redacted; charts fall back to the units
+  // series (showCost is false in that case), so 0 here is chart plumbing only,
+  // never a displayed figure.
   const valuationData = data.valuationByCategory.map((c, i) => ({
     label: c.category,
-    value: c.value,
+    value: c.value ?? 0,
     units: c.units,
     fill: seriesColor(i, ct.palette),
   }));
   const agingData = data.aging.map((a) => ({
     label: a.bucket,
-    value: a.value,
+    value: a.value ?? 0,
     units: a.units,
   }));
   const hasInStock = data.valuationByCategory.length > 0;
@@ -110,7 +113,7 @@ export function ReportsTab() {
           </h2>
           {showCost && (
             <span className="text-brand-navy text-lg font-semibold tabular-nums">
-              {formatCurrency(data.totalValuation)}
+              {data.totalValuation != null ? formatCurrency(data.totalValuation) : "—"}
             </span>
           )}
         </div>
@@ -213,7 +216,7 @@ export function ReportsTab() {
                 Value consumed / retired
               </p>
               <p className="text-brand-navy text-2xl font-semibold tabular-nums">
-                {formatCurrency(data.consumption90d.value)}
+                {data.consumption90d.value != null ? formatCurrency(data.consumption90d.value) : "—"}
               </p>
             </div>
           )}

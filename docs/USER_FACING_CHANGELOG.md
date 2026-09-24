@@ -116,6 +116,23 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Security — Cost, margin & internal notes are now server-enforced (SEC-1)
+
+- Cost, margin, and internal-notes visibility is now enforced by the server, not
+  just hidden in the screen. A user without the relevant permission
+  (**View cost** for inventory, **View margin** or **View internal notes** for
+  quotes) no longer receives those figures at all — they’re absent from the data,
+  the reports, and every CSV/Excel/PDF export, not merely blanked in the UI.
+- Concretely: per-unit and average cost, total stock value, PO totals, the
+  inventory-valuation report and its exports, the dashboard’s inventory-value
+  donut, and — on quotes — per-line cost/margin, the margin summary, internal
+  notes, and technician names are all withheld from users who lack the matching
+  permission. Where a figure is withheld it shows a clean “—”, never a fake $0.
+- Nobody’s permissions changed: anyone who could see these figures before still
+  sees them, and anyone who could edit a quote still can. A quote editor who
+  can’t see margin can still change prices — their save preserves the real cost
+  behind the scenes rather than wiping it.
+
 ### Dashboard — Balance history & deltas (SNAP-1)
 
 - The balance tiles — **AR**, **AP**, **deposits held**, and **WIP** — now show how

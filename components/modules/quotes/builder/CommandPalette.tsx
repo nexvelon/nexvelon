@@ -111,7 +111,7 @@ export function CommandPalette({ sections, onAddProductToSection }: Props) {
                   </div>
                 </div>
                 <span className="text-brand-charcoal shrink-0 text-xs tabular-nums">
-                  {formatCurrency(p.cost)}
+                  {p.cost != null ? formatCurrency(p.cost) : "—"}
                 </span>
               </div>
             </CommandItem>

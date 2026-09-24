@@ -25,6 +25,7 @@ import {
 import type { MonthlyRevenuePoint } from "@/lib/api/financials";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 import { businessDateISO } from "@/lib/format";
 import {
   BALANCE_METRICS,
@@ -227,7 +228,19 @@ export async function getInventoryHealthAction(): Promise<ActionResult<Inventory
   try {
     const denied = await gateOr("inventory", "view");
     if (denied) return { ok: false, error: denied };
-    return { ok: true, data: await getInventoryHealth() };
+    const health = await getInventoryHealth();
+    // SEC-1 — stock value by category is cost-derived; strip it from the wire
+    // when the caller lacks inventory:viewCost (null, not zeroed §2.8). The
+    // dashboard widget renders null categories without a value figure.
+    const { inventoryCost } = await resolveFieldGates();
+    if (inventoryCost) return { ok: true, data: health };
+    return {
+      ok: true,
+      data: {
+        ...health,
+        by_category: health.by_category.map((c) => ({ ...c, value: null })),
+      },
+    };
   } catch (e) {
     return fail(e);
   }

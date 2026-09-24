@@ -76,6 +76,7 @@ import {
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { useReadOnly } from "@/lib/use-read-only";
 import { useRole } from "@/lib/role-context";
+import { hasPermission } from "@/lib/permissions";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { clients as MOCK_CLIENTS } from "@/lib/mock-data/clients";
 import {
@@ -439,6 +440,11 @@ export function QuoteBuilder({
   const ro = useReadOnly(status);
   const { role } = useRole();
   const isAdmin = role === "Admin";
+  // SEC-1 — the per-line cost & margin columns are gated on quotes:viewMargin,
+  // mirroring the TotalsBar margin summary. The server also nulls these fields
+  // for callers without the flag (defence in depth); a redacted caller edits the
+  // selling price only, and upsertQuoteAction preserves the real cost on save.
+  const showCost = hasPermission(role, "quotes", "viewMargin");
   // APPROVAL-REOPEN + POLISH-2: admin-only reopen. From Sent / Approved /
   // Revision it reverts to Draft (re-enters the edit + re-approval loop); from
   // Closed it reopens to Sent so a closed deal is never terminal-locked.
@@ -675,15 +681,19 @@ export function QuoteBuilder({
     // (list_price) → blank. Tier mode uses the line's margin model; fixed mode
     // sets the exact price (and back-derives the displayed margin); none starts
     // at $0 so the user prices it on the quote.
+    // SEC-1: cost is null for a caller without margin visibility (the catalog read
+    // redacts it). The line then carries 0 cost locally; the gated upsert action
+    // re-derives / preserves the real cost server-side on save, so nothing is lost.
+    const cost = p.cost ?? 0;
     let margin = 0;
     let unitPrice = 0;
     if (p.quoteDefaultMargin != null) {
       margin = p.quoteDefaultMargin;
       unitPrice =
-        margin >= 100 ? p.cost : round2(p.cost / (1 - margin / 100));
+        margin >= 100 ? cost : round2(cost / (1 - margin / 100));
     } else if (p.price > 0) {
       unitPrice = p.price;
-      margin = p.cost > 0 ? round2((1 - p.cost / p.price) * 100) : 0;
+      margin = cost > 0 ? round2((1 - cost / p.price) * 100) : 0;
     }
 
     setSections((prev) =>
@@ -706,7 +716,7 @@ export function QuoteBuilder({
                   description: "",
                   classification: "Materials",
                   qty: 1,
-                  unitCost: p.cost,
+                  unitCost: cost,
                   margin,
                   unitPrice,
                 },
@@ -1718,7 +1728,7 @@ export function QuoteBuilder({
                 section={s}
                 sections={sections}
                 classifications={classifications}
-                showCost
+                showCost={showCost}
                 defaultLabourSellRate={defaultLabourSellRate}
                 disabled={ro.readOnly}
                 onUpdateSection={updateSection}
