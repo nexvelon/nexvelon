@@ -2,17 +2,18 @@
 
 > **Single source of truth for the Nexvelon project.**
 > A fresh Claude Code session reads, in order:
->   1. **`NEXVELON_PRINCIPLES.md`** — the six non-negotiables (incl. §6 Extensibility).
->   2. **`NEXVELON_SESSION_AE_HANDOFF.md`** — the LATEST session handoff and the
->      authoritative source for current project state (Client / Sites / Contacts
->      modules complete through the POLISH-N arc, PR #273; migrations applied
->      through 0075; next migration 0076). Read this first for current reality.
->      `NEXVELON_SESSION_AD_HANDOFF.md` (CL-5 trilogy, PR #68) is the prior
->      session handoff.
->   3. The `## Current Session State` block immediately below.
->   4. **`NEXVELON_SESSION_B_HANDOFF.md`** — what shipped in Session B + file-by-file delta.
->   5. **`NEXVELON_ROADMAP.md`** — what's next, in order, with v1 acceptance bars.
->   6. `NEXVELON_SESSION_A_HANDOFF.md` — historical auth-surface reference.
+>   1. **`NEXVELON_PRINCIPLES.md`** — the non-negotiables (incl. §6 Extensibility).
+>   2. The `## Current Session State` block immediately below — the real HEAD,
+>      latest PR, and highest migration.
+>   3. **`docs/BUILD_STATE_AUDIT.md`** — the authoritative built-vs-designed
+>      reconciliation (REALITY-1, 2026-09-24). What actually shipped, the
+>      permissions gap, the debt register, and the tiered pending list.
+>      **This supersedes the session-handoff docs as the current-state source.**
+>   4. **`NEXVELON_ROADMAP.md`** — what genuinely remains, in order.
+>   5. `docs/USER_FACING_CHANGELOG.md` — the reliable per-chunk shipped record.
+>   6. The `NEXVELON_SESSION_*_HANDOFF.md` docs and §0–§16 below are HISTORICAL
+>      strategic context only — they describe the migration-0001 → PR-#273 era and
+>      do not reflect current reality.
 
 ---
 
@@ -37,23 +38,16 @@
 
 ## Current Session State
 
-**As of 2026-06-25. Session AE CLOSED. POLISH-N polish arc wrapped (PRs #252–#273). Repo docs refreshed to current reality — no chat handover required for future sessions.**
+**As of 2026-09-24 (REALITY-1 build-state resync). The core ERP has shipped end to end. Full built-vs-designed reconciliation lives in `docs/BUILD_STATE_AUDIT.md` — read it for the real gap picture; treat live code + migrations as ground truth over any older narrative in this file.**
 
-- **Latest migration applied:** **0075** (`0075_unify_site_codes.sql` — client_code backfill + per-client site renumber).
-- **Next migration number:** **0076.**
-- **Latest PR merged:** **#273** (trade-name routing fix — store entered trade name as display name).
-- **Active sprint:** **paused.** The POLISH-N polish series on Clients / Sites / Contacts is complete; no sprint currently pinned. Jay directs the next one.
-- **Recent architectural arcs complete (full narrative in `NEXVELON_SESSION_AE_HANDOFF.md`):**
-  - Client soft-delete + optional hard-delete (type-to-confirm); site hard-delete via **atomic plpgsql cascade** (`hard_delete_client`/`hard_delete_site`, migrations 0068–0070). WHY: hidden FK `ON DELETE RESTRICT` edges make sequential JS deletes unsafe.
-  - Contact routing bug fixed — invite-approved contacts now flow into `contacts` (were dumped as notes text). Schema reality: boolean flags (`is_primary`/`is_accounts_payable`/etc.) + `contact_type_custom`, **no `role` column**; phones jsonb is `{label, number}`. Site contacts use `client_id=NULL` + `site_id`.
-  - Site Contacts UI + CRUD via `ContactFormDrawer` `create-site` mode (extend-with-mode, not duplicate).
-  - Client detail redesign — inline 2-col grid + per-section pencil edit. **SectionCard hoisted to module scope** (focus-loss fix).
-  - Company Address field + **copy-resolved inheritance with flag columns** (migrations 0071–0073) replacing NULL-when-inheriting; cascade dialog on source edits; mailing supports two "same as" options. Real columns: `billing_street`/`billing_city` (NOT `billing_address_line1`); only company uses `_line1`/`_line2`.
-  - Site-code unification — `client_code` as `C-IS-{year}-{NNNN}`, sites as `S-{client_code}-NNN` (migrations 0074–0075); `nextClientCode`/`nextSiteCodeForClient` reused by invite + manual paths.
-  - Excel: single-client onboarding template v4 (Company Address safe end-append, rows 49–56) + new admin-only **bulk client importer** (46-col wide template, `bulkImportClientsAction`).
-  - T&C (manual, in DB via Settings → Quote Defaults, NOT in git): Warranty split into 5 sub-clauses; new Consumer Clients section (IS §24 / Guardian §27, Ontario CPA carve-out) — pending Ordower Law review.
-  - Email infra: M365 for nexvelonglobal.com (SPF+DKIM+DMARC complete); `ceo@` aliases configured.
-- **⚠️ Note on the older session-state history below:** the Session-Z-and-earlier blocks describe a *planned* Permissions design/build narrative that does NOT reflect what actually shipped. Actual delivery (per git) is the Clients/Sites/Contacts/Quotes builder surfaces through the POLISH arc. Treat AE handoff + live code/migrations as ground truth; the older blocks are preserved as historical strategic context only.
+- **HEAD:** `f69b815d0999520853516050a965d669ac366690`.
+- **Latest PR merged:** **#388** (SNAP-1 — daily balance snapshots).
+- **Highest migration in repo:** **0124** (`0124_balance_snapshots.sql`). Next migration number: **0125**. (Migrations are additive-only per §1 and applied manually by Jay via the Supabase Dashboard.)
+- **Where the product stands (one paragraph):** Clients/Sites/Contacts, Users, and Settings are DB-wired and mature. On top of them the full quote-to-cash suite has shipped: **Quotes** (multi-section builder, margin gating, PDF, convert-to-project), **Projects & Jobs** (jobs, tasks, deficiencies, commissioning, WIP + cost codes, site log, team, warranty/bonds, and the full **Gantt arc** — interactive schedule at `/projects/[id]/schedule` with critical path, resource lane, and working-day calendar), **Inventory** (products, lots, allocations, cycle counts, pickup slips), **Vendors** (+ POs, performance), **Invoices/AR** (+ deposits, holdback, payments), **Vendor bills/AP**, **Tax/HST**, **Subcontractors** (compliance, agreements, work orders), **Financials** (P&L, WIP, AR/AP aging, HST), **Scheduling/dispatch** (SCHED-1..4), **Reports** (REP-1..4 — export hub + financial + operational reports), a widgetized **Dashboard** (UIDG-5..10 + SNAP-1 balance history), and an **Activity/audit** feed (AUD-1..3). **Permissions shipped as a DB-backed role×resource×action matrix with per-user overrides + an admin UI + audit (PERM-1..4, DES-1/2)** — this is roughly Phases 1–2 of the ten-dimension `NEXVELON_PERMISSIONS_DESIGN.md`; the deeper dimensions (field-level visibility, data scopes, time-bounded grants, approval delegation, request-access workflow, encryption-at-rest, audit-on-read, eight-layer print, append-only ledgers) are **designed but not built** — see `docs/BUILD_STATE_AUDIT.md` §4.
+- **Top open risks (from the audit):** a **P0 field-level confidentiality leak** (inventory cost / quote margin / internal notes are hidden client-side only while the server returns them), and **invoices write no `activity_log`** (§5 gap). Both are enumerated in `docs/BUILD_STATE_AUDIT.md` §5–§6.
+- **What remains** is enumerated and tiered in `docs/BUILD_STATE_AUDIT.md` and reflected in the resynced `NEXVELON_ROADMAP.md`. Deferred modules (Expenses / Receipt OCR / Payroll-HR) and the Jay-triggered training package are unchanged and still pending.
+- **Build/test:** `next build --turbopack` is the supported build (a webpack `next build` fails on `@react-pdf/renderer` ESM); the vitest suite is green (~1450+ tests).
+- **⚠️ Everything below this block is historical.** The Session-AE-and-earlier narrative, the Session-Z permissions design/build plan, and §0–§8 (which still describe the migration-0001 clients-only era) are preserved as strategic/historical context only and do NOT reflect current delivery. Ground truth = live code + migrations + `docs/BUILD_STATE_AUDIT.md`.
 
 ---
 
