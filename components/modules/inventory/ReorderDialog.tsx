@@ -35,7 +35,8 @@ import {
   createPurchaseOrderAction,
   getLastVendorIdForProductAction,
 } from "@/app/(app)/purchase-orders/actions";
-import type { DbVendor, DbStockLocation } from "@/lib/types/database";
+import type { DbStockLocation } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 export interface ReorderPart {
   id: string;
@@ -50,7 +51,7 @@ export interface ReorderPart {
 
 // A vendor that lists this part in excluded_parts (by SKU or master part #) is
 // ineligible.
-function vendorCarries(v: DbVendor, part: ReorderPart): boolean {
+function vendorCarries(v: VendorRead, part: ReorderPart): boolean {
   const excluded = (v.excluded_parts ?? []).map((s) => s.trim().toLowerCase());
   if (excluded.length === 0) return true;
   const ids = [part.sku, part.masterPartNumber]
@@ -70,7 +71,7 @@ export function ReorderDialog({
 }) {
   const router = useRouter();
 
-  const [vendors, setVendors] = useState<DbVendor[]>([]);
+  const [vendors, setVendors] = useState<VendorRead[]>([]);
   const [warehouses, setWarehouses] = useState<DbStockLocation[]>([]);
   const [loaded, setLoaded] = useState(false);
 

@@ -10,10 +10,10 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { VendorPerformanceCard } from "./VendorPerformanceCard";
 import { ActivitySection } from "@/components/activity/ActivityTimeline";
 import type { VendorMetricsView } from "@/app/(app)/vendors/actions";
-import type { DbVendor } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 interface Props {
-  vendor: DbVendor;
+  vendor: VendorRead;
   initialMetrics: VendorMetricsView;
   initialCanSeeSpend: boolean;
   years: number[];

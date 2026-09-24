@@ -19,10 +19,12 @@ import { Button } from "@/components/ui/button";
 import {
   createVendorAction,
   updateVendorAction,
+  revealVendorAccountNumberAction,
 } from "@/app/(app)/vendors/actions";
-import type { DbVendor, DbVendorInsert } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
+import type { DbVendorInsert } from "@/lib/types/database";
 
-type Mode = { kind: "create" } | { kind: "edit"; vendor: DbVendor };
+type Mode = { kind: "create" } | { kind: "edit"; vendor: VendorRead };
 
 interface Props {
   open: boolean;
@@ -66,7 +68,9 @@ function seed(mode: Mode): DbVendorInsert {
     province: v.province ?? "",
     postal_code: v.postal_code ?? "",
     country: v.country ?? "",
-    account_number: v.account_number ?? "",
+    // SEC-2 — the account number is never sent to the client; the field starts
+    // blank/masked and is only populated if the user reveals or changes it.
+    account_number: "",
     payment_terms: v.payment_terms ?? "",
     notes: v.notes ?? "",
     is_active: v.is_active,
@@ -84,11 +88,30 @@ export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
     (seed(mode).excluded_parts ?? []).join(", ")
   );
   const [saving, setSaving] = useState(false);
+  // SEC-2 — account-number field state. In edit mode it starts UNTOUCHED (masked,
+  // preserved on save). Revealing or changing it marks it touched, and only then
+  // is a new value sent (an untouched save never overwrites the stored credential).
+  const hasStoredAcct = mode.kind === "edit" && mode.vendor.has_account_number;
+  const [acctTouched, setAcctTouched] = useState(mode.kind === "create");
+  const [revealing, setRevealing] = useState(false);
 
   const set = <K extends keyof DbVendorInsert>(
     key: K,
     value: DbVendorInsert[K]
   ) => setForm((f) => ({ ...f, [key]: value }));
+
+  const revealAccountNumber = async () => {
+    if (mode.kind !== "edit") return;
+    setRevealing(true);
+    const res = await revealVendorAccountNumberAction(mode.vendor.id);
+    setRevealing(false);
+    if (res.ok) {
+      set("account_number", res.data.value ?? "");
+      setAcctTouched(true);
+    } else {
+      toast.error(res.error);
+    }
+  };
 
   const handleSave = async () => {
     if ((form.name ?? "").trim() === "") {
@@ -102,6 +125,10 @@ export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
         .map((s) => s.trim())
         .filter(Boolean),
     };
+    // SEC-2 — never overwrite the stored account number on an untouched edit.
+    if (isEdit && !acctTouched) {
+      delete (payload as { account_number?: string }).account_number;
+    }
     setSaving(true);
     const res = isEdit
       ? await updateVendorAction(mode.vendor.id, payload)
@@ -147,10 +174,42 @@ export function VendorFormDrawer({ open, onClose, onSaved, mode }: Props) {
               />
             </Field>
             <Field label="Account number">
-              <Input
-                value={form.account_number ?? ""}
-                onChange={(e) => set("account_number", e.target.value)}
-              />
+              {hasStoredAcct && !acctTouched ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground flex-1 font-mono text-sm tracking-widest">
+                    ••••••••
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={revealAccountNumber}
+                    disabled={revealing}
+                  >
+                    {revealing ? "…" : "Reveal"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      set("account_number", "");
+                      setAcctTouched(true);
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <Input
+                  value={form.account_number ?? ""}
+                  onChange={(e) => {
+                    set("account_number", e.target.value);
+                    setAcctTouched(true);
+                  }}
+                  placeholder={isEdit ? "Enter a new account number" : ""}
+                />
+              )}
             </Field>
           </div>
 

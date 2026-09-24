@@ -20,6 +20,10 @@ export interface FieldGates {
   quoteMargin: boolean;
   /** quotes:viewInternal — the PM-only internal notes. */
   quoteInternal: boolean;
+  /** SEC-2 — financials:view governs vendor banking (the encrypted account
+   *  number). The value is never in a bulk payload regardless; this gate governs
+   *  the single-record reveal (see revealVendorAccountNumberAction). */
+  vendorBanking: boolean;
   /** Cost is trusted in EITHER cost context. The product catalog read is shared by
    *  the inventory pages and the quote builder, so a caller trusted with cost in
    *  either place may receive it. (Today viewMargin holders also hold viewCost, so
@@ -30,20 +34,28 @@ export interface FieldGates {
 /** Resolve the field-visibility gates once, server-side, fail-closed. */
 export async function resolveFieldGates(): Promise<FieldGates> {
   try {
-    const [inventoryCost, quoteMargin, quoteInternal] = await Promise.all([
+    const [inventoryCost, quoteMargin, quoteInternal, vendorBanking] = await Promise.all([
       can("inventory", "viewCost"),
       can("quotes", "viewMargin"),
       can("quotes", "viewInternal"),
+      can("financials", "view"),
     ]);
     return {
       inventoryCost,
       quoteMargin,
       quoteInternal,
+      vendorBanking,
       anyCost: inventoryCost || quoteMargin,
     };
   } catch {
     // Never expose a gated value on an error path.
-    return { inventoryCost: false, quoteMargin: false, quoteInternal: false, anyCost: false };
+    return {
+      inventoryCost: false,
+      quoteMargin: false,
+      quoteInternal: false,
+      vendorBanking: false,
+      anyCost: false,
+    };
   }
 }
 

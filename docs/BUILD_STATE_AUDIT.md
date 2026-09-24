@@ -93,8 +93,8 @@ The v0.11 **dormant schema** (`0005`/`0006` — ~21 catalog/cache/runtime tables
 | 3 | Time-bounded grants w/ expiry | **ABSENT** | Live `user_permission_overrides` (`0115`) has `revoked_at` but **no `expires_at`**; resolver filters `revoked_at IS NULL` only |
 | 4 | Approval delegation w/ value caps | **ABSENT** | No code |
 | 5 | Request-admin-access workflow | **ABSENT** | Only dormant table refs in `smoke_chunk_02.sql`; no submit/approve/notify path |
-| 6 | Encryption-at-rest (gate codes, bank #) | **ABSENT** | `pgcrypto` used only for `gen_random_uuid`; "encrypted at rest" is backup-UI copy (`BackupsData.tsx`) |
-| 7 | Audit-on-read (high-sensitivity reads) | **ABSENT** | `requires_audit_on_read` only in dormant `0005`; `permission_audit` logs writes only |
+| 6 | Encryption-at-rest (gate codes, bank #) | **PARTIAL — enforced where applicable (SEC-2, PR #392)** | App-layer AES-256-GCM (`lib/crypto/credentials.ts`), key in `CREDENTIAL_ENCRYPTION_KEY` env only (never in DB/Vault/backups). Applied to `vendors.account_number` (mig 0125/0126 + backfill). NOTE: the audit's premised gate/alarm-code columns **do not exist** in the schema — no plaintext codes to encrypt today; the mechanism + standing rule (NEXVELON_PRINCIPLES §2) cover any such field added later. |
+| 7 | Audit-on-read (high-sensitivity reads) | **PARTIAL — present for the vendor-banking reveal (SEC-2)** | A reveal of `vendors.account_number` writes an `activity_log` row (who + which vendor, never the value) via `revealVendorAccountNumberAction`. A dedicated `read` action enum (vs reusing `update`) + `requires_audit_on_read` config remain follow-ups. `permission_audit` still logs writes only. |
 | 8 | Eight-layer print protection | **ABSENT** | Only a plain `@media print` chrome-hide (`globals.css:231`); no watermark/PDF protection |
 | 9 | Append-only permission ledgers | **PARTIAL** | One genuine ledger: `permission_audit` (`0115`, mutation-block trigger). Design wanted 8 partitioned; shipped 1, unpartitioned |
 | 10 | Effective-permissions caching | **PARTIAL** | React per-request `cache()` only; DB cache tables dormant; no invalidation triggers or warm-up |

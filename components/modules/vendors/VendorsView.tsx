@@ -29,19 +29,19 @@ import { cn } from "@/lib/utils";
 import { VendorFormDrawer } from "./VendorFormDrawer";
 import { deleteVendorAction, listVendorsAction } from "@/app/(app)/vendors/actions";
 import { formatCurrency } from "@/lib/format";
-import type { DbVendor } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 
 interface Props {
-  vendors: DbVendor[];
+  vendors: VendorRead[];
 }
 
 export function VendorsView({ vendors }: Props) {
   const [search, setSearch] = useState("");
-  const [rows, setRows] = useState<DbVendor[]>(vendors);
+  const [rows, setRows] = useState<VendorRead[]>(vendors);
   const [drawer, setDrawer] = useState<
-    { open: false } | { open: true; mode: { kind: "create" } | { kind: "edit"; vendor: DbVendor } }
+    { open: false } | { open: true; mode: { kind: "create" } | { kind: "edit"; vendor: VendorRead } }
   >({ open: false });
-  const [confirmDelete, setConfirmDelete] = useState<DbVendor | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<VendorRead | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const reload = async () => {
@@ -209,7 +209,7 @@ function VendorRow({
   onEdit,
   onDelete,
 }: {
-  vendor: DbVendor;
+  vendor: VendorRead;
   onEdit: () => void;
   onDelete: () => void;
 }) {

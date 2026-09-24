@@ -12,13 +12,15 @@ import {
   getVendorById,
   getVendors,
   updateVendor,
+  revealVendorAccountNumber,
+  type VendorRead,
 } from "@/lib/api/vendors";
 import { getVendorMetrics, type VendorMetrics } from "@/lib/api/vendor-metrics";
 import { computeChanges, logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { isEncryptionConfigured } from "@/lib/crypto/credentials";
 import { type Action } from "@/lib/permissions";
 import type {
-  DbVendor,
   DbVendorInsert,
   DbVendorUpdate,
 } from "@/lib/types/database";
@@ -59,8 +61,9 @@ function validateVendorPayload(
   return null;
 }
 
-/** Read helper for the client view to refresh after a mutation (no gate). */
-export async function listVendorsAction(): Promise<ActionResult<DbVendor[]>> {
+/** Read helper for the client view to refresh after a mutation (no gate).
+ *  Credential-stripped (VendorRead) — never carries the account number. */
+export async function listVendorsAction(): Promise<ActionResult<VendorRead[]>> {
   try {
     return { ok: true, data: await getVendors() };
   } catch (e) {
@@ -101,16 +104,81 @@ export async function updateVendorAction(
 
     const row = await updateVendor(id, payload);
 
+    // SEC-2 — NEVER let the plaintext account number reach the activity log.
+    // Diff everything EXCEPT account_number; record a value-free marker when the
+    // banking credential was changed.
+    const { account_number: acctChange, ...auditPayload } = payload as {
+      account_number?: string | null;
+    } & Record<string, unknown>;
     const changes = computeChanges(
       before as unknown as Record<string, unknown>,
-      payload as Record<string, unknown>
+      auditPayload as Record<string, unknown>
     );
+    if (acctChange !== undefined) {
+      const hadValue = before.has_account_number;
+      const hasValue = acctChange != null && acctChange !== "";
+      if (hadValue !== hasValue || hasValue) {
+        changes.account_number = {
+          from: hadValue ? "••••" : null,
+          to: hasValue ? "••••" : null,
+        };
+      }
+    }
     if (Object.keys(changes).length > 0) {
-      await logActivity("vendor", id, "update", changes);
+      await logActivity("vendor", id, "update", changes, {
+        entityLabel: before.name,
+      });
     }
 
     revalidatePath("/vendors");
     return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * SEC-2 — reveal ONE vendor's decrypted account number on explicit action.
+ * Gated on financials:view (banking is financial data), never bulk, server-side
+ * only. Audit-on-read: a successful reveal writes an activity row naming the
+ * vendor — never the value. Fail-closed: any decryption/config failure returns a
+ * clean error so the UI keeps the masked state and never shows plaintext.
+ */
+export async function revealVendorAccountNumberAction(
+  id: string
+): Promise<ActionResult<{ value: string | null }>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !(await can("financials", "view"))) {
+      return { ok: false, error: "You don't have permission to view banking details." };
+    }
+    if (!isEncryptionConfigured()) {
+      return { ok: false, error: "Credential encryption is not configured." };
+    }
+    const vendor = await getVendorById(id);
+    if (!vendor) return { ok: false, error: "Vendor not found" };
+
+    let value: string | null;
+    try {
+      value = await revealVendorAccountNumber(id);
+    } catch {
+      // Decryption failed (bad key / tampered ciphertext) — stay masked.
+      return { ok: false, error: "Couldn't decrypt this credential." };
+    }
+
+    if (value != null) {
+      // Audit-on-read (§4.2 dim 7): who revealed the banking credential + which
+      // vendor. NEVER the value. "update" is the closest fit in the strict
+      // create|update|delete action union; a dedicated read action is a follow-up.
+      await logActivity(
+        "vendor",
+        id,
+        "update",
+        { account_number_revealed: { from: null, to: "(revealed)" } },
+        { entityLabel: vendor.name }
+      );
+    }
+    return { ok: true, data: { value } };
   } catch (e) {
     return fail(e);
   }

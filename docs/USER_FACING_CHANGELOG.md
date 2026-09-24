@@ -116,6 +116,22 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Security — Encrypted vendor banking & gated PO costs (SEC-2)
+
+- A vendor's **account number** is now **encrypted at rest** and hidden by default.
+  Lists and the vendor form show **"••••••••"** instead of the number; someone who
+  needs it clicks **Reveal** on that one vendor, and only users with financials
+  access can. Each reveal is recorded in the vendor's activity history (who and
+  when — never the number itself). The encryption key lives outside the database,
+  so a database backup no longer exposes any account number.
+- **Purchase-order costs** are now consistently restricted: the PO detail view and
+  the PO PDF require the "view cost" permission, matching the cost columns already
+  hidden in the lists. A user who can't see costs on screen can no longer pull
+  them by opening a PO or generating its PDF.
+- Under the hood this adds a reusable credential-encryption mechanism, so any
+  future access secret (e.g. a site gate or alarm code, none of which exist in the
+  system yet) is encrypted from the day it's added.
+
 ### Invoices — Full history & audit trail (AUD-4)
 
 - Every invoice now keeps a running history, shown as an **Activity** timeline on

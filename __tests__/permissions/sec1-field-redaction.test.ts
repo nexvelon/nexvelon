@@ -58,6 +58,7 @@ describe("resolveFieldGates", () => {
       inventoryCost: false,
       quoteMargin: false,
       quoteInternal: false,
+      vendorBanking: false,
       anyCost: false,
     });
   });

@@ -41,7 +41,8 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 import type { PurchaseOrderListRow } from "@/lib/api/purchase-orders";
-import type { DbVendor, DbInventoryCategory } from "@/lib/types/database";
+import type { DbInventoryCategory } from "@/lib/types/database";
+import type { VendorRead } from "@/lib/api/vendors";
 import type { StockMovementRow } from "@/lib/api/stock-movements";
 import type { AllocationsByProject } from "@/lib/api/inventory-allocations";
 
@@ -95,7 +96,7 @@ export function InventoryPageClient({
 }: {
   products: Product[];
   purchaseOrders: PurchaseOrderListRow[];
-  vendors: DbVendor[];
+  vendors: VendorRead[];
   categories: DbInventoryCategory[];
   movements: StockMovementRow[];
   allocations: AllocationsByProject[];
