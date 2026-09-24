@@ -5,6 +5,10 @@
 import Link from "next/link";
 import { getInvoiceById } from "@/lib/api/invoices";
 import { InvoiceBuilder } from "@/components/modules/invoices/InvoiceBuilder";
+import { ActivitySection } from "@/components/activity/ActivityTimeline";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { hasPermission } from "@/lib/permissions";
+import { adaptDbRole } from "@/lib/permissions/resolve";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +19,10 @@ export default async function InvoiceDetailPage({
 }) {
   const { id } = await params;
   const detail = await getInvoiceById(id);
+
+  // AUD-4 — the Activity tab is gated exactly as the invoice: financials view.
+  const me = await getCurrentProfile();
+  const canViewActivity = !!me && hasPermission(adaptDbRole(me.role), "financials", "view");
 
   if (!detail) {
     return (
@@ -42,6 +50,7 @@ export default async function InvoiceDetailPage({
         ← Back to Invoices
       </Link>
       <InvoiceBuilder detail={detail} />
+      {canViewActivity && <ActivitySection entityType="invoice" entityId={id} />}
     </div>
   );
 }

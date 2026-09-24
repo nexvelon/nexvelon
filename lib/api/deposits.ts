@@ -28,7 +28,7 @@ import "server-only";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type { BalanceClient } from "@/lib/api/balance-client";
 import { round2 } from "@/lib/quote-helpers";
-import { businessDateISO } from "@/lib/format";
+import { businessDateISO, formatCurrency } from "@/lib/format";
 import { deriveStatusFromPayments, isOpenStatus } from "@/lib/invoice-status";
 import { logActivity } from "@/lib/api/activity-log";
 import type {
@@ -39,6 +39,25 @@ import type {
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+// AUD-4 — a readable label for a project deposit/holdback activity row so the
+// event is identifiable in the timeline and the central feed. Best-effort.
+async function projectAuditLabel(
+  supabase: Awaited<ReturnType<typeof db>>,
+  projectId: string
+): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from("projects")
+      .select("project_number, title")
+      .eq("id", projectId)
+      .maybeSingle();
+    const p = data as { project_number: string | null; title: string | null } | null;
+    return p?.project_number ?? p?.title ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type DepositErrorCode =
@@ -225,9 +244,13 @@ export async function recordDeposit(
     .single();
   if (error) throw new Error(`recordDeposit: ${error.message}`);
 
-  await logActivity("project", input.projectId, "update", {
-    deposit_received: { from: null, to: amount },
-  });
+  await logActivity(
+    "project",
+    input.projectId,
+    "update",
+    { deposit_received: { from: null, to: `${formatCurrency(amount)} — ${input.method}` } },
+    { entityLabel: await projectAuditLabel(supabase, input.projectId) }
+  );
 
   return data as DbProjectDeposit;
 }
@@ -261,9 +284,13 @@ export async function deleteDeposit(depositId: string): Promise<void> {
     .eq("id", depositId);
   if (error) throw new Error(`deleteDeposit: ${error.message}`);
 
-  await logActivity("project", deposit.project_id, "update", {
-    deposit_removed: { from: Number(deposit.amount), to: null },
-  });
+  await logActivity(
+    "project",
+    deposit.project_id,
+    "update",
+    { deposit_removed: { from: formatCurrency(Number(deposit.amount)), to: null } },
+    { entityLabel: await projectAuditLabel(supabase, deposit.project_id) }
+  );
 }
 
 export interface ApplyDepositInput {
@@ -402,11 +429,29 @@ export async function applyDepositToInvoice(
     .single();
   if (upErr) throw new Error(`applyDeposit/status: ${upErr.message}`);
 
-  await logActivity("project", deposit.project_id, "update", {
-    deposit_applied: { from: null, to: amount },
-  });
+  // AUD-4 — a deposit application changes an invoice's balance, so log it as an
+  // INVOICE row rolled up to the project: it surfaces on the invoice timeline
+  // AND the project timeline, with the amount recorded.
+  const invoiceRow = updated as DbInvoice;
+  await logActivity(
+    "invoice",
+    invoiceRow.id,
+    "update",
+    {
+      deposit_applied: { from: null, to: formatCurrency(amount) },
+      status: { from: invoice.status, to: status },
+    },
+    {
+      parentType: "project",
+      parentId: deposit.project_id,
+      entityLabel: invoiceRow.invoice_number
+        ? `Invoice ${invoiceRow.invoice_number}`
+        : "Draft invoice",
+      parentLabel: await projectAuditLabel(supabase, deposit.project_id),
+    }
+  );
 
-  return { applicationId, invoice: updated as DbInvoice };
+  return { applicationId, invoice: invoiceRow };
 }
 
 /**
@@ -481,11 +526,28 @@ export async function unapplyDeposit(
     .single();
   if (upErr) throw new Error(`unapplyDeposit/status: ${upErr.message}`);
 
-  if (invoice.project_id) {
-    await logActivity("project", invoice.project_id, "update", {
-      deposit_unapplied: { from: Number(application.amount), to: null },
-    });
-  }
+  // AUD-4 — mirror the apply event: an INVOICE row rolled up to the project so
+  // the reversal shows on both timelines with the amount removed.
+  const invoiceRow = updated as DbInvoice;
+  await logActivity(
+    "invoice",
+    invoiceRow.id,
+    "update",
+    {
+      deposit_unapplied: { from: formatCurrency(Number(application.amount)), to: null },
+      status: { from: invoice.status, to: status },
+    },
+    {
+      parentType: invoice.project_id ? "project" : null,
+      parentId: invoice.project_id,
+      entityLabel: invoiceRow.invoice_number
+        ? `Invoice ${invoiceRow.invoice_number}`
+        : "Draft invoice",
+      parentLabel: invoice.project_id
+        ? await projectAuditLabel(supabase, invoice.project_id)
+        : null,
+    }
+  );
 
-  return updated as DbInvoice;
+  return invoiceRow;
 }

@@ -130,6 +130,9 @@ export const ACTIVITY_RESOURCE: Partial<Record<ActivityEntityType, Resource>> = 
   site: "clients",
   contact: "clients",
   project: "projects",
+  // AUD-4 — the invoice detail Activity tab is gated exactly as the invoice is:
+  // financials view. A user who can't see financials can't read invoice history.
+  invoice: "financials",
   purchase_order: "inventory",
   vendor: "inventory",
   inventory: "inventory",
