@@ -141,7 +141,7 @@ Tiered on evidence. Each item states why.
 
 ### P0 — something is wrong or unsafe now
 - **P0-1 — Server-strip field-gated data (cost / margin / internal notes). ✅ CLOSED (SEC-1, PR #390).** Reasoning: a lower-privilege authenticated user could read cost/margin/notes from the wire payload; the field-visibility dimension was substituted with cosmetic client-side hiding. Confidentiality breach. **Fix:** one shared server-side redactor (`lib/permissions/field-redaction.ts`) applied at every read/action/export boundary — inventory cost (catalog, detail, allocations, PO totals, valuation report + exports, dashboard donut), quote margin (line cost/margin, TotalsBar) and internal notes (notes + technician names). Redaction is `null`/absent (never zeroed, §2.8), fails closed, and `upsertQuoteAction` preserves the real values from the prior blob so a redacted edit never clobbers them. No role's capabilities changed. *(No migration.)*
-- **P0-2 — Invoice audit trail.** Reasoning: financial-entity mutations write no `activity_log` — a §5 launch-gate violation and an integrity/traceability gap on money. *(No migration.)*
+- **P0-2 — Invoice audit trail. ✅ CLOSED (AUD-4, PR #391).** Reasoning: financial-entity mutations wrote no `activity_log` — a §5 launch-gate violation and an integrity/traceability gap on money. **Fix:** every invoice / payment / deposit / holdback-release mutation now writes a best-effort `entity_type: "invoice"` (or project) activity row with a readable label and the money amount, rolled up to the project; issue and void are distinguishable; removed lines/reversed payments keep their label; the Activity tab mounts on the invoice detail page, gated on `financials:view`. No SEC-1-redacted field appears in any invoice audit payload. *(No migration — `invoice` was already an allowed `entity_type` since migration 0120.)*
 
 ### P1 — designed, materially absent, commercially matters
 - **P1-1 — Reports platform:** custom/copy-modify builder, scheduled email/PDF delivery, subscriptions, immutable snapshots, the 7 report tables. Today ~14 static reports, zero infra.
@@ -178,7 +178,7 @@ Tiered on evidence. Each item states why.
 Ordered by tier, then by dependency. **(M)** = needs a migration.
 
 1. **SEC-1 — server-strip field-gated data. ✅ DONE (PR #390).** Redact `unit_cost`/margin/internal notes in the server reads by permission, mirroring the WIP `canSeeCost` pattern; tests assert a non-`viewCost`/`viewMargin`/`viewInternal` role's payload (and every export) omits the field. *(P0-1, no migration.)*
-2. **AUD-4 — invoice audit trail.** `logActivity("invoice", …)` on create/update/line-edit/payment; readable labels per AUD-2B. *(P0-2, no migration.)*
+2. **AUD-4 — invoice audit trail. ✅ DONE (PR #391).** `logActivity("invoice", …)` on create/update/line-edit/issue/void/payment/deposit/holdback; readable labels per AUD-2B; Activity tab on the invoice detail page. *(P0-2, no migration.)*
 3. **FIN-TAX-1 — holdback HST treatment.** Resolve `invoices.ts:15`; correct the figure + test. *(P1-6, no migration.)*
 4. **PERM-HYGIENE-1 — drop dormant `0005`/`0006`; reconcile the override schema collision.** **(M)** — needs a decision (§8 Q4) since it drops tables.
 5. **REP-5 — report platform foundation.** `report_definitions` + `report_subscriptions` + `report_snapshots` + `scheduled_reports`; copy-modify builder. **(M)**

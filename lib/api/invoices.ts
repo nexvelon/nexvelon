@@ -16,12 +16,15 @@ import "server-only";
 // timing with the accountant before INVOICE-1b (branded PDF).
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatInvoiceNumber, businessDateISO } from "@/lib/format";
+import { formatInvoiceNumber, businessDateISO, formatCurrency } from "@/lib/format";
 import { round2 } from "@/lib/quote-helpers";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 import { composeIdentifier } from "@/lib/invoice-identifiers";
 import { deriveStatusFromPayments, isOpenStatus } from "@/lib/invoice-status";
+import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import type {
+  ActivityAction,
+  ActivityChanges,
   DbInvoice,
   DbInvoiceLine,
   DbInvoicePayment,
@@ -30,6 +33,71 @@ import type {
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+// ─── AUD-4 — invoice audit trail ─────────────────────────────────────────────
+// Every invoice mutation writes a best-effort activity row (§5 definition-of-
+// done). Logged at the data-access layer so the specific line / prior state /
+// minted number is in hand, and so an invoice the holdback flow generates gets a
+// real timeline too. Rows are entity_type "invoice", rolled up to the project so
+// they surface on BOTH the invoice detail timeline and the project timeline.
+//
+// SEC-1 note: invoice rows only ever carry billed amounts, tax/holdback rates,
+// due dates, notes, statuses, invoice numbers and payment sums — NEVER inventory
+// unit_cost, quote margin or quote internal notes. So no SEC-1-redacted field can
+// leak through an invoice audit payload; the surface is also gated on
+// financials:view (see lib/activity-access.ts), stricter than the SEC-1 flags.
+
+/** A one-line money label for an audit diff value, e.g. "$1,250.00". */
+function money(n: number): string {
+  return formatCurrency(round2(n));
+}
+
+/**
+ * Best-effort audit write for an invoice event. Never throws (mirrors
+ * logActivity + §2.8): a logging failure must not roll back the money mutation.
+ * Resolves a readable label (invoice number, or a "Draft invoice — <project /
+ * client>" fallback pre-issue) and the project roll-up, with one small lookup.
+ */
+async function logInvoice(
+  invoice: DbInvoice,
+  action: ActivityAction,
+  changes: ActivityChanges
+): Promise<void> {
+  try {
+    const supabase = await db();
+    let projectLabel: string | null = null;
+    let clientName: string | null = null;
+    if (invoice.project_id) {
+      const { data } = await supabase
+        .from("projects")
+        .select("project_number, title")
+        .eq("id", invoice.project_id)
+        .maybeSingle();
+      const p = data as { project_number: string | null; title: string | null } | null;
+      projectLabel = p?.project_number ?? p?.title ?? null;
+    }
+    if (!invoice.invoice_number && invoice.client_id) {
+      const { data } = await supabase
+        .from("clients")
+        .select("name")
+        .eq("id", invoice.client_id)
+        .maybeSingle();
+      clientName = (data as { name: string | null } | null)?.name ?? null;
+    }
+    const label = invoice.invoice_number
+      ? `Invoice ${invoice.invoice_number}`
+      : `Draft invoice — ${projectLabel ?? clientName ?? "unassigned"}`;
+    await logActivity("invoice", invoice.id, action, changes, {
+      parentType: invoice.project_id ? "project" : null,
+      parentId: invoice.project_id,
+      entityLabel: label,
+      parentLabel: projectLabel,
+    });
+  } catch (e) {
+    // Never block the mutation; never swallow silently (AUDIT-FIX-1).
+    console.error(`[activity_log] invoice audit failed for ${invoice.id}:`, e);
+  }
 }
 
 /** A cost center the invoice's project exposes for a draw. */
@@ -545,7 +613,9 @@ export async function createInvoiceForProject(
     .select("*")
     .single();
   if (error) throw new Error(`createInvoiceForProject: ${error.message}`);
-  return data as DbInvoice;
+  const invoice = data as DbInvoice;
+  await logInvoice(invoice, "create", {});
+  return invoice;
 }
 
 // ─── Totals ──────────────────────────────────────────────────────────────────
@@ -644,7 +714,12 @@ export async function addManualLine(
     sort_order: sortOrder,
   });
   if (error) throw new Error(`addManualLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  const amount = round2(quantity * unitPrice);
+  await logInvoice(result.invoice, "update", {
+    line_added: { from: null, to: `${input.description || "(no description)"} — ${money(amount)}` },
+  });
+  return result;
 }
 
 /**
@@ -682,7 +757,14 @@ export async function addCostCenterLine(
     sort_order: sortOrder,
   });
   if (error) throw new Error(`addCostCenterLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  await logInvoice(result.invoice, "update", {
+    line_added: {
+      from: null,
+      to: `${center.name} — ${money(amount)}${pct !== 100 ? ` (${pct}% draw)` : ""}`,
+    },
+  });
+  return result;
 }
 
 // MATERIALS-1 — bill a project part as a material line. The description is
@@ -757,7 +839,11 @@ export async function addMaterialLine(
     sort_order: sortOrder,
   });
   if (error) throw new Error(`addMaterialLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  await logInvoice(result.invoice, "update", {
+    line_added: { from: null, to: `${description} — ${money(round2(qty * unitPrice))}` },
+  });
+  return result;
 }
 
 export interface LineUpdateInput {
@@ -781,12 +867,17 @@ export async function updateLine(
 
   const { data: cur, error: curErr } = await supabase
     .from("invoice_lines")
-    .select("quantity, unit_price, amount")
+    .select("description, quantity, unit_price, amount")
     .eq("id", lineId)
     .maybeSingle();
   if (curErr) throw new Error(`updateLine/load: ${curErr.message}`);
   if (!cur) throw new Error("Line not found.");
-  const line = cur as { quantity: number; unit_price: number; amount: number };
+  const line = cur as {
+    description: string;
+    quantity: number;
+    unit_price: number;
+    amount: number;
+  };
 
   const quantity = patch.quantity ?? Number(line.quantity);
   const unitPrice = patch.unit_price ?? Number(line.unit_price);
@@ -808,7 +899,24 @@ export async function updateLine(
     .update(update)
     .eq("id", lineId);
   if (error) throw new Error(`updateLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  // Diff the fields the caller could have touched; only changed keys are logged.
+  const before = {
+    description: line.description,
+    quantity: Number(line.quantity),
+    unit_price: Number(line.unit_price),
+    amount: Number(line.amount),
+  };
+  const after: Partial<typeof before> = { quantity, unit_price: unitPrice, amount };
+  if (patch.description !== undefined) after.description = patch.description;
+  const changes = computeChanges(before, after);
+  if (Object.keys(changes).length > 0) {
+    await logInvoice(result.invoice, "update", {
+      ...changes,
+      line_edited: { from: null, to: line.description || "(no description)" },
+    });
+  }
+  return result;
 }
 
 /** Detach a sourced line from its cost center, keeping its current amount. */
@@ -817,12 +925,24 @@ export async function unlinkLine(
   lineId: string
 ): Promise<InvoiceMutationResult> {
   const supabase = await db();
+  const { data: cur } = await supabase
+    .from("invoice_lines")
+    .select("description")
+    .eq("id", lineId)
+    .maybeSingle();
   const { error } = await supabase
     .from("invoice_lines")
     .update({ source_type: "manual", source_id: null, source_pct: null })
     .eq("id", lineId);
   if (error) throw new Error(`unlinkLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  await logInvoice(result.invoice, "update", {
+    line_detached: {
+      from: (cur as { description: string } | null)?.description || "(sourced line)",
+      to: "manual",
+    },
+  });
+  return result;
 }
 
 export async function deleteLine(
@@ -830,12 +950,29 @@ export async function deleteLine(
   lineId: string
 ): Promise<InvoiceMutationResult> {
   const supabase = await db();
+  // AUD-4 — capture the line's label BEFORE the delete so the audit row survives
+  // with a readable description (rows have no FK back to the deleted line).
+  const { data: cur } = await supabase
+    .from("invoice_lines")
+    .select("description, amount")
+    .eq("id", lineId)
+    .maybeSingle();
+  const removed = cur as { description: string; amount: number } | null;
   const { error } = await supabase
     .from("invoice_lines")
     .delete()
     .eq("id", lineId);
   if (error) throw new Error(`deleteLine: ${error.message}`);
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  await logInvoice(result.invoice, "update", {
+    line_removed: {
+      from: removed
+        ? `${removed.description || "(no description)"} — ${money(Number(removed.amount))}`
+        : lineId,
+      to: null,
+    },
+  });
+  return result;
 }
 
 // ─── Header settings (each recomputes) ───────────────────────────────────────
@@ -852,20 +989,47 @@ async function patchInvoice(
   if (error) throw new Error(`updateInvoice: ${error.message}`);
 }
 
+/**
+ * AUD-4 — patch header columns, then settle and write ONE audit row carrying a
+ * before/after diff of exactly the patched columns (computeChanges skips no-op
+ * saves). Reads the prior values of the patched columns first so the diff is
+ * truthful (§2.2 — never recompute a historical figure to tidy a log line).
+ */
+async function patchInvoiceAudited(
+  invoiceId: string,
+  patch: Record<string, unknown>
+): Promise<InvoiceMutationResult> {
+  const supabase = await db();
+  const cols = Object.keys(patch).join(", ");
+  const { data: before } = await supabase
+    .from("invoices")
+    .select(cols)
+    .eq("id", invoiceId)
+    .maybeSingle();
+  await patchInvoice(invoiceId, patch);
+  const result = await settle(invoiceId);
+  const changes = computeChanges(
+    (before ?? {}) as Record<string, unknown>,
+    patch as Record<string, unknown>
+  );
+  if (Object.keys(changes).length > 0) {
+    await logInvoice(result.invoice, "update", changes);
+  }
+  return result;
+}
+
 export async function setTaxRate(
   invoiceId: string,
   taxRate: number
 ): Promise<InvoiceMutationResult> {
-  await patchInvoice(invoiceId, { tax_rate: taxRate });
-  return settle(invoiceId);
+  return patchInvoiceAudited(invoiceId, { tax_rate: taxRate });
 }
 
 export async function setTaxExempt(
   invoiceId: string,
   exempt: boolean
 ): Promise<InvoiceMutationResult> {
-  await patchInvoice(invoiceId, { tax_exempt: exempt });
-  return settle(invoiceId);
+  return patchInvoiceAudited(invoiceId, { tax_exempt: exempt });
 }
 
 export async function setHoldbackRate(
@@ -873,24 +1037,21 @@ export async function setHoldbackRate(
   holdbackRate: number
 ): Promise<InvoiceMutationResult> {
   // 10 = the Ontario statutory holdback rate (Construction Act).
-  await patchInvoice(invoiceId, { holdback_rate: holdbackRate });
-  return settle(invoiceId);
+  return patchInvoiceAudited(invoiceId, { holdback_rate: holdbackRate });
 }
 
 export async function setDueDate(
   invoiceId: string,
   dueDate: string | null
 ): Promise<InvoiceMutationResult> {
-  await patchInvoice(invoiceId, { due_date: dueDate });
-  return settle(invoiceId);
+  return patchInvoiceAudited(invoiceId, { due_date: dueDate });
 }
 
 export async function setNotes(
   invoiceId: string,
   notes: string
 ): Promise<InvoiceMutationResult> {
-  await patchInvoice(invoiceId, { notes });
-  return settle(invoiceId);
+  return patchInvoiceAudited(invoiceId, { notes });
 }
 
 /**
@@ -905,6 +1066,11 @@ export async function setLineIdentifierFields(
   const supabase = await db();
   // Guard: never persist an empty set — fall back to {name}.
   const safe = fields.length > 0 ? fields : ["name"];
+  const { data: beforeIdent } = await supabase
+    .from("invoices")
+    .select("line_identifier_fields")
+    .eq("id", invoiceId)
+    .maybeSingle();
   await patchInvoice(invoiceId, { line_identifier_fields: safe });
 
   const { data: matLines, error } = await supabase
@@ -969,7 +1135,16 @@ export async function setLineIdentifierFields(
     }
   }
 
-  return settle(invoiceId);
+  const result = await settle(invoiceId);
+  await logInvoice(result.invoice, "update", {
+    line_identifier_fields: {
+      from:
+        (beforeIdent as { line_identifier_fields: string[] } | null)
+          ?.line_identifier_fields ?? null,
+      to: safe,
+    },
+  });
+  return result;
 }
 
 // ─── Issue + status ──────────────────────────────────────────────────────────
@@ -1015,7 +1190,16 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
     .select("*")
     .single();
   if (error) throw new Error(`issueInvoice: ${error.message}`);
-  return data as DbInvoice;
+  const invoice = data as DbInvoice;
+  // AUD-4 — issuing stamps the number: the single most important event on the
+  // entity. Make it unmistakable — the number appears in the diff, and the row's
+  // label is now the real invoice number (not the draft fallback).
+  await logInvoice(invoice, "update", {
+    status: { from: cur.status, to: "sent" },
+    invoice_number: { from: cur.invoice_number, to: invoiceNumber },
+    issue_date: { from: null, to: invoice.issue_date },
+  });
+  return invoice;
 }
 
 // FIN-2 — narrowed to the lifecycle flips the ledger does NOT own: void (a hard
@@ -1027,6 +1211,13 @@ export async function setInvoiceStatus(
   status: "sent" | "void"
 ): Promise<DbInvoice> {
   const supabase = await db();
+  // Capture the prior status BEFORE the flip so void/re-open reads truthfully.
+  const { data: prior } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
+  const priorStatus = (prior as { status: string } | null)?.status ?? null;
   const { data, error } = await supabase
     .from("invoices")
     .update({ status })
@@ -1034,7 +1225,14 @@ export async function setInvoiceStatus(
     .select("*")
     .single();
   if (error) throw new Error(`setInvoiceStatus: ${error.message}`);
-  return data as DbInvoice;
+  const invoice = data as DbInvoice;
+  // AUD-4 — void is a hard stop and must be unmistakable in the timeline. There
+  // is no void-reason field captured today; recording WHY is a follow-up (a
+  // reason column) rather than an invented value here.
+  await logInvoice(invoice, "update", {
+    status: { from: priorStatus, to: status },
+  });
+  return invoice;
 }
 
 // ─── Payments (FIN-2) ────────────────────────────────────────────────────────
@@ -1151,13 +1349,16 @@ export async function recordPayment(
     .single();
   if (upErr) throw new Error(`recordPayment/status: ${upErr.message}`);
 
-  // NOTE(audit): invoices carry no audit trail today — issue/void/status flips
-  // write no log, and activity_log's entity_type CHECK doesn't include
-  // 'invoice'. There is therefore no existing mechanism to mirror best-effort;
-  // wiring invoice auditing (its own migration) is tracked as deferred.
+  const invoiceRow = updated as DbInvoice;
+  // AUD-4 — record the payment with its AMOUNT (the point is reconstructing a
+  // disputed balance) plus the status transition it triggered.
+  await logInvoice(invoiceRow, "update", {
+    payment_recorded: { from: null, to: `${money(amount)} — ${input.method}` },
+    status: { from: invoice.status, to: status },
+  });
 
   const payments = await listPaymentsForInvoice(input.invoiceId);
-  return { invoice: updated as DbInvoice, payments };
+  return { invoice: invoiceRow, payments };
 }
 
 /**
@@ -1165,22 +1366,25 @@ export async function recordPayment(
  * (paid → partially_paid when a payment is pulled; last one removed → sent).
  * Blocked once the invoice is void.
  *
- * NOTE(audit): deleting a payment currently leaves no trace of who removed it —
- * there is no invoice audit sink to write to (see recordPayment). No actorId
- * parameter is carried here rather than accepting one and dropping it on the
- * floor; it lands when invoice auditing does.
+ * AUD-4 — the reversal is now audited (who + the amount removed) via logInvoice
+ * below; the actor is resolved from the session by logActivity.
  */
 export async function deletePayment(paymentId: string): Promise<PaymentResult> {
   const supabase = await db();
 
   const { data: pay, error: pErr } = await supabase
     .from("invoice_payments")
-    .select("id, invoice_id")
+    .select("id, invoice_id, amount, method")
     .eq("id", paymentId)
     .maybeSingle();
   if (pErr) throw new Error(`deletePayment/load: ${pErr.message}`);
   if (!pay) throw new InvoicePaymentError("not_found", "Payment not found.");
-  const invoiceId = (pay as { invoice_id: string }).invoice_id;
+  const payment = pay as {
+    invoice_id: string;
+    amount: number;
+    method: string;
+  };
+  const invoiceId = payment.invoice_id;
 
   const { data: inv, error: iErr } = await supabase
     .from("invoices")
@@ -1214,5 +1418,12 @@ export async function deletePayment(paymentId: string): Promise<PaymentResult> {
     .single();
   if (upErr) throw new Error(`deletePayment/status: ${upErr.message}`);
 
-  return { invoice: updated as DbInvoice, payments: remaining };
+  const invoiceRow = updated as DbInvoice;
+  // AUD-4 — record the reversal with the amount removed + the status it reverted.
+  await logInvoice(invoiceRow, "update", {
+    payment_reversed: { from: `${money(Number(payment.amount))} — ${payment.method}`, to: null },
+    status: { from: invoice.status, to: status },
+  });
+
+  return { invoice: invoiceRow, payments: remaining };
 }

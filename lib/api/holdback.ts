@@ -24,7 +24,7 @@ import "server-only";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { round2 } from "@/lib/quote-helpers";
-import { businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
+import { businessDateISO, businessDatePlusDaysISO, formatCurrency } from "@/lib/format";
 import { logActivity } from "@/lib/api/activity-log";
 import { ISSUED_STATUSES } from "@/lib/api/financials";
 import {
@@ -38,6 +38,24 @@ import type { DbHoldbackRelease } from "@/lib/types/database";
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+// AUD-4 — a readable project label for a holdback activity row. Best-effort.
+async function projectAuditLabel(
+  supabase: Awaited<ReturnType<typeof db>>,
+  projectId: string
+): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from("projects")
+      .select("project_number, title")
+      .eq("id", projectId)
+      .maybeSingle();
+    const p = data as { project_number: string | null; title: string | null } | null;
+    return p?.project_number ?? p?.title ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Ontario lien period, in days, after substantial completion. */
@@ -240,9 +258,13 @@ export async function createHoldbackRelease(
     .single();
   if (error) throw new Error(`createHoldbackRelease: ${error.message}`);
 
-  await logActivity("project", input.projectId, "update", {
-    holdback_release_setup: { from: null, to: retained },
-  });
+  await logActivity(
+    "project",
+    input.projectId,
+    "update",
+    { holdback_release_setup: { from: null, to: formatCurrency(retained) } },
+    { entityLabel: await projectAuditLabel(supabase, input.projectId) }
+  );
 
   return data as DbHoldbackRelease;
 }
@@ -315,9 +337,19 @@ export async function releaseHoldback(input: {
     .single();
   if (uErr) throw new Error(`releaseHoldback/update: ${uErr.message}`);
 
-  await logActivity("project", release.project_id, "update", {
-    holdback_released: { from: null, to: Number(release.amount) },
-  });
+  // AUD-4 — the generated invoice already logged its own create/line/issue rows
+  // (they roll up to this project). This row records the holdback release event
+  // itself, naming the amount and the invoice number it produced.
+  await logActivity(
+    "project",
+    release.project_id,
+    "update",
+    {
+      holdback_released: { from: null, to: formatCurrency(Number(release.amount)) },
+      release_invoice: { from: null, to: issued.invoice_number ?? issued.id },
+    },
+    { entityLabel: await projectAuditLabel(supabase, release.project_id) }
+  );
 
   return { release: updated as DbHoldbackRelease, invoice_id: issued.id };
 }
@@ -354,10 +386,34 @@ export async function voidHoldbackRelease(input: {
       );
     }
     // Void the paired invoice too.
+    const { data: relInv } = await supabase
+      .from("invoices")
+      .select("invoice_number, status, project_id")
+      .eq("id", release.release_invoice_id)
+      .maybeSingle();
     await supabase
       .from("invoices")
       .update({ status: "void" })
       .eq("id", release.release_invoice_id);
+    // AUD-4 — this raw update bypasses setInvoiceStatus, so log the invoice void
+    // here (on the invoice timeline, rolled up to the project).
+    const ri = relInv as
+      | { invoice_number: string | null; status: string; project_id: string | null }
+      | null;
+    await logActivity(
+      "invoice",
+      release.release_invoice_id,
+      "update",
+      { status: { from: ri?.status ?? null, to: "void" } },
+      {
+        parentType: release.project_id ? "project" : null,
+        parentId: release.project_id,
+        entityLabel: ri?.invoice_number
+          ? `Invoice ${ri.invoice_number}`
+          : "Holdback release invoice",
+        parentLabel: await projectAuditLabel(supabase, release.project_id),
+      }
+    );
   }
 
   const { data: updated, error: uErr } = await supabase
@@ -368,9 +424,13 @@ export async function voidHoldbackRelease(input: {
     .single();
   if (uErr) throw new Error(`voidHoldbackRelease/update: ${uErr.message}`);
 
-  await logActivity("project", release.project_id, "update", {
-    holdback_release_voided: { from: Number(release.amount), to: null },
-  });
+  await logActivity(
+    "project",
+    release.project_id,
+    "update",
+    { holdback_release_voided: { from: formatCurrency(Number(release.amount)), to: null } },
+    { entityLabel: await projectAuditLabel(supabase, release.project_id) }
+  );
 
   return updated as DbHoldbackRelease;
 }

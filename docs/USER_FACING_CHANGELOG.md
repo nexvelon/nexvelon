@@ -116,6 +116,22 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Invoices — Full history & audit trail (AUD-4)
+
+- Every invoice now keeps a running history, shown as an **Activity** timeline on
+  the invoice page: who created it, edited a line, changed the tax/holdback rate
+  or due date, **issued** it (the moment it gets its number), **voided** it, and
+  **recorded or reversed a payment** — each entry names the person, the time, and
+  for money events the **amount**. Deposits applied to an invoice and holdback
+  releases appear too, and all of it also rolls up onto the project's timeline.
+- Issuing and voiding are called out distinctly, and a removed line or reversed
+  payment keeps a readable description in the log even after it's gone — so a
+  disputed balance can be reconstructed from the record.
+- Invoice history is visible only to people who can view financials — the same
+  access the invoice itself requires. It is **not** back-filled: history starts
+  the day this ships; edits made to invoices before now were never captured and
+  can't be reconstructed.
+
 ### Security — Cost, margin & internal notes are now server-enforced (SEC-1)
 
 - Cost, margin, and internal-notes visibility is now enforced by the server, not
