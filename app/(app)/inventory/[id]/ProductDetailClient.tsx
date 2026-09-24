@@ -88,6 +88,9 @@ import type {
   InventoryStockStatus,
 } from "@/lib/types/database";
 
+// SEC-1 — a stock row whose per-lot cost may be redacted to null.
+type RedactedStockRow = Omit<DbInventoryStock, "unit_cost"> & { unit_cost: number | null };
+
 export function ProductDetailClient({
   product,
   stock,
@@ -101,9 +104,12 @@ export function ProductDetailClient({
   highlightStockId,
 }: {
   product: DbInventoryProduct;
-  stock: DbInventoryStock[];
+  // SEC-1 — cost fields arrive null when the caller lacks inventory:viewCost.
+  stock: RedactedStockRow[];
   sites: DbSiteWithClient[];
-  poHistory: ProductPurchaseHistoryRow[];
+  poHistory: (Omit<ProductPurchaseHistoryRow, "unit_cost"> & {
+    unit_cost: number | null;
+  })[];
   locations: DbStockLocation[];
   movements: DbStockMovement[];
   currentLabels: Record<string, string>;
@@ -130,11 +136,11 @@ export function ProductDetailClient({
   const [editing, setEditing] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [addStockOpen, setAddStockOpen] = useState(false);
-  const [moveTarget, setMoveTarget] = useState<DbInventoryStock | null>(null);
+  const [moveTarget, setMoveTarget] = useState<RedactedStockRow | null>(null);
   // CUSTODY-1: the unit whose Mark-Delivered dialog is open.
   const [deliverTarget, setDeliverTarget] = useState<string | null>(null);
   // PART-FIX-1: the unit whose Adjust-qty dialog is open.
-  const [adjustTarget, setAdjustTarget] = useState<DbInventoryStock | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<RedactedStockRow | null>(null);
   const [deleting, startDelete] = useTransition();
   const [unitPending, startUnitAction] = useTransition();
 
@@ -150,7 +156,7 @@ export function ProductDetailClient({
   // unallocated qty (what's available, not on a job) as the headline number,
   // total qty, and the PO #(s) present; expanding reveals the individual units.
   const costGroups = useMemo(() => {
-    const map = new Map<number, DbInventoryStock[]>();
+    const map = new Map<number, RedactedStockRow[]>();
     for (const s of stock) {
       const c = Number(s.unit_cost);
       const arr = map.get(c) ?? [];
@@ -177,7 +183,7 @@ export function ProductDetailClient({
   }, [stock]);
 
   const [expandedCosts, setExpandedCosts] = useState<Record<string, boolean>>({});
-  const [editingUnit, setEditingUnit] = useState<DbInventoryStock | null>(null);
+  const [editingUnit, setEditingUnit] = useState<RedactedStockRow | null>(null);
   const toggleCost = (key: string) =>
     setExpandedCosts((s) => ({ ...s, [key]: !s[key] }));
 
@@ -209,7 +215,7 @@ export function ProductDetailClient({
 
   // FIX-BATCH-O: group rows by their receive batch (one intake = one batch).
   const batches = useMemo(() => {
-    const map = new Map<string, DbInventoryStock[]>();
+    const map = new Map<string, RedactedStockRow[]>();
     for (const s of stock) {
       if (!s.receive_batch_id) continue;
       const arr = map.get(s.receive_batch_id) ?? [];
@@ -1059,7 +1065,7 @@ export function ProductDetailClient({
                     </TableCell>
                     {showCost && (
                       <TableCell className="text-right text-xs tabular-nums">
-                        {formatCurrency(r.unit_cost)}
+                        {r.unit_cost != null ? formatCurrency(r.unit_cost) : "—"}
                       </TableCell>
                     )}
                     <TableCell className="text-right text-xs tabular-nums">
@@ -1268,7 +1274,7 @@ export function ProductDetailClient({
 
 // CUSTODY-1: combined custody/location status label for a serialized unit.
 function custodyDisplay(
-  s: DbInventoryStock,
+  s: RedactedStockRow,
   currentLabel: string | undefined
 ): string {
   switch (s.custody_status) {

@@ -6,7 +6,10 @@ import Link from "next/link";
 import { getProductRowById, listStockForProduct } from "@/lib/api/products";
 import { resolveCategoryPaths } from "@/lib/api/categories";
 import { listSites } from "@/lib/api/clients";
-import { getPurchaseOrdersByProduct } from "@/lib/api/purchase-orders";
+import {
+  getPurchaseOrdersByProduct,
+  type ProductPurchaseHistoryRow,
+} from "@/lib/api/purchase-orders";
 import { listStockLocations } from "@/lib/api/stock-locations";
 import {
   getCurrentLocationLabels,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/api/stock-movements";
 import { listInvoicesForProduct } from "@/lib/api/invoices";
 import { ProductDetailClient } from "./ProductDetailClient";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +48,7 @@ export default async function ProductDetailPage({
     );
   }
 
-  const [stock, sites, poHistory, locations, movements, invoices] =
+  const [stockRaw, sites, poHistoryRaw, locations, movementsRaw, invoices, gates] =
     await Promise.all([
       listStockForProduct(id),
       listSites(),
@@ -52,7 +56,21 @@ export default async function ProductDetailPage({
       listStockLocations(),
       listMovementsByProduct(id),
       listInvoicesForProduct(id),
+      resolveFieldGates(),
     ]);
+
+  // SEC-1 — strip per-unit cost / PO cost / movement cost + the product's default
+  // cost from the wire when the caller lacks inventory:viewCost. Redaction is null
+  // (never zeroed, §2.8); the client also hides these behind `showCost`.
+  const productSafe = gates.inventoryCost ? product : { ...product, default_unit_cost: null };
+  const stock = gates.inventoryCost ? stockRaw : stockRaw.map((s) => ({ ...s, unit_cost: null }));
+  const poHistory: (Omit<ProductPurchaseHistoryRow, "unit_cost"> & {
+    unit_cost: number | null;
+  })[] = gates.inventoryCost
+    ? poHistoryRaw
+    : poHistoryRaw.map((r) => ({ ...r, unit_cost: null }));
+  // Stock movements carry no cost field, so nothing to redact there.
+  const movements = movementsRaw;
 
   // MOVE-1: resolve each stock row's current warehouse/truck/job label.
   const currentLabels = await getCurrentLocationLabels(stock);
@@ -67,7 +85,7 @@ export default async function ProductDetailPage({
 
   return (
     <ProductDetailClient
-      product={product}
+      product={productSafe}
       stock={stock}
       sites={sites}
       poHistory={poHistory}

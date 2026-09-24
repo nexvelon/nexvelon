@@ -53,6 +53,7 @@ import { deleteAttachmentsForEntity } from "@/app/(app)/attachments/actions";
 import { sendLowStockAlert } from "@/lib/auth/email";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 import type {
   DbInventoryProductInsert,
   DbInventoryProductUpdate,
@@ -60,6 +61,9 @@ import type {
   DbInventoryStockUpdate,
 } from "@/lib/types/database";
 import type { Product } from "@/lib/types";
+
+// SEC-1 — a stock row whose per-lot cost may be redacted to null on the wire.
+export type RedactedStock = Omit<DbInventoryStock, "unit_cost"> & { unit_cost: number | null };
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -79,8 +83,14 @@ function fail(err: unknown): { ok: false; error: string } {
 // this so SKU search runs against live inventory instead of the empty mock
 // array). Plain Product[] return — a thrown error rejects the promise and the
 // caller falls back to an empty catalog.
+// SEC-1: cost is redacted server-side (→ null, never zeroed) unless the caller is
+// cost-trusted in EITHER consuming context — inventory:viewCost (the inventory
+// pages) or quotes:viewMargin (the quote builder), since this one read feeds both.
 export async function listProductsAction(): Promise<Product[]> {
-  return listProducts();
+  const products = await listProducts();
+  const { anyCost } = await resolveFieldGates();
+  if (anyCost) return products;
+  return products.map((p) => ({ ...p, cost: null, avgCost: null, quoteDefaultMargin: null }));
 }
 
 // INV-6: lazy fetch of aggregated report data (valuation / aging / consumption).
@@ -88,9 +98,15 @@ export async function listProductsAction(): Promise<Product[]> {
 // F-2: expose a product's stock units to the quote builder's pin picker.
 export async function listStockForProductAction(
   productId: string
-): Promise<ActionResult<DbInventoryStock[]>> {
+): Promise<ActionResult<RedactedStock[]>> {
   try {
-    return { ok: true, data: await listStockForProduct(productId) };
+    const rows = await listStockForProduct(productId);
+    const { anyCost } = await resolveFieldGates();
+    // SEC-1 — per-lot unit_cost is redacted (→ null) for non-cost-trusted callers.
+    const data: RedactedStock[] = anyCost
+      ? rows
+      : rows.map((s) => ({ ...s, unit_cost: null }));
+    return { ok: true, data };
   } catch (e) {
     return fail(e);
   }
@@ -293,7 +309,23 @@ export async function getPickupSlipPdfUrlAction(
 export async function getInventoryReportDataAction(): Promise<InventoryReportData> {
   const denied = await requireInventoryView();
   if (denied) throw new Error(denied);
-  return getInventoryReportData();
+  const report = await getInventoryReportData();
+  // SEC-1 — the report is accessible at inventory:view, but its cost-derived
+  // VALUE columns (valuation, category value, aging value, 90d consumption
+  // value) require inventory:viewCost. Redact to null (never zeroed §2.8) for
+  // callers without it; the ReportsTab also hides these behind `showCost`.
+  const { inventoryCost } = await resolveFieldGates();
+  if (inventoryCost) return report;
+  return {
+    ...report,
+    totalValuation: null,
+    valuationByCategory: report.valuationByCategory.map((c) => ({
+      ...c,
+      value: null,
+    })),
+    aging: report.aging.map((a) => ({ ...a, value: null })),
+    consumption90d: { ...report.consumption90d, value: null },
+  };
 }
 
 // INV-5: on-demand low-stock report. Computes stock<=reorderPoint inline over

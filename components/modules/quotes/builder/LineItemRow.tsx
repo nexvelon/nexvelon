@@ -107,7 +107,7 @@ export function LineItemRow({
         vendor: p.vendor,
         // INV-4: unitCost snapshots the catalog default_unit_cost (Product.cost
         // via the INV-2a adapter); §2.2 — the copied value is the snapshot.
-        unitCost: p.cost,
+        unitCost: p.cost ?? 0,
         margin: item.margin || 40,
         // classification intentionally omitted to preserve the user's selection
       })
@@ -278,7 +278,7 @@ export function LineItemRow({
       {showCost && (
         <td className="w-24 px-1.5 text-right">
           <CurrencyInput
-            value={item.unitCost}
+            value={item.unitCost ?? 0}
             onChange={(v) => {
               const next = recalcLineItem({ ...item, unitCost: v });
               if (isLabourLine) changeLabourCostMargin(next);
@@ -327,7 +327,7 @@ export function LineItemRow({
         <td className="w-12 px-1.5 text-right">
           <Input
             inputMode="decimal"
-            value={item.margin.toString()}
+            value={(item.margin ?? 0).toString()}
             onChange={(e) => {
               const m = parseFloat(e.target.value);
               const next = recalcLineItem({ ...item, margin: isNaN(m) ? 0 : m });

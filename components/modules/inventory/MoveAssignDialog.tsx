@@ -56,7 +56,9 @@ export function MoveAssignDialog({
   onMoved,
 }: {
   productId: string;
-  unit: DbInventoryStock | null;
+  // SEC-1 — per-lot cost may be redacted to null on the wire; this dialog never
+  // reads unit_cost, so it accepts the redacted shape.
+  unit: (Omit<DbInventoryStock, "unit_cost"> & { unit_cost: number | null }) | null;
   locations: DbStockLocation[];
   open: boolean;
   onOpenChange: (open: boolean) => void;

@@ -85,7 +85,8 @@ export function CommitStockDialog({
                       )}
                     </div>
                     <div className="text-muted-foreground text-[11px]">
-                      qty {it.qty} · {formatCurrency(it.unitCost)} each
+                      qty {it.qty} ·{" "}
+                      {it.unitCost != null ? formatCurrency(it.unitCost) : "—"} each
                     </div>
                   </div>
                 </li>

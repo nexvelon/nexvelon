@@ -109,7 +109,7 @@ export function SkuAutocomplete({ value, onChange, onPick, disabled }: Props) {
                 <div className="text-muted-foreground mt-0.5 flex justify-between">
                   <span>{p.manufacturer} · {p.category}</span>
                   <span className="tabular-nums">
-                    cost {formatCurrency(p.cost)}
+                    {p.cost != null ? `cost ${formatCurrency(p.cost)}` : "cost —"}
                   </span>
                 </div>
               </li>

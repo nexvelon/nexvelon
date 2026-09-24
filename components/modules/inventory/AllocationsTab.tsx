@@ -78,7 +78,7 @@ export function AllocationsTab({
                 </div>
                 {showCost && (
                   <p className="text-brand-charcoal font-serif text-sm tabular-nums">
-                    {formatCurrency(proj.projectTotal)}
+                    {proj.projectTotal != null ? formatCurrency(proj.projectTotal) : "—"}
                   </p>
                 )}
               </button>
@@ -93,7 +93,7 @@ export function AllocationsTab({
                         </p>
                         {showCost && (
                           <p className="text-muted-foreground text-xs tabular-nums">
-                            {formatCurrency(cc.subtotal)}
+                            {cc.subtotal != null ? formatCurrency(cc.subtotal) : "—"}
                           </p>
                         )}
                       </div>
@@ -125,12 +125,12 @@ export function AllocationsTab({
                               </TableCell>
                               {showCost && (
                                 <TableCell className="text-muted-foreground text-right text-[11px] tabular-nums">
-                                  {formatCurrency(r.unitCost)}
+                                  {r.unitCost != null ? formatCurrency(r.unitCost) : "—"}
                                 </TableCell>
                               )}
                               {showCost && (
                                 <TableCell className="text-brand-charcoal text-right text-[11px] font-semibold tabular-nums">
-                                  {formatCurrency(r.quantity * r.unitCost)}
+                                  {r.unitCost != null ? formatCurrency(r.quantity * r.unitCost) : "—"}
                                 </TableCell>
                               )}
                             </TableRow>

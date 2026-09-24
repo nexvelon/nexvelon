@@ -86,7 +86,15 @@ export async function listPurchaseOrdersAction(): Promise<
   ActionResult<PurchaseOrderListRow[]>
 > {
   try {
-    return { ok: true, data: await getPurchaseOrders() };
+    const orders = await getPurchaseOrders();
+    // SEC-1 — the PO total is Σ qty×unit_cost; strip it from the wire when the
+    // caller lacks inventory:viewCost (null, not zeroed §2.8), matching the
+    // list surfaces that already gate this column.
+    const canSeeCost = await can("inventory", "viewCost");
+    return {
+      ok: true,
+      data: canSeeCost ? orders : orders.map((po) => ({ ...po, total: null })),
+    };
   } catch (e) {
     return fail(e);
   }

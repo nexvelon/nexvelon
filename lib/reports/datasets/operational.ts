@@ -127,7 +127,13 @@ export function inventoryValuationDataset(data: InventoryReportData): ReportData
       { key: "value", label: "Value", kind: "currency" },
     ],
     rows: data.valuationByCategory.map((c) => ({ category: c.category, units: c.units, value: c.value })),
-    totals: { category: "Total", units, value: round2(data.totalValuation) },
+    // SEC-1 — value is null when the caller lacks inventory:viewCost; the cell
+    // formatter renders null as blank, so the export honours the redaction.
+    totals: {
+      category: "Total",
+      units,
+      value: data.totalValuation != null ? round2(data.totalValuation) : null,
+    },
     filename: `nexvelon-inventory-valuation-${businessDateISO()}`,
   };
 }

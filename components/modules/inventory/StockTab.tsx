@@ -138,7 +138,7 @@ export function StockTab({ products }: { products: Product[] }) {
         return (b.stock - totalAllocated(b.id)) - (a.stock - totalAllocated(a.id));
       }
       if (sortKey === "value") {
-        return b.stock * b.cost - a.stock * a.cost;
+        return b.stock * (b.cost ?? 0) - a.stock * (a.cost ?? 0);
       }
       return a.sku.localeCompare(b.sku);
     });
@@ -362,12 +362,12 @@ function FragmentRow({
         <TableCell className="text-muted-foreground text-right text-xs tabular-nums">{p.reorderPoint}</TableCell>
         {showCost && (
           <TableCell className="text-right text-xs tabular-nums">
-            {formatCurrency(p.avgCost ?? p.cost)}
+            {(p.avgCost ?? p.cost) != null ? formatCurrency((p.avgCost ?? p.cost)!) : "—"}
           </TableCell>
         )}
         {showCost && (
           <TableCell className="text-brand-charcoal text-right text-xs font-semibold tabular-nums">
-            {formatCurrency(p.stock * p.cost)}
+            {p.cost != null ? formatCurrency(p.stock * p.cost) : "—"}
           </TableCell>
         )}
         <TableCell className="text-muted-foreground text-xs">

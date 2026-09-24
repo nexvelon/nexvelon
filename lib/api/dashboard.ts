@@ -534,7 +534,9 @@ export async function getTopClientsByRevenue(opts: {
 }
 
 export interface InventoryHealth {
-  by_category: { category: string; value: number }[];
+  // SEC-1 — category value is null on the wire when the caller lacks
+  // inventory:viewCost (never zeroed §2.8); the count/low-stock data is not cost.
+  by_category: { category: string; value: number | null }[];
   low_stock: { product_id: string; name: string; on_hand: number; reorder_point: number }[];
   low_stock_count: number;
 }
@@ -544,7 +546,7 @@ export async function getInventoryHealth(): Promise<InventoryHealth> {
   const low = products.filter((p) => p.stock <= p.reorderPoint);
   return {
     by_category: report.valuationByCategory
-      .map((c) => ({ category: c.category || "Uncategorized", value: round2(c.value) }))
+      .map((c) => ({ category: c.category || "Uncategorized", value: round2(c.value ?? 0) }))
       .sort((a, b) => b.value - a.value),
     low_stock: low.map((p) => ({
       product_id: p.id,

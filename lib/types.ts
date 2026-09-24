@@ -69,18 +69,20 @@ export interface Product {
   categoryId?: string;
   categoryPath?: string[];
   vendor: Vendor;
-  cost: number;
+  // SEC-1 — cost is server-redacted to `null` for users without cost visibility
+  // (inventory:viewCost, or quotes:viewMargin in the builder). Not zeroed (§2.8).
+  cost: number | null;
   price: number; // = list_price (the part's "fixed price" quote default, if any)
   // PART-FORM-2: MSRP (reference only) + the resolved quote-default margin. When
   // the part uses a margin tier, quoteDefaultMargin is that tier's markup %;
   // otherwise undefined (the quote builder then falls back to price → blank).
   msrp?: number;
   marginTierId?: string;
-  quoteDefaultMargin?: number;
+  quoteDefaultMargin?: number | null; // SEC-1 — redactable (discloses cost via price)
   stock: number;
   reorderPoint: number;
   reorderQty?: number;
-  avgCost?: number;
+  avgCost?: number | null; // SEC-1 — redactable
   upc?: string;
   masterPartNumber?: string; // CAT-2: snapshotted onto quote lines
   imageUrl?: string; // IMG-1: public URL when the product has an image
@@ -175,8 +177,13 @@ export interface BuilderLineItem {
   classification?: string; // see lib/classifications.ts
   name: string;
   qty: number;
-  unitCost: number;
-  margin: number;
+  // SEC-1 — cost & margin are null on the wire when the caller lacks
+  // quotes:viewMargin (never zeroed, §2.8). The builder math coalesces null→0
+  // (cost/profit/margin outputs are hidden for such callers); upsertQuoteAction
+  // restores the real values from the prior blob so a redacted edit never
+  // clobbers cost. unitPrice is NOT cost-derived and always present.
+  unitCost: number | null;
+  margin: number | null;
   unitPrice: number;
   notes?: string;
   // F-2: when set, this line's unitCost is pinned to a specific inventory_stock
