@@ -2645,6 +2645,48 @@ export interface DbServiceContractInvoice {
   generated_at: string;
 }
 
+// QUOTE-PORTAL-1 (migration 0129) — client e-acceptance portal.
+export type QuotePortalSendStatus =
+  | "sent"
+  | "viewed"
+  | "accepted"
+  | "declined"
+  | "revoked"
+  | "expired";
+
+export interface DbQuotePortalSend {
+  id: string;
+  quote_id: string;
+  token: string;
+  snapshot: unknown; // the frozen client-safe QuoteSnapshot (jsonb)
+  recipient_email: string | null;
+  status: string;
+  view_count: number;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  responded_at: string | null;
+  decline_reason: string | null;
+  sent_by: string | null;
+  sent_at: string;
+  expires_at: string;
+}
+
+export interface DbQuoteAcceptance {
+  id: string;
+  send_id: string;
+  quote_id: string;
+  decision: "accepted" | "declined";
+  signer_name: string | null;
+  signer_title: string | null;
+  signer_email: string | null;
+  signature_image: string | null;
+  record_hash: string | null;
+  decline_reason: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  accepted_at: string;
+}
+
 export type DbInvoiceInsert = {
   invoice_number?: string | null;
   opco: string;
