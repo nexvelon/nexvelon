@@ -447,3 +447,26 @@ missed line isn't cosmetic; it's an untrained user.
 product.** The changelog is append-only in spirit — correct an entry
 if a later chunk changes the same task, but don't rewrite history to
 tidy it. It is the spec the training package is built from.
+
+**Roadmap + context currency (added REALITY-3, 2026-09-25).** The
+changelog stayed accurate because it had this gate; the roadmap and
+`CLAUDE_CONTEXT.md` drifted because they had none. So the same
+same-PR discipline now applies to them — these are **launch-gate
+rules, not aspirations**:
+
+- **Ship an item → delete it from `NEXVELON_ROADMAP.md` in the SAME PR**
+  (or mark it closed with its PR number). A roadmap must never describe
+  work that already shipped.
+- **Discover new deferred work → add it to `NEXVELON_ROADMAP.md` in the
+  SAME PR**, at a tier, with a one-line actionable description.
+- **Change HEAD's shape materially** — a new migration, a new module, a
+  new arc — **→ update `CLAUDE_CONTEXT.md`'s "Current Session State" in
+  that PR.**
+
+**Why it's a principle, not a nicety.** REALITY-1, REALITY-2, and
+REALITY-3 (`docs/BUILD_STATE_AUDIT.md`, `docs/INTENT_RECOVERY.md`)
+existed *only because these gates were absent*: shipped items sat in the
+roadmap as pending, and recovered items had silently vanished into git
+history. A fresh session reads these files as truth on its first pass;
+if they lie, it builds on a lie. Do not make a fourth REALITY chunk
+necessary.
