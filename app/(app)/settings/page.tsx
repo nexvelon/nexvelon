@@ -37,6 +37,7 @@ import { LabourPane } from "@/components/modules/settings/LabourPane";
 import { CostCodesPane } from "@/components/modules/settings/CostCodesPane";
 import { PurchaseOrderEmailPane } from "@/components/modules/settings/PurchaseOrderEmailPane";
 import { WorkingCalendarPane } from "@/components/modules/settings/WorkingCalendarPane";
+import { HoldbackHstPane } from "@/components/modules/settings/HoldbackHstPane";
 import { CalendarClock } from "lucide-react";
 import {
   ApiWebhooks,
@@ -182,7 +183,12 @@ export default function SettingsPage() {
             {active === "working-calendar" && isAdmin && <WorkingCalendarPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}
-            {active === "tax" && <TaxCurrency />}
+            {active === "tax" && (
+              <>
+                <TaxCurrency />
+                <HoldbackHstPane />
+              </>
+            )}
             {active === "integrations" && <Integrations />}
             {active === "vendors" && <VendorsPane />}
             {active === "backups" && <BackupsData />}

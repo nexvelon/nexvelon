@@ -116,6 +116,23 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Financials — Holdback HST treatment is now stated and configurable (FIN-TAX-1)
+
+- How HST is handled on Ontario construction **holdback** (the 10% a client
+  retains) is now an explicit, Admin-chosen setting under **Settings → Tax &
+  Currency**, with two options: **HST charged up front** (HST on the full invoice
+  at issue; the release invoice is tax-exempt — this is the existing behaviour and
+  the default, so nothing changes on its own) or **HST deferred to release** (HST
+  on the payable portion now; the holdback's HST is charged on the release
+  invoice).
+- The treatment in effect is now shown where you'd check it: on the **holdback
+  panel** (how the release will be taxed), on the **release invoice** line, and on
+  the **HST return** tab. The return's HST figures come from what each invoice
+  actually charged, so the return and the invoices can't disagree.
+- Changing the setting affects **future invoices only** — an invoice already
+  issued keeps the tax it was issued with. This is a tax-policy choice; confirm it
+  with your bookkeeper.
+
 ### Security — Encrypted vendor banking & gated PO costs (SEC-2)
 
 - A vendor's **account number** is now **encrypted at rest** and hidden by default.

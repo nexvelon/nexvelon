@@ -34,10 +34,53 @@ import {
   setDueDate,
   issueInvoice,
 } from "@/lib/api/invoices";
+import {
+  asHoldbackHstTreatment,
+  DEFAULT_HOLDBACK_HST_TREATMENT,
+  type HoldbackHstTreatment,
+} from "@/lib/tax/holdback-hst";
 import type { DbHoldbackRelease } from "@/lib/types/database";
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+/**
+ * FIN-TAX-1 — the holdback HST treatment of the holdback being released, read
+ * from the project's holdback-retaining issued invoices. It decides whether the
+ * RELEASE invoice is tax-exempt (charged_upfront) or taxable (deferred_to_release)
+ * — the two must always be inverses so the holdback dollar's HST is collected
+ * exactly once. Throws on a mixed-treatment project (a pathological state, since
+ * the setting rarely changes) rather than guess and mis-file the return.
+ */
+async function retainedHoldbackTreatment(
+  supabase: Awaited<ReturnType<typeof db>>,
+  projectId: string
+): Promise<HoldbackHstTreatment> {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("holdback_amount, is_holdback_release, holdback_hst_treatment, status")
+    .eq("project_id", projectId)
+    .in("status", ISSUED_STATUSES);
+  if (error) throw new Error(`retainedHoldbackTreatment: ${error.message}`);
+  const treatments = new Set<HoldbackHstTreatment>();
+  for (const r of (data ?? []) as {
+    holdback_amount: number | null;
+    is_holdback_release: boolean;
+    holdback_hst_treatment: string | null;
+  }[]) {
+    if (r.is_holdback_release) continue;
+    if (Number(r.holdback_amount ?? 0) <= 0) continue;
+    treatments.add(asHoldbackHstTreatment(r.holdback_hst_treatment));
+  }
+  if (treatments.size === 0) return DEFAULT_HOLDBACK_HST_TREATMENT;
+  if (treatments.size > 1) {
+    throw new HoldbackError(
+      "mixed_treatment",
+      "This project's holdback invoices use different HST treatments; resolve that before releasing so the release invoice's tax basis is unambiguous."
+    );
+  }
+  return [...treatments][0];
 }
 
 // AUD-4 — a readable project label for a holdback activity row. Best-effort.
@@ -71,7 +114,8 @@ export type HoldbackErrorCode =
   | "release_exists"
   | "not_yet_eligible"
   | "invalid_status"
-  | "has_payments";
+  | "has_payments"
+  | "mixed_treatment";
 
 export class HoldbackError extends Error {
   code: HoldbackErrorCode;
@@ -306,17 +350,28 @@ export async function releaseHoldback(input: {
     );
   }
 
+  // FIN-TAX-1 — the release invoice's tax basis is the INVERSE of how the original
+  // invoices treated the holdback, so the holdback dollar's HST is collected
+  // exactly once across the lifecycle:
+  //   • charged_upfront    → HST was already collected on the originals → EXEMPT.
+  //   • deferred_to_release → HST was deferred → the release is TAXABLE on it.
+  const treatment = await retainedHoldbackTreatment(supabase, release.project_id);
+  const releaseIsExempt = treatment === "charged_upfront";
+
   // Generate the release invoice: reuse the normal invoice machinery so it
   // flows through AR / payments / aging / statements unchanged.
   const draft = await createInvoiceForProject(release.project_id);
-  // Mark it, exempt it (already-taxed principal), one line for the held sum.
+  // Mark it as a release, and pin the treatment of the holdback it collects (may
+  // differ from the current org setting — this release settles OLD holdback).
   await supabase
     .from("invoices")
-    .update({ is_holdback_release: true })
+    .update({ is_holdback_release: true, holdback_hst_treatment: treatment })
     .eq("id", draft.id);
-  await setTaxExempt(draft.id, true);
+  await setTaxExempt(draft.id, releaseIsExempt);
   await addManualLine(draft.id, {
-    description: "Holdback release — statutory holdback (Ontario Construction Act)",
+    description: releaseIsExempt
+      ? "Holdback release — statutory holdback (Ontario Construction Act) — HST already remitted at invoicing"
+      : "Holdback release — statutory holdback (Ontario Construction Act) — HST on released holdback",
     quantity: 1,
     unit_price: round2(Number(release.amount)),
   });

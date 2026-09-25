@@ -6,14 +6,20 @@ import "server-only";
 //
 // Money model (recomputeTotals):
 //   subtotal        = Σ line.amount
-//   tax_amount      = tax_exempt ? 0 : subtotal * tax_rate/100
 //   holdback_amount = subtotal * holdback_rate/100
+//   taxable_base    = hstTaxableBase(subtotal, holdback_amount, treatment)
+//   tax_amount      = tax_exempt ? 0 : taxable_base * tax_rate/100
 //   total           = subtotal + tax_amount
 //   amount_due      = total - holdback_amount
-// NOTE: HST is charged on the FULL subtotal even when a holdback is retained —
-// the holdback is a payment-TIMING reduction (released on substantial
-// completion), not a tax reduction. TODO(accounting): confirm holdback HST
-// timing with the accountant before INVOICE-1b (branded PDF).
+// FIN-TAX-1 — the HST taxable base depends on the invoice's holdback HST
+// TREATMENT (lib/tax/holdback-hst.ts), snapshot per-invoice (§2.2):
+//   • charged_upfront (default) — HST on the FULL subtotal at invoicing incl. the
+//     held-back portion; the holdback-release invoice is tax-exempt.
+//   • deferred_to_release — HST on the payable portion now (subtotal − holdback);
+//     the release invoice is taxable and carries the holdback's HST.
+// The org default lives in company_settings ('holdback_hst_treatment'); each
+// invoice freezes the value in force when it was created, so changing the setting
+// never alters an issued invoice's tax.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatInvoiceNumber, businessDateISO, formatCurrency } from "@/lib/format";
@@ -21,6 +27,13 @@ import { round2 } from "@/lib/quote-helpers";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 import { composeIdentifier } from "@/lib/invoice-identifiers";
 import { deriveStatusFromPayments, isOpenStatus } from "@/lib/invoice-status";
+import {
+  asHoldbackHstTreatment,
+  hstTaxableBase,
+  HOLDBACK_HST_TREATMENT_KEY,
+  DEFAULT_HOLDBACK_HST_TREATMENT,
+} from "@/lib/tax/holdback-hst";
+import { getSetting } from "@/lib/api/company-settings";
 import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import type {
   ActivityAction,
@@ -597,6 +610,13 @@ export async function createInvoiceForProject(
     resolvedJobId = (main as { id: string } | null)?.id ?? null;
   }
 
+  // FIN-TAX-1 — snapshot the org's holdback HST treatment onto the invoice at
+  // creation, so a later change to the org setting never alters this invoice's tax
+  // (§2.2). Legacy/absent setting → the default (charged_upfront).
+  const treatment = asHoldbackHstTreatment(
+    (await getSetting(HOLDBACK_HST_TREATMENT_KEY)) ?? DEFAULT_HOLDBACK_HST_TREATMENT
+  );
+
   const { data, error } = await supabase
     .from("invoices")
     .insert({
@@ -607,6 +627,7 @@ export async function createInvoiceForProject(
       site_id: p.site_id,
       status: "draft",
       // tax_rate (13), holdback_rate (0), currency ('CAD') come from defaults.
+      holdback_hst_treatment: treatment,
       created_by: user?.id ?? null,
       updated_by: user?.id ?? null,
     })
@@ -630,7 +651,7 @@ export async function recomputeTotals(invoiceId: string): Promise<DbInvoice> {
 
   const { data: inv, error: iErr } = await supabase
     .from("invoices")
-    .select("tax_rate, tax_exempt, holdback_rate")
+    .select("tax_rate, tax_exempt, holdback_rate, holdback_hst_treatment")
     .eq("id", invoiceId)
     .single();
   if (iErr) throw new Error(`recomputeTotals/invoice: ${iErr.message}`);
@@ -638,14 +659,21 @@ export async function recomputeTotals(invoiceId: string): Promise<DbInvoice> {
     tax_rate: number;
     tax_exempt: boolean;
     holdback_rate: number;
+    holdback_hst_treatment: string | null;
   };
 
   const lines = await fetchLines(supabase, invoiceId);
   const subtotal = round2(lines.reduce((s, l) => s + Number(l.amount), 0));
+  const holdbackAmount = round2((subtotal * Number(h.holdback_rate)) / 100);
+  // FIN-TAX-1 — the HST base depends on the invoice's OWN holdback HST treatment
+  // (snapshot, §2.2). charged_upfront taxes the full subtotal; deferred_to_release
+  // taxes only the payable portion (subtotal − holdback), leaving the holdback's
+  // HST for the release invoice. See lib/tax/holdback-hst.ts.
+  const treatment = asHoldbackHstTreatment(h.holdback_hst_treatment);
+  const taxableBase = hstTaxableBase({ subtotal, holdbackAmount, treatment });
   const taxAmount = h.tax_exempt
     ? 0
-    : round2((subtotal * Number(h.tax_rate)) / 100);
-  const holdbackAmount = round2((subtotal * Number(h.holdback_rate)) / 100);
+    : round2((taxableBase * Number(h.tax_rate)) / 100);
   const total = round2(subtotal + taxAmount);
   const amountDue = round2(total - holdbackAmount);
 

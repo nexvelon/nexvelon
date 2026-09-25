@@ -29,6 +29,11 @@ import {
   hasConfiguredCalendar,
 } from "@/lib/settings/working-calendar-settings";
 import type { WorkingCalendarConfig } from "@/lib/gantt/working-calendar";
+import {
+  HOLDBACK_HST_TREATMENT_KEY,
+  asHoldbackHstTreatment,
+  type HoldbackHstTreatment,
+} from "@/lib/tax/holdback-hst";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -101,6 +106,35 @@ export async function setDefaultTermsAction(
     await setSetting(DEFAULT_TERMS_KEY, value);
     revalidatePath("/settings");
     revalidatePath("/quotes/new");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// FIN-TAX-1 — org-level default holdback HST treatment. Read open (the invoice
+// creator reads it to snapshot onto new invoices); write admin-gated. Changing it
+// affects FUTURE invoices only — each invoice freezes the value at creation (§2.2).
+export async function getHoldbackHstTreatmentAction(): Promise<
+  ActionResult<HoldbackHstTreatment>
+> {
+  try {
+    const stored = await getSetting(HOLDBACK_HST_TREATMENT_KEY);
+    return { ok: true, data: asHoldbackHstTreatment(stored) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function setHoldbackHstTreatmentAction(
+  value: HoldbackHstTreatment
+): Promise<ActionResult<null>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    // Coerce defensively — never persist an unknown treatment.
+    await setSetting(HOLDBACK_HST_TREATMENT_KEY, asHoldbackHstTreatment(value));
+    revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);
