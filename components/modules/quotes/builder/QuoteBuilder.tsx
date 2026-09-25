@@ -33,6 +33,7 @@ import { CommandPalette } from "./CommandPalette";
 import { TotalsBar } from "./TotalsBar";
 import { NotesCard, InternalNotesCard } from "./NotesCards";
 import { QuoteHistoryPanel } from "./QuoteHistoryPanel";
+import { QuotePortalPanel } from "./QuotePortalPanel";
 import { ReadOnlyBanner } from "./ReadOnlyBanner";
 import { PdfPreviewPane } from "./PdfPreviewPane";
 
@@ -1753,6 +1754,15 @@ export function QuoteBuilder({
             onChange={setInternalNotes}
             disabled={ro.readOnly}
           />
+
+          {/* QUOTE-PORTAL-1: client e-acceptance status + send. Only on a saved
+              quote — a brand-new one has no send/token yet. */}
+          {!isNew && (
+            <QuotePortalPanel
+              quoteId={String(initial.id)}
+              defaultEmail={client?.email}
+            />
+          )}
 
           {/* AUDIT-1: admin-only, read-only quote history (self-gates to admin).
               Only on a saved quote — a brand-new one has no audit rows yet. */}

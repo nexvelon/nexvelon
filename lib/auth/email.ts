@@ -599,6 +599,61 @@ export async function sendClientInviteEmail(opts: {
   if (result.error) throw new Error(`sendClientInviteEmail: ${result.error.message}`);
 }
 
+/** QUOTE-PORTAL-1 — email a client the link to review + sign a quote online.
+ *  Reuses the shared house shell; the link opens the unauthenticated /q/<token>
+ *  portal. Best-effort caller decides whether a failure is fatal. */
+export async function sendQuotePortalEmail(opts: {
+  to: string;
+  token: string;
+  baseUrl: string;
+  quoteNumber: string;
+  companyName?: string | null;
+  total?: string | null;
+}): Promise<void> {
+  const base = `${opts.baseUrl.replace(/\/$/, "")}/q/${opts.token}`;
+  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
+  const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
+  const intro = `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Your quote${opts.quoteNumber ? ` <strong>${opts.quoteNumber}</strong>` : ""}${opts.total ? ` (total ${opts.total})` : ""} is ready to review. Open the secure link below to see the details and accept or decline online — no account needed.</p>`;
+  const closing = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}The link is private to you and expires in 90 days. For any questions, simply reply to this email.</p>`;
+
+  const html = emailShell({
+    eyebrow: "QUOTE",
+    headline: "Your quote is ready to review and sign.",
+    bodyHtml: `${intro}${closing}`,
+    ctaHref: base,
+    ctaLabel: "Review & Sign Quote",
+    ctaSubline: "OPEN SECURE QUOTE",
+    signatureItalic: "We look forward to working with you.",
+    signatureGroup: opts.companyName || "The Nexvelon Global Group",
+    signatureSubline: "QUOTE · PRIVATE LINK",
+    outerNote: outerNoteFor("This quote was prepared for", opts.to),
+  });
+
+  const text = [
+    "Nexvelon Global · Quote",
+    "",
+    `Your quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""}${opts.total ? ` (total ${opts.total})` : ""} is ready to review.`,
+    "Open the secure link below to see the details and accept or decline online — no account needed.",
+    "",
+    `Review & Sign Quote: ${base}`,
+    "",
+    "The link is private to you and expires in 90 days. For any questions, reply to this email.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const resend = client();
+  const result = await resend.emails.send({
+    from: INQUIRIES_FROM,
+    to: opts.to,
+    subject: `Your Nexvelon quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""} — review & sign`,
+    html,
+    text,
+    headers: { "X-Entity-Ref-ID": `nexvelon-quote-portal-${Date.now()}` },
+  });
+  if (result.error) throw new Error(`sendQuotePortalEmail: ${result.error.message}`);
+}
+
 /** Notify inquiries@ that a client completed + submitted their onboarding. */
 export async function sendClientSubmissionEmail(opts: {
   email: string;

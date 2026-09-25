@@ -68,7 +68,7 @@ Cross-referencing standard: an item counts as **SHIPPED** only with concrete evi
 | 11b. Scheduling route/capacity optimisation | DROPPED-DELIBERATE | spec said "v2"; resync P2 "resource levelling / auto-assignment" |
 | 12. Reports v1 (static) | SHIPPED | REP-1..4 |
 | 12b. Reports builder + scheduled delivery + snapshots | SUPERSEDED (carried fwd) | roadmap REP-5 |
-| Client quote e-acceptance portal `/q/[token]` | DROPPED-DELIBERATE (carried fwd) | roadmap QUOTE-PORTAL-1 |
+| Client quote e-acceptance portal `/q/[token]` | SHIPPED | QUOTE-PORTAL-1 (PR #397, migration 0129) |
 | Invoice customer payment portal (Stripe) | DROPPED-DELIBERATE (carried fwd) | roadmap PAY-PORTAL-1 |
 | Gantt presentation-export templates | DROPPED-DELIBERATE (carried fwd) | resync P2 "presentation-timeline export" |
 

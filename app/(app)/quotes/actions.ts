@@ -32,9 +32,15 @@ import { hasPermission } from "@/lib/permissions";
 import { diffQuote } from "@/lib/quote-audit-diff";
 import { newId, round2 } from "@/lib/quote-helpers";
 import { getProductRowById } from "@/lib/api/products";
-import { businessDateISO } from "@/lib/format";
+import { businessDateISO, formatCurrency } from "@/lib/format";
 import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
 import { redactQuote, resolveFieldGates } from "@/lib/permissions/field-redaction";
+import {
+  createQuotePortalSend,
+  getQuotePortalStatus,
+  type QuotePortalStatus,
+} from "@/lib/api/quote-portal";
+import { sendQuotePortalEmail } from "@/lib/auth/email";
 import type { BuilderLineItem, Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
@@ -379,6 +385,86 @@ export async function sendQuoteAction(
       );
     }
     return await upsertQuoteAction({ ...quote, status: "Sent" });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+function portalBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexvelonglobal.com";
+}
+
+/**
+ * QUOTE-PORTAL-1 — send a quote to the client for online review + e-acceptance.
+ * Captures the immutable snapshot, mints a fresh token (revoking any prior open
+ * link), flips a Draft to Sent, and emails the /q/<token> link. Gated quotes:edit.
+ */
+export async function sendQuotePortalAction(input: {
+  quoteId: string;
+  recipientEmail: string;
+}): Promise<ActionResult<{ url: string }>> {
+  try {
+    const gate = await requireQuotesPermission("edit");
+    if (!gate.ok) return gate;
+    const email = input.recipientEmail?.trim();
+    if (!email || !email.includes("@")) {
+      return { ok: false, error: "Enter the client's email address to send the quote." };
+    }
+    const quote = await getQuoteById(input.quoteId);
+    if (!quote) return { ok: false, error: "Quote not found." };
+    if (!quote.clientId) {
+      return { ok: false, error: "Add a client to the quote before sending it." };
+    }
+
+    // Capture the snapshot + token (revokes any prior open link).
+    const { token } = await createQuotePortalSend({
+      quoteId: input.quoteId,
+      recipientEmail: email,
+      sentBy: gate.actorId,
+    });
+
+    // First send flips Draft → Sent (needs client + site, per the existing guard).
+    if (quote.status === "Draft") {
+      if (!quote.siteId) {
+        return { ok: false, error: "Add a service site to the quote before sending it." };
+      }
+      const flip = await upsertQuoteAction({ ...quote, status: "Sent" });
+      if (!flip.ok) return flip;
+    }
+
+    // Email the link (best-effort — the link + snapshot already exist and are
+    // visible in the portal panel even if the email transport fails).
+    const url = `${portalBaseUrl().replace(/\/$/, "")}/q/${token}`;
+    try {
+      await sendQuotePortalEmail({
+        to: email,
+        token,
+        baseUrl: portalBaseUrl(),
+        quoteNumber: quote.number,
+        total: quote.total != null ? formatCurrency(quote.total) : null,
+      });
+    } catch (e) {
+      console.error("[quote-portal] email send failed (link still valid):", e);
+    }
+
+    revalidatePath("/quotes");
+    revalidatePath(`/quotes/${input.quoteId}`);
+    return { ok: true, data: { url } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Operator read of the portal status (viewed / accepted / declined + signature).
+ *  Gated quotes:view — visible to any operator who can see the quote. */
+export async function getQuotePortalStatusAction(
+  quoteId: string
+): Promise<ActionResult<QuotePortalStatus>> {
+  try {
+    const gate = await requireQuotesPermission("view");
+    if (!gate.ok) return gate;
+    const supabase = await createSupabaseServerClient();
+    return { ok: true, data: await getQuotePortalStatus(supabase, quoteId) };
   } catch (e) {
     return fail(e);
   }

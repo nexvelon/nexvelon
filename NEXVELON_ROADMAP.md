@@ -76,9 +76,16 @@ Each line is scoped to a single Claude Code paste.
   today). **(M)**
 - **QBO-1 — accounting export** (QuickBooks/Xero/Sage 50; §3's integration
   backbone; label-only today). Write-only QuickBooks first. **(M)**
-- **QUOTE-PORTAL-1 — client quote portal `/q/[token]`** *(designed §5)*:
-  signed-URL e-acceptance (no login), append-only acceptance records, and immutable
-  send snapshots. **(M)**
+- ~~QUOTE-PORTAL-1 — client quote portal `/q/[token]`~~ **✅ SHIPPED (PR #397).**
+  Unauthenticated signed-URL e-acceptance (no login), rendering an **immutable send
+  snapshot** captured at send time (§2.2) that carries no internal figure
+  (cost/margin/notes/tech); **append-only** acceptance records (signature + identity
+  + IP + timestamp + SHA-256 seal, §5); one token per send with 90-day expiry, prior
+  links revoked on resend; fail-closed on invalid/expired/revoked; accept → Approved,
+  decline → Revision; portal events logged to `quote_audit_log`; operator Client
+  portal panel on the quote builder (migration 0129). **Kept separate (not built
+  here):** quote→project conversion stays a deliberate operator action;
+  approval-threshold routing not in scope.
 - **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
 
 ### P2 — polish / designed-but-deferred

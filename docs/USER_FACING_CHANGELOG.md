@@ -116,6 +116,32 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Quotes — send a quote to the client for online acceptance (QUOTE-PORTAL-1)
+
+- You can now **send a quote to your client as a secure web link** they open on any
+  device — no login, no account. Open a saved quote, use the new **Client portal**
+  panel, enter the client's email (prefilled from the client contact) and click
+  **Send to client**. They get an email with a link to a clean, Nexvelon-branded
+  page showing exactly what you sent, where they can **accept and sign** or
+  **decline**.
+- What the client sees is a **frozen copy taken at the moment you send** — line
+  items, quantities, prices, totals, tax and terms. Editing the quote afterwards
+  never changes what they were shown or what they agreed to. **None of your internal
+  figures** (cost, margin, internal notes, technician names) are ever on that page.
+- To **accept**, the client types their name (their signature), can optionally draw
+  a signature, confirms they're authorised, and submits. Their name, title, email,
+  the time, and their IP are recorded as a permanent, tamper-evident acceptance
+  record you can see in the Client portal panel. Accepting moves the quote to
+  **Approved**; declining (with an optional reason) moves it to **Revision**.
+  Turning an accepted quote into a project stays a deliberate step you take.
+- The panel shows honest status the whole way through — **not viewed yet**, when and
+  how many times it was viewed, and the full signed record once they respond.
+- **Resending** a quote issues a **fresh link and a fresh snapshot** and
+  **invalidates the previous link**, so an old copy can never be accepted after
+  you've revised the offer. Links **expire after 90 days**. An expired, replaced, or
+  invalid link shows the client a clear, safe message (and reveals nothing about the
+  quote) rather than an error page.
+
 ### Service Contracts — recurring billing (RECUR-1)
 
 - You can now set up a **service contract** — a recurring agreement (e.g. "$85 a
