@@ -26,7 +26,10 @@ BEGIN;
 -- (status, view counters, responded_at, decline_reason) may change.
 CREATE TABLE IF NOT EXISTS public.quote_portal_sends (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  quote_id uuid NOT NULL REFERENCES public.quotes(id) ON DELETE RESTRICT,
+  -- quotes.id is TEXT (client-generated, 0027) — every referencing column matches
+  -- it (project_quotes/projects/project_cost_centers/project_jobs; quote_audit_log
+  -- was widened uuid→text in 0040). This FK MUST be text or it can't be created.
+  quote_id text NOT NULL REFERENCES public.quotes(id) ON DELETE RESTRICT,
   token text NOT NULL UNIQUE,
   -- The client-safe projection captured at send time (line descriptions, qty,
   -- unit price, totals, tax, terms, party display names). It NEVER contains
@@ -55,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.quote_portal_sends (
 CREATE TABLE IF NOT EXISTS public.quote_acceptances (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   send_id uuid NOT NULL UNIQUE REFERENCES public.quote_portal_sends(id) ON DELETE RESTRICT,
-  quote_id uuid NOT NULL REFERENCES public.quotes(id) ON DELETE RESTRICT,
+  quote_id text NOT NULL REFERENCES public.quotes(id) ON DELETE RESTRICT,  -- text: matches quotes.id (0027)
   decision text NOT NULL CHECK (decision IN ('accepted','declined')),
   signer_name text,
   signer_title text,

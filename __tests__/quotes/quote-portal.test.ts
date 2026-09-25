@@ -6,6 +6,8 @@
 //   • acceptance is append-only and a second response is rejected;
 //   • accept → quote Approved, decline → Revision, each logged to the quote audit.
 
+import { readFileSync } from "fs";
+import { join } from "path";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeSupabaseMock, type ChainCtx } from "../helpers/supabaseChainMock";
 import type { Quote, BuilderLineItem } from "@/lib/types";
@@ -137,6 +139,26 @@ beforeEach(() => {
   h.sendUpdates = [];
   h.quoteUpdate = null;
   h.log.mockClear();
+});
+
+// ── Migration schema contract (would have caught the 0129 FK type bug) ──────
+// The mocked-DB unit tests below can't catch a wrong SQL column type (uuid vs
+// text are both `string` in TS). quotes.id is TEXT (0027) and EVERY column that
+// references it is text (project_quotes/projects/project_cost_centers/
+// project_jobs; quote_audit_log widened uuid→text in 0040). Assert 0129 matches.
+describe("migration 0129 — FK column types match quotes.id (text)", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase/migrations/0129_quote_portal.sql"),
+    "utf8"
+  );
+  it("both new tables declare quote_id as text referencing quotes(id)", () => {
+    const fks = sql.match(/quote_id\s+\w+\s+NOT NULL[^,]*REFERENCES public\.quotes\(id\)/g) ?? [];
+    expect(fks.length).toBe(2); // quote_portal_sends + quote_acceptances
+    for (const fk of fks) expect(fk).toMatch(/quote_id\s+text\b/);
+  });
+  it("no column that references quotes(id) is typed uuid", () => {
+    expect(sql).not.toMatch(/quote_id\s+uuid[^;]*REFERENCES public\.quotes\(id\)/);
+  });
 });
 
 // ── The snapshot boundary (the strongest guarantee) ─────────────────────────
