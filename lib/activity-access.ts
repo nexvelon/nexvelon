@@ -43,6 +43,9 @@ export const FEED_RESOURCE: Record<ActivityEntityType, Resource> = {
   subcontractor_compliance: "subcontractors",
   // SNAP-1 — the daily balance-snapshot capture audit; financial data → financials.
   balance_snapshot: "financials",
+  // RECUR-1 — service contracts are client/site commercial records; viewing them is
+  // gated clients:view (matching the read model), so the feed guard follows suit.
+  service_contract: "clients",
 };
 
 // AUD-3 — human labels for each entity_type, for the feed's type column + the
@@ -69,6 +72,7 @@ export const ENTITY_TYPE_LABEL: Record<ActivityEntityType, string> = {
   subcontractor: "Subcontractor",
   subcontractor_compliance: "Compliance document",
   balance_snapshot: "Balance snapshot",
+  service_contract: "Service contract",
 };
 
 /** AUD-3 — the detail-page href for a feed row, or null when the type has no

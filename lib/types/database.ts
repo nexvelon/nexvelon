@@ -648,6 +648,8 @@ export const ACTIVITY_ENTITY_TYPES = [
   "subcontractor_compliance",
   // SNAP-1 — the daily balance-snapshot capture writes a system audit row here.
   "balance_snapshot",
+  // RECUR-1 — service-contract create/update/cancel + recurring-invoice generation.
+  "service_contract",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
@@ -2580,6 +2582,67 @@ export interface DbInvoice {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// RECUR-1 (migration 0128) — service contracts + recurring billing.
+export type ServiceContractCadence =
+  | "monthly"
+  | "quarterly"
+  | "semiannual"
+  | "annual"
+  | "custom";
+export type ServiceContractBillingTiming = "advance" | "arrears";
+export type ServiceContractBillingMode =
+  | "manual"
+  | "automatic"
+  | "draft_for_approval";
+/** Lifecycle — not a DB CHECK (statuses may grow); the app validates transitions. */
+export type ServiceContractStatus =
+  | "draft"
+  | "active"
+  | "suspended"
+  | "cancelled"
+  | "expired";
+
+export interface DbServiceContract {
+  id: string;
+  opco: string;
+  client_id: string;
+  site_id: string | null;
+  name: string;
+  status: string;
+  cadence: ServiceContractCadence;
+  custom_interval_days: number | null;
+  billing_timing: ServiceContractBillingTiming;
+  billing_mode: ServiceContractBillingMode;
+  start_date: string;
+  end_date: string | null;
+  next_billing_date: string | null;
+  tax_rate: number;
+  tax_exempt: boolean;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbServiceContractLine {
+  id: string;
+  contract_id: string;
+  description: string;
+  amount: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface DbServiceContractInvoice {
+  id: string;
+  contract_id: string;
+  invoice_id: string | null;
+  period_start: string;
+  period_end: string;
+  generated_at: string;
 }
 
 export type DbInvoiceInsert = {

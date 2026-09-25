@@ -37,6 +37,7 @@ import { TabBar, type TabKey } from "../_components/TabBar";
 import { SitesPane } from "../_components/SitesPane";
 import { ContactsPane } from "../_components/ContactsPane";
 import { PlaceholderPane } from "../_components/PlaceholderPane";
+import { ContractsSection } from "@/components/modules/contracts/ContractsSection";
 import { ClientFormDrawer } from "../ClientFormDrawer";
 import { AttachmentsSection } from "@/components/modules/attachments/AttachmentsSection";
 import { SiteFormDrawer } from "../SiteFormDrawer";
@@ -403,7 +404,17 @@ export function ClientDetailView({
           siteNameById={siteNameById}
         />
       )}
-      {tab === "Contracts" && <PlaceholderPane label="Contracts" />}
+      {tab === "Contracts" && (
+        <div className="space-y-3">
+          <ContractsSection clientId={client.id} />
+          <p className="text-muted-foreground text-xs">
+            Recurring service contracts for this client.{" "}
+            <Link href="/contracts" className="text-brand-gold hover:underline">
+              Manage all contracts →
+            </Link>
+          </p>
+        </div>
+      )}
       {tab === "Service History" && (
         <PlaceholderPane label="Service history" />
       )}
