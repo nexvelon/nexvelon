@@ -16,6 +16,7 @@ import {
   UserCog,
   Users,
   Activity,
+  Repeat,
   type LucideIcon,
 } from "lucide-react";
 import type { Resource } from "@/lib/permissions";
@@ -51,6 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart, resource: "inventory" },
   { href: "/rmas", label: "Returns / RMAs", icon: Undo2, resource: "inventory" },
   { href: "/scheduling", label: "Scheduling", icon: Calendar, resource: "scheduling" },
+  { href: "/contracts", label: "Service Contracts", icon: Repeat, resource: "clients" },
   { href: "/invoices", label: "Invoices", icon: FileSpreadsheet, resource: "financials" },
   { href: "/financials", label: "Financials", icon: Receipt, resource: "financials" },
   { href: "/reports", label: "Reports", icon: BarChart3, resource: "reports" },

@@ -7,6 +7,7 @@
 
 import Link from "next/link";
 import { SiteContactsPane } from "@/app/(app)/clients/_components/SiteContactsPane";
+import { ContractsSection } from "@/components/modules/contracts/ContractsSection";
 import type { DbContact, DbSiteWithClient } from "@/lib/types/database";
 
 export function SiteDetailView({
@@ -61,6 +62,8 @@ export function SiteDetailView({
       </header>
 
       <SiteContactsPane siteId={site.id} contacts={contacts} />
+
+      <ContractsSection siteId={site.id} />
     </div>
   );
 }

@@ -54,16 +54,14 @@ Each line is scoped to a single Claude Code paste.
 
 ### P1 — designed, materially absent, commercially matters
 
-- **RECUR-1 — recurring revenue** *(top of P1)* **[recovered]**. Nexvelon Guardian
-  is a monitoring business whose revenue is recurring by nature, yet the ERP
-  **cannot currently express a contract that bills monthly** — the single most
-  commercially significant recovered item (`docs/INTENT_RECOVERY.md` §11 P1). One
-  coherent initiative: **`service_contracts`** (recurring per-site maintenance
-  plans + billing cycles, M1) → a **Service Contract quote type** with recurring
-  billing (M5; today only a `projectType` label + a two-value conversion
-  target-kind exist) → **recurring invoice templates** (M9) → **late-fee
-  auto-application + compounding** (M1/M9; today `lib/late-payment-rates.ts` is
-  informational T&C text only). **(M)**
+- ~~RECUR-1 — recurring revenue~~ **✅ SHIPPED (PR #396).** `service_contracts` +
+  recurring invoice generation (migration 0128): per-contract cadence
+  (monthly/quarterly/semiannual/annual/custom), per-contract generation mode
+  (manual/automatic/draft-for-approval, default draft-for-approval), idempotent
+  daily generation on the SNAP-1 cron pattern with missed-day catch-up, per-invoice
+  price snapshots (§2.2), per-opco separation, MRR, and the Service Contracts UI.
+  **Deferred to follow-ups (below):** the Service Contract *quote type → contract*
+  conversion; late-fee auto-application; mid-cycle cancellation credits.
 - **TAXFILE-1 — tax-filing records** **[recovered]**. Durable `tax_filings`
   records + PST returns + CRA-confirmation tracking beyond the computed HST CSV +
   T5018 that shipped (`docs/INTENT_RECOVERY.md` §11 P1). **(M)**
@@ -108,6 +106,15 @@ Each line is scoped to a single Claude Code paste.
   `invoices:approveWriteOff` gate + an AR write-off workflow (reason + audit) — the
   clean roadmap-level silent casualty; a write-off is currently an untracked edit
   (`docs/INTENT_RECOVERY.md` §4). **(M)**
+- **RECUR-2 — service-contract follow-ups** *(deferred from RECUR-1, PR #396)*: the
+  **Service Contract quote type → contract conversion** (a Service Contract quote
+  converts into a `service_contract` the way a project quote converts into a
+  project; contracts are directly creatable today, so this is convenience);
+  **late-fee auto-application + compounding** on overdue contract invoices (today
+  `lib/late-payment-rates.ts` is informational T&C text only); and **mid-cycle
+  cancellation credits** (the `prorate()` primitive ships tested in
+  `lib/recurring/billing-schedule.ts`, but cancellation currently just stops future
+  billing — a pro-rated credit/final invoice is not auto-issued). **(M?)**
 - **Clients — SLA engine + client-level holdback config**; the **Contracts tab**
   (placeholder at `ClientDetailView.tsx:406`); a dedicated `/contacts` detail
   route; **[recovered]** a native per-client **communication log** (email/call/SMS).

@@ -116,6 +116,31 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Service Contracts — recurring billing (RECUR-1)
+
+- You can now set up a **service contract** — a recurring agreement (e.g. "$85 a
+  month for fire monitoring") attached to a client and, optionally, a specific
+  site. Contracts live under the new **Service Contracts** area in the sidebar and
+  also appear on the client's **Contracts** tab and the site detail page.
+- Choose **how often** it bills — monthly, quarterly, semi-annual, annual, or a
+  custom number of days — and whether you bill **in advance** (the default, typical
+  for monitoring) or in arrears. Pricing is entered as lines ("Fire monitoring $45",
+  "Elevator monitoring $40") that appear on each invoice.
+- Choose **how invoices are generated**, per contract:
+  - **Draft for approval (default)** — on each billing date a draft invoice is
+    created and waits for you to review and issue it.
+  - **Automatic** — the invoice is created and issued immediately, no review.
+  - **Manual** — nothing generates on a schedule; you click **Generate now**.
+- Generated **drafts awaiting approval** are surfaced prominently at the top of the
+  Service Contracts page so they're never forgotten, and each can be issued in one
+  click. Invoices generate on a daily schedule and a period can never be billed
+  twice, even if the schedule catches up after a missed day.
+- **Monthly recurring revenue (MRR)** is shown at the top of the Service Contracts
+  page — total and per operating company — computed only from active contracts.
+- A contract can be activated, suspended, cancelled, or edited; changing a
+  contract's price only affects future invoices — invoices already generated keep
+  the price they were issued with.
+
 ### Financials — Holdback HST treatment is now stated and configurable (FIN-TAX-1)
 
 - How HST is handled on Ontario construction **holdback** (the 10% a client
