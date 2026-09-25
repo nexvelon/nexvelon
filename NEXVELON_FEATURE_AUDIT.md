@@ -81,6 +81,16 @@ Through Sessions B-O (FINAL):
 # 1-12. Modules 1-12 — condensed headline stats
 ═══════════════════════════════════════════════════════════════════
 
+> **These headline stats are the DESIGNED scope catalogued during the audit — NOT
+> a shipped-state claim.** Many lines below name capabilities that were designed
+> but not built (e.g. FIFO valuation, built-in GL, five-dimensional dispatch
+> auto-suggest, vendor onboarding gates). For what actually shipped vs. what
+> remains, the authoritative sources are **`docs/BUILD_STATE_AUDIT.md`** (built-
+> vs-designed reconciliation) and **`docs/INTENT_RECOVERY.md`** (recovered
+> intent); all unbuilt-but-designed items are tracked in **`NEXVELON_ROADMAP.md`**.
+> REALITY-3 (2026-09-25) corrected the individual §5 line below where it read as
+> shipped; the rest are read through this banner.
+
 ## §1. Clients + Sites + Contacts
 23 routes, ~110 actions, 15 lookup tables, 14 field visibilities. Per-site SLAs with precedence. Contractual integrity exception. Holdback (10%/Excl/45 Ontario). 54 acceptance criteria. Permissions: items 1-14. (Full at `073b393`.)
 
@@ -94,7 +104,11 @@ Through Sessions B-O (FINAL):
 3 routes, ~35 actions, 5 owned tables, 3 status surfaces. ~20 seeded widgets, 6 role layouts. Three-way visibility gate. UI as 10th dimension. 25 acceptance criteria. Permissions: items 28-30. (Full at `6283d0f`.)
 
 ## §5. Quotes
-18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. Three quote types. Online portal acceptance. Immutable send snapshots. T&C auto-composition. 52 acceptance criteria. Permissions: items 31-37. (Full at `5633e25`.)
+18 routes + 1 portal, ~85 actions, 12 owned tables, 5 status surfaces. 52 acceptance criteria. Permissions: items 31-37. (Full at `5633e25`.)
+**Designed vs shipped (REALITY-3 correction, evidence in `docs/BUILD_STATE_AUDIT.md` §3 + `docs/INTENT_RECOVERY.md`):**
+- *"Three quote types" — NOT shipped as designed.* What shipped is a `projectType` descriptor label (`lib/types.ts:150` — New Install / Service / Upgrade / Maintenance Contract) plus a **two-value** conversion target-kind (`intendedTargetKind: new_project | change_order`, `lib/types.ts:240`). The distinct **Service Contract quote type with recurring billing** was never built → tracked in `NEXVELON_ROADMAP.md` at the top of P1 (recurring revenue).
+- *"T&C auto-composition" — NOT shipped.* Quote terms are a static block (`lib/quote-helpers.ts`); the designed onboarding-gate-driven clause composition was never built → roadmap P2 (onboarding gates + auto-T&C).
+- *"Online portal acceptance" + "Immutable send snapshots" — NOT shipped.* No `/q/[token]` client portal exists → tracked as roadmap **QUOTE-PORTAL-1** (P1).
 
 ## §6. Projects
 24 routes, ~110 actions, 12 owned tables, 8 status surfaces. Three-state costing. Change order workflow. Commissioning + ULC verification. Handover with warranty clock. 58 acceptance criteria. Permissions: items 38-44. (Full at `bafb708`.)

@@ -26,6 +26,17 @@
 > work" list below — nothing was dropped. Read the audit for the evidence, the
 > permissions gap, and the debt register behind these items.
 
+> **Reinstatement marker (2026-09-25): REALITY-3 doc repair.** Evidence:
+> **`docs/INTENT_RECOVERY.md`** (REALITY-2, PR #394). Two things happened here:
+> (1) items that shipped since the resync were removed from "Remaining work" and
+> marked closed with their PR — **SEC-1 #390, AUD-4 #391, SEC-2 #392 (vendor
+> banking encryption + PO cost gates), FIN-TAX-1 #393**; (2) every DROPPED-SILENT /
+> UNCERTAIN item recovered by REALITY-2 was folded in below at its tier, merged
+> into an existing entry, or explicitly **decided out**. Recurring revenue is now
+> the top P1 item; the built-in General Ledger is **decided out** (see that
+> section). New tagging: **[recovered]** = reinstated from INTENT_RECOVERY;
+> **[catalogue]** = aspirational scope, not a commitment.
+
 ---
 
 ## Remaining work (ordered)
@@ -36,21 +47,28 @@ Each line is scoped to a single Claude Code paste.
 
 ### P0 — correctness / security (do first)
 
-- **SEC-1 — server-strip field-gated data.** Inventory `unit_cost`, quote margin,
-  and internal notes are hidden client-side only while the server returns them
-  (`inventory/actions.ts` gates reads on `inventory:view`; `viewCost` lives in
-  `StockTab.tsx:49` et al). Redact these in the server reads by permission,
-  mirroring the WIP `canSeeCost` pattern; test that a non-`viewCost` payload omits
-  cost. *No migration.*
-- **AUD-4 — invoice audit trail.** `lib/api/invoices.ts` + `invoices/actions.ts`
-  write zero `activity_log` rows (§5 gap). Add `logActivity("invoice", …)` on
-  create / update / line-edit / payment with readable labels (AUD-2B rule). *No
-  migration.*
+- **✅ CLEARED.** Both original P0 items shipped: **SEC-1 — server-strip
+  field-gated data (PR #390)** and **AUD-4 — invoice audit trail (PR #391)**. No
+  open P0 items. (SEC-2 #392 additionally shipped vendor-banking encryption + PO
+  document-cost gates — the two field gates SEC-1 recorded for follow-up.)
 
 ### P1 — designed, materially absent, commercially matters
 
-- **FIN-TAX-1 — holdback HST treatment.** Resolve the unresolved tax question at
-  `lib/api/invoices.ts:15`; correct the figure + test. *No migration.*
+- **RECUR-1 — recurring revenue** *(top of P1)* **[recovered]**. Nexvelon Guardian
+  is a monitoring business whose revenue is recurring by nature, yet the ERP
+  **cannot currently express a contract that bills monthly** — the single most
+  commercially significant recovered item (`docs/INTENT_RECOVERY.md` §11 P1). One
+  coherent initiative: **`service_contracts`** (recurring per-site maintenance
+  plans + billing cycles, M1) → a **Service Contract quote type** with recurring
+  billing (M5; today only a `projectType` label + a two-value conversion
+  target-kind exist) → **recurring invoice templates** (M9) → **late-fee
+  auto-application + compounding** (M1/M9; today `lib/late-payment-rates.ts` is
+  informational T&C text only). **(M)**
+- **TAXFILE-1 — tax-filing records** **[recovered]**. Durable `tax_filings`
+  records + PST returns + CRA-confirmation tracking beyond the computed HST CSV +
+  T5018 that shipped (`docs/INTENT_RECOVERY.md` §11 P1). **(M)**
+- ~~FIN-TAX-1 — holdback HST treatment.~~ **✅ SHIPPED (PR #393)** — explicit +
+  org-configurable treatment, per-invoice snapshot (migration 0127).
 - **REP-5 — Reports platform** *(carries forward the designed M13 scope)*. Today
   ~14 static reports render; build the report-definition data model, a copy-modify
   **custom builder**, **scheduled email/PDF delivery** (reuse the SNAP-1 cron
@@ -73,19 +91,53 @@ Each line is scoped to a single Claude Code paste.
   audit-on-read, eight-layer print protection, encryption-at-rest (gate codes /
   bank numbers), and persistent effective-permissions caching. Sequence per the
   v0.11 six-phase plan when commercially triggered. **(M each)**
+  - **[recovered]** Audit-capture commitments the shipped `permission_audit`
+    (`0115`, 4 change-types) dropped from the 11 design passes: **denied/failed
+    action-attempt logging**, **IP capture + 12-month IP-only nulling**, and
+    **system-actor audit rows** (`docs/INTENT_RECOVERY.md` §7). Part of the
+    audit-on-read / audit-visibility build-out above.
 - **PERM-HYGIENE — drop dormant `0005`/`0006`** (~21 dead, unreferenced tables) and
   reconcile the `user_permission_overrides` schema collision (`0006` vs live
   `0115`). **(M)** — needs the §8 Q4 decision (drops tables).
+- **GATES-1 — onboarding-gate framework + auto-composed T&C [recovered].** Per-party
+  compliance gates (insurance/MSA/deposit/bond/NDA) that inject clause text, spanning
+  **clients (M1), vendors (M8), and contractors (M10)** — flagged in the audit as a
+  differentiator; only static boilerplate shipped (`docs/INTENT_RECOVERY.md` §11 P2).
+  Merges the M1/M8/M10 onboarding-gate + T&C-versioning items. **(M)**
+- **INV-WRITEOFF-1 — invoice write-off approval [recovered].** The
+  `invoices:approveWriteOff` gate + an AR write-off workflow (reason + audit) — the
+  clean roadmap-level silent casualty; a write-off is currently an untracked edit
+  (`docs/INTENT_RECOVERY.md` §4). **(M)**
 - **Clients — SLA engine + client-level holdback config**; the **Contracts tab**
   (placeholder at `ClientDetailView.tsx:406`); a dedicated `/contacts` detail
-  route. **(M)**
+  route; **[recovered]** a native per-client **communication log** (email/call/SMS).
+  **(M)**
 - **Settings — Workflow Rules engine** (§6 Phase-2 commitment), **email/PDF
   template editors**, and real wiring for the Notifications / API-Webhooks stubs.
 - **Users — employee HR surface** (certifications, territories) beyond techs.
-- **Scheduling — SLA auto-enforcement, cert-expiry auto-block on booking, mobile
-  geolocation clock-in.**
-- **Subcontractors — skill+territory matching; lien-deadline tracking.**
-- **Vendors — banking encryption-at-rest; performance auto-degrade + stored score.**
+- **Scheduling — SLA auto-enforcement, mobile geolocation clock-in**; **[recovered]**
+  cross-resource scheduling (contractors/vehicles/equipment as resources), recurring
+  appointment series, and an emergency-dispatch override workflow (reason + audit)
+  (`docs/INTENT_RECOVERY.md` §11 P2). *(Cert-expiry auto-block on booking already
+  shipped — DES-2.)*
+- **Subcontractors — skill+territory matching; lien-deadline tracking**;
+  **[recovered]** contractor-side parity with vendors: versioned labor-rate tables
+  (effective-dated per-role base/OT/weekend/holiday/travel), a worker manifest with
+  per-worker cert verification, and a contractor performance ledger + auto-degrade.
+- **Vendors — performance auto-degrade + stored score**; **[recovered]** vendor
+  insurance/WSIB expiry tracking + PO auto-block (exists for subs only today).
+  *(Banking encryption-at-rest already shipped — SEC-2 #392; vendor onboarding gates
+  merged into GATES-1.)*
+- **AP-MATCH-1 — 3-way match / price-discrepancy auto-flag [recovered]** (PO ↔ receipt
+  ↔ bill; only thin matching in `vendor-bills.ts` today).
+- **INV-LOWSTOCK-CRON — scheduled low-stock cron email digest [recovered]** (cron
+  infra exists — `api/cron/capture-balance-snapshots` — low-stock was never wired;
+  also a handoff commitment). **(M-free)**
+- **QUOTE-CATALOG-1 — pre-built assemblies library + master pricebook [recovered]**
+  (quote-building productivity catalogs; simPRO parity). **(M)**
+- **QUOTE-APPROVAL-1 — threshold-based multi-step quote approval routing [recovered]**
+  (`quote_approvals`; today a single approve button, no thresholds —
+  `docs/INTENT_RECOVERY.md` §5). Fits the Settings Workflow-Rules engine above. **(M)**
 - **Projects — ULC verification in commissioning; handover-package flow.**
 - **Dashboard — remaining role templates (4→6) + widget-catalogue breadth.**
 - **Bug/polish batch** — QuoteHistoryPanel → shared `formatActivityValue`
@@ -107,6 +159,51 @@ Each line is scoped to a single Claude Code paste.
 - **Permissions Phase-2 deferrals** — multi-tenant per-tenant rollout, SSO/SAML,
   API tokens, role hierarchy, crews.
 - Dead entity-type cleanup (`inventory_product` never emitted).
+- **[recovered] SCHED-AUTOSUGGEST — five-dimensional dispatch auto-suggest engine
+  [catalogue].** Skill + cert + territory + availability + SLA ranked recommender.
+  Aspirational parity scope, **not a commitment** (`docs/INTENT_RECOVERY.md` §11 P3);
+  do not mistake for promised work.
+- **[recovered]** Scheduling niceties: **travel-time estimates [catalogue]** (also
+  collides with the no-paid-subscription constraint — needs a free distance source)
+  and **external-calendar (iCS) one-way export**.
+- **[recovered]** Permissions admin conveniences: **CSV grants round-trip**
+  (export-edit-reimport of the role matrix) and a **self-service `/profile/permissions`
+  page** (a user's own effective grants; admin-side computation already exists).
+- **[recovered]** Users/HR niceties: **equipment assignments** (trucks/test-kits/
+  devices), **sessions view + force sign-out**, **employee map + licence-matrix report**.
+- **[recovered]** Settings niceties: **audit-retention / cold-storage config**,
+  **operator-configurable sidebar badges**, **settings change-preview** ("affects N
+  records; apply new/all" — only the theme `ApplyDefaultDialog` exists today).
+- **[recovered]** Dashboard niceties: **per-widget CSV export**, **per-user custom
+  landing page**.
+- **[recovered]** Clients niceties: **misc-contacts directory** (inspectors/brokers/
+  lawyers/ULC) + global search (the `/contacts` route is already tracked under P2),
+  **client merge with dual-side audit**, **client-level encrypted banking**.
+- **[recovered]** Invoices nicety: **multi-currency invoices + FX-rate snapshot**
+  (CAD-only today).
+- **[recovered]** Inventory nicety: **un-convert auto-return of committed stock**
+  (commit is forward-only today; returns are manual).
+
+### Decided out (recorded — NOT pending work)
+
+- **Built-in General Ledger — DECIDED OUT (Jay, 2026-09-25).** No chart-of-accounts,
+  no journal entries, no period close, no bank reconciliation, no FX revaluation, no
+  recurring journals. **Reasoning:** Nexvelon uses **QuickBooks/Xero/Sage export
+  (roadmap QBO-1) as the accounting system of record** — the ERP computes roll-ups
+  (P&L, AR/AP, tax) and hands the GL to the accounting package rather than
+  reimplementing one. This resolves `docs/INTENT_RECOVERY.md` §11 (M11 GL, UNCERTAIN)
+  and `docs/BUILD_STATE_AUDIT.md` open decision **Q5** in the negative. If a customer
+  ever requires a native GL, reopen this as a P1 initiative.
+
+### Confirm-or-drop (UNCERTAIN — verify against the live system, then re-file)
+
+These `docs/INTENT_RECOVERY.md` items could not be resolved from git history; each
+needs a quick live-system check to either mark shipped, place at a tier, or drop:
+- **`invoices:viewMargin`** — likely folded into `projects.viewFinancialsTab`; confirm invoice-surface margin is actually gated.
+- **Admin-exception override audit** (SLA / insurance / WSIB / period-reopen, each with reason) — depends on override actions that don't exist yet; rides on the modules that would introduce them.
+- **Commissioning GPS/photo evidence + RLS immutability**; **phase-completion progress-invoice auto-generation** (M6).
+- **MFA enrollment** (M2); **Backups pane** (M3 — S3 inputs, no backing table); **photo-on-receive** (M7); **true turnover ratio** (M7 — table exists, ReportsTab still labels it a proxy).
+- Handoff decision-forks: **project-vs-site allocation reconciliation**, **free-text `inventory_products.vendor` → vendors FK wiring**, **INV-1c per-vendor-tab metrics**, **Guardian letterhead / `default_opco` auto-select**, **permissions runtime cutover completeness** (static matrix not yet retired).
 
 ---
 
