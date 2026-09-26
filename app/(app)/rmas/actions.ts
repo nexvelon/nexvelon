@@ -28,7 +28,7 @@ import { getVendors, getVendorById } from "@/lib/api/vendors";
 import { renderRmaPdf } from "@/lib/pdf/render-rma";
 import { uploadRmaPdf } from "@/lib/storage/rma-pdfs";
 import { sendRmaEmail } from "@/lib/auth/email";
-import { getPoSenderFrom } from "@/lib/settings/po-sender";
+import { resolveCurrentSender } from "@/lib/email/dispatch";
 import { logActivity } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import type { VendorRead } from "@/lib/api/vendors";
@@ -164,15 +164,17 @@ export async function sendRmaToVendorAction(
         warnings.push(`PDF upload failed: ${err instanceof Error ? err.message : String(err)}`);
       }
       try {
-        const from = await getPoSenderFrom();
+        const sender = await resolveCurrentSender();
         const sent = await sendRmaEmail({
           to: recipientEmail,
-          from,
+          sender,
           rmaNumber: props.rma.rma_number,
           vendorName: vendor.name,
           salesRepName: vendor.sales_rep_name,
           pdfBuffer: pdf,
           pdfFilename: `RMA_${props.rma.rma_number}.pdf`,
+          entityId: rmaId,
+          sentBy: sender?.id ?? null,
         });
         emailId = sent.id;
       } catch (err) {

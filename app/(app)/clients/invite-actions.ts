@@ -11,6 +11,7 @@ import {
   recordInvitationDecision,
   deletePendingApplication,
 } from "@/lib/api/client-invitations";
+import { resolveCurrentSender } from "@/lib/email/dispatch";
 import {
   sendClientInviteEmail,
   sendApplicationApprovedEmail,
@@ -85,6 +86,8 @@ export async function sendClientInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "full",
+      sender: await resolveCurrentSender(),
+      sentBy: gate.profile.id,
     });
     revalidatePath("/clients");
     return { ok: true, data: { token: inv.token } };
@@ -118,6 +121,8 @@ export async function sendSiteInviteAction(
       token: inv.token,
       baseUrl: baseUrl(),
       inviteType: "site_only",
+      sender: await resolveCurrentSender(),
+      sentBy: gate.profile.id,
     });
     revalidatePath(`/clients/${clientId}`);
     return { ok: true, data: { token: inv.token } };

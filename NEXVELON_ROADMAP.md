@@ -122,6 +122,16 @@ Each line is scoped to a single Claude Code paste.
   cancellation credits** (the `prorate()` primitive ships tested in
   `lib/recurring/billing-schedule.ts`, but cancellation currently just stops future
   billing — a pro-rated credit/final invoice is not auto-issued). **(M?)**
+- **MAIL-2 — email sending follow-ups** *(deferred from MAIL-1, PR #TBD)*: **true
+  per-rep mailbox sending via Google Workspace OAuth** (send as the rep's own
+  mailbox rather than one authenticated address with the rep as display-name +
+  reply-to, which is what MAIL-1 ships — explicitly out of scope per Jay's
+  decision); **bounce & spam-complaint handling** (consume Resend/SES webhooks to
+  mark hard bounces and complaints); and a **suppression list** (never re-send to
+  a hard-bounced/complained/unsubscribed address). `email_log` (migration 0130)
+  is the foundation these build on. A `List-Unsubscribe` header is intentionally
+  omitted for now because all current sends are transactional (a quote/PO/WO the
+  recipient asked for); add it if any bulk/marketing mail is introduced. **(M)**
 - **Clients — SLA engine + client-level holdback config**; the **Contracts tab**
   (placeholder at `ClientDetailView.tsx:406`); a dedicated `/contacts` detail
   route; **[recovered]** a native per-client **communication log** (email/call/SMS).

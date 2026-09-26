@@ -2687,6 +2687,24 @@ export interface DbQuoteAcceptance {
   accepted_at: string;
 }
 
+// MAIL-1 (migration 0130) — one row per outbound email send attempt.
+export interface DbEmailLog {
+  id: string;
+  kind: string; // 'client' | 'internal'
+  to_email: string;
+  from_email: string;
+  reply_to: string | null;
+  bcc: string | null;
+  subject: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  sent_by: string | null;
+  provider_message_id: string | null;
+  status: string; // 'sent' | 'failed'
+  error: string | null;
+  created_at: string;
+}
+
 export type DbInvoiceInsert = {
   invoice_number?: string | null;
   opco: string;

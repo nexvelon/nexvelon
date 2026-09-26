@@ -25,7 +25,7 @@ import {
 } from "@/lib/api/purchase-orders";
 import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
 import { getVendorById } from "@/lib/api/vendors";
-import { getPoSenderFrom } from "@/lib/settings/po-sender";
+import { resolveCurrentSender } from "@/lib/email/dispatch";
 import { renderPurchaseOrderPdf } from "@/lib/pdf/render-po";
 import { uploadPoPdf } from "@/lib/storage/po-pdfs";
 import { sendPurchaseOrderEmail } from "@/lib/auth/email";
@@ -329,15 +329,17 @@ export async function issuePurchaseOrderAction(
       }
 
       try {
-        const from = await getPoSenderFrom();
+        const sender = await resolveCurrentSender();
         const sent = await sendPurchaseOrderEmail({
           to: recipientEmail,
-          from,
+          sender,
           poNumber: detail.header.po_number,
           vendorName: vendor.name,
           salesRepName: vendor.sales_rep_name,
           pdfBuffer: pdf,
           pdfFilename: `PO_${detail.header.po_number}.pdf`,
+          entityId: id,
+          sentBy: sender?.id ?? null,
         });
         emailId = sent.id;
         await stampPurchaseOrder(id, {

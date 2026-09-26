@@ -116,6 +116,26 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Email — quotes and documents now come from the company address, as you, with a copy kept (MAIL-1)
+
+- Every email the app sends to a client, vendor or subcontractor — quotes,
+  purchase orders, work orders, RMAs, invitations, onboarding notices — now goes
+  out **from a single company address** (`quotes@nexvelonglobal.com`) with **your
+  name as the sender** ("Jane Rep via Nexvelon"), and **replies come back to you**
+  (your own email), so a client who hits reply reaches the person who sent it.
+- **You automatically keep a copy of every client email**, BCC'd to
+  `quotes@nexvelonglobal.com` — nothing you send to a client is invisible to the
+  company.
+- **If an email fails to send, you'll know.** On the quote's Client portal panel,
+  a failed send now shows a clear warning (the link is still created — copy it and
+  send it another way), and every send attempt (success or failure) is recorded,
+  so "did the client ever get it?" can be answered from the system.
+- Behind the scenes this also improves the odds your mail reaches the inbox
+  rather than junk (plain-text alongside the styled version, real links on the
+  company domain, no shorteners). Inbox placement also depends on your domain's
+  DNS and reputation — see `docs/EMAIL_SETUP.md` for the one-time setup and how to
+  verify it.
+
 ### Quotes — send a quote to the client for online acceptance (QUOTE-PORTAL-1)
 
 - You can now **send a quote to your client as a secure web link** they open on any

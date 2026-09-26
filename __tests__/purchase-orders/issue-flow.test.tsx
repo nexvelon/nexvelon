@@ -49,6 +49,8 @@ vi.mock("@/lib/supabase/admin", () => ({
     storage: {
       from: () => ({ upload: m.storageUpload, createSignedUrl: m.createSignedUrl }),
     },
+    // MAIL-1 — the central dispatcher writes an email_log row via the admin client.
+    from: () => ({ insert: vi.fn(async () => ({ error: null })) }),
   }),
 }));
 
@@ -102,10 +104,10 @@ describe("renderPurchaseOrderPdf", () => {
 });
 
 describe("sendPurchaseOrderEmail", () => {
-  it("calls resend.emails.send with the right from/to/subject + PDF attachment", async () => {
+  it("sends via the central identity: from quotes@ with the rep display name, reply-to the rep, BCC the copy address, + PDF attachment", async () => {
     const res = await sendPurchaseOrderEmail({
       to: "rep@vendor.com",
-      from: "Nexvelon <ceo@nexvelonglobal.com>",
+      sender: { name: "Jane Rep", email: "jane@nexvelonglobal.com" },
       poNumber: "PO-2026-0001",
       vendorName: "Acme Supply",
       salesRepName: "Jane Rep",
@@ -116,7 +118,10 @@ describe("sendPurchaseOrderEmail", () => {
     expect(m.resendSend).toHaveBeenCalledTimes(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const arg = (m.resendSend.mock.calls[0] as unknown[])[0] as any;
-    expect(arg.from).toBe("Nexvelon <ceo@nexvelonglobal.com>");
+    // MAIL-1: single authenticated address + "<Rep> via Nexvelon" display name.
+    expect(arg.from).toBe("Jane Rep via Nexvelon <quotes@nexvelonglobal.com>");
+    expect(arg.replyTo).toBe("jane@nexvelonglobal.com");
+    expect(arg.bcc).toContain("quotes@nexvelonglobal.com");
     expect(arg.to).toBe("rep@vendor.com");
     expect(arg.subject).toContain("PO-2026-0001");
     expect(arg.attachments[0].filename).toBe("PO_PO-2026-0001.pdf");

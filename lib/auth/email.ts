@@ -1,26 +1,16 @@
 import "server-only";
 
-import { Resend } from "resend";
 import { parseTierText } from "@/lib/tier-text-parser";
+import { dispatchEmail, type EmailSender } from "@/lib/email/dispatch";
 
-/**
- * Resend client.
- *
- * RESEND_API_KEY is set at the project level in Vercel and locally in
- * .env.local. The same key is also used by Supabase's Custom SMTP integration
- * (Phase 2 setup) — Resend rate-limits per-key, not per-channel, so we share.
- */
-function client(): Resend {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    throw new Error(
-      "Missing RESEND_API_KEY. Paste the same Resend API key used in " +
-        "Supabase → Authentication → Emails → SMTP Settings."
-    );
-  }
-  return new Resend(key);
-}
-
+// MAIL-1 — all sending now goes through the central dispatcher
+// (lib/email/dispatch.ts), which owns the Resend client, the sending identity
+// (from / display name / reply-to / BCC) and the email_log audit. This module
+// only builds the message bodies and hands them to dispatchEmail().
+//
+// FROM / INQUIRIES_FROM below are the INTERNAL transport addresses (OTP,
+// low-stock, the ops onboarding notice) passed as fromOverride; client-facing
+// mail ignores them and uses the dispatcher's single authenticated address.
 const FROM =
   process.env.RESEND_FROM_EMAIL ?? "Nexvelon <noreply@nexvelonglobal.com>";
 
@@ -42,21 +32,19 @@ export async function sendOtpEmail(opts: {
   const html = renderOtpHtml({ greeting, code: opts.code, minutes });
   const text = renderOtpText({ greeting, code: opts.code, minutes });
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: FROM,
+  const res = await dispatchEmail({
+    label: "sendOtpEmail",
+    kind: "internal",
+    fromOverride: FROM,
     to: opts.to,
     subject: `Your Nexvelon sign-in code: ${opts.code}`,
     html,
     text,
-    headers: {
-      // Helpful for downstream filters / threading.
-      "X-Entity-Ref-ID": `nexvelon-otp-${Date.now()}`,
-    },
+    headers: { "X-Entity-Ref-ID": `nexvelon-otp-${Date.now()}` },
+    log: { entityType: "otp" },
   });
-
-  if (result.error) {
-    throw new Error(`sendOtpEmail: ${result.error.message}`);
+  if (!res.ok) {
+    throw new Error(`sendOtpEmail: ${res.error}`);
   }
 }
 
@@ -208,20 +196,19 @@ export async function sendLowStockAlert(
   });
   const text = renderLowStockText(items);
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: FROM,
+  const res = await dispatchEmail({
+    label: "sendLowStockAlert",
+    kind: "internal",
+    fromOverride: FROM,
     to,
     subject,
     html,
     text,
-    headers: {
-      "X-Entity-Ref-ID": `nexvelon-lowstock-${Date.now()}`,
-    },
+    headers: { "X-Entity-Ref-ID": `nexvelon-lowstock-${Date.now()}` },
+    log: { entityType: "inventory" },
   });
-
-  if (result.error) {
-    throw new Error(`sendLowStockAlert: ${result.error.message}`);
+  if (!res.ok) {
+    throw new Error(`sendLowStockAlert: ${res.error}`);
   }
 }
 
@@ -511,6 +498,8 @@ export async function sendClientInviteEmail(opts: {
   token: string;
   baseUrl: string;
   inviteType?: "full" | "site_only";
+  sender?: EmailSender | null;
+  sentBy?: string | null;
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/invite/${opts.token}`;
   const siteOnly = opts.inviteType === "site_only";
@@ -585,9 +574,10 @@ export async function sendClientInviteEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendClientInviteEmail",
+    kind: "client",
+    sender: opts.sender,
     to: opts.to,
     subject: siteOnly
       ? "Your Nexvelon Global site onboarding"
@@ -595,8 +585,9 @@ export async function sendClientInviteEmail(opts: {
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-invite-${Date.now()}` },
+    log: { entityType: "client_invite", sentBy: opts.sentBy },
   });
-  if (result.error) throw new Error(`sendClientInviteEmail: ${result.error.message}`);
+  if (!res.ok) throw new Error(`sendClientInviteEmail: ${res.error}`);
 }
 
 /** QUOTE-PORTAL-1 — email a client the link to review + sign a quote online.
@@ -609,6 +600,9 @@ export async function sendQuotePortalEmail(opts: {
   quoteNumber: string;
   companyName?: string | null;
   total?: string | null;
+  sender?: EmailSender | null;
+  quoteId?: string | null;
+  sentBy?: string | null;
 }): Promise<void> {
   const base = `${opts.baseUrl.replace(/\/$/, "")}/q/${opts.token}`;
   const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
@@ -642,16 +636,18 @@ export async function sendQuotePortalEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendQuotePortalEmail",
+    kind: "client",
+    sender: opts.sender,
     to: opts.to,
     subject: `Your Nexvelon quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""} — review & sign`,
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-quote-portal-${Date.now()}` },
+    log: { entityType: "quote", entityId: opts.quoteId, sentBy: opts.sentBy },
   });
-  if (result.error) throw new Error(`sendQuotePortalEmail: ${result.error.message}`);
+  if (!res.ok) throw new Error(`sendQuotePortalEmail: ${res.error}`);
 }
 
 /** Notify inquiries@ that a client completed + submitted their onboarding. */
@@ -730,9 +726,10 @@ export async function sendClientSubmissionEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendClientSubmissionEmail",
+    kind: "internal",
+    fromOverride: INQUIRIES_FROM,
     // POLISH-38 — both internal recipients receive the same bundle + attachments.
     to: [INQUIRIES_TO, CLIENTS_SITES_INFO_TO],
     subject: `New client onboarding submitted — ${cf.legalName ?? opts.email}`,
@@ -742,8 +739,9 @@ export async function sendClientSubmissionEmail(opts: {
       ? { attachments: opts.attachments }
       : {}),
     headers: { "X-Entity-Ref-ID": `nexvelon-onboarding-${Date.now()}` },
+    log: { entityType: "client_onboarding" },
   });
-  if (result.error) throw new Error(`sendClientSubmissionEmail: ${result.error.message}`);
+  if (!res.ok) throw new Error(`sendClientSubmissionEmail: ${res.error}`);
 }
 
 /**
@@ -794,9 +792,9 @@ export async function sendClientConfirmationEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendClientConfirmationEmail",
+    kind: "client",
     to: opts.to,
     subject:
       "Your Nexvelon Global application — confirmation and signed agreements",
@@ -806,9 +804,10 @@ export async function sendClientConfirmationEmail(opts: {
       ? { attachments: opts.attachments }
       : {}),
     headers: { "X-Entity-Ref-ID": `nexvelon-confirmation-${Date.now()}` },
+    log: { entityType: "client_onboarding" },
   });
-  if (result.error)
-    throw new Error(`sendClientConfirmationEmail: ${result.error.message}`);
+  if (!res.ok)
+    throw new Error(`sendClientConfirmationEmail: ${res.error}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -901,17 +900,18 @@ export async function sendApplicationApprovedEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendApplicationApprovedEmail",
+    kind: "client",
     to: opts.to,
     subject: "Welcome to Nexvelon Global — your application is approved",
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-approved-${Date.now()}` },
+    log: { entityType: "client_onboarding" },
   });
-  if (result.error)
-    throw new Error(`sendApplicationApprovedEmail: ${result.error.message}`);
+  if (!res.ok)
+    throw new Error(`sendApplicationApprovedEmail: ${res.error}`);
 }
 
 /** Declined — with an optional reason. */
@@ -946,17 +946,18 @@ export async function sendApplicationDeclinedEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendApplicationDeclinedEmail",
+    kind: "client",
     to: opts.to,
     subject: "Update on your Nexvelon Global application",
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-declined-${Date.now()}` },
+    log: { entityType: "client_onboarding" },
   });
-  if (result.error)
-    throw new Error(`sendApplicationDeclinedEmail: ${result.error.message}`);
+  if (!res.ok)
+    throw new Error(`sendApplicationDeclinedEmail: ${res.error}`);
 }
 
 /** Tier changed on an existing client. */
@@ -1022,30 +1023,34 @@ export async function sendTierChangedEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: INQUIRIES_FROM,
+  const res = await dispatchEmail({
+    label: "sendTierChangedEmail",
+    kind: "client",
     to: opts.to,
     subject: "Your Nexvelon Global Prestige Tier has been updated",
     html,
     text,
     headers: { "X-Entity-Ref-ID": `nexvelon-tier-${Date.now()}` },
+    log: { entityType: "client_onboarding" },
   });
-  if (result.error)
-    throw new Error(`sendTierChangedEmail: ${result.error.message}`);
+  if (!res.ok)
+    throw new Error(`sendTierChangedEmail: ${res.error}`);
 }
 
 // PO-4 — email an issued purchase order (PDF attached) to the vendor's sales
-// rep. `from` is resolved by the caller from the configurable po_sender setting
-// (getPoSenderFrom); the branded shell matches the other Nexvelon mail.
+// rep. MAIL-1: sends via the central path from the single authenticated client
+// address with the operator as display name + reply-to; the branded shell
+// matches the other Nexvelon mail.
 export async function sendPurchaseOrderEmail(params: {
   to: string;
-  from: string;
+  sender?: EmailSender | null;
   poNumber: string;
   vendorName: string;
   salesRepName: string | null;
   pdfBuffer: Buffer;
   pdfFilename: string;
+  entityId?: string | null;
+  sentBy?: string | null;
 }): Promise<{ id: string | null }> {
   const greetName = params.salesRepName ?? params.vendorName;
   const subject = `Purchase Order ${params.poNumber} from Nexvelon Integrated Solutions`;
@@ -1078,18 +1083,20 @@ export async function sendPurchaseOrderEmail(params: {
     "— Nexvelon Integrated Solutions",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: params.from,
+  const res = await dispatchEmail({
+    label: "sendPurchaseOrderEmail",
+    kind: "client",
+    sender: params.sender,
     to: params.to,
     subject,
     html,
     text,
     attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+    log: { entityType: "purchase_order", entityId: params.entityId, sentBy: params.sentBy },
   });
-  if (result.error)
-    throw new Error(`sendPurchaseOrderEmail: ${result.error.message}`);
-  return { id: result.data?.id ?? null };
+  if (!res.ok)
+    throw new Error(`sendPurchaseOrderEmail: ${res.error}`);
+  return { id: res.id };
 }
 
 // SUB-5 — email an issued work order (PDF attached) to the subcontractor,
@@ -1097,13 +1104,15 @@ export async function sendPurchaseOrderEmail(params: {
 // the caller treats a throw here as a warning, never a rollback.
 export async function sendWorkOrderEmail(params: {
   to: string;
-  from: string;
+  sender?: EmailSender | null;
   agreementNumber: string;
   subcontractorName: string;
   contactName: string | null;
   opcoLegalName: string;
   pdfBuffer: Buffer;
   pdfFilename: string;
+  entityId?: string | null;
+  sentBy?: string | null;
 }): Promise<{ id: string | null }> {
   const greetName = params.contactName ?? params.subcontractorName;
   const subject = `Work Order ${params.agreementNumber} from ${params.opcoLegalName}`;
@@ -1136,29 +1145,33 @@ export async function sendWorkOrderEmail(params: {
     `— ${params.opcoLegalName}`,
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: params.from,
+  const res = await dispatchEmail({
+    label: "sendWorkOrderEmail",
+    kind: "client",
+    sender: params.sender,
     to: params.to,
     subject,
     html,
     text,
     attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+    log: { entityType: "work_order", entityId: params.entityId, sentBy: params.sentBy },
   });
-  if (result.error) throw new Error(`sendWorkOrderEmail: ${result.error.message}`);
-  return { id: result.data?.id ?? null };
+  if (!res.ok) throw new Error(`sendWorkOrderEmail: ${res.error}`);
+  return { id: res.id };
 }
 
 // INV-4 — email a return authorization (RMA) PDF to the vendor sales rep,
 // mirroring sendPurchaseOrderEmail (same shell/sender contract).
 export async function sendRmaEmail(params: {
   to: string;
-  from: string;
+  sender?: EmailSender | null;
   rmaNumber: string;
   vendorName: string;
   salesRepName: string | null;
   pdfBuffer: Buffer;
   pdfFilename: string;
+  entityId?: string | null;
+  sentBy?: string | null;
 }): Promise<{ id: string | null }> {
   const greetName = params.salesRepName ?? params.vendorName;
   const subject = `RMA ${params.rmaNumber} — Return Authorization from Nexvelon`;
@@ -1193,15 +1206,17 @@ export async function sendRmaEmail(params: {
     "— Nexvelon Integrated Solutions",
   ].join("\n");
 
-  const resend = client();
-  const result = await resend.emails.send({
-    from: params.from,
+  const res = await dispatchEmail({
+    label: "sendRmaEmail",
+    kind: "client",
+    sender: params.sender,
     to: params.to,
     subject,
     html,
     text,
     attachments: [{ filename: params.pdfFilename, content: params.pdfBuffer }],
+    log: { entityType: "rma", entityId: params.entityId, sentBy: params.sentBy },
   });
-  if (result.error) throw new Error(`sendRmaEmail: ${result.error.message}`);
-  return { id: result.data?.id ?? null };
+  if (!res.ok) throw new Error(`sendRmaEmail: ${res.error}`);
+  return { id: res.id };
 }

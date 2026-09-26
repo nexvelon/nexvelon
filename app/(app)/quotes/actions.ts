@@ -41,6 +41,7 @@ import {
   type QuotePortalStatus,
 } from "@/lib/api/quote-portal";
 import { sendQuotePortalEmail } from "@/lib/auth/email";
+import { resolveCurrentSender } from "@/lib/email/dispatch";
 import type { BuilderLineItem, Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
@@ -402,7 +403,7 @@ function portalBaseUrl(): string {
 export async function sendQuotePortalAction(input: {
   quoteId: string;
   recipientEmail: string;
-}): Promise<ActionResult<{ url: string }>> {
+}): Promise<ActionResult<{ url: string; emailWarning: string | null }>> {
   try {
     const gate = await requireQuotesPermission("edit");
     if (!gate.ok) return gate;
@@ -432,9 +433,13 @@ export async function sendQuotePortalAction(input: {
       if (!flip.ok) return flip;
     }
 
-    // Email the link (best-effort — the link + snapshot already exist and are
-    // visible in the portal panel even if the email transport fails).
+    // Email the link. The link + snapshot already exist and are visible in the
+    // portal panel even if the transport fails — but the failure is NOT silent:
+    // it is recorded in email_log by the dispatcher AND surfaced to the operator
+    // as a warning on the result so they can copy the link and follow up.
     const url = `${portalBaseUrl().replace(/\/$/, "")}/q/${token}`;
+    const sender = await resolveCurrentSender();
+    let emailWarning: string | null = null;
     try {
       await sendQuotePortalEmail({
         to: email,
@@ -442,14 +447,18 @@ export async function sendQuotePortalAction(input: {
         baseUrl: portalBaseUrl(),
         quoteNumber: quote.number,
         total: quote.total != null ? formatCurrency(quote.total) : null,
+        sender,
+        quoteId: input.quoteId,
+        sentBy: gate.actorId,
       });
     } catch (e) {
+      emailWarning = e instanceof Error ? e.message : String(e);
       console.error("[quote-portal] email send failed (link still valid):", e);
     }
 
     revalidatePath("/quotes");
     revalidatePath(`/quotes/${input.quoteId}`);
-    return { ok: true, data: { url } };
+    return { ok: true, data: { url, emailWarning } };
   } catch (e) {
     return fail(e);
   }
