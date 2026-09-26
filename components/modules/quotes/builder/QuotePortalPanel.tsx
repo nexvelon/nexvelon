@@ -46,6 +46,7 @@ export function QuotePortalPanel({
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -67,9 +68,15 @@ export function QuotePortalPanel({
   const send = async () => {
     setBusy(true);
     setError(null);
+    setWarning(null);
     const res = await sendQuotePortalAction({ quoteId, recipientEmail: email.trim() });
     setBusy(false);
     if (!res.ok) return setError(res.error);
+    // The link is live even if the email transport failed — surface that clearly
+    // so the operator copies the link and follows up rather than assuming it sent.
+    if (res.data.emailWarning) {
+      setWarning(`The link was created but the email didn't send (${res.data.emailWarning}). Copy the link below and send it another way.`);
+    }
     await refresh();
   };
 
@@ -222,6 +229,7 @@ export function QuotePortalPanel({
           )}
 
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {warning && <p className="mt-2 text-sm text-amber-700">{warning}</p>}
         </>
       )}
     </div>

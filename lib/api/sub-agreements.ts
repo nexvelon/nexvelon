@@ -23,7 +23,7 @@ import {
   signWorkOrderPdf,
 } from "@/lib/storage/work-order-pdfs";
 import { sendWorkOrderEmail } from "@/lib/auth/email";
-import { getPoSenderFrom } from "@/lib/settings/po-sender";
+import { resolveCurrentSender } from "@/lib/email/dispatch";
 import { getQuoteTemplate } from "@/lib/company-profile";
 import type { WorkOrderDocumentProps } from "@/components/modules/subcontractors/WorkOrderDocument";
 import type {
@@ -379,16 +379,18 @@ export async function issueAgreement(
         );
       } else {
         try {
-          const from = await getPoSenderFrom();
+          const sender = await resolveCurrentSender();
           await sendWorkOrderEmail({
             to: recipient,
-            from,
+            sender,
             agreementNumber: agreement.agreement_number,
             subcontractorName: sub.name,
             contactName: sub.contact_name,
             opcoLegalName: (props.opco.legal_name),
             pdfBuffer: pdf,
             pdfFilename: `WorkOrder_${agreement.agreement_number}.pdf`,
+            entityId: input.id,
+            sentBy: sender?.id ?? null,
           });
         } catch (err) {
           bestEffortErrors.push(`Email send failed: ${msg(err)}`);
