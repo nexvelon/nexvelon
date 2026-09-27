@@ -122,7 +122,7 @@ Each line is scoped to a single Claude Code paste.
   cancellation credits** (the `prorate()` primitive ships tested in
   `lib/recurring/billing-schedule.ts`, but cancellation currently just stops future
   billing — a pro-rated credit/final invoice is not auto-issued). **(M?)**
-- ~~**MAIL-2 — email addresses as Settings**~~ **✅ SHIPPED (PR #TBD).** Every
+- ~~**MAIL-2 — email addresses as Settings**~~ **✅ SHIPPED (PR #399).** Every
   operational address is now an Admin-editable Setting (Settings → Email
   Addresses; `company_settings` KV, audited), POs send from/print their per-opco
   order address (NISorders@ / NGorders@), the dead "Purchase Order Email" control
