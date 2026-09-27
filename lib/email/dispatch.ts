@@ -15,17 +15,13 @@ import "server-only";
 
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmailAddresses } from "@/lib/email/addresses";
 
-// ── Configuration (all overridable via env; no secret is a from/bcc address) ──
-export const INTERNAL_FROM =
-  process.env.RESEND_FROM_EMAIL ?? "Nexvelon <noreply@nexvelonglobal.com>";
-/** The single authenticated address all client-facing mail sends from. */
-export const CLIENT_FROM_EMAIL =
-  process.env.RESEND_CLIENT_FROM_EMAIL ?? "quotes@nexvelonglobal.com";
-/** Standing BCC on every client-facing send — Jay keeps a copy of everything. */
-export const CLIENT_BCC =
-  process.env.RESEND_CLIENT_BCC ?? "quotes@nexvelonglobal.com";
-/** Org suffix on the display name: "<Rep> via Nexvelon". */
+// ── Configuration ─────────────────────────────────────────────────────────────
+// MAIL-2: the FROM / BCC / internal-FROM addresses are now Admin-editable
+// Settings (lib/email/addresses.ts → company_settings), resolved per send with a
+// safe default. Only the display-name ORG suffix ("<Rep> via Nexvelon") remains
+// a code/env value, because it is a brand word, not an address.
 export const CLIENT_FROM_ORG = process.env.RESEND_CLIENT_FROM_NAME ?? "Nexvelon";
 
 function client(): Resend {
@@ -59,7 +55,11 @@ export interface DispatchEmailInput {
   replyTo?: string | null;
   /** Internal mail may set its own from (e.g. OTP from noreply@). Ignored for client mail. */
   fromOverride?: string | null;
-  /** Extra BCC(s). Client mail ALWAYS also BCCs CLIENT_BCC — it cannot be dropped. */
+  /** Client mail only: a specific FROM address (e.g. a per-opco PO order address)
+   *  that overrides the configured client-from. The rep display name + reply-to
+   *  + BCC still apply. Ignored for internal mail. */
+  fromAddress?: string | null;
+  /** Extra BCC(s). Client mail ALWAYS also BCCs the configured copy address — it cannot be dropped. */
   bcc?: string | string[] | null;
   attachments?: { filename: string; content: Buffer }[];
   headers?: Record<string, string>;
@@ -80,18 +80,27 @@ export function clientDisplayName(sender?: EmailSender | null): string {
   return name ? `${name} via ${CLIENT_FROM_ORG}` : CLIENT_FROM_ORG;
 }
 
-/** The composed From header for a send. */
-export function resolveFrom(input: Pick<DispatchEmailInput, "kind" | "sender" | "fromOverride">): string {
+/** The composed From header for a send. `base` carries the resolved (settings-
+ *  sourced) client-from and internal-from addresses. */
+export function resolveFrom(
+  input: Pick<DispatchEmailInput, "kind" | "sender" | "fromOverride" | "fromAddress">,
+  base: { clientFrom: string; internalFrom: string }
+): string {
   if (input.kind === "client") {
-    return `${clientDisplayName(input.sender)} <${CLIENT_FROM_EMAIL}>`;
+    const email = input.fromAddress?.trim() || base.clientFrom;
+    return `${clientDisplayName(input.sender)} <${email}>`;
   }
-  return input.fromOverride?.trim() || INTERNAL_FROM;
+  return input.fromOverride?.trim() || base.internalFrom;
 }
 
-/** Client mail always carries CLIENT_BCC; extras are merged and de-duped. */
-export function resolveBcc(input: Pick<DispatchEmailInput, "kind" | "bcc">): string[] {
+/** Client mail always carries the configured copy address; extras are merged and
+ *  de-duped. Internal mail is never given the client copy address. */
+export function resolveBcc(
+  input: Pick<DispatchEmailInput, "kind" | "bcc">,
+  base: { clientBcc: string }
+): string[] {
   const extra = input.bcc == null ? [] : Array.isArray(input.bcc) ? input.bcc : [input.bcc];
-  const all = input.kind === "client" ? [CLIENT_BCC, ...extra] : [...extra];
+  const all = input.kind === "client" ? [base.clientBcc, ...extra] : [...extra];
   return Array.from(new Set(all.map((a) => a.trim()).filter(Boolean)));
 }
 
@@ -147,11 +156,17 @@ async function writeEmailLog(row: {
 export async function dispatchEmail(input: DispatchEmailInput): Promise<DispatchResult> {
   assertMessageHygiene(input);
 
-  const from = resolveFrom(input);
+  // MAIL-2: the FROM / BCC / internal-FROM come from Admin settings (with safe
+  // defaults; never throws).
+  const addrs = await getEmailAddresses();
+  const from = resolveFrom(input, {
+    clientFrom: addrs.clientFrom,
+    internalFrom: addrs.internalFrom,
+  });
   const replyTo =
     input.replyTo?.trim() ||
     (input.kind === "client" ? input.sender?.email?.trim() || undefined : undefined);
-  const bccList = resolveBcc(input);
+  const bccList = resolveBcc(input, { clientBcc: addrs.clientBcc });
   const toList = Array.isArray(input.to) ? input.to : [input.to];
 
   let id: string | null = null;

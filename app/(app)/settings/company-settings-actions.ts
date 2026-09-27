@@ -24,6 +24,17 @@ import {
   setPoSenderName,
 } from "@/lib/settings/po-sender";
 import {
+  EMAIL_ADDRESS_KEYS,
+  EMAIL_ADDRESS_DEFAULTS,
+  EMAIL_ADDRESS_LABELS,
+  getEmailAddresses,
+  isValidEmailSetting,
+  isOnSendingDomain,
+  type EmailAddressField,
+  type ResolvedEmailAddresses,
+} from "@/lib/email/addresses";
+import { insertAuditRow } from "@/lib/api/settings-audit";
+import {
   getWorkingCalendar,
   setWorkingCalendar,
   hasConfiguredCalendar,
@@ -82,6 +93,60 @@ export async function updatePoSenderAction(input: {
       ok: true,
       data: { email: input.email.trim(), name: input.name.trim() },
     };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// MAIL-2 — operational email addresses as Admin-editable settings. Reads open
+// (like the other getters, and resolves defaults for unset keys); writes are
+// admin-gated, validated, and audited to settings_audit_log (§5).
+export async function getEmailAddressesAction(): Promise<
+  ActionResult<ResolvedEmailAddresses>
+> {
+  try {
+    return { ok: true, data: await getEmailAddresses() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function updateEmailAddressAction(input: {
+  field: EmailAddressField;
+  value: string;
+}): Promise<ActionResult<{ value: string; warning: string | null }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    if (!(input.field in EMAIL_ADDRESS_KEYS)) {
+      return { ok: false, error: "Unknown email setting." };
+    }
+    const value = input.value.trim();
+    if (!isValidEmailSetting(value)) {
+      return { ok: false, error: "Enter a valid email address." };
+    }
+    const key = EMAIL_ADDRESS_KEYS[input.field];
+    const before = await getSetting(key); // null → the in-code default is in effect
+    await setSetting(key, value);
+    // §5 — an address change is auditable: which setting, from what, to what, by whom.
+    await insertAuditRow({
+      setting_key: key,
+      before_text: before ?? `${EMAIL_ADDRESS_DEFAULTS[input.field]} (default)`,
+      after_text: value,
+      edited_by_user_id: gate.profile.id,
+      edited_by_email: gate.profile.email ?? null,
+      edited_by_name:
+        gate.profile.display_name?.trim() ||
+        [gate.profile.first_name, gate.profile.last_name].filter(Boolean).join(" ").trim() ||
+        null,
+      action_type: "edit",
+      change_summary: EMAIL_ADDRESS_LABELS[input.field],
+    });
+    revalidatePath("/settings");
+    const warning = isOnSendingDomain(value)
+      ? null
+      : "This address is not on nexvelonglobal.com — Resend will reject mail from an unverified domain until that domain is verified.";
+    return { ok: true, data: { value, warning } };
   } catch (e) {
     return fail(e);
   }

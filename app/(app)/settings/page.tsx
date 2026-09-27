@@ -35,7 +35,7 @@ import { CategoriesPane } from "@/components/modules/settings/CategoriesPane";
 import { TechsPane } from "@/components/modules/settings/TechsPane";
 import { LabourPane } from "@/components/modules/settings/LabourPane";
 import { CostCodesPane } from "@/components/modules/settings/CostCodesPane";
-import { PurchaseOrderEmailPane } from "@/components/modules/settings/PurchaseOrderEmailPane";
+import { EmailAddressesPane } from "@/components/modules/settings/EmailAddressesPane";
 import { WorkingCalendarPane } from "@/components/modules/settings/WorkingCalendarPane";
 import { HoldbackHstPane } from "@/components/modules/settings/HoldbackHstPane";
 import { CalendarClock } from "lucide-react";
@@ -84,7 +84,7 @@ const SECTIONS: Section[] = [
   { key: "tax", label: "Tax & Currency", description: "HST 13% default, regional rules, multi-currency toggle.", icon: Receipt },
   { key: "integrations", label: "Integrations", description: "QuickBooks, Xero, Stripe, Twilio, Genetec, Avigilon, ICT…", icon: Plug },
   { key: "vendors", label: "Vendors", description: "Vendor directory mirroring the inventory module.", icon: Building2 },
-  { key: "po-email", label: "Purchase Order Email", description: "The sender address used when emailing purchase orders to vendors.", icon: Mail, adminOnly: true },
+  { key: "email-addresses", label: "Email Addresses", description: "The addresses the system sends from, copies, and prints on documents (per-opco order addresses, client BCC, inquiries).", icon: Mail, adminOnly: true },
   { key: "backups", label: "Backups & Data", description: "Cloud, local Mac folder, NAS, S3 — schedule, history, restore.", icon: Database },
   { key: "notifications", label: "Notifications", description: "Email/SMS preferences per event type.", icon: Bell },
   { key: "audit", label: "Audit & Compliance", description: "Audit log, retention policy, GDPR/PIPEDA export.", icon: ShieldCheck },
@@ -179,7 +179,7 @@ export default function SettingsPage() {
             {active === "techs" && <TechsPane />}
             {active === "labour" && <LabourPane />}
             {active === "cost-codes" && <CostCodesPane />}
-            {active === "po-email" && isAdmin && <PurchaseOrderEmailPane />}
+            {active === "email-addresses" && isAdmin && <EmailAddressesPane />}
             {active === "working-calendar" && isAdmin && <WorkingCalendarPane />}
             {active === "project" && <ProjectDefaults />}
             {active === "numbering" && <NumberingSchemes />}

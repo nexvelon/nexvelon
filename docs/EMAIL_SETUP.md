@@ -1,44 +1,70 @@
-# EMAIL_SETUP.md — deliverability & sending identity (MAIL-1)
+# EMAIL_SETUP.md — deliverability & sending identity (MAIL-1 / MAIL-2)
 
 This is the reference for how Nexvelon sends email and how the domain is
 configured so that email lands in the inbox, not junk. Read the top section for
-the "why," then follow the numbered steps for the "what to do." Nothing here
-requires code — it is DNS (at your domain registrar) and Resend settings.
+the "why," then follow the numbered steps for the "what to do."
 
 > **The situation that started this.** A quote emailed to a client's Gmail
 > landed in **Junk**. It was sent from `inquiries@nexvelonglobal.com` via Resend.
 > This document is the fix and the permanent record of the configuration.
 
+## Infrastructure at a glance (record — do not lose)
+
+- **Domain & DNS:** `nexvelonglobal.com` is registered and DNS-managed at
+  **Namecheap** — *Domain List → Manage → Advanced DNS*. All the DNS record
+  changes in this document are made there.
+- **Mailboxes:** **Microsoft 365** (the domain's MX points to Outlook). The
+  addresses below (`quotes@`, `NISorders@`, `inquiries@`, etc.) are M365
+  mailboxes/aliases — create them there.
+- **Sending:** transactional mail is sent through **Resend** (over Amazon SES
+  infrastructure), authenticated for the domain via DKIM + a `send.` subdomain.
+- **App config:** the *addresses* the app sends from are **Admin Settings**
+  (Settings → Email Addresses), not env vars. The only email secret in the app
+  is `RESEND_API_KEY`.
+
 ---
 
-## 1. What the app sends, and from where (after MAIL-1)
+## 1. What the app sends, and from where (MAIL-1 identity + MAIL-2 settings)
 
-Every outbound email now goes through **one** code path
-(`lib/email/dispatch.ts`). There are two categories:
+Every outbound email goes through **one** code path (`lib/email/dispatch.ts`).
+Two categories:
 
 - **Client-facing mail** (quotes, purchase orders, work orders, RMAs, client
-  invitations, onboarding confirmations): sent **FROM one authenticated address**
-  — `quotes@nexvelonglobal.com` — with the **sending rep's name** as the display
-  name ("Jane Rep via Nexvelon"), **reply-to set to the rep's own email** (so a
-  client's reply reaches the rep), and a **BCC to `quotes@nexvelonglobal.com`**
-  so you keep a copy of everything.
+  invitations, onboarding confirmations): sent **FROM the configured client
+  address** (default `quotes@nexvelonglobal.com`) with the **sending rep's name**
+  as the display name ("Jane Rep via Nexvelon"), **reply-to = the rep's own
+  email**, and a **BCC to the configured copy address** (default `quotes@`) so
+  you keep a copy of everything. **Purchase orders are per-opco:** an Integrated
+  Solutions PO sends from — and prints — `NISorders@`, a Guardian PO uses
+  `NGorders@` (see §8).
 - **Internal / automated mail** (sign-in codes, low-stock alerts, the ops
-  onboarding notice): sent from `noreply@` / `inquiries@`, never BCC'd to the
-  client copy address.
+  onboarding notice): sent from the configured internal-from (default
+  `Nexvelon <noreply@…>`) / inquiries address, never BCC'd to the client copy
+  address.
 
-Every send is recorded in the `email_log` table (who it went to, from, reply-to,
-bcc, the Resend message id, and whether it succeeded or failed), so "did the
-client ever get it?" is answered from the database, not from memory.
+Every send is recorded in the `email_log` table (to, from, reply-to, bcc, the
+Resend message id, and success/failure), so "did the client ever get it?" is
+answered from the database, not from memory.
 
-**Configurable without a code change** (Vercel environment variables):
+**Configured in the app — Settings → Email Addresses (Admin only).** Each is a
+row in the `company_settings` key/value store, with a safe in-code default when
+unset, validated on save and written to the settings audit log:
 
-| Variable | What it sets | Default |
+| Setting | What it does | Default |
 |---|---|---|
-| `RESEND_CLIENT_FROM_EMAIL` | the single client-facing From address | `quotes@nexvelonglobal.com` |
-| `RESEND_CLIENT_BCC` | the standing BCC copy address | `quotes@nexvelonglobal.com` |
-| `RESEND_CLIENT_FROM_NAME` | the org suffix in the display name | `Nexvelon` |
-| `RESEND_FROM_EMAIL` | internal/transport From | `Nexvelon <noreply@nexvelonglobal.com>` |
-| `RESEND_API_KEY` | the Resend API key | (secret, already set) |
+| Client from | client quotes/documents are sent from this | `quotes@nexvelonglobal.com` |
+| Client BCC | a copy of every client email goes here | `quotes@nexvelonglobal.com` |
+| Orders — Integrated Solutions | IS purchase orders send from / print this | `NISorders@nexvelonglobal.com` |
+| Orders — Guardian | Guardian purchase orders send from / print this | `NGorders@nexvelonglobal.com` |
+| Inquiries | onboarding + the "contact us at" address in client emails | `inquiries@nexvelonglobal.com` |
+| Clients & Sites info | 2nd recipient of onboarding submissions | `ClientsAndSitesInfo@nexvelonglobal.com` |
+| Internal from | sign-in codes, resets, internal alerts | `Nexvelon <noreply@nexvelonglobal.com>` |
+
+Changing any of these takes effect immediately — **no code change or deploy.**
+The only email value still in the environment is the `RESEND_API_KEY` secret.
+Every one of these addresses must be a real, monitored M365 mailbox/alias, and
+must be on `nexvelonglobal.com` (the Settings screen warns if it isn't, because
+Resend rejects mail from an unverified domain).
 
 ---
 
@@ -228,3 +254,28 @@ SPF/DKIM/DMARC, blacklists, and content issues, and gives a /10 score. Aim for
   code already blocks shorteners and root-relative links).
 - Reassess with mail-tester after a couple of weeks, then move DMARC to
   `p=quarantine`.
+
+---
+
+## 8. Per-opco purchase orders (MAIL-2 / §2.6)
+
+Purchase orders send from — and print — the **operating company's own order
+address**, so a Guardian PO never carries Integrated Solutions' identity:
+
+- **Integrated Solutions** → `NISorders@nexvelonglobal.com` (Settings → Email
+  Addresses → "Orders — Integrated Solutions").
+- **Guardian** → `NGorders@nexvelonglobal.com` ("Orders — Guardian").
+
+**How a PO's company is decided:** a PO has no company field of its own; it
+inherits the company of the **project it's attached to**. A PO that isn't
+attached to a project has no company signal and defaults to **Integrated
+Solutions** (the primary company). This is deliberate and documented — it is
+never a silent guess between the two. If in future you need a standalone PO to
+go out as Guardian, that requires adding a company selector to the PO screen
+(tracked on the roadmap as a MAIL-2 follow-up).
+
+Both `NISorders@` and `NGorders@` must exist as monitored M365 mailboxes/aliases.
+
+Commissioning certificates, pickup slips, work orders and RMAs carry **no
+company contact email** on the document (the old hardcoded `SecurityServices@`
+address — which was never in use — has been removed everywhere).

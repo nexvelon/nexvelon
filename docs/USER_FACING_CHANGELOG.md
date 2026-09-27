@@ -116,6 +116,28 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Email — you can now set the addresses the system sends from (MAIL-2)
+
+- A new **Settings → Email Addresses** screen (Admin only) lets you change every
+  address the system uses — the address client quotes are sent from, the address
+  that keeps a copy of every client email, the per-company purchase-order
+  addresses, the inquiries address, and the system/sign-in address — **without a
+  developer or a deploy.** Each field explains in plain words what it does, an
+  invalid address is refused, and you're warned if an address isn't on
+  nexvelonglobal.com (which would stop mail from being delivered).
+- **Purchase orders now use the right company's address.** An Integrated
+  Solutions PO sends from and prints `NISorders@`; a Guardian PO uses `NGorders@`
+  — decided by the project the PO belongs to. A PO not tied to a project uses
+  Integrated Solutions.
+- **Commissioning certificates and pickup slips no longer print a contact
+  email**, and the old `SecurityServices@` address (which was never in use) has
+  been removed from every document.
+- The old **Settings → Purchase Order Email** control has been removed. After the
+  previous email change it no longer affected anything — it reported "saved" but
+  did nothing — so it's gone; the per-company order addresses above replace it.
+- Every change to an email address is recorded in the settings audit log (who
+  changed what, from what, to what).
+
 ### Email — quotes and documents now come from the company address, as you, with a copy kept (MAIL-1)
 
 - Every email the app sends to a client, vendor or subcontractor — quotes,

@@ -12,8 +12,10 @@ import { receiveStock } from "@/lib/api/products";
 import { getVendorById } from "@/lib/api/vendors";
 import { getSiteById } from "@/lib/api/clients";
 import { getQuoteTemplate } from "@/lib/company-profile";
+import { getEmailAddresses, orderAddressForOpco } from "@/lib/email/addresses";
 import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
 import type {
+  DbClientOpco,
   DbPurchaseOrder,
   DbPurchaseOrderInsert,
   DbPurchaseOrderLine,
@@ -44,6 +46,26 @@ export const PO_STATUS_TRANSITIONS: Record<
 
 async function db() {
   return createSupabaseServerClient();
+}
+
+// MAIL-2 (§2.6) — a PO's operating company. POs carry no opco column; the only
+// reliable signal is the attributed project's opco. A standalone PO (no project)
+// has no opco signal and defaults to Integrated Solutions — the primary company
+// and the pre-MAIL-2 behavior. This is a deliberate, documented default, never a
+// silent choice between IS and Guardian. It governs BOTH the PO's send-from
+// order address and the letterhead printed on the PO PDF.
+export async function resolvePurchaseOrderOpco(header: {
+  project_id: string | null;
+}): Promise<DbClientOpco> {
+  if (!header.project_id) return "integrated_solutions";
+  const supabase = await db();
+  const { data } = await supabase
+    .from("projects")
+    .select("opco")
+    .eq("id", header.project_id)
+    .maybeSingle();
+  const opco = (data as { opco?: string } | null)?.opco;
+  return opco === "guardian" ? "guardian" : "integrated_solutions";
 }
 
 /** A list row: the header + vendor name + computed total + line count. */
@@ -760,7 +782,11 @@ export async function buildPurchaseOrderPdfProps(
 
   const vendor = await getVendorById(header.vendor_id);
 
-  const t = getQuoteTemplate("integrated_solutions");
+  // MAIL-2 / §2.6 — resolve the PO's opco and use ITS letterhead + order address,
+  // so a Guardian PO never prints Integrated Solutions' identity (or vice versa).
+  const opcoSlug = await resolvePurchaseOrderOpco(header);
+  const t = getQuoteTemplate(opcoSlug);
+  const orderEmail = orderAddressForOpco(await getEmailAddresses(), opcoSlug);
   const opco: PurchaseOrderDocumentProps["opco"] = {
     legal_name: t.legalName,
     address_line1: t.address.line1,
@@ -769,7 +795,7 @@ export async function buildPurchaseOrderPdfProps(
     province: t.address.province,
     postal_code: t.address.postalCode,
     phone: t.phone,
-    email: t.email,
+    email: orderEmail, // per-opco order address (NISorders@ / NGorders@)
     hst_number: t.hstNumber,
     logoUrl: null, // no ERP logo asset yet — header renders the wordmark instead
   };

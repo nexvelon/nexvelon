@@ -305,7 +305,6 @@ export async function buildWorkOrderPdfProps(
       province: t.address.province,
       postal_code: t.address.postalCode,
       phone: t.phone,
-      email: t.email,
       hst_number: t.hstNumber,
     },
   };

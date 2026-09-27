@@ -67,7 +67,6 @@ export interface CommissioningCertificateProps {
     province: string;
     postal_code: string;
     phone: string | null;
-    email: string | null;
     hst_number: string;
   };
 }

@@ -24,7 +24,9 @@ export const COMPANY_PROFILE = {
     country: "Canada",
   },
   phone: "Toll-Free: 1-855-969-8655",
-  email: "SecurityServices@NexvelonGlobal.com",
+  // MAIL-2 — no company contact email on documents; the old hardcoded contact
+  // address was never used. Operational addresses live in Settings
+  // (lib/email/addresses.ts); POs print their per-opco order address.
   website: "www.NexvelonGlobal.com",
   gst_hst_number: "785486770 RT0001",
 } as const;
@@ -72,7 +74,6 @@ export interface QuoteTemplate {
   tagline: string;
   address: QuoteTemplateAddress;
   phone: string;
-  email: string;
   web: string;
   hstNumber: string;       // e.g. "785486770 RT0001"
   footerShort: string;     // per-page footer left, e.g. "NEXVELON · GLOBAL"
@@ -98,7 +99,6 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
       country: "Canada",
     },
     phone: "Toll-Free: 1-855-969-8655",
-    email: "SecurityServices@NexvelonGlobal.com",
     web: "www.NexvelonGlobal.com",
     hstNumber: "785486770 RT0001",
     footerShort: "NEXVELON · GLOBAL",
@@ -108,7 +108,7 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
     // Started as a structural copy of integrated_solutions (QB-1b). slug,
     // displayName, enabled, legalName, hstNumber, and the footerLong legal
     // line are Guardian-specific. The shared values (tradeName, brandMark,
-    // brandSub, tagline, address, phone/email/web) are intentionally shared:
+    // brandSub, tagline, address, phone/web) are intentionally shared:
     // both entities operate under the licensed "Nexvelon Global" brand and
     // share the registered office. Guardian now carries its own HST/GST
     // registration (720125632 RT0001).
@@ -129,7 +129,6 @@ export const QUOTE_TEMPLATES: Record<QuoteTemplateSlug, QuoteTemplate> = {
       country: "Canada",
     },
     phone: "Toll-Free: 1-855-969-8655",
-    email: "SecurityServices@NexvelonGlobal.com",
     web: "www.NexvelonGlobal.com",
     hstNumber: "720125632 RT0001",
     footerShort: "NEXVELON · GLOBAL",

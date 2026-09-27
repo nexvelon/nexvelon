@@ -122,16 +122,25 @@ Each line is scoped to a single Claude Code paste.
   cancellation credits** (the `prorate()` primitive ships tested in
   `lib/recurring/billing-schedule.ts`, but cancellation currently just stops future
   billing — a pro-rated credit/final invoice is not auto-issued). **(M?)**
-- **MAIL-2 — email sending follow-ups** *(deferred from MAIL-1, PR #TBD)*: **true
+- ~~**MAIL-2 — email addresses as Settings**~~ **✅ SHIPPED (PR #TBD).** Every
+  operational address is now an Admin-editable Setting (Settings → Email
+  Addresses; `company_settings` KV, audited), POs send from/print their per-opco
+  order address (NISorders@ / NGorders@), the dead "Purchase Order Email" control
+  is removed, and the hardcoded `SecurityServices@` is gone from all documents.
+- **MAIL-3 — email sending follow-ups** *(deferred from MAIL-1/MAIL-2)*: **true
   per-rep mailbox sending via Google Workspace OAuth** (send as the rep's own
   mailbox rather than one authenticated address with the rep as display-name +
-  reply-to, which is what MAIL-1 ships — explicitly out of scope per Jay's
-  decision); **bounce & spam-complaint handling** (consume Resend/SES webhooks to
-  mark hard bounces and complaints); and a **suppression list** (never re-send to
-  a hard-bounced/complained/unsubscribed address). `email_log` (migration 0130)
-  is the foundation these build on. A `List-Unsubscribe` header is intentionally
-  omitted for now because all current sends are transactional (a quote/PO/WO the
-  recipient asked for); add it if any bulk/marketing mail is introduced. **(M)**
+  reply-to — explicitly out of scope per Jay's decision); **bounce &
+  spam-complaint handling** (consume Resend/SES webhooks to mark hard bounces and
+  complaints); a **suppression list** (never re-send to a hard-bounced/
+  complained/unsubscribed address); and a **per-PO operating-company selector** so
+  a *standalone* PO (one not attached to a project) can be issued as Guardian
+  rather than defaulting to Integrated Solutions — and, if wanted, per-opco order
+  addresses for work orders / RMAs (today those send from the client-from
+  address). `email_log` (migration 0130) is the foundation the webhook work builds
+  on. A `List-Unsubscribe` header is intentionally omitted for now because all
+  current sends are transactional; add it if any bulk/marketing mail is
+  introduced. **(M)**
 - **Clients — SLA engine + client-level holdback config**; the **Contracts tab**
   (placeholder at `ClientDetailView.tsx:406`); a dedicated `/contacts` detail
   route; **[recovered]** a native per-client **communication log** (email/call/SMS).
