@@ -1,11 +1,13 @@
-// MAIL-1 — the central email dispatcher's guarantees:
-//   • client-facing mail sends FROM one authenticated address with the rep as the
-//     display name and reply-to, and ALWAYS BCCs the standing copy address;
-//   • the BCC on client mail cannot be omitted;
+// MAIL-1/2 — the central email dispatcher's guarantees:
+//   • client-facing mail sends FROM the configured client address (or a per-opco
+//     override) with the rep as display name + reply-to, and ALWAYS BCCs the
+//     configured copy address (it cannot be omitted);
 //   • internal mail keeps its transport from and is never BCC'd to the copy addr;
 //   • a plain-text alternative is required and links must be absolute;
 //   • every send (success OR failure) writes an email_log row, and a provider
 //     failure is returned (ok:false) rather than thrown.
+// Addresses now come from Settings (MAIL-2); the admin mock returns no
+// company_settings rows, so the dispatcher resolves the in-code defaults.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -19,8 +21,15 @@ const h = vi.hoisted(() => ({
 vi.mock("resend", () => ({
   Resend: vi.fn(() => ({ emails: { send: h.resendSend } })),
 }));
+// The admin client is used for BOTH the email-address settings read
+// (company_settings → empty here, so defaults apply) and the email_log insert.
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: () => ({ insert: h.logInsert }) }),
+  createAdminClient: () => ({
+    from: (table: string) =>
+      table === "company_settings"
+        ? { select: () => ({ in: async () => ({ data: [], error: null }) }) }
+        : { insert: h.logInsert },
+  }),
 }));
 
 import {
@@ -29,10 +38,13 @@ import {
   resolveFrom,
   resolveBcc,
   assertMessageHygiene,
-  CLIENT_FROM_EMAIL,
-  CLIENT_BCC,
-  INTERNAL_FROM,
 } from "@/lib/email/dispatch";
+import { EMAIL_ADDRESS_DEFAULTS } from "@/lib/email/addresses";
+
+const CLIENT_FROM = EMAIL_ADDRESS_DEFAULTS.clientFrom;
+const CLIENT_BCC = EMAIL_ADDRESS_DEFAULTS.clientBcc;
+const INTERNAL_FROM = EMAIL_ADDRESS_DEFAULTS.internalFrom;
+const base = { clientFrom: CLIENT_FROM, clientBcc: CLIENT_BCC, internalFrom: INTERNAL_FROM };
 
 const baseHtml = `<p>Hello</p><a href="https://app.nexvelonglobal.com/q/abc">Open</a>`;
 const baseText = "Hello — https://app.nexvelonglobal.com/q/abc";
@@ -61,33 +73,40 @@ describe("identity composition", () => {
     expect(clientDisplayName({ name: "  " })).toBe("Nexvelon");
   });
 
-  it("client mail always sends from the single authenticated address", () => {
-    expect(resolveFrom({ kind: "client", sender: { name: "Jay Shah" } })).toBe(
-      `Jay Shah via Nexvelon <${CLIENT_FROM_EMAIL}>`
+  it("client mail sends from the configured client address", () => {
+    expect(resolveFrom({ kind: "client", sender: { name: "Jay Shah" } }, base)).toBe(
+      `Jay Shah via Nexvelon <${CLIENT_FROM}>`
     );
+  });
+
+  it("client mail with a per-opco fromAddress overrides the client-from (still rep display name)", () => {
+    expect(
+      resolveFrom(
+        { kind: "client", sender: { name: "Jay Shah" }, fromAddress: "NISorders@nexvelonglobal.com" },
+        base
+      )
+    ).toBe("Jay Shah via Nexvelon <NISorders@nexvelonglobal.com>");
   });
 
   it("internal mail uses its fromOverride, else the transport default", () => {
-    expect(resolveFrom({ kind: "internal", fromOverride: "Nexvelon <noreply@nexvelonglobal.com>" })).toBe(
+    expect(resolveFrom({ kind: "internal", fromOverride: "Nexvelon <noreply@nexvelonglobal.com>" }, base)).toBe(
       "Nexvelon <noreply@nexvelonglobal.com>"
     );
-    expect(resolveFrom({ kind: "internal" })).toBe(INTERNAL_FROM);
+    expect(resolveFrom({ kind: "internal" }, base)).toBe(INTERNAL_FROM);
   });
 
   it("client BCC always includes the copy address and cannot be dropped", () => {
-    expect(resolveBcc({ kind: "client" })).toContain(CLIENT_BCC);
-    // even an empty extra bcc still carries the standing copy
-    expect(resolveBcc({ kind: "client", bcc: [] })).toEqual([CLIENT_BCC]);
-    // extras are merged + de-duped, copy address still present
-    const merged = resolveBcc({ kind: "client", bcc: ["extra@x.com", CLIENT_BCC] });
+    expect(resolveBcc({ kind: "client" }, base)).toContain(CLIENT_BCC);
+    expect(resolveBcc({ kind: "client", bcc: [] }, base)).toEqual([CLIENT_BCC]);
+    const merged = resolveBcc({ kind: "client", bcc: ["extra@x.com", CLIENT_BCC] }, base);
     expect(merged).toContain(CLIENT_BCC);
     expect(merged).toContain("extra@x.com");
     expect(merged.filter((a) => a === CLIENT_BCC)).toHaveLength(1);
   });
 
   it("internal mail is NOT bcc'd to the client copy address", () => {
-    expect(resolveBcc({ kind: "internal" })).toEqual([]);
-    expect(resolveBcc({ kind: "internal" })).not.toContain(CLIENT_BCC);
+    expect(resolveBcc({ kind: "internal" }, base)).toEqual([]);
+    expect(resolveBcc({ kind: "internal" }, base)).not.toContain(CLIENT_BCC);
   });
 });
 
@@ -112,6 +131,15 @@ describe("assertMessageHygiene", () => {
 });
 
 // ── dispatch behavior ────────────────────────────────────────────────────────
+function lastSend(): Record<string, unknown> {
+  const calls = h.resendSend.mock.calls as unknown as unknown[][];
+  return calls[calls.length - 1][0] as Record<string, unknown>;
+}
+function lastLog(): Record<string, unknown> {
+  const calls = h.logInsert.mock.calls as unknown as unknown[][];
+  return calls[calls.length - 1][0] as Record<string, unknown>;
+}
+
 describe("dispatchEmail", () => {
   it("client send sets from/reply-to/bcc from the rep + copy address, and logs 'sent'", async () => {
     const res = await dispatchEmail({
@@ -125,13 +153,11 @@ describe("dispatchEmail", () => {
       log: { entityType: "quote", entityId: "q1", sentBy: "u1" },
     });
     expect(res).toEqual({ ok: true, id: "email_abc", error: null });
-    const arg = h.resendSend.mock.calls[0][0] as Record<string, unknown>;
-    expect(arg.from).toBe(`Jay Shah via Nexvelon <${CLIENT_FROM_EMAIL}>`);
+    const arg = lastSend();
+    expect(arg.from).toBe(`Jay Shah via Nexvelon <${CLIENT_FROM}>`);
     expect(arg.replyTo).toBe("jay@nexvelonglobal.com");
     expect(arg.bcc).toContain(CLIENT_BCC);
-    // logged as sent, with identity + entity context
-    const logged = h.logInsert.mock.calls[0][0] as Record<string, unknown>;
-    expect(logged).toMatchObject({
+    expect(lastLog()).toMatchObject({
       kind: "client",
       to_email: "client@acme.com",
       status: "sent",
@@ -146,8 +172,16 @@ describe("dispatchEmail", () => {
     await dispatchEmail({
       label: "x", kind: "client", to: "c@x.com", subject: "s", html: baseHtml, text: baseText,
     });
-    const arg = h.resendSend.mock.calls[0][0] as Record<string, unknown>;
-    expect(arg.bcc).toContain(CLIENT_BCC);
+    expect(lastSend().bcc).toContain(CLIENT_BCC);
+  });
+
+  it("a per-opco fromAddress is honored on a client send", async () => {
+    await dispatchEmail({
+      label: "sendPurchaseOrderEmail", kind: "client", sender: { name: "Rep" },
+      fromAddress: "NGorders@nexvelonglobal.com",
+      to: "vendor@x.com", subject: "PO", html: baseHtml, text: baseText,
+    });
+    expect(lastSend().from).toBe("Rep via Nexvelon <NGorders@nexvelonglobal.com>");
   });
 
   it("internal send has no client BCC and no reply-to", async () => {
@@ -155,7 +189,7 @@ describe("dispatchEmail", () => {
       label: "sendOtpEmail", kind: "internal", fromOverride: INTERNAL_FROM,
       to: "u@x.com", subject: "code", html: baseHtml, text: baseText,
     });
-    const arg = h.resendSend.mock.calls[0][0] as Record<string, unknown>;
+    const arg = lastSend();
     expect(arg.from).toBe(INTERNAL_FROM);
     expect(arg.bcc).toBeUndefined();
     expect(arg.replyTo).toBeUndefined();
@@ -168,8 +202,7 @@ describe("dispatchEmail", () => {
     });
     expect(res.ok).toBe(false);
     expect(res.error).toBe("domain not verified");
-    const logged = h.logInsert.mock.calls[0][0] as Record<string, unknown>;
-    expect(logged).toMatchObject({ status: "failed", error: "domain not verified", provider_message_id: null });
+    expect(lastLog()).toMatchObject({ status: "failed", error: "domain not verified", provider_message_id: null });
   });
 
   it("a thrown transport error is caught, recorded, and returned as ok:false", async () => {
@@ -179,7 +212,7 @@ describe("dispatchEmail", () => {
     });
     expect(res.ok).toBe(false);
     expect(res.error).toBe("network down");
-    expect((h.logInsert.mock.calls[0][0] as Record<string, unknown>).status).toBe("failed");
+    expect(lastLog().status).toBe("failed");
   });
 
   it("refuses to send without a plain-text part (hygiene enforced pre-send)", async () => {

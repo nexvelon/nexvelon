@@ -15,6 +15,7 @@ import {
   getPurchaseOrderById,
   getPurchaseOrders,
   receivePurchaseOrderLines,
+  resolvePurchaseOrderOpco,
   setPurchaseOrderStatus,
   stampPurchaseOrder,
   updatePurchaseOrder,
@@ -26,6 +27,7 @@ import {
 import type { PurchaseOrderDocumentProps } from "@/components/modules/purchase-orders/PurchaseOrderDocument";
 import { getVendorById } from "@/lib/api/vendors";
 import { resolveCurrentSender } from "@/lib/email/dispatch";
+import { getEmailAddresses, orderAddressForOpco } from "@/lib/email/addresses";
 import { renderPurchaseOrderPdf } from "@/lib/pdf/render-po";
 import { uploadPoPdf } from "@/lib/storage/po-pdfs";
 import { sendPurchaseOrderEmail } from "@/lib/auth/email";
@@ -330,9 +332,13 @@ export async function issuePurchaseOrderAction(
 
       try {
         const sender = await resolveCurrentSender();
+        // MAIL-2 / §2.6 — send from the PO's per-opco order address.
+        const opco = await resolvePurchaseOrderOpco(detail.header);
+        const fromAddress = orderAddressForOpco(await getEmailAddresses(), opco);
         const sent = await sendPurchaseOrderEmail({
           to: recipientEmail,
           sender,
+          fromAddress,
           poNumber: detail.header.po_number,
           vendorName: vendor.name,
           salesRepName: vendor.sales_rep_name,

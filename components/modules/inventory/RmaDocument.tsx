@@ -105,7 +105,6 @@ export interface RmaDocumentProps {
     province: string;
     postal_code: string;
     phone: string | null;
-    email: string | null;
     hst_number: string;
     logoUrl: string | null;
   };
@@ -325,7 +324,6 @@ export function RmaDocument({ rma, vendor, lines, subtotal, opco }: RmaDocumentP
               </Text>
             ))}
             {opco.phone ? <Text style={styles.entityLine}>{opco.phone}</Text> : null}
-            {opco.email ? <Text style={styles.entityLine}>{opco.email}</Text> : null}
             <Text style={styles.entityHst}>HST/GST {opco.hst_number}</Text>
           </View>
 

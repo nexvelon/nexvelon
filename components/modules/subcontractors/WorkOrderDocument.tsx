@@ -87,7 +87,6 @@ export interface WorkOrderDocumentProps {
     province: string;
     postal_code: string;
     phone: string | null;
-    email: string | null;
     hst_number: string;
   };
 }
@@ -239,7 +238,6 @@ export function WorkOrderDocument({ wo, subcontractor, project, opco }: WorkOrde
               </Text>
             ))}
             {opco.phone ? <Text style={styles.entityLine}>{opco.phone}</Text> : null}
-            {opco.email ? <Text style={styles.entityLine}>{opco.email}</Text> : null}
             <Text style={styles.entityHst}>HST/GST {opco.hst_number}</Text>
           </View>
 
@@ -333,7 +331,7 @@ export function WorkOrderDocument({ wo, subcontractor, project, opco }: WorkOrde
             {opco.legal_name.toUpperCase()} — HST/GST {opco.hst_number}
           </Text>
           <Text style={styles.footerContact}>
-            {[opco.phone, opco.email].filter(Boolean).join("  ·  ")}
+            {[opco.phone].filter(Boolean).join("  ·  ")}
           </Text>
         </View>
         <Text

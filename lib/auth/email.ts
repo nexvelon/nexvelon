@@ -2,6 +2,7 @@ import "server-only";
 
 import { parseTierText } from "@/lib/tier-text-parser";
 import { dispatchEmail, type EmailSender } from "@/lib/email/dispatch";
+import { getEmailAddresses } from "@/lib/email/addresses";
 
 // MAIL-1 — all sending now goes through the central dispatcher
 // (lib/email/dispatch.ts), which owns the Resend client, the sending identity
@@ -234,15 +235,11 @@ function renderLowStockText(items: LowStockItem[]): string {
 // sent TO inquiries@. Falls back to the same Resend-verified domain.
 // ----------------------------------------------------------------------------
 
-const INQUIRIES_FROM =
-  process.env.RESEND_INQUIRIES_EMAIL ?? "Nexvelon <inquiries@nexvelonglobal.com>";
-const INQUIRIES_TO =
-  process.env.RESEND_INQUIRIES_TO ?? "inquiries@nexvelonglobal.com";
-// POLISH-38 — second internal recipient of the bundled submission email. Ensure
-// this alias exists in M365 before relying on it. Overridable via env.
-const CLIENTS_SITES_INFO_TO =
-  process.env.RESEND_CLIENTS_SITES_INFO_TO ??
-  "ClientsAndSitesInfo@NexvelonGlobal.com";
+// MAIL-2 — the inquiries@ and ClientsAndSitesInfo@ addresses are now Admin
+// Settings (lib/email/addresses.ts → company_settings), resolved per send via
+// getEmailAddresses(). The inquiries address is used as the FROM + first TO of
+// the onboarding notice, and as the "contact us at …" address in the body of the
+// approved/declined/tier emails, so changing the setting changes the text too.
 
 /** An email attachment (filename + raw buffer), for Resend. */
 export interface EmailAttachment {
@@ -726,12 +723,13 @@ export async function sendClientSubmissionEmail(opts: {
     "— Nexvelon Global",
   ].join("\n");
 
+  const addrs = await getEmailAddresses();
   const res = await dispatchEmail({
     label: "sendClientSubmissionEmail",
     kind: "internal",
-    fromOverride: INQUIRIES_FROM,
+    fromOverride: addrs.inquiries,
     // POLISH-38 — both internal recipients receive the same bundle + attachments.
-    to: [INQUIRIES_TO, CLIENTS_SITES_INFO_TO],
+    to: [addrs.inquiries, addrs.clientsSitesInfo],
     subject: `New client onboarding submitted — ${cf.legalName ?? opts.email}`,
     html,
     text,
@@ -869,13 +867,13 @@ export async function sendApplicationApprovedEmail(opts: {
         ? `<strong>Your Prestige Tier: ${escapeHtml(opts.tierName as string)}</strong>`
         : "",
     ]) + tierBlockHtml;
+  const addrs = await getEmailAddresses();
   const html = emailShell({
     eyebrow: "APPLICATION APPROVED",
     headline: "Welcome to Nexvelon Global.",
     bodyHtml,
     statusLine: "APPROVED · TIER ASSIGNED",
-    signatureItalic:
-      "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    signatureItalic: `Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at ${addrs.inquiries}.`,
     signatureGroup: "The Nexvelon Global Group",
     signatureSubline: "CLIENT ACCOUNT · ACTIVE",
     outerNote: outerNoteFor("This message was sent to", opts.to),
@@ -895,7 +893,7 @@ export async function sendApplicationApprovedEmail(opts: {
     "Welcome to Nexvelon Global. We are pleased to confirm that your application has been approved and your account is now active.",
     showRequestedLine ? `\n${requestedLineText}\n` : "",
     hasTier ? `\nYour Prestige Tier: ${opts.tierName}\n\n${tierTextBlock}\n` : "",
-    "Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    `Our team will be in touch shortly with next steps. If you have any immediate questions, please reply to this email or contact us at ${addrs.inquiries}.`,
     "",
     "— Nexvelon Global",
   ].join("\n");
@@ -993,13 +991,13 @@ export async function sendTierChangedEmail(opts: {
         opts.oldTierLabel
       )}</strong> to <strong>${escapeHtml(opts.newTierName)}</strong>.`,
     ]) + tierBlockHtml;
+  const addrs = await getEmailAddresses();
   const html = emailShell({
     eyebrow: "TIER UPDATE",
     headline: "Your Tier has been updated.",
     bodyHtml,
     statusLine: "PRESTIGE TIER · UPDATED",
-    signatureItalic:
-      "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    signatureItalic: `Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at ${addrs.inquiries}.`,
     signatureGroup: "The Nexvelon Global Group",
     signatureSubline: "PRESTIGE TIER · NOTIFICATION",
     outerNote: outerNoteFor("This message was sent to", opts.to),
@@ -1018,7 +1016,7 @@ export async function sendTierChangedEmail(opts: {
     "",
     tierTextBlock,
     "",
-    "Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at inquiries@NexvelonGlobal.com.",
+    `Thank you for your continued partnership. If you have any questions, please reply to this email or contact us at ${addrs.inquiries}.`,
     "",
     "— Nexvelon Global",
   ].join("\n");
@@ -1044,6 +1042,8 @@ export async function sendTierChangedEmail(opts: {
 export async function sendPurchaseOrderEmail(params: {
   to: string;
   sender?: EmailSender | null;
+  /** MAIL-2 — the per-opco order address this PO sends from (NISorders@ / NGorders@). */
+  fromAddress?: string | null;
   poNumber: string;
   vendorName: string;
   salesRepName: string | null;
@@ -1087,6 +1087,7 @@ export async function sendPurchaseOrderEmail(params: {
     label: "sendPurchaseOrderEmail",
     kind: "client",
     sender: params.sender,
+    fromAddress: params.fromAddress,
     to: params.to,
     subject,
     html,

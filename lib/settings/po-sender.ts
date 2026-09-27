@@ -1,7 +1,13 @@
 // PO-3 — the configurable "From" address for purchase-order emails. Backed by
-// the company_settings key-value store (getSetting/setSetting), falling back to
-// the ceo@ default when unset. The env RESEND_FROM_EMAIL stays the transport
-// default for other mail; the PO email flow (PO-4) will read getPoSenderFrom().
+// the company_settings key-value store (getSetting/setSetting).
+//
+// MAIL-2: this module is NO LONGER wired to sending. Purchase orders now send
+// from the per-opco order address (lib/email/addresses.ts → NISorders@ /
+// NGorders@), and the "Purchase Order Email" Settings control that edited these
+// keys has been removed (it did nothing after MAIL-1 centralised sending — §2.8
+// forbids a control that reports success while having no effect). Per §1 the
+// stored po_sender_email / po_sender_name rows are NOT dropped; this module and
+// its unit tests remain so the values are preserved and inspectable.
 //
 // These live in their own module (rather than company-settings.ts) so they can
 // be unit-tested by mocking @/lib/api/company-settings — see
