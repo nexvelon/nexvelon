@@ -98,7 +98,7 @@ Each line is scoped to a single Claude Code paste.
   hard delete** of an acceptance — a deliberate owner override of the §2.2 append-only
   stance, compensated by an audit row of the deletion (migrations 0131, 0132).
 - ~~QUOTE-PORTAL-3 — portal presentation + mandatory attestation~~ **✅ SHIPPED
-  (PR #TBD).** The attestation checkbox is now MANDATORY and enforced server-side
+  (PR #402).** The attestation checkbox is now MANDATORY and enforced server-side
   (an acceptance can't be recorded without it), and the exact wording shown is
   stored on the record (migration 0133, `attestation_text`); the embedded quote is
   rendered page-by-page with pdf.js (one full page fitted, visible scrollbar,
