@@ -113,7 +113,7 @@ function makeQuote(over: Partial<Quote> = {}): Quote {
 
 const openSend = {
   id: "send-1", quote_id: "q1", token: null,
-  snapshot: { number: "Q-1001", total: 4063.48 },
+  snapshot: { number: "Q-1001", total: 4063.48, clientName: "Acme Corp" },
   status: "viewed", delivery_mode: "link", proposal_pdf_path: "quote/q1/Proposals/x.pdf",
   render_payload: { number: "Q-1001", sections: [] },
   expires_at: "2999-01-01T00:00:00Z", view_count: 1, sent_by: "u1",
@@ -236,19 +236,22 @@ describe("recordPortalDecision", () => {
     h.sendRow = { ...openSend };
   });
 
-  it("requires name, title AND signature on accept (item 3)", async () => {
+  it("requires name, title, signature AND attestation on accept (item 3 + QP-3 item 1)", async () => {
     const base = { token: "tok-abcdefgh", decision: "accepted" as const };
     expect((await recordPortalDecision({ ...base, signerName: "" })).ok).toBe(false);
     expect((await recordPortalDecision({ ...base, signerName: "Dana" })).ok).toBe(false); // no title
     expect((await recordPortalDecision({ ...base, signerName: "Dana", signerTitle: "Mgr" })).ok).toBe(false); // no signature
+    // name + title + signature present but attestation NOT ticked → rejected server-side
+    const noAttest = await recordPortalDecision({ ...base, signerName: "Dana", signerTitle: "Mgr", signatureImage: "data:x" });
+    expect(noAttest).toEqual({ ok: false, error: expect.stringContaining("authorisation statement") });
     expect(h.captured.acceptInsert).toBeNull();
   });
 
-  it("accept: stores the countersigned PDF in Signed with a timestamped filename, closes siblings, flips to Approved", async () => {
+  it("accept: stores countersigned PDF (timestamped) + the attestation wording, closes siblings, flips to Approved", async () => {
     const res = await recordPortalDecision({
       token: "tok-abcdefgh", decision: "accepted",
       signerName: "Dana Buyer", signerTitle: "Facilities Manager", signerEmail: "dana@acme.com",
-      signatureImage: "data:image/png;base64,AAAA", ip: "203.0.113.5",
+      signatureImage: "data:image/png;base64,AAAA", attested: true, ip: "203.0.113.5",
     });
     expect(res.ok).toBe(true);
     const signed = h.storeCalls.find((c) => c.folder === "Signed");
@@ -257,6 +260,8 @@ describe("recordPortalDecision", () => {
     expect(signed!.filename).toMatch(/2026-09-28_1200/); // timestamped
     expect(h.captured.acceptInsert).toMatchObject({ decision: "accepted", recipient_id: "rec-1" });
     expect(h.captured.acceptInsert?.signed_pdf_path).toBeTruthy();
+    // QP-3 — the exact attestation wording (with the client name) is stored
+    expect(h.captured.acceptInsert?.attestation_text).toMatch(/authorised to accept this quote on behalf of Acme Corp/);
     // sibling 'to' links superseded
     expect(h.captured.recipientUpdates.some((u) => u.payload.status === "superseded")).toBe(true);
     expect(h.captured.quoteUpdate).toMatchObject({ status: "Approved" });
@@ -267,7 +272,7 @@ describe("recordPortalDecision", () => {
     h.acceptError = { code: "23505" };
     const res = await recordPortalDecision({
       token: "tok-abcdefgh", decision: "accepted",
-      signerName: "Dana", signerTitle: "Mgr", signatureImage: "data:image/png;base64,AAAA",
+      signerName: "Dana", signerTitle: "Mgr", signatureImage: "data:image/png;base64,AAAA", attested: true,
     });
     expect(res).toEqual({ ok: false, error: expect.stringContaining("already been responded") });
   });

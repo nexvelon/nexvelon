@@ -9,6 +9,8 @@ import { useRef, useState, useTransition } from "react";
 import { formatCurrency } from "@/lib/format";
 import { acceptQuoteAction, declineQuoteAction } from "./actions";
 import { PORTAL_COLORS } from "./PortalShell";
+import { PortalPdfViewer } from "./PortalPdfViewer";
+import { buildAttestationText } from "@/lib/quotes/attestation";
 import type { QuoteSnapshot } from "@/lib/api/quote-portal";
 
 const { NAVY, GOLD, INK } = PORTAL_COLORS;
@@ -24,7 +26,20 @@ export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; sn
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [attest, setAttest] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
   const sigRef = useRef<SignaturePadHandle>(null);
+  const attestationText = buildAttestationText(snapshot.clientName);
+
+  // §2.8 — a disabled Accept button must say WHY. All four inputs are mandatory.
+  const acceptBlockedReason = !name.trim()
+    ? "Enter your full name to continue."
+    : !title.trim()
+      ? "Enter your title to continue."
+      : !hasSignature
+        ? "Add your signature to continue."
+        : !attest
+          ? "Tick the authorisation statement to continue."
+          : null;
   // Decline form
   const [reason, setReason] = useState("");
 
@@ -43,6 +58,7 @@ export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; sn
         signerTitle: title.trim(),
         signerEmail: email.trim() || undefined,
         signatureImage: signature,
+        attested: attest,
       });
       if (res.ok) setDone("accepted");
       else setError(res.error);
@@ -97,18 +113,9 @@ export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; sn
         </div>
       </div>
 
-      {/* Full quote PDF (item 3 — the portal shows the full document). */}
+      {/* Full quote PDF — one page fitted to the window, scroll for more (item 2). */}
       <div style={{ padding: "16px 24px 0" }}>
-        <iframe
-          src={pdfUrl}
-          title={`Quote ${snapshot.number}`}
-          style={{ width: "100%", height: 620, border: "1px solid #e7e0cf", borderRadius: 6, background: "#fff" }}
-        />
-        <div style={{ textAlign: "center", marginTop: 6 }}>
-          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontSize: 12 }}>
-            Open the full quote PDF in a new tab
-          </a>
-        </div>
+        <PortalPdfViewer url={pdfUrl} />
       </div>
 
       {/* Quick summary (from the immutable snapshot) */}
@@ -211,20 +218,25 @@ export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; sn
               </div>
             </div>
             <label style={lbl}>Draw your signature</label>
-            <SignaturePad ref={sigRef} />
+            <SignaturePad ref={sigRef} onSignatureChange={setHasSignature} />
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "12px 0", fontSize: 13, color: INK }}>
               <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 3 }} />
-              <span>
-                I am authorised to accept this quote on behalf of {snapshot.clientName ?? "the client"}, and I agree to the
-                pricing and terms shown above.
-              </span>
+              <span>{attestationText}</span>
             </label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button style={btnPrimary} onClick={submitAccept} disabled={pending}>
-                {pending ? "Submitting…" : "Accept quote"}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                style={acceptBlockedReason || pending ? btnDisabled : btnPrimary}
+                onClick={submitAccept}
+                disabled={pending || !!acceptBlockedReason}
+                aria-disabled={pending || !!acceptBlockedReason}
+              >
+                {pending ? "Submitting…" : "Accept & sign"}
               </button>
               <button style={btnGhost} onClick={() => setMode("view")} disabled={pending}>Back</button>
             </div>
+            {acceptBlockedReason && !pending && (
+              <p style={{ color: "#8a7a3a", fontSize: 12, margin: "8px 0 0" }}>{acceptBlockedReason}</p>
+            )}
           </div>
         )}
 
@@ -258,7 +270,8 @@ function TotalRow({ label, value, strong }: { label: string; value: string; stro
 // ── Minimal pointer-drawn signature pad ──────────────────────────────────────
 import { forwardRef, useImperativeHandle } from "react";
 interface SignaturePadHandle { toDataURL: () => string | null }
-const SignaturePad = forwardRef<SignaturePadHandle>(function SignaturePad(_props, ref) {
+const SignaturePad = forwardRef<SignaturePadHandle, { onSignatureChange?: (has: boolean) => void }>(
+  function SignaturePad({ onSignatureChange }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const dirty = useRef(false);
@@ -288,13 +301,17 @@ const SignaturePad = forwardRef<SignaturePadHandle>(function SignaturePad(_props
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.stroke();
-    dirty.current = true;
+    if (!dirty.current) {
+      dirty.current = true;
+      onSignatureChange?.(true);
+    }
   };
   const up = () => { drawing.current = false; };
   const clear = () => {
     const c = canvasRef.current!;
     c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
     dirty.current = false;
+    onSignatureChange?.(false);
   };
 
   return (
@@ -324,6 +341,7 @@ const lbl = { display: "block", fontSize: 11, textTransform: "uppercase", letter
 const inp = { width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid #c9bfa6", borderRadius: 6, fontSize: 15, background: "#fff", color: INK } as const;
 const btnPrimary = { background: NAVY, color: "#fff", border: `1px solid ${NAVY}`, borderRadius: 6, padding: "12px 20px", fontSize: 15, fontWeight: 600, cursor: "pointer" } as const;
 const btnGhost = { background: "transparent", color: NAVY, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "12px 20px", fontSize: 15, cursor: "pointer" } as const;
+const btnDisabled = { background: "#c9c2b0", color: "#fff", border: "1px solid #c9c2b0", borderRadius: 6, padding: "12px 20px", fontSize: 15, fontWeight: 600, cursor: "not-allowed" } as const;
 
 function Pad({ children }: { children: React.ReactNode }) {
   return <div style={{ padding: "40px 28px", textAlign: "center" }}>{children}</div>;

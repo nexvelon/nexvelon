@@ -158,6 +158,20 @@
   DNS and reputation — see `docs/EMAIL_SETUP.md` for the one-time setup and how to
   verify it.
 
+### Quotes — the client sign page reads better and requires the authorisation tick (QUOTE-PORTAL-3)
+
+- When a client opens their quote link, they now see **one full page of the quote,
+  fitted to their window, with a scrollbar** to move through the rest — instead of a
+  cropped sliver of the top. It reads well on a computer and on a phone (it renders
+  the pages as images, so it works reliably in mobile Safari), and the "open the full
+  PDF in a new tab" link is still there.
+- **The authorisation checkbox is now required.** "Accept & sign" stays disabled — and
+  now tells the client exactly what's still needed (name, title, signature, or ticking
+  the statement) — until the client confirms *"I am authorised to accept this quote on
+  behalf of [client], and I agree to the pricing and terms shown above."* This is
+  enforced on our side too, so an acceptance can't be recorded without it, and the exact
+  wording the client agreed to is saved on the acceptance record.
+
 ### Quotes — choose who receives a quote, send it two ways, and get the signed copy back (QUOTE-PORTAL-2)
 
 - When you send a quote, you now **pick the recipients** from the client's and site's
