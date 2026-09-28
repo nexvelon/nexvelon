@@ -68,6 +68,7 @@ export async function acceptQuoteAction(input: {
   signerTitle?: string;
   signerEmail?: string;
   signatureImage?: string | null;
+  attested?: boolean;
 }): Promise<PortalActionResult> {
   const { ip, userAgent } = await requestMeta();
   const res = await recordPortalDecision({
@@ -77,6 +78,7 @@ export async function acceptQuoteAction(input: {
     signerTitle: input.signerTitle,
     signerEmail: input.signerEmail,
     signatureImage: input.signatureImage ?? null,
+    attested: input.attested,
     ip,
     userAgent,
   });

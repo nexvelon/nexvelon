@@ -19,6 +19,7 @@ import { createHash, randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logQuoteAuditEvent } from "@/lib/api/quote-audit";
 import { getQuoteTemplate } from "@/lib/company-profile";
+import { buildAttestationText } from "@/lib/quotes/attestation";
 import {
   buildSafeQuoteDocProps,
   renderQuotePdf,
@@ -454,6 +455,8 @@ export interface PortalDecisionInput {
   signerTitle?: string;
   signerEmail?: string;
   signatureImage?: string | null;
+  /** QP-3 item 1 — the mandatory attestation checkbox was ticked. Required on accept. */
+  attested?: boolean;
   declineReason?: string;
   ip?: string | null;
   userAgent?: string | null;
@@ -506,11 +509,17 @@ export async function recordPortalDecision(input: PortalDecisionInput): Promise<
     return { ok: false, error: "This link has expired." };
   }
 
-  // Item 3 — name, title and signature are ALL mandatory on accept.
+  // Item 3 + QP-3 item 1 — name, title, signature AND the attestation are ALL
+  // mandatory on accept. The attestation is enforced here server-side; an
+  // acceptance recorded without it would be worthless as evidence.
+  let attestationText: string | null = null;
   if (input.decision === "accepted") {
     if (!input.signerName?.trim()) return { ok: false, error: "Please enter your full name." };
     if (!input.signerTitle?.trim()) return { ok: false, error: "Please enter your title." };
     if (!input.signatureImage?.trim()) return { ok: false, error: "Please add your signature before submitting." };
+    if (!input.attested) return { ok: false, error: "Please confirm the authorisation statement before accepting." };
+    // Store the EXACT wording shown (built from the same source as the portal UI).
+    attestationText = buildAttestationText((send.snapshot as QuoteSnapshot).clientName);
   }
 
   const signedAtIso = new Date().toISOString();
@@ -521,6 +530,7 @@ export async function recordPortalDecision(input: PortalDecisionInput): Promise<
         signerName: input.signerName ?? null,
         signerTitle: input.signerTitle ?? null,
         signerEmail: input.signerEmail ?? null,
+        attestationText,
         recipientId: recipient?.id ?? null,
         snapshot: send.snapshot,
         at: signedAtIso,
@@ -573,6 +583,7 @@ export async function recordPortalDecision(input: PortalDecisionInput): Promise<
     signature_image: input.signatureImage ?? null,
     record_hash: recordHash,
     signed_pdf_path: signedPdfPath,
+    attestation_text: attestationText,
     decline_reason: input.decision === "declined" ? input.declineReason ?? null : null,
     ip: input.ip ?? null,
     user_agent: input.userAgent ?? null,

@@ -97,12 +97,22 @@ Each line is scoped to a single Claude Code paste.
   **notifications** to sender + Admins (new `notifications` table); and an **Admin-only
   hard delete** of an acceptance — a deliberate owner override of the §2.2 append-only
   stance, compensated by an audit row of the deletion (migrations 0131, 0132).
-- **QUOTE-PORTAL-3 — deferred follow-ups** *(from QUOTE-PORTAL-2)*: drag-and-drop
-  recipient assignment (QP-2 ships keyboard-accessible click-to-assign To/Cc; DnD is a
-  polish enhancement); rendering uploaded **drawing** pages into the server-generated
-  PDF (the live builder preview renders them client-side; the sent/countersigned PDF
-  currently omits ephemeral drawing images); and full client/site **address** fidelity
-  on the countersigned copy's cover. **(S each)**
+- ~~QUOTE-PORTAL-3 — portal presentation + mandatory attestation~~ **✅ SHIPPED
+  (PR #402).** The attestation checkbox is now MANDATORY and enforced server-side
+  (an acceptance can't be recorded without it), and the exact wording shown is
+  stored on the record (migration 0133, `attestation_text`); the embedded quote is
+  rendered page-by-page with pdf.js (one full page fitted, visible scrollbar,
+  works on iOS Safari where native embedding fails) with the open-in-new-tab
+  escape kept; the portal lays out to the window on desktop and phone; and a
+  disabled Accept button now says why (§2.8). Resolved from the earlier QP-3 note:
+  full client/site **address fidelity on the countersigned cover** already holds —
+  the countersigned PDF renders from the frozen send payload, which carries the
+  full client/site objects.
+- **QUOTE-PORTAL-4 — remaining polish** *(carried from QP-2/3)*: **drag-and-drop**
+  recipient assignment (the picker ships keyboard-accessible click-to-assign To/Cc;
+  DnD is an enhancement) and rendering uploaded **drawing** pages into the
+  server-generated sent/countersigned PDF (still omitted server-side; the live
+  builder preview renders them client-side). **(S each)**
 - **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
 
 ### P2 — polish / designed-but-deferred

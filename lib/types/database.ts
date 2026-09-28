@@ -2700,6 +2700,7 @@ export interface DbQuoteAcceptance {
   quote_id: string;
   recipient_id: string | null; // QP-2 (0131): which recipient signed
   signed_pdf_path: string | null; // QP-2 (0131): the countersigned PDF
+  attestation_text: string | null; // QP-3 (0133): exact attestation wording agreed
   decision: "accepted" | "declined";
   signer_name: string | null;
   signer_title: string | null;
