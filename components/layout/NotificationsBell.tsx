@@ -1,19 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, FileSignature } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { type AppNotification } from "@/lib/notifications";
 import {
-  SEED_NOTIFICATIONS,
-  type AppNotification,
-} from "@/lib/notifications";
+  getMyNotificationsAction,
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+} from "@/app/(app)/notifications/actions";
+import type { DbNotification } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
+
+function timeAgo(iso: string): string {
+  const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function toAppNotification(n: DbNotification): AppNotification {
+  return {
+    id: n.id,
+    title: n.title,
+    body: n.body ?? "",
+    href: n.link ?? "#",
+    icon: FileSignature,
+    tone: n.type === "quote_declined" ? "warning" : "success",
+    timeAgo: timeAgo(n.created_at),
+    unread: !n.read_at,
+  };
+}
 
 const TONE_BG: Record<AppNotification["tone"], string> = {
   default: "bg-brand-navy/10 text-brand-navy",
@@ -23,12 +49,26 @@ const TONE_BG: Record<AppNotification["tone"], string> = {
 };
 
 export function NotificationsBell() {
-  const [items, setItems] = useState(SEED_NOTIFICATIONS);
+  const [items, setItems] = useState<AppNotification[]>([]);
   const unread = items.filter((i) => i.unread).length;
 
-  const markAllRead = () => setItems((prev) => prev.map((i) => ({ ...i, unread: false })));
-  const handleClick = (id: string) =>
+  const load = () => {
+    void getMyNotificationsAction().then((rows) => setItems(rows.map(toAppNotification)));
+  };
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 60_000); // light poll (no realtime subscription yet)
+    return () => clearInterval(t);
+  }, []);
+
+  const markAllRead = () => {
+    setItems((prev) => prev.map((i) => ({ ...i, unread: false })));
+    void markAllNotificationsReadAction();
+  };
+  const handleClick = (id: string) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, unread: false } : i)));
+    void markNotificationReadAction(id);
+  };
 
   return (
     <Popover>

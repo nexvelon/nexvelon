@@ -21,7 +21,7 @@ export default async function QuotePortalPage({
   if (result.status === "valid") {
     return (
       <PortalShell>
-        <QuotePortalView token={token} snapshot={result.snapshot} />
+        <QuotePortalView token={token} snapshot={result.snapshot} pdfUrl={`/q/${token}/pdf`} />
       </PortalShell>
     );
   }
@@ -33,9 +33,22 @@ export default async function QuotePortalPage({
           title={result.decision === "accepted" ? "Quote accepted" : "Quote declined"}
           body={
             result.decision === "accepted"
-              ? "Thank you — this quote has been accepted and the record is on file. Our team will be in touch about next steps."
+              ? "Thank you — this quote has been accepted and a signed copy has been emailed to you. Our team will be in touch about next steps."
               : "This quote has been declined. If that wasn't intended, please reply to the email you received and we'll help."
           }
+        />
+      </PortalShell>
+    );
+  }
+
+  // QP-2 — another recipient of the same quote already responded; this link is
+  // now read-only, not broken (item 2c).
+  if (result.status === "superseded") {
+    return (
+      <PortalShell>
+        <PortalMessage
+          title="This quote has already been responded to"
+          body="Someone else on this quote has already accepted or declined it, so it can no longer be signed from this link. If you have questions, please reply to the email you received."
         />
       </PortalShell>
     );

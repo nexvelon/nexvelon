@@ -86,6 +86,23 @@ Each line is scoped to a single Claude Code paste.
   portal panel on the quote builder (migration 0129). **Kept separate (not built
   here):** quote→project conversion stays a deliberate operator action;
   approval-threshold routing not in scope.
+- ~~QUOTE-PORTAL-2 — recipients, delivery modes, countersigned record~~ **✅ SHIPPED
+  (PR #400).** Recipient picker (client/site contacts + employees + free-type, To/Cc);
+  two delivery modes (link-only vs PDF-attachment, with the "Cc never gets a signing
+  link" rule enforced server-side + a DB CHECK); the portal shows the **full PDF**
+  with mandatory name/title/signature; on acceptance a **countersigned PDF** (signature
+  page written onto the document) is emailed to both parties and filed in the quote's
+  **Proposals**/**Signed** folders; **30-day** expiry; re-send revokes the prior link
+  immediately; per-recipient tokens with one-acceptance-closes-the-others; in-app
+  **notifications** to sender + Admins (new `notifications` table); and an **Admin-only
+  hard delete** of an acceptance — a deliberate owner override of the §2.2 append-only
+  stance, compensated by an audit row of the deletion (migrations 0131, 0132).
+- **QUOTE-PORTAL-3 — deferred follow-ups** *(from QUOTE-PORTAL-2)*: drag-and-drop
+  recipient assignment (QP-2 ships keyboard-accessible click-to-assign To/Cc; DnD is a
+  polish enhancement); rendering uploaded **drawing** pages into the server-generated
+  PDF (the live builder preview renders them client-side; the sent/countersigned PDF
+  currently omits ephemeral drawing images); and full client/site **address** fidelity
+  on the countersigned copy's cover. **(S each)**
 - **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
 
 ### P2 — polish / designed-but-deferred
