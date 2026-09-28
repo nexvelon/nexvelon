@@ -1,9 +1,9 @@
 "use client";
 
-// QUOTE-PORTAL-1 — the client-facing quote view + e-acceptance. Renders the
-// immutable SNAPSHOT only. Accept = typed name (the signature of record) + a
-// required attestation + an optional drawn signature; Decline = optional reason.
-// Mobile-first, large tap targets, self-contained styling.
+// QUOTE-PORTAL-2 — the client-facing quote view + e-acceptance. Shows the FULL
+// quote PDF (item 3) plus a quick summary from the immutable snapshot. Accept
+// requires name, title AND a drawn signature (all mandatory); Decline takes an
+// optional reason. Mobile-first, large tap targets, self-contained styling.
 
 import { useRef, useState, useTransition } from "react";
 import { formatCurrency } from "@/lib/format";
@@ -13,7 +13,7 @@ import type { QuoteSnapshot } from "@/lib/api/quote-portal";
 
 const { NAVY, GOLD, INK } = PORTAL_COLORS;
 
-export function QuotePortalView({ token, snapshot }: { token: string; snapshot: QuoteSnapshot }) {
+export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; snapshot: QuoteSnapshot; pdfUrl: string }) {
   const [mode, setMode] = useState<"view" | "accept" | "decline">("view");
   const [done, setDone] = useState<null | "accepted" | "declined">(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,16 +29,20 @@ export function QuotePortalView({ token, snapshot }: { token: string; snapshot: 
   const [reason, setReason] = useState("");
 
   const submitAccept = () => {
-    if (!name.trim()) return setError("Please type your full name to sign.");
+    // Item 3 — name, title and signature are ALL mandatory.
+    if (!name.trim()) return setError("Please enter your full name.");
+    if (!title.trim()) return setError("Please enter your title.");
+    const signature = sigRef.current?.toDataURL() ?? null;
+    if (!signature) return setError("Please add your signature before submitting.");
     if (!attest) return setError("Please confirm you're authorised to accept this quote.");
     setError(null);
     start(async () => {
       const res = await acceptQuoteAction({
         token,
         signerName: name.trim(),
-        signerTitle: title.trim() || undefined,
+        signerTitle: title.trim(),
         signerEmail: email.trim() || undefined,
-        signatureImage: sigRef.current?.toDataURL() ?? null,
+        signatureImage: signature,
       });
       if (res.ok) setDone("accepted");
       else setError(res.error);
@@ -93,7 +97,21 @@ export function QuotePortalView({ token, snapshot }: { token: string; snapshot: 
         </div>
       </div>
 
-      {/* Line items */}
+      {/* Full quote PDF (item 3 — the portal shows the full document). */}
+      <div style={{ padding: "16px 24px 0" }}>
+        <iframe
+          src={pdfUrl}
+          title={`Quote ${snapshot.number}`}
+          style={{ width: "100%", height: 620, border: "1px solid #e7e0cf", borderRadius: 6, background: "#fff" }}
+        />
+        <div style={{ textAlign: "center", marginTop: 6 }}>
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontSize: 12 }}>
+            Open the full quote PDF in a new tab
+          </a>
+        </div>
+      </div>
+
+      {/* Quick summary (from the immutable snapshot) */}
       <div style={{ padding: "16px 24px" }}>
         {snapshot.sections.map((sec, si) => (
           <div key={si} style={{ marginBottom: 18 }}>
@@ -184,7 +202,7 @@ export function QuotePortalView({ token, snapshot }: { token: string; snapshot: 
             <input style={inp} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
             <div style={{ display: "flex", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <label style={lbl}>Title (optional)</label>
+                <label style={lbl}>Title</label>
                 <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Facilities Manager" />
               </div>
               <div style={{ flex: 1 }}>
@@ -192,7 +210,7 @@ export function QuotePortalView({ token, snapshot }: { token: string; snapshot: 
                 <input style={inp} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
               </div>
             </div>
-            <label style={lbl}>Draw your signature (optional)</label>
+            <label style={lbl}>Draw your signature</label>
             <SignaturePad ref={sigRef} />
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "12px 0", fontSize: 13, color: INK }}>
               <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 3 }} />

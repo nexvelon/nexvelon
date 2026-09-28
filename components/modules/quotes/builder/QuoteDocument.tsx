@@ -2692,7 +2692,7 @@ function DrawingsImagePage({
 // Orchestrator
 // ----------------------------------------------------------------------------
 
-interface DocProps {
+export interface DocProps {
   number: string;
   name?: string;
   createdAt: string;
@@ -2721,6 +2721,79 @@ interface DocProps {
   // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.
   // Ephemeral (never persisted); absent slots fall back to the placeholder.
   drawingsImagesByPath?: Record<string, string[]>;
+  // QUOTE-PORTAL-2 item 4 — when present, a final "Accepted & Signed" page is
+  // appended so the signature/name/title/timestamp are written onto the PDF
+  // itself (the countersigned copy), not merely recorded in the database.
+  acceptance?: QuoteAcceptanceStamp;
+}
+
+export interface QuoteAcceptanceStamp {
+  name: string;
+  title: string;
+  email?: string | null;
+  signedAt: string; // ISO
+  signatureImage?: string | null; // drawn-signature data URL (optional)
+  ip?: string | null;
+}
+
+// QUOTE-PORTAL-2 — the appended countersignature page. Self-contained styling so
+// it never depends on the themed page internals; themed only by accent colour.
+function SignaturePage({ theme, template, number, acceptance }: {
+  theme: QuoteTheme;
+  template: QuoteTemplate;
+  number: string;
+  acceptance: QuoteAcceptanceStamp;
+}) {
+  const accent = theme.accent ?? "#8A6A2E";
+  const ink = "#1A1A1A";
+  return (
+    <Page size="LETTER" style={{ padding: 56, fontFamily: "Helvetica", color: ink, backgroundColor: "#ffffff" }}>
+      <Text style={{ fontSize: 10, letterSpacing: 2, color: accent, marginBottom: 6 }}>
+        {template.tradeName?.toUpperCase() ?? "NEXVELON"}
+      </Text>
+      <Text style={{ fontSize: 22, marginBottom: 4 }}>Accepted &amp; Signed</Text>
+      <Text style={{ fontSize: 11, color: "#555", marginBottom: 28 }}>
+        Quote {number} — this acceptance is recorded against the exact quote shown above.
+      </Text>
+      <View style={{ height: 1, backgroundColor: accent, marginBottom: 24 }} />
+
+      {acceptance.signatureImage ? (
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ fontSize: 9, color: "#777", marginBottom: 4 }}>SIGNATURE</Text>
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+          <Image src={acceptance.signatureImage} style={{ width: 240, height: 80, objectFit: "contain" }} />
+        </View>
+      ) : null}
+
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 9, color: "#777" }}>SIGNED BY</Text>
+        <Text style={{ fontSize: 14 }}>{acceptance.name}</Text>
+      </View>
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 9, color: "#777" }}>TITLE</Text>
+        <Text style={{ fontSize: 12 }}>{acceptance.title}</Text>
+      </View>
+      {acceptance.email ? (
+        <View style={{ marginBottom: 10 }}>
+          <Text style={{ fontSize: 9, color: "#777" }}>EMAIL</Text>
+          <Text style={{ fontSize: 12 }}>{acceptance.email}</Text>
+        </View>
+      ) : null}
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 9, color: "#777" }}>DATE &amp; TIME</Text>
+        <Text style={{ fontSize: 12 }}>{safeFormat(acceptance.signedAt, "MMMM d, yyyy 'at' h:mm a")}</Text>
+      </View>
+      {acceptance.ip ? (
+        <Text style={{ fontSize: 8, color: "#999", marginTop: 18 }}>
+          Recorded from IP {acceptance.ip}. A tamper-evident hash of this acceptance is stored with Nexvelon.
+        </Text>
+      ) : (
+        <Text style={{ fontSize: 8, color: "#999", marginTop: 18 }}>
+          A tamper-evident hash of this acceptance is stored with Nexvelon.
+        </Text>
+      )}
+    </Page>
+  );
 }
 
 // QD-2 Phase 5c — how many rendered pages a schedule contributes. Every kind
@@ -2766,6 +2839,7 @@ export function QuoteDocument(props: DocProps) {
     showName = true,
     showDescription = true,
     drawingsImagesByPath = {},
+    acceptance,
   } = props;
 
   const styles = createStyles(theme);
@@ -2983,6 +3057,14 @@ export function QuoteDocument(props: DocProps) {
             );
         }
       })}
+      {acceptance ? (
+        <SignaturePage
+          theme={theme}
+          template={template}
+          number={number}
+          acceptance={acceptance}
+        />
+      ) : null}
     </Document>
   );
 }

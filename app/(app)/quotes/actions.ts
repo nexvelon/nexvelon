@@ -37,11 +37,19 @@ import { adaptClient, adaptSite } from "@/lib/quotes/picker-adapters";
 import { redactQuote, resolveFieldGates } from "@/lib/permissions/field-redaction";
 import {
   createQuotePortalSend,
-  getQuotePortalStatus,
-  type QuotePortalStatus,
+  getQuotePortalOverview,
+  deleteAcceptance,
+  type QuotePortalOverview,
+  type DeliveryMode,
+  type PortalRecipientInput,
 } from "@/lib/api/quote-portal";
-import { sendQuotePortalEmail } from "@/lib/auth/email";
+import {
+  sendQuotePortalEmail,
+  sendQuoteAttachmentEmail,
+} from "@/lib/auth/email";
 import { resolveCurrentSender } from "@/lib/email/dispatch";
+import { getClientById, getSiteById, getContactsByClient, getContactsBySite } from "@/lib/api/clients";
+import type { DbContact } from "@/lib/types/database";
 import type { BuilderLineItem, Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
 
@@ -395,85 +403,219 @@ function portalBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL ?? "https://app.nexvelonglobal.com";
 }
 
-/**
- * QUOTE-PORTAL-1 — send a quote to the client for online review + e-acceptance.
- * Captures the immutable snapshot, mints a fresh token (revoking any prior open
- * link), flips a Draft to Sent, and emails the /q/<token> link. Gated quotes:edit.
- */
-export async function sendQuotePortalAction(input: {
-  quoteId: string;
-  recipientEmail: string;
-}): Promise<ActionResult<{ url: string; emailWarning: string | null }>> {
+export interface QuoteRecipientOption {
+  name: string;
+  email: string;
+  role: string | null; // title / role for display
+  source: "client_contact" | "site_contact" | "employee";
+}
+
+function contactToOption(c: DbContact, source: "client_contact" | "site_contact"): QuoteRecipientOption | null {
+  if (!c.email) return null;
+  const name = [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.email;
+  return { name, email: c.email, role: c.title ?? null, source };
+}
+
+/** QUOTE-PORTAL-2 — the recipient picker's data: client contacts, site contacts,
+ *  and employees (each with name/role/email). Gated quotes:view. */
+export async function getQuoteRecipientOptionsAction(quoteId: string): Promise<
+  ActionResult<{ clientContacts: QuoteRecipientOption[]; siteContacts: QuoteRecipientOption[]; employees: QuoteRecipientOption[] }>
+> {
   try {
-    const gate = await requireQuotesPermission("edit");
+    const gate = await requireQuotesPermission("view");
     if (!gate.ok) return gate;
-    const email = input.recipientEmail?.trim();
-    if (!email || !email.includes("@")) {
-      return { ok: false, error: "Enter the client's email address to send the quote." };
-    }
-    const quote = await getQuoteById(input.quoteId);
+    const quote = await getQuoteById(quoteId);
     if (!quote) return { ok: false, error: "Quote not found." };
-    if (!quote.clientId) {
-      return { ok: false, error: "Add a client to the quote before sending it." };
-    }
 
-    // Capture the snapshot + token (revokes any prior open link).
-    const { token } = await createQuotePortalSend({
-      quoteId: input.quoteId,
-      recipientEmail: email,
-      sentBy: gate.actorId,
-    });
+    const clientContacts = quote.clientId
+      ? (await getContactsByClient(quote.clientId))
+          .map((c) => contactToOption(c, "client_contact"))
+          .filter((o): o is QuoteRecipientOption => o !== null)
+      : [];
+    const siteContacts = quote.siteId
+      ? (await getContactsBySite(quote.siteId))
+          .map((c) => contactToOption(c, "site_contact"))
+          .filter((o): o is QuoteRecipientOption => o !== null)
+      : [];
 
-    // First send flips Draft → Sent (needs client + site, per the existing guard).
-    if (quote.status === "Draft") {
-      if (!quote.siteId) {
-        return { ok: false, error: "Add a service site to the quote before sending it." };
-      }
-      const flip = await upsertQuoteAction({ ...quote, status: "Sent" });
-      if (!flip.ok) return flip;
-    }
+    const supabase = await createSupabaseServerClient();
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, display_name, email, title, status")
+      .neq("status", "Terminated");
+    const employees: QuoteRecipientOption[] = ((profs ?? []) as {
+      first_name: string | null;
+      last_name: string | null;
+      display_name: string | null;
+      email: string | null;
+      title: string | null;
+    }[])
+      .filter((p) => !!p.email)
+      .map((p) => ({
+        name:
+          p.display_name?.trim() ||
+          [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
+          p.email!,
+        email: p.email!,
+        role: p.title ?? "Employee",
+        source: "employee" as const,
+      }));
 
-    // Email the link. The link + snapshot already exist and are visible in the
-    // portal panel even if the transport fails — but the failure is NOT silent:
-    // it is recorded in email_log by the dispatcher AND surfaced to the operator
-    // as a warning on the result so they can copy the link and follow up.
-    const url = `${portalBaseUrl().replace(/\/$/, "")}/q/${token}`;
-    const sender = await resolveCurrentSender();
-    let emailWarning: string | null = null;
-    try {
-      await sendQuotePortalEmail({
-        to: email,
-        token,
-        baseUrl: portalBaseUrl(),
-        quoteNumber: quote.number,
-        total: quote.total != null ? formatCurrency(quote.total) : null,
-        sender,
-        quoteId: input.quoteId,
-        sentBy: gate.actorId,
-      });
-    } catch (e) {
-      emailWarning = e instanceof Error ? e.message : String(e);
-      console.error("[quote-portal] email send failed (link still valid):", e);
-    }
-
-    revalidatePath("/quotes");
-    revalidatePath(`/quotes/${input.quoteId}`);
-    return { ok: true, data: { url, emailWarning } };
+    return { ok: true, data: { clientContacts, siteContacts, employees } };
   } catch (e) {
     return fail(e);
   }
 }
 
-/** Operator read of the portal status (viewed / accepted / declined + signature).
- *  Gated quotes:view — visible to any operator who can see the quote. */
-export async function getQuotePortalStatusAction(
+/**
+ * QUOTE-PORTAL-2 — send a quote to chosen recipients (To/Cc) as a link or an
+ * attachment. Captures the immutable snapshot + safe PDF, mints a per-'to'
+ * recipient link (revoking any prior open link — item 9), flips a Draft to Sent,
+ * and emails per the delivery mode. The "Cc never gets a signing link" rule is
+ * enforced here (link emails go only to To) and in the schema. Gated quotes:edit.
+ */
+export async function sendQuotePortalAction(input: {
+  quoteId: string;
+  deliveryMode: DeliveryMode;
+  recipients: PortalRecipientInput[];
+}): Promise<ActionResult<{ links: { email: string; url: string }[]; emailWarning: string | null }>> {
+  try {
+    const gate = await requireQuotesPermission("edit");
+    if (!gate.ok) return gate;
+
+    const recipients = (input.recipients ?? [])
+      .map((r) => ({ ...r, email: r.email.trim() }))
+      .filter((r) => r.email);
+    const invalid = recipients.find((r) => !r.email.includes("@"));
+    if (invalid) return { ok: false, error: `"${invalid.email}" is not a valid email address.` };
+    const toRecipients = recipients.filter((r) => r.role === "to");
+    if (toRecipients.length === 0) {
+      return { ok: false, error: "Add at least one To recipient." };
+    }
+    const mode: DeliveryMode = input.deliveryMode === "attachment" ? "attachment" : "link";
+
+    const quote = await getQuoteById(input.quoteId);
+    if (!quote) return { ok: false, error: "Quote not found." };
+    if (!quote.clientId) return { ok: false, error: "Add a client to the quote before sending it." };
+    if (quote.status === "Draft" && !quote.siteId) {
+      return { ok: false, error: "Add a service site to the quote before sending it." };
+    }
+
+    // Resolve display parties for the PDF (names/addresses only — never internal figures).
+    const dbClient = quote.clientId ? await getClientById(quote.clientId) : null;
+    const dbSite = quote.siteId ? await getSiteById(quote.siteId) : null;
+    const parties = {
+      client: dbClient ? adaptClient(dbClient.client) : undefined,
+      site: dbSite ? adaptSite(dbSite) : undefined,
+    };
+
+    const result = await createQuotePortalSend({
+      quoteId: input.quoteId,
+      deliveryMode: mode,
+      recipients,
+      parties,
+      sentBy: gate.actorId,
+    });
+
+    if (quote.status === "Draft") {
+      const flip = await upsertQuoteAction({ ...quote, status: "Sent" });
+      if (!flip.ok) return flip;
+    }
+
+    const sender = await resolveCurrentSender();
+    const base = portalBaseUrl();
+    const total = quote.total != null ? formatCurrency(quote.total) : null;
+    const links: { email: string; url: string }[] = [];
+    let emailWarning: string | null = null;
+
+    // Attachment mode: the PDF goes to To + Cc (one email). The link is sent
+    // SEPARATELY to To only (below). Cc therefore never receives a link.
+    if (mode === "attachment") {
+      const ccEmails = recipients.filter((r) => r.role === "cc").map((r) => r.email);
+      try {
+        await sendQuoteAttachmentEmail({
+          to: toRecipients.map((r) => r.email),
+          cc: ccEmails,
+          quoteNumber: quote.number,
+          total,
+          pdfBuffer: result.proposalPdf,
+          pdfFilename: `Quote_${quote.number}.pdf`,
+          sender,
+          quoteId: input.quoteId,
+          sentBy: gate.actorId,
+        });
+      } catch (e) {
+        emailWarning = e instanceof Error ? e.message : String(e);
+        console.error("[quote-portal] attachment email failed:", e);
+      }
+    }
+
+    // Signing link → To recipients ONLY, in both modes.
+    for (const rec of result.recipients.filter((r) => r.role === "to" && r.token)) {
+      const url = `${base.replace(/\/$/, "")}/q/${rec.token}`;
+      links.push({ email: rec.email, url });
+      try {
+        await sendQuotePortalEmail({
+          to: rec.email,
+          token: rec.token!,
+          baseUrl: base,
+          quoteNumber: quote.number,
+          total,
+          sender,
+          quoteId: input.quoteId,
+          sentBy: gate.actorId,
+        });
+      } catch (e) {
+        emailWarning = e instanceof Error ? e.message : String(e);
+        console.error("[quote-portal] link email failed (link still valid):", e);
+      }
+    }
+
+    revalidatePath("/quotes");
+    revalidatePath(`/quotes/${input.quoteId}`);
+    return { ok: true, data: { links, emailWarning } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Operator read of the full portal history (sends + recipients + acceptances).
+ *  Gated quotes:view. */
+export async function getQuotePortalOverviewAction(
   quoteId: string
-): Promise<ActionResult<QuotePortalStatus>> {
+): Promise<ActionResult<QuotePortalOverview>> {
   try {
     const gate = await requireQuotesPermission("view");
     if (!gate.ok) return gate;
     const supabase = await createSupabaseServerClient();
-    return { ok: true, data: await getQuotePortalStatus(supabase, quoteId) };
+    return { ok: true, data: await getQuotePortalOverview(supabase, quoteId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** QUOTE-PORTAL-2 item 10 — ADMIN-ONLY hard delete of an acceptance record. The
+ *  deletion is permanent and cannot be undone; it is itself audited to
+ *  quote_audit_log (who, when, which quote, which signer, when signed). */
+export async function deleteAcceptanceAction(input: {
+  acceptanceId: string;
+}): Promise<ActionResult<{ deleted: true }>> {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate;
+    const adminName =
+      gate.profile.display_name?.trim() ||
+      [gate.profile.first_name, gate.profile.last_name].filter(Boolean).join(" ").trim() ||
+      gate.profile.email ||
+      null;
+    const res = await deleteAcceptance({
+      acceptanceId: input.acceptanceId,
+      adminId: gate.profile.id,
+      adminName,
+    });
+    if (!res.ok) return { ok: false, error: res.error ?? "Delete failed." };
+    revalidatePath("/quotes");
+    return { ok: true, data: { deleted: true } };
   } catch (e) {
     return fail(e);
   }

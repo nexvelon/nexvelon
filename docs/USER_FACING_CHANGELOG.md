@@ -158,6 +158,33 @@
   DNS and reputation — see `docs/EMAIL_SETUP.md` for the one-time setup and how to
   verify it.
 
+### Quotes — choose who receives a quote, send it two ways, and get the signed copy back (QUOTE-PORTAL-2)
+
+- When you send a quote, you now **pick the recipients** from the client's and site's
+  real contacts and from your employees (searchable), sorting them into **To** and
+  **Cc** — or type an address for someone not yet in the system. It's the Client
+  portal panel on the quote.
+- **Two ways to send:**
+  - **Link only** — the secure signing link goes to your **To** recipients.
+  - **PDF + link** — the full quote PDF is emailed to **To and Cc**, and the signing
+    link goes **separately to To only**. A Cc recipient never receives a link they
+    could sign with.
+- The portal now shows the client the **full quote PDF**. To accept, they must enter
+  their **name, title and a signature** (all required), then submit.
+- **On acceptance, both you and the client get the signed quote** — a countersigned
+  PDF with the signature, name, title and timestamp written onto the document — and
+  it's filed on the quote: the unsigned version in a **Proposals** folder, the signed
+  version in a **Signed** folder, each named with the date and time.
+- **You're notified when a quote is signed** — the sender and every Admin get an
+  in-app notification (the bell), and the quote moves to Approved (or Revision if
+  declined).
+- **Links expire after 30 days.** **Re-sending** a revised quote creates a new link
+  and a new snapshot and **immediately disables the old link** — a client can never
+  accept old pricing. Earlier sends and acceptances stay visible as history.
+- **Admins can permanently delete an acceptance record.** It asks you to confirm and
+  warns it can't be undone; the deletion itself is recorded in the audit log (who
+  deleted it, when, which quote, which signer, and when it had been signed).
+
 ### Quotes — send a quote to the client for online acceptance (QUOTE-PORTAL-1)
 
 - You can now **send a quote to your client as a secure web link** they open on any

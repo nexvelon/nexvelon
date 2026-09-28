@@ -605,7 +605,7 @@ export async function sendQuotePortalEmail(opts: {
   const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
   const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
   const intro = `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Your quote${opts.quoteNumber ? ` <strong>${opts.quoteNumber}</strong>` : ""}${opts.total ? ` (total ${opts.total})` : ""} is ready to review. Open the secure link below to see the details and accept or decline online — no account needed.</p>`;
-  const closing = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}The link is private to you and expires in 90 days. For any questions, simply reply to this email.</p>`;
+  const closing = `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}The link is private to you and expires in 30 days. For any questions, simply reply to this email.</p>`;
 
   const html = emailShell({
     eyebrow: "QUOTE",
@@ -628,7 +628,7 @@ export async function sendQuotePortalEmail(opts: {
     "",
     `Review & Sign Quote: ${base}`,
     "",
-    "The link is private to you and expires in 90 days. For any questions, reply to this email.",
+    "The link is private to you and expires in 30 days. For any questions, reply to this email.",
     "",
     "— Nexvelon Global",
   ].join("\n");
@@ -645,6 +645,106 @@ export async function sendQuotePortalEmail(opts: {
     log: { entityType: "quote", entityId: opts.quoteId, sentBy: opts.sentBy },
   });
   if (!res.ok) throw new Error(`sendQuotePortalEmail: ${res.error}`);
+}
+
+/** QUOTE-PORTAL-2 — "send as attachment" mode: the full quote PDF goes to To + Cc.
+ *  The signing link is sent SEPARATELY (sendQuotePortalEmail) to To only, so Cc
+ *  never receives a link. */
+export async function sendQuoteAttachmentEmail(opts: {
+  to: string[];
+  cc?: string[];
+  quoteNumber: string;
+  companyName?: string | null;
+  total?: string | null;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+  sender?: EmailSender | null;
+  quoteId?: string | null;
+  sentBy?: string | null;
+}): Promise<void> {
+  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
+  const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
+  const bodyHtml = emailShell({
+    eyebrow: "QUOTE",
+    headline: "Your quote is attached.",
+    bodyHtml:
+      `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}Please find your quote${opts.quoteNumber ? ` <strong>${opts.quoteNumber}</strong>` : ""}${opts.total ? ` (total ${opts.total})` : ""} attached as a PDF.</p>` +
+      `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}A separate email with a secure link to review and sign online has been sent to the primary recipient. For any questions, simply reply to this email.</p>`,
+    signatureItalic: "We look forward to working with you.",
+    signatureGroup: opts.companyName || "The Nexvelon Global Group",
+    signatureSubline: "QUOTE",
+    outerNote: outerNoteFor("This quote was prepared for", opts.to[0] ?? ""),
+  });
+  const text = [
+    "Nexvelon Global · Quote",
+    "",
+    `Please find your quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""}${opts.total ? ` (total ${opts.total})` : ""} attached as a PDF.`,
+    "A separate email with a secure link to review and sign online has been sent to the primary recipient.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const res = await dispatchEmail({
+    label: "sendQuoteAttachmentEmail",
+    kind: "client",
+    sender: opts.sender,
+    to: opts.to,
+    bcc: opts.cc, // Cc recipients on the copy; the dispatcher also BCCs the copy address
+    subject: `Your Nexvelon quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""}`,
+    html: bodyHtml,
+    text,
+    attachments: [{ filename: opts.pdfFilename, content: opts.pdfBuffer }],
+    headers: { "X-Entity-Ref-ID": `nexvelon-quote-attachment-${Date.now()}` },
+    log: { entityType: "quote", entityId: opts.quoteId, sentBy: opts.sentBy },
+  });
+  if (!res.ok) throw new Error(`sendQuoteAttachmentEmail: ${res.error}`);
+}
+
+/** QUOTE-PORTAL-2 item 4 — on acceptance, email the COUNTERSIGNED PDF to the
+ *  signer; the configured copy address is BCC'd by the dispatcher, so Nexvelon
+ *  receives a copy too. */
+export async function sendSignedQuoteEmail(opts: {
+  to: string;
+  quoteNumber: string;
+  signerName?: string | null;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+  quoteId?: string | null;
+}): Promise<void> {
+  const para = `font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;color:#2A2418;line-height:1.65;padding-left:24px;text-indent:-24px;`;
+  const bullet = `<span style="color:#C9A35C;font-size:11px;margin-right:10px;vertical-align:middle;">&#10022;</span>`;
+  const html = emailShell({
+    eyebrow: "SIGNED QUOTE",
+    headline: "Thank you — your signed quote.",
+    bodyHtml:
+      `<p class="nx-p" style="${para}margin:0 0 24px;">${bullet}${opts.signerName ? `${opts.signerName}, thank you` : "Thank you"} for accepting quote${opts.quoteNumber ? ` <strong>${opts.quoteNumber}</strong>` : ""}. A countersigned copy is attached for your records.</p>` +
+      `<p class="nx-p" style="${para}margin:0 0 28px;">${bullet}Our team will be in touch about next steps. For any questions, simply reply to this email.</p>`,
+    signatureItalic: "We look forward to working with you.",
+    signatureGroup: "The Nexvelon Global Group",
+    signatureSubline: "SIGNED QUOTE",
+    outerNote: outerNoteFor("This signed quote was sent to", opts.to),
+  });
+  const text = [
+    "Nexvelon Global · Signed Quote",
+    "",
+    `${opts.signerName ? `${opts.signerName}, thank you` : "Thank you"} for accepting quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""}. A countersigned copy is attached for your records.`,
+    "Our team will be in touch about next steps.",
+    "",
+    "— Nexvelon Global",
+  ].join("\n");
+
+  const res = await dispatchEmail({
+    label: "sendSignedQuoteEmail",
+    kind: "client",
+    to: opts.to,
+    subject: `Your signed Nexvelon quote${opts.quoteNumber ? ` ${opts.quoteNumber}` : ""}`,
+    html,
+    text,
+    attachments: [{ filename: opts.pdfFilename, content: opts.pdfBuffer }],
+    headers: { "X-Entity-Ref-ID": `nexvelon-quote-signed-${Date.now()}` },
+    log: { entityType: "quote", entityId: opts.quoteId, sentBy: null },
+  });
+  if (!res.ok) throw new Error(`sendSignedQuoteEmail: ${res.error}`);
 }
 
 /** Notify inquiries@ that a client completed + submitted their onboarding. */

@@ -2657,10 +2657,13 @@ export type QuotePortalSendStatus =
 export interface DbQuotePortalSend {
   id: string;
   quote_id: string;
-  token: string;
+  token: string | null; // QP-2 (0131): legacy send-level link; new sends use per-recipient tokens
   snapshot: unknown; // the frozen client-safe QuoteSnapshot (jsonb)
   recipient_email: string | null;
   status: string;
+  delivery_mode: string; // QP-2 (0131): 'link' | 'attachment'
+  proposal_pdf_path: string | null; // QP-2 (0131): the unsigned PDF as sent
+  render_payload: unknown; // QP-2 (0131): frozen safe DocProps for the countersigned render
   view_count: number;
   first_viewed_at: string | null;
   last_viewed_at: string | null;
@@ -2671,10 +2674,32 @@ export interface DbQuotePortalSend {
   expires_at: string;
 }
 
+// QUOTE-PORTAL-2 (migration 0131) — one row per To/Cc recipient of a send. Only
+// 'to' rows carry a token (the signing link); 'cc' rows have token NULL.
+export type QuotePortalRecipientRole = "to" | "cc";
+export interface DbQuotePortalRecipient {
+  id: string;
+  send_id: string;
+  quote_id: string;
+  role: QuotePortalRecipientRole;
+  name: string | null;
+  email: string;
+  source: string | null; // client_contact | site_contact | employee | manual
+  token: string | null; // non-null only for 'to' recipients
+  status: string; // sent|viewed|accepted|declined|revoked|expired|superseded
+  view_count: number;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  responded_at: string | null;
+  created_at: string;
+}
+
 export interface DbQuoteAcceptance {
   id: string;
   send_id: string;
   quote_id: string;
+  recipient_id: string | null; // QP-2 (0131): which recipient signed
+  signed_pdf_path: string | null; // QP-2 (0131): the countersigned PDF
   decision: "accepted" | "declined";
   signer_name: string | null;
   signer_title: string | null;
@@ -2702,6 +2727,18 @@ export interface DbEmailLog {
   provider_message_id: string | null;
   status: string; // 'sent' | 'failed'
   error: string | null;
+  created_at: string;
+}
+
+// QUOTE-PORTAL-2 (migration 0132) — a per-user in-app notification.
+export interface DbNotification {
+  id: string;
+  user_id: string;
+  type: string; // e.g. 'quote_signed'
+  title: string;
+  body: string | null;
+  link: string | null;
+  read_at: string | null;
   created_at: string;
 }
 
