@@ -104,7 +104,7 @@ Each line is scoped to a single Claude Code paste.
   currently omits ephemeral drawing images); and full client/site **address** fidelity
   on the countersigned copy's cover. **(S each)**
 - **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
-- ~~TZ-1 — timezone correctness~~ **✅ SHIPPED (PR #TBD).** All date/time DISPLAYS
+- ~~TZ-1 — timezone correctness~~ **✅ SHIPPED (PR #403).** All date/time DISPLAYS
   now convert through the `lib/format` business helpers (`businessDateTime`,
   `businessDate`/`businessDateLong`, `businessClock`, and a new legal
   `businessDateTimeZoned` → "September 28, 2026 at 5:07 PM EDT") to
