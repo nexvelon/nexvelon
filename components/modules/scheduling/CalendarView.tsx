@@ -1,4 +1,5 @@
 "use client";
+import { businessClock } from "@/lib/format";
 
 // SCHED-2 — the dispatch swimlane board, now rendering REAL bookings from
 // getDispatchBoard. Tech rows × day/hour grid; booking blocks placed at their
@@ -262,7 +263,7 @@ function BookingBlock({
       <div className="px-1.5 py-0.5">
         <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider opacity-90">
           {st.done && <Check className="h-2.5 w-2.5" />}
-          {booking.job_type} · {format(start, "HH:mm")}
+          {booking.job_type} · {businessClock(booking.starts_at)}
         </div>
         <div className="truncate text-[10px] font-medium leading-tight">{booking.title}</div>
         {booking.site_label && <div className="truncate text-[9px] opacity-80">{booking.site_label}</div>}

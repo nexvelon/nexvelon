@@ -55,6 +55,56 @@ export function businessDateTime(iso: string): string {
   }
 }
 
+// TZ-1 — datetime WITH the named zone, for legal documents (the countersigned
+// PDF's signature page). e.g. "September 28, 2026 at 5:07 PM EDT". A time with no
+// zone is ambiguous on a legal record; the zone name (EDT/EST) is DST-correct via
+// the IANA database, never a hardcoded offset. Uses formatToParts so we can splice
+// the literal "at" between the date and time.
+const businessDateTimeZonedFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZoneName: "short",
+});
+
+// TZ-1 — time-only 24h clock in Toronto, e.g. "13:42", for schedule/booking
+// times (timestamptz instants). A `time` column (naive local wall-clock) must
+// NOT be passed here — only true instants.
+const businessClockFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: BUSINESS_TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** Format an ISO/timestamptz instant as a Toronto 24h clock time, e.g. "13:42". */
+export function businessClock(iso: string): string {
+  try {
+    return businessClockFmt.format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+/** Format an ISO/timestamptz string as "September 28, 2026 at 5:07 PM EDT" in
+ *  Toronto, with the DST-correct zone name. For legal displays. */
+export function businessDateTimeZoned(iso: string): string {
+  try {
+    const parts = businessDateTimeZonedFmt.formatToParts(new Date(iso));
+    const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
+    const date = `${get("month")} ${get("day")}, ${get("year")}`;
+    const time = `${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
+    const zone = get("timeZoneName");
+    return `${date} at ${time}${zone ? ` ${zone}` : ""}`;
+  } catch {
+    return iso;
+  }
+}
+
 // JC-1 — date-only display, e.g. "Jun 16, 2026". For a `date` column value
 // (YYYY-MM-DD) there is no time-of-day, so we anchor at UTC noon before
 // rendering in Toronto: that keeps the calendar day stable instead of rolling
@@ -74,6 +124,29 @@ export function businessDate(iso: string): string {
       ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12))
       : new Date(iso);
     return businessDateDisplayFmt.format(d);
+  } catch {
+    return iso;
+  }
+}
+
+// TZ-1 — long-month date-only, e.g. "September 16, 2026", for the PDF documents
+// (which use that style). Same UTC-noon anchor for a bare YYYY-MM-DD so a
+// timestamptz rendered date-only never rolls back a day in Toronto.
+const businessDateLongFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+/** Format a date-only (YYYY-MM-DD) or ISO string as "September 16, 2026" in Toronto. */
+export function businessDateLong(iso: string): string {
+  try {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    const d = m
+      ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12))
+      : new Date(iso);
+    return businessDateLongFmt.format(d);
   } catch {
     return iso;
   }

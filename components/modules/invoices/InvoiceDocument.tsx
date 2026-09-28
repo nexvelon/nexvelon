@@ -1,4 +1,5 @@
 "use client";
+import { businessDateLong, businessDateTimeZoned } from "@/lib/format";
 
 // INVOICE-1b — branded invoice PDF (@react-pdf/renderer), mirroring the quote
 // document's fonts (Cormorant Garamond × Inter) and navy/antique-gold house
@@ -8,7 +9,6 @@
 
 import React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
-import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
@@ -35,7 +35,7 @@ function currencyFmt(currency: string) {
 function safeDate(iso: string | null, fmt = "MMMM d, yyyy"): string {
   if (!iso) return "—";
   try {
-    return format(parseISO(iso), fmt);
+    return /[hH]/.test(fmt) ? businessDateTimeZoned(iso) : businessDateLong(iso);
   } catch {
     return iso;
   }

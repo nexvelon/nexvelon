@@ -1,4 +1,5 @@
 "use client";
+import { businessDate } from "@/lib/format";
 
 // PROJ2-4b — interactive folder tree. Left pane: the tree (indented by depth).
 // Right pane: files in the selected folder (or the synthetic "Unfiled" node).
@@ -22,7 +23,6 @@ import {
   FileText,
   FolderInput,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -351,7 +351,7 @@ export function FolderTreeClient({
                   <div className="min-w-0 flex-1">
                     <p className="text-brand-charcoal truncate text-xs">{a.filename}</p>
                     <p className="text-muted-foreground text-[11px]">
-                      {fmtSize(a.size_bytes)} · {format(parseISO(a.created_at), "MMM d, yyyy")}
+                      {fmtSize(a.size_bytes)} · {businessDate(a.created_at)}
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="ghost" onClick={() => download(a)}>

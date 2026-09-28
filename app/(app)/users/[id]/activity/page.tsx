@@ -18,10 +18,10 @@ import {
 } from "@/lib/api/activity-log";
 import { ENTITY_TYPE_LABEL, canViewUserActivity } from "@/lib/activity-access";
 import { rangeFor } from "@/lib/date-range";
-import { format, parseISO } from "date-fns";
 import { ActivityFeedView } from "@/app/(app)/activity/ActivityFeedView";
 import { loadActivityFeedAction } from "@/app/(app)/activity/actions";
 import { parseFeedParams } from "@/app/(app)/activity/page";
+import { businessDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +100,7 @@ export default async function UserActivityPage({
             label="Most recent"
             value={
               summary.mostRecentAt
-                ? format(parseISO(summary.mostRecentAt), "MMM d, yyyy 'at' h:mm a")
+                ? businessDateTime(summary.mostRecentAt)
                 : "—"
             }
           />

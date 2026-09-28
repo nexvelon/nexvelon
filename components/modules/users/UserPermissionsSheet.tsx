@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // PERM-4 — the per-user permission override editor. Admin-only surface (mounts
 // behind the Users admin page, itself Admin-gated). Shows the user's role, an
@@ -35,7 +36,6 @@ import {
 import type { PermissionOverride, PermissionAuditRow } from "@/lib/api/permission-overrides";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
 
 const NEXT_STATE: Record<CellState, CellState> = {
   default: "granted",
@@ -222,7 +222,7 @@ export function UserPermissionsSheet({
                 <ul className="space-y-1">
                   {audit.map((a) => (
                     <li key={a.id} className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-[11px]">
-                      <span className="tabular-nums">{a.created_at ? format(parseISO(a.created_at), "MMM d, HH:mm") : "—"}</span>
+                      <span className="tabular-nums">{a.created_at ? businessDateTime(a.created_at) : "—"}</span>
                       <span className={cn("rounded px-1 text-[10px] font-medium",
                         a.change_type === "grant" ? "bg-emerald-50 text-emerald-700" : a.change_type === "deny" ? "bg-red-50 text-red-700" : "bg-muted")}>
                         {a.change_type}

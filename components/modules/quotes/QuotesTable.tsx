@@ -10,7 +10,6 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import {
   Table,
   TableBody,
@@ -21,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { QuoteStatusBadge } from "./QuoteStatusBadge";
 import { QuoteRowActions } from "./QuoteRowActions";
-import { formatCurrency } from "@/lib/format";
+import { businessDate, formatCurrency } from "@/lib/format";
 import { ensureSections } from "@/lib/quote-helpers";
 import type { Quote } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -115,7 +114,7 @@ export function QuotesTable({
         header: "Created",
         cell: ({ row }) => (
           <span className="text-muted-foreground text-xs tabular-nums">
-            {format(parseISO(row.original.createdAt), "MMM d, yyyy")}
+            {businessDate(row.original.createdAt)}
           </span>
         ),
       },
@@ -124,7 +123,7 @@ export function QuotesTable({
         header: "Valid Until",
         cell: ({ row }) => (
           <span className="text-muted-foreground text-xs tabular-nums">
-            {format(parseISO(row.original.expiresAt), "MMM d, yyyy")}
+            {businessDate(row.original.expiresAt)}
           </span>
         ),
       },

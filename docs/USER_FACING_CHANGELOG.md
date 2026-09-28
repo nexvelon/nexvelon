@@ -116,6 +116,19 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Everywhere — dates and times now show in Toronto time (TZ-1)
+
+- Dates and times across the app — the signed-quote PDF, activity and audit
+  timelines, the client portal, emails, schedules, invoices and more — now display
+  in **Eastern (America/Toronto)** time, not the server's UTC. Previously a quote
+  signed at 5:00 PM Toronto showed 9:00 PM.
+- The **countersigned quote PDF** — the legal record of when a client accepted —
+  now states the correct local time **with the zone named**, e.g. *"September 28,
+  2026 at 5:07 PM EDT"*. Daylight saving is handled automatically (EDT in summer,
+  EST in winter).
+- Nothing you signed before was stored wrongly — the times were always recorded
+  correctly; only their on-screen display was off, and that's now fixed.
+
 ### Email — you can now set the addresses the system sends from (MAIL-2)
 
 - A new **Settings → Email Addresses** screen (Admin only) lets you change every

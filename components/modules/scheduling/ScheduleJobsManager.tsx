@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // SCHED-1 — a functional dispatch-job backlog: create a dispatchable job
 // (standalone service call or from a project job), set required certs + a target
@@ -260,7 +261,7 @@ function BookDialog({
         toast.error(`Blocked — ${r.reasons.join(" ")}`);
       } else if (r.error === "tech_double_booked") {
         toast.error(
-          `Double-booked — that tech already has ${new Date(r.conflict.starts_at).toLocaleString()} → ${new Date(r.conflict.ends_at).toLocaleString()}.`
+          `Double-booked — that tech already has ${businessDateTime(r.conflict.starts_at)} → ${businessDateTime(r.conflict.ends_at)}.`
         );
       } else if (r.error === "invalid_window") {
         toast.error("End must be after start.");

@@ -14,7 +14,7 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import { format, parseISO } from "date-fns";
+import { businessDateLong, businessDateTimeZoned } from "@/lib/format";
 import "@/lib/quote-fonts";
 import { takeoffGroups } from "@/lib/quote-helpers";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
@@ -126,7 +126,7 @@ const usd = (n: number) =>
 
 function safeFormat(iso: string, fmt: string): string {
   try {
-    return format(parseISO(iso), fmt);
+    return /[hH]/.test(fmt) ? businessDateTimeZoned(iso) : businessDateLong(iso);
   } catch {
     return iso;
   }
@@ -2786,7 +2786,9 @@ function SignaturePage({ theme, template, number, acceptance }: {
       ) : null}
       <View style={{ marginBottom: 10 }}>
         <Text style={{ fontSize: 9, color: "#777" }}>DATE &amp; TIME</Text>
-        <Text style={{ fontSize: 12 }}>{safeFormat(acceptance.signedAt, "MMMM d, yyyy 'at' h:mm a")}</Text>
+        {/* TZ-1 — the legal signing time in Toronto with the DST-correct zone
+            named (e.g. "September 28, 2026 at 5:07 PM EDT"), never raw UTC. */}
+        <Text style={{ fontSize: 12 }}>{businessDateTimeZoned(acceptance.signedAt)}</Text>
       </View>
       {acceptance.ip ? (
         <Text style={{ fontSize: 8, color: "#999", marginTop: 18 }}>

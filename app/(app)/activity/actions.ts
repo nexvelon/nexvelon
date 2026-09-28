@@ -1,4 +1,5 @@
 "use server";
+import { businessDateTime } from "@/lib/format";
 
 // AUD-3 — server actions for the central Activity feed + its CSV export. Both go
 // through listActivityFeed with the caller's role, so a row for a record the
@@ -141,7 +142,7 @@ export async function exportActivityFeedAction(
         { key: "changes", label: "Changes", kind: "text" },
       ],
       rows: entries.map((e) => ({
-        when: format(parseISO(e.created_at), "yyyy-MM-dd HH:mm"),
+        when: businessDateTime(e.created_at),
         actor: actorName(e),
         action: e.action,
         type: ENTITY_TYPE_LABEL[e.entity_type] ?? e.entity_type,

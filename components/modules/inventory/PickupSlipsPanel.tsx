@@ -1,4 +1,5 @@
 "use client";
+import { businessDate } from "@/lib/format";
 
 // INV-9-3 — the pickup slips that issued this product. Read-only: reference,
 // recipient, date, a derived signed badge (signature present), a "View PDF" link
@@ -7,7 +8,6 @@
 // has_pdf), not status columns.
 
 import { useEffect, useState } from "react";
-import { format, parseISO } from "date-fns";
 import { CheckCircle2, ClipboardList, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -86,7 +86,7 @@ export function PickupSlipsPanel({ productId }: { productId: string }) {
                       <span style={{ color: "var(--brand-primary)" }}>{s.recipient_label}</span>
                     </td>
                     <td className="px-4 py-2 tabular-nums">
-                      {s.created_at ? format(parseISO(s.created_at), "d MMM yyyy") : "—"}
+                      {s.created_at ? businessDate(s.created_at) : "—"}
                     </td>
                     <td className="px-4 py-2 text-center tabular-nums">{s.line_count}</td>
                     <td className="px-4 py-2">

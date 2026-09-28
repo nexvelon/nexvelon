@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // SCHED-2 — the real Dispatch Board. Renders getDispatchBoard data (tech rows,
 // bookings, unscheduled backlog) and persists drag-to-assign / drag-to-reschedule
@@ -294,7 +295,7 @@ function BookingActionsDialog({
         <DialogHeader>
           <DialogTitle>{booking.title}</DialogTitle>
           <DialogDescription>
-            {new Date(booking.starts_at).toLocaleString()} → {new Date(booking.ends_at).toLocaleString()}
+            {businessDateTime(booking.starts_at)} → {businessDateTime(booking.ends_at)}
             {booking.site_label ? ` · ${booking.site_label}` : ""} · {booking.status}
           </DialogDescription>
         </DialogHeader>
@@ -353,7 +354,7 @@ function BookingActionsDialog({
               {audit.map((a) => (
                 <li key={a.id} className="text-muted-foreground flex justify-between">
                   <span className="capitalize">{a.action.replace(/_/g, " ")}</span>
-                  <span className="tabular-nums">{new Date(a.created_at).toLocaleString()}</span>
+                  <span className="tabular-nums">{businessDateTime(a.created_at)}</span>
                 </li>
               ))}
             </ul>

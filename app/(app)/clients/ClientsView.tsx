@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/format";
+import { businessDate, formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ClientFormDrawer } from "./ClientFormDrawer";
 import { BulkImportClientsDialog } from "./_components/BulkImportClientsDialog";
@@ -245,7 +245,7 @@ export function ClientsView({ clients }: Props) {
                   <span className="text-muted-foreground block truncate text-[11px]">
                     {c.portal_contact_email ?? c.legal_name ?? "—"}
                     {c.invited_at
-                      ? ` · submitted ${new Date(c.invited_at).toLocaleDateString()}`
+                      ? ` · submitted ${businessDate(c.invited_at)}`
                       : ""}
                   </span>
                 </div>

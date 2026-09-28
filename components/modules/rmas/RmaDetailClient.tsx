@@ -7,7 +7,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -40,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
-import { formatCurrency } from "@/lib/format";
+import { businessDateTime, formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   RMA_REASON_LABEL,
@@ -66,7 +65,7 @@ import type {
 function fmt(iso: string | null): string {
   if (!iso) return "—";
   try {
-    return format(parseISO(iso), "MMM d, yyyy 'at' h:mm a");
+    return businessDateTime(iso);
   } catch {
     return iso;
   }

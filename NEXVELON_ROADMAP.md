@@ -104,6 +104,19 @@ Each line is scoped to a single Claude Code paste.
   currently omits ephemeral drawing images); and full client/site **address** fidelity
   on the countersigned copy's cover. **(S each)**
 - **PAY-PORTAL-1 — invoice customer payment portal** *(designed §9, Stripe)*. **(M)**
+- ~~TZ-1 — timezone correctness~~ **✅ SHIPPED (PR #TBD).** All date/time DISPLAYS
+  now convert through the `lib/format` business helpers (`businessDateTime`,
+  `businessDate`/`businessDateLong`, `businessClock`, and a new legal
+  `businessDateTimeZoned` → "September 28, 2026 at 5:07 PM EDT") to
+  America/Toronto, DST-correct via the IANA database — the countersigned PDF, all
+  PDF documents (via one delegating `safeDate`), activity/audit timelines, emails,
+  the portal, scheduling and user screens. No migration: every timestamp column is
+  already `timestamptz` (UTC), so this was display-only — **no stored data was
+  wrong or rewritten**. **Deferred (not wrong today):** the scheduling day/week
+  GRID *positions* still use the viewer's browser zone (correct for Toronto-based
+  operators; the labels are now Toronto-fixed); and genuine `date`-column
+  displays (invoice/PO/quote dates) keep their bespoke date-fns formats since a
+  date-only value is day-stable and forcing one helper would regress formatting.
 
 ### P2 — polish / designed-but-deferred
 
