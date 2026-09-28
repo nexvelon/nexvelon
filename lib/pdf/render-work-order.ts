@@ -5,6 +5,7 @@ import "server-only";
 // registered by "@/lib/quote-fonts" (imported transitively by the document).
 // Mirrors lib/pdf/render-po.ts. NEVER import into a client component.
 
+import { ensureQuoteFontsRegistered } from "@/lib/pdf/quote-fonts-server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import {
   WorkOrderDocument,
@@ -14,5 +15,6 @@ import {
 export async function renderWorkOrderPdf(
   props: WorkOrderDocumentProps
 ): Promise<Buffer> {
+  ensureQuoteFontsRegistered();
   return await renderToBuffer(WorkOrderDocument(props));
 }

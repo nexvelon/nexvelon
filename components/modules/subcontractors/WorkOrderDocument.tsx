@@ -1,4 +1,7 @@
-"use client";
+// NOTE: intentionally NOT "use client" — this @react-pdf document is rendered
+// server-side to a Buffer (lib/pdf/render-*.ts) as well as in the client preview.
+// It has no hooks/browser APIs; a "use client" directive makes it a client
+// reference the server cannot render. Keep it isomorphic.
 
 // SUB-5 — the work-order (subcontractor agreement) PDF (@react-pdf/renderer).
 // Mirrors PurchaseOrderDocument's brand system but deliberately plainer: this is

@@ -1,4 +1,7 @@
-"use client";
+// NOTE: intentionally NOT "use client" — this @react-pdf document is rendered
+// server-side to a Buffer (lib/pdf/render-*.ts) as well as in the client preview.
+// It has no hooks/browser APIs; a "use client" directive makes it a client
+// reference the server cannot render. Keep it isomorphic.
 
 // PROJ2-13 — the commissioning certificate PDF (@react-pdf/renderer). Reuses the
 // SUB-5 work-order document's brand system and structure: Nexvelon wordmark +

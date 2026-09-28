@@ -1,4 +1,7 @@
-"use client";
+// NOTE: intentionally NOT "use client" — this @react-pdf document is rendered
+// server-side to a Buffer (lib/pdf/render-*.ts) as well as in the client preview.
+// It has no hooks/browser APIs; a "use client" directive makes it a client
+// reference the server cannot render. Keep it isomorphic.
 
 // INV-3 — branded parts pickup slip PDF (@react-pdf/renderer). Clones the
 // PurchaseOrderDocument house look (Cormorant Garamond × Inter, antique-gold-

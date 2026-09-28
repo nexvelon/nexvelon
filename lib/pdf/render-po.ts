@@ -5,6 +5,7 @@ import "server-only";
 // registered by "@/lib/quote-fonts" (imported transitively by the document).
 // NEVER import this into a client component.
 
+import { ensureQuoteFontsRegistered } from "@/lib/pdf/quote-fonts-server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import {
   PurchaseOrderDocument,
@@ -16,5 +17,6 @@ export async function renderPurchaseOrderPdf(
 ): Promise<Buffer> {
   // Invoke the component directly (returns the <Document> element) — the same
   // pattern the invite/quote PDFs use for server-side renderToBuffer.
+  ensureQuoteFontsRegistered();
   return await renderToBuffer(PurchaseOrderDocument(props));
 }
