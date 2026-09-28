@@ -87,7 +87,7 @@ Each line is scoped to a single Claude Code paste.
   here):** quote→project conversion stays a deliberate operator action;
   approval-threshold routing not in scope.
 - ~~QUOTE-PORTAL-2 — recipients, delivery modes, countersigned record~~ **✅ SHIPPED
-  (PR #TBD).** Recipient picker (client/site contacts + employees + free-type, To/Cc);
+  (PR #400).** Recipient picker (client/site contacts + employees + free-type, To/Cc);
   two delivery modes (link-only vs PDF-attachment, with the "Cc never gets a signing
   link" rule enforced server-side + a DB CHECK); the portal shows the **full PDF**
   with mandatory name/title/signature; on acceptance a **countersigned PDF** (signature
