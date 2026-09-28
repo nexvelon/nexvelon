@@ -5,6 +5,7 @@ import "server-only";
 // "@/lib/quote-fonts" (imported transitively by the document). Mirrors
 // lib/pdf/render-po.ts. NEVER import this into a client component.
 
+import { ensureQuoteFontsRegistered } from "@/lib/pdf/quote-fonts-server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import {
   PickupSlipDocument,
@@ -16,5 +17,6 @@ export async function renderPickupSlipPdf(
 ): Promise<Buffer> {
   // Invoke the component directly (returns the <Document> element) — the same
   // pattern the PO / invite / quote PDFs use for server-side renderToBuffer.
+  ensureQuoteFontsRegistered();
   return await renderToBuffer(PickupSlipDocument(props));
 }

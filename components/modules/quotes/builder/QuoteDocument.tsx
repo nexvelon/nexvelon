@@ -1,4 +1,9 @@
-"use client";
+// NOTE: intentionally NOT "use client". This module is rendered on BOTH sides:
+// the client preview (PdfPreviewPane) AND server-side to a PDF Buffer
+// (lib/pdf/render-quote.ts → renderToBuffer). It is a pure @react-pdf render
+// function with no React hooks or browser APIs, so it must stay isomorphic — a
+// "use client" directive turns it into a client reference that the server cannot
+// render ("Attempted to call QuoteDocument() from the server…"). See render-quote.ts.
 
 import React from "react";
 import {

@@ -11,6 +11,7 @@ import "server-only";
 // The unsigned PDF (as sent) and the countersigned PDF (with an appended
 // signature page via the `acceptance` prop) are both produced from this payload.
 
+import { ensureQuoteFontsRegistered } from "@/lib/pdf/quote-fonts-server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import {
   QuoteDocument,
@@ -112,6 +113,12 @@ export function buildSafeQuoteDocProps(
 
 /** Render the document to a PDF Buffer (Node runtime; @react-pdf needs Node). */
 export async function renderQuotePdf(props: DocProps): Promise<Buffer> {
+  // QuoteDocument is isomorphic (no "use client"), so on the server it is the real
+  // function — invoking it returns the <Document> element for renderToBuffer. A
+  // "use client" document would instead be a client reference the server cannot
+  // invoke ("Attempted to call QuoteDocument() from the server…"). Fonts must be
+  // registered first (server auto-registration does not happen — see quote-fonts).
+  ensureQuoteFontsRegistered();
   return await renderToBuffer(QuoteDocument(props));
 }
 

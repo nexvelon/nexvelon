@@ -36,5 +36,12 @@ export function registerQuoteFonts(basePath: string = "/fonts") {
 }
 
 if (typeof window !== "undefined") {
-  registerQuoteFonts();
+  // Resilient: in a jsdom test env `window` exists but @react-pdf may be mocked
+  // with a partial Font API — a throw here would crash module import. In a real
+  // browser this registers normally.
+  try {
+    registerQuoteFonts();
+  } catch {
+    /* fonts unavailable in this environment (e.g. mocked in tests) */
+  }
 }
