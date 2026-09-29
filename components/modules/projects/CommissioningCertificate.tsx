@@ -12,16 +12,16 @@
 
 import React from "react";
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
-import { format, parseISO } from "date-fns";
 import "@/lib/quote-fonts";
 import { getQuoteTheme, type QuoteTheme } from "@/lib/quote-themes";
+import { businessDateLong, businessDateTimeZoned } from "@/lib/format";
 
 const THEME_SLUG = "solid_white" as const;
 
 function safeDate(iso: string | null, fmt = "MMMM d, yyyy"): string {
   if (!iso) return "—";
   try {
-    return format(parseISO(iso), fmt);
+    return /[hH]/.test(fmt) ? businessDateTimeZoned(iso) : businessDateLong(iso);
   } catch {
     return iso;
   }

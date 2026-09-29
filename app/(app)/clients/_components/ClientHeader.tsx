@@ -3,7 +3,7 @@
 import { format, parseISO } from "date-fns";
 import { Edit3, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
+import { businessDate, formatCurrency } from "@/lib/format";
 import type { DbClientWithCounts, DbSite } from "@/lib/types/database";
 import { TIER_BADGE, initials } from "./shared";
 
@@ -55,7 +55,7 @@ export function ClientHeader({
                   style={{ color: "var(--brand-accent-soft)" }}
                   title="Tier last updated"
                 >
-                  Tier updated {format(parseISO(client.tier_set_at), "MMM d, yyyy")}
+                  Tier updated {businessDate(client.tier_set_at)}
                 </span>
               )}
               {client.client_code && (

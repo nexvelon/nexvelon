@@ -5,6 +5,7 @@
 
 import type { DbScheduleJobType, DbScheduleAssignmentStatus } from "@/lib/types/database";
 import type { BookingResult } from "@/lib/api/schedule-assignments";
+import { businessDate, businessDateTime } from "@/lib/format";
 
 /** Default booking length when a schedule_job has no estimated_hours. */
 export const DEFAULT_SLOT_MINUTES = 120; // 2 hours
@@ -71,9 +72,9 @@ export function bookingErrorMessage(r: BookingResult, techName: string): string 
     case "cert_block":
       return `Can't assign: ${techName} is missing ${r.reasons.join(" ")}`;
     case "tech_double_booked":
-      return `Can't assign: ${techName} is already booked ${new Date(r.conflict.starts_at).toLocaleString()} → ${new Date(r.conflict.ends_at).toLocaleString()}`;
+      return `Can't assign: ${techName} is already booked ${businessDateTime(r.conflict.starts_at)} → ${businessDateTime(r.conflict.ends_at)}`;
     case "tech_on_leave":
-      return `Can't assign: ${techName} is on approved leave ${new Date(r.absence.starts_at).toLocaleDateString()} → ${new Date(r.absence.ends_at).toLocaleDateString()}`;
+      return `Can't assign: ${techName} is on approved leave ${businessDate(r.absence.starts_at)} → ${businessDate(r.absence.ends_at)}`;
     case "invalid_window":
       return "Invalid time window.";
     default:

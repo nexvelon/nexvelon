@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // ACT-1 — display component for the activity_log. Renders the entries
 // fetched by listActivityFor() on the server side, latest-on-top.
@@ -13,7 +14,6 @@
 // a bare count is never shown (AUDIT-FIX-2).
 
 import { useState } from "react";
-import { format, parseISO } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type {
   ActivityAction,
@@ -67,10 +67,7 @@ function ActivityEntry({ entry }: { entry: DbActivityLogWithActor }) {
   const description = entry.parent_type
     ? describeChild(entry.action, entry.entity_type, entry.entity_label)
     : describeAction(entry.action, changeCount, changeKeys);
-  const timestamp = format(
-    parseISO(entry.created_at),
-    "MMM d, yyyy 'at' h:mm a"
-  );
+  const timestamp = businessDateTime(entry.created_at);
   const hasExpandable = entry.action === "update" && changeCount > 0;
 
   return (

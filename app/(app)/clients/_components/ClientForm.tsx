@@ -1,4 +1,5 @@
 "use client";
+import { businessDateLong } from "@/lib/format";
 
 // CL-9 — Shared client-form body. Extracted wholesale from the old
 // ClientFormDrawer so both the drawer (edit mode) and the new full-screen
@@ -18,7 +19,6 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -853,7 +853,7 @@ export function ClientForm({ mode, onSubmitSuccess, onCancel }: ClientFormProps)
       {isEdit && existing && (
         <p className="text-muted-foreground text-xs">
           Client created on{" "}
-          {format(parseISO(existing.created_at), "MMMM d, yyyy")}
+          {businessDateLong(existing.created_at)}
         </p>
       )}
 

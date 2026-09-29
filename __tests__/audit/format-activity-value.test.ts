@@ -41,8 +41,10 @@ describe("formatActivityValue — dates render in display format", () => {
   it("date-only string", () => {
     expect(fmt("2026-04-30")).toBe("Apr 30, 2026");
   });
-  it("ISO datetime string", () => {
-    expect(fmt("2026-04-30T13:05:00Z")).toMatch(/^Apr 30, 2026 at \d{1,2}:\d{2} (AM|PM)$/);
+  it("ISO datetime string — converted to Toronto (TZ-1), not raw UTC", () => {
+    // 13:05 UTC on Apr 30 is 9:05 AM EDT in Toronto. businessDateTime renders
+    // "Apr 30, 2026, 9:05 AM".
+    expect(fmt("2026-04-30T13:05:00Z")).toBe("Apr 30, 2026, 9:05 AM");
   });
   it("a non-date string is left alone", () => {
     expect(fmt("not-a-date")).toBe("not-a-date");

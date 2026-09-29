@@ -1,4 +1,5 @@
 "use client";
+import { businessDate, businessDateTime } from "@/lib/format";
 
 // POLISH-3 — public invitation UI: status/submit hub, the client + site info
 // forms (debounced autosave to a flat string→jsonb map), and the two T&C
@@ -1303,7 +1304,7 @@ export function TcSign({ token, which }: { token: string; which: "tc1" | "tc2" }
           style={{ borderColor: GOLD, background: PANEL, color: NAVY }}
         >
           Signed by <strong>{signedName}</strong> on{" "}
-          {new Date(signedAt).toLocaleString()}.
+          {businessDateTime(signedAt)}.
         </div>
       ) : (
         <div className="space-y-4">
@@ -1577,10 +1578,10 @@ export function InviteStatus({ token }: { token: string }) {
     (tc2Status === "complete" ? 1 : 0);
 
   const tc1Note = inv.tc1_signed_at
-    ? `Signed ${new Date(inv.tc1_signed_at).toLocaleDateString()}`
+    ? `Signed ${businessDate(inv.tc1_signed_at)}`
     : null;
   const tc2Note = inv.tc2_signed_at
-    ? `Signed ${new Date(inv.tc2_signed_at).toLocaleDateString()}`
+    ? `Signed ${businessDate(inv.tc2_signed_at)}`
     : null;
 
   return (

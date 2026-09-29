@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -1316,7 +1317,7 @@ export function QuoteBuilder({
               : ""}
             {rejection.rejectedByUser && rejection.rejectedAt ? " · " : ""}
             {rejection.rejectedAt
-              ? new Date(rejection.rejectedAt).toLocaleString()
+              ? businessDateTime(rejection.rejectedAt)
               : ""}
           </p>
           <p className="mt-1 text-[11px] text-orange-700">
@@ -1338,7 +1339,7 @@ export function QuoteBuilder({
             {closing.closedByUser ? `Closed by ${closing.closedByUser}` : ""}
             {closing.closedByUser && closing.closedAt ? " · " : ""}
             {closing.closedAt
-              ? new Date(closing.closedAt).toLocaleString()
+              ? businessDateTime(closing.closedAt)
               : ""}
           </p>
           <p className="mt-1 text-[11px] text-zinc-500">

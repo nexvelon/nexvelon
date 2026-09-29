@@ -1,7 +1,7 @@
 "use client";
+import { businessDate, businessDateTime } from "@/lib/format";
 
 import { useMemo, useState, useTransition } from "react";
-import { format, parseISO } from "date-fns";
 import {
   Activity,
   Check,
@@ -251,9 +251,7 @@ export function UsersTab({ realUsers, grantsByUser, onInvite }: UsersTabProps) {
                     </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs tabular-nums">
-                    {u.last_login_at
-                      ? format(parseISO(u.last_login_at), "MMM d, HH:mm")
-                      : "—"}
+                    {u.last_login_at ? businessDateTime(u.last_login_at) : "—"}
                   </TableCell>
                   <TableCell>
                     {u.mfa_enrolled ? (
@@ -728,7 +726,7 @@ export function ActivityLogTab({ events }: ActivityLogTabProps) {
               return (
                 <TableRow key={e.id}>
                   <TableCell className="text-muted-foreground text-[11px] tabular-nums whitespace-nowrap">
-                    {format(parseISO(e.created_at), "MMM d, HH:mm:ss")}
+                    {businessDateTime(e.created_at)}
                   </TableCell>
                   <TableCell className="text-xs">
                     <div className="text-brand-charcoal font-medium">
@@ -824,7 +822,7 @@ export function InvitationsTab({ realUsers }: InvitationsTabProps) {
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground text-xs tabular-nums">
-                  {format(parseISO(i.created_at), "MMM d, yyyy")}
+                  {businessDate(i.created_at)}
                 </TableCell>
                 <TableCell>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">

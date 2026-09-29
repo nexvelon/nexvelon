@@ -1,4 +1,5 @@
 "use client";
+import { businessDate } from "@/lib/format";
 
 // PROJ-1b — lean /projects list over REAL data only. Renders ProjectListRow
 // directly (no mock Project view-model): P-number, title, client, site, opco,
@@ -10,7 +11,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, X } from "lucide-react";
-import { format, parseISO } from "date-fns";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectComplianceAlertsPanel } from "@/components/modules/projects/ProjectComplianceAlertsPanel";
@@ -240,7 +240,7 @@ export default function ProjectsListPage() {
                     <ProjectLifecycleBadge status={r.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs tabular-nums">
-                    {format(parseISO(r.created_at), "MMM d, yyyy")}
+                    {businessDate(r.created_at)}
                   </TableCell>
                 </TableRow>
               ))

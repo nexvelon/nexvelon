@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // AUD-3 — the row renderer for the central Activity feed and the per-user view.
 // Each row: actor · action · entity type · label (linked when the record still
@@ -7,7 +8,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { format, parseISO } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { DbActivityLogWithActor } from "@/lib/types/database";
 import { ENTITY_TYPE_LABEL, feedHref } from "@/lib/activity-access";
@@ -68,7 +68,7 @@ function FeedRow({
   const label = entry.entity_label ?? "(unnamed)";
   const href = feedHref(entry.entity_type, entry.entity_id, entry.parent_id);
   const isLive = href ? liveKeys.has(`${entry.entity_type}:${entry.entity_id}`) : false;
-  const timestamp = format(parseISO(entry.created_at), "MMM d, yyyy 'at' h:mm a");
+  const timestamp = businessDateTime(entry.created_at);
 
   return (
     <div

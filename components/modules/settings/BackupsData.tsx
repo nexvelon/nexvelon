@@ -1,7 +1,8 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 import { useState } from "react";
-import { format, parseISO, subDays } from "date-fns";
+import { subDays } from "date-fns";
 import {
   CheckCircle2,
   Cloud,
@@ -301,7 +302,7 @@ export function BackupsData() {
               {history.slice(0, 10).map((h) => (
                 <TableRow key={h.id}>
                   <TableCell className="text-muted-foreground text-xs tabular-nums">
-                    {format(parseISO(h.date), "MMM d, yyyy · HH:mm")}
+                    {businessDateTime(h.date)}
                   </TableCell>
                   <TableCell className="text-xs">{h.type}</TableCell>
                   <TableCell className="text-right text-xs tabular-nums">{h.size}</TableCell>
@@ -328,7 +329,7 @@ export function BackupsData() {
                       size="xs"
                       variant="ghost"
                       onClick={() =>
-                        toast(`Restoring backup from ${format(parseISO(h.date), "MMM d, HH:mm")}`)
+                        toast(`Restoring backup from ${businessDateTime(h.date)}`)
                       }
                     >
                       Restore
@@ -416,7 +417,7 @@ export function BackupsData() {
                 {history.map((h) => (
                   <TableRow key={h.id}>
                     <TableCell className="text-xs tabular-nums">
-                      {format(parseISO(h.date), "MMM d, yyyy · HH:mm")}
+                      {businessDateTime(h.date)}
                     </TableCell>
                     <TableCell className="text-xs">{h.type}</TableCell>
                     <TableCell className="text-xs tabular-nums">{h.size}</TableCell>
@@ -428,7 +429,7 @@ export function BackupsData() {
                         size="xs"
                         onClick={() =>
                           toast.success(
-                            `Restore queued from ${format(parseISO(h.date), "MMM d, HH:mm")}`
+                            `Restore queued from ${businessDateTime(h.date)}`
                           )
                         }
                       >

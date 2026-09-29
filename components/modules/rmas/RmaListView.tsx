@@ -5,7 +5,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, parseISO } from "date-fns";
 import { Plus, Undo2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -27,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
-import { formatCurrency } from "@/lib/format";
+import { businessDate, formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   RMA_REASON_LABEL,
@@ -175,7 +174,7 @@ export function RmaListView({
                     {RMA_REASON_LABEL[r.reason as DbRmaReason] ?? r.reason}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {format(parseISO(r.created_at), "MMM d, yyyy")}
+                    {businessDate(r.created_at)}
                   </TableCell>
                   <TableCell className="text-right text-xs tabular-nums">
                     {r.line_count}

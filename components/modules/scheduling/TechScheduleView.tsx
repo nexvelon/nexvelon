@@ -1,4 +1,5 @@
 "use client";
+import { businessClock } from "@/lib/format";
 
 // SCHED-4 — a technician's read-only schedule (the "field" view). Techs are NOT
 // linked to logins (the techs roster carries no profile/user id — audit 2e), so
@@ -93,7 +94,7 @@ export function TechScheduleView() {
                         <div>
                           <span style={{ color: "var(--brand-primary)" }}>{b.title}</span>
                           <span className="text-muted-foreground">
-                            {" · "}{format(parseISO(b.starts_at), "HH:mm")}–{format(parseISO(b.ends_at), "HH:mm")}
+                            {" · "}{businessClock(b.starts_at)}–{businessClock(b.ends_at)}
                             {b.site_label ? ` · ${b.site_label}` : ""}
                           </span>
                         </div>

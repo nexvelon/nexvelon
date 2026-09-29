@@ -75,7 +75,7 @@ import {
 import { useRole } from "@/lib/role-context";
 import { hasPermission } from "@/lib/permissions";
 import { isSerializedProduct } from "@/lib/inventory-serial";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { businessDate, formatCurrency, formatNumber } from "@/lib/format";
 import type { ProductPurchaseHistoryRow } from "@/lib/api/purchase-orders";
 import type { InvoiceListRow } from "@/lib/api/invoices";
 import { STATUS_TONE } from "@/components/modules/invoices/shared";
@@ -710,10 +710,7 @@ export function ProductDetailClient({
                                     <TableCell className="text-muted-foreground text-xs">
                                       {/* PART-DETAIL B2: show acquired_at, fall
                                           back to created_at when unset. */}
-                                      {format(
-                                        parseISO(s.acquired_at ?? s.created_at),
-                                        "MMM d, yyyy"
-                                      )}
+                                      {businessDate(s.acquired_at ?? s.created_at)}
                                     </TableCell>
                                     <TableCell>
                                       <DropdownMenu>
@@ -960,7 +957,7 @@ export function ProductDetailClient({
                 {batches.map((b) => (
                   <TableRow key={b.batchId}>
                     <TableCell className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-                      {format(parseISO(b.createdAt), "MMM d, yyyy")}
+                      {businessDate(b.createdAt)}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {b.poNumber ?? "Manual"}
@@ -1058,7 +1055,7 @@ export function ProductDetailClient({
                     <TableCell className="text-muted-foreground text-xs">
                       {r.order_date
                         ? format(parseISO(r.order_date), "MMM d, yyyy")
-                        : format(parseISO(r.created_at), "MMM d, yyyy")}
+                        : businessDate(r.created_at)}
                     </TableCell>
                     <TableCell className="text-right text-xs tabular-nums">
                       {formatNumber(r.quantity)}

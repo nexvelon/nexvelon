@@ -3,6 +3,7 @@ import "server-only";
 import { parseTierText } from "@/lib/tier-text-parser";
 import { dispatchEmail, type EmailSender } from "@/lib/email/dispatch";
 import { getEmailAddresses } from "@/lib/email/addresses";
+import { businessDateTime } from "@/lib/format";
 
 // MAIL-1 — all sending now goes through the central dispatcher
 // (lib/email/dispatch.ts), which owns the Resend client, the sending identity
@@ -789,8 +790,8 @@ export async function sendClientSubmissionEmail(opts: {
     kv("Site contact", contact(sf)) +
     kv("Site phone", sf.c0Phone);
   const tcRows =
-    kv("Integrated Solutions Inc. T&C", `${opts.tc1.name ?? "—"} · ${opts.tc1.at ? new Date(opts.tc1.at).toLocaleString() : "—"}`) +
-    kv("Guardian Inc. T&C", `${opts.tc2.name ?? "—"} · ${opts.tc2.at ? new Date(opts.tc2.at).toLocaleString() : "—"}`);
+    kv("Integrated Solutions Inc. T&C", `${opts.tc1.name ?? "—"} · ${opts.tc1.at ? businessDateTime(opts.tc1.at) : "—"}`) +
+    kv("Guardian Inc. T&C", `${opts.tc2.name ?? "—"} · ${opts.tc2.at ? businessDateTime(opts.tc2.at) : "—"}`);
 
   const bodyHtml = `
     <p style="margin:0;">A prospective client (${escapeHtml(

@@ -1,4 +1,5 @@
 "use client";
+import { businessDateTime } from "@/lib/format";
 
 // QUOTE-PORTAL-2 — the operator's send-and-track panel. Pick recipients (To/Cc)
 // from real client/site contacts + employees (or free-type), choose a delivery
@@ -26,7 +27,7 @@ type Picked = { name: string; email: string; source: string };
 function fmt(ts: string | null): string {
   if (!ts) return "";
   try {
-    return new Date(ts).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    return businessDateTime(ts);
   } catch {
     return ts;
   }

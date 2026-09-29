@@ -19,7 +19,8 @@
 //                     a separate follow-up).
 //   • never renders undefined / null / [object Object] to a user.
 
-import { format, parseISO, isValid } from "date-fns";
+import { parseISO, isValid } from "date-fns";
+import { businessDate, businessDateTime } from "@/lib/format";
 
 const MAX_ARRAY_ITEMS = 6;
 const MAX_STRING = 200;
@@ -43,12 +44,10 @@ function truncateString(s: string): string {
  *  the string isn't a recognisable date. */
 function formatDateString(s: string): string | null {
   if (DATE_ONLY.test(s)) {
-    const d = parseISO(s);
-    return isValid(d) ? format(d, "MMM d, yyyy") : null;
+    return isValid(parseISO(s)) ? businessDate(s) : null;
   }
   if (DATE_TIME.test(s)) {
-    const d = parseISO(s);
-    return isValid(d) ? format(d, "MMM d, yyyy 'at' h:mm a") : null;
+    return isValid(parseISO(s)) ? businessDateTime(s) : null;
   }
   return null;
 }
