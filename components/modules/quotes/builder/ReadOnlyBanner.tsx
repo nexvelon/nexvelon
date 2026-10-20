@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Quote } from "@/lib/types";
@@ -26,9 +27,22 @@ export function ReadOnlyBanner({ state, quote }: Props) {
       <div className="space-y-0.5">
         <p className="font-medium">Read-only</p>
         <p className="text-xs leading-relaxed">
-          {quote?.status === "Converted" && quote.projectId
-            ? `This quote has been converted to Project ${quote.projectId}. Contact a Project Manager for changes.`
-            : (state.message ?? "Edits are disabled for the current role.")}
+          {quote?.status === "Converted" && quote.contractId ? (
+            // RECUR-2 — converted into a service contract. Editing this quote now
+            // could never change the contract (it was built from the signed copy),
+            // so say where changes belong.
+            <>
+              This quote has been converted to a{" "}
+              <Link href={`/contracts/${quote.contractId}`} className="underline">
+                service contract
+              </Link>
+              . Rate or term changes are made on the contract.
+            </>
+          ) : quote?.status === "Converted" && quote.projectId ? (
+            `This quote has been converted to Project ${quote.projectId}. Contact a Project Manager for changes.`
+          ) : (
+            (state.message ?? "Edits are disabled for the current role.")
+          )}
         </p>
       </div>
     </div>

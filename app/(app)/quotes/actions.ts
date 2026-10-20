@@ -52,6 +52,7 @@ import { getClientById, getSiteById, getContactsByClient, getContactsBySite } fr
 import type { DbContact } from "@/lib/types/database";
 import type { BuilderLineItem, Client, Quote, Site } from "@/lib/types";
 import type { DbQuoteAuditLog } from "@/lib/types/database";
+import { serviceContractQuoteIssues } from "@/lib/recurring/quote-terms";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -142,8 +143,9 @@ async function validateIntendedTarget(quote: Quote): Promise<string | null> {
   const kind = quote.intendedTargetKind ?? null;
   const projectId = quote.intendedTargetProjectId ?? null;
 
-  if (kind === null || kind === "new_project") {
-    // A non-change-order intent never carries a project id.
+  if (kind === null || kind === "new_project" || kind === "service_contract") {
+    // A non-change-order intent never carries a project id (RECUR-2: a
+    // service-contract quote converts into a contract, never onto a project).
     return projectId ? "invalid_convert_target" : null;
   }
 
@@ -251,6 +253,29 @@ export async function upsertQuoteAction(
     // cannot clobber the blob with the nulls we sent them.
     const gates = await resolveFieldGates();
     quote = await restoreRedactedQuoteFields(quote, prior, gates);
+
+    // RECUR-2 — the contract link is SERVER-OWNED: only the conversion action sets
+    // it. A builder save can neither forge one nor erase an existing one, and a
+    // quote that converted into a contract stays Converted.
+    if (prior?.contractId) {
+      quote = { ...quote, contractId: prior.contractId, status: "Converted" };
+    } else if (quote.contractId) {
+      quote = { ...quote, contractId: undefined };
+    }
+    // RECUR-2 — a service-contract quote becomes Converted ONLY by the conversion
+    // action (which creates the contract). Any other path flipping it to Converted
+    // would lock the quote with no contract behind it — monitored, never billed.
+    if (
+      quote.status === "Converted" &&
+      prior?.status !== "Converted" &&
+      quote.intendedTargetKind === "service_contract" &&
+      !quote.contractId
+    ) {
+      return {
+        ok: false,
+        error: "A service-contract quote is converted with “Convert to Contract” on the quote, which creates the contract.",
+      };
+    }
 
     // PROJ2-5 — reject an inconsistent intended conversion target before write.
     const targetError = await validateIntendedTarget(quote);
@@ -497,6 +522,16 @@ export async function sendQuotePortalAction(input: {
     const quote = await getQuoteById(input.quoteId);
     if (!quote) return { ok: false, error: "Quote not found." };
     if (!quote.clientId) return { ok: false, error: "Add a client to the quote before sending it." };
+    // RECUR-2 — a service-contract quote is only signable once its recurring terms
+    // are complete: the client signs the cadence + monthly fees the contract will
+    // bill, so an incomplete one would produce a signature we can't convert.
+    const scIssues = serviceContractQuoteIssues(quote);
+    if (scIssues.length > 0) {
+      return {
+        ok: false,
+        error: `This service-contract quote isn't ready to sign: ${scIssues.join(" ")}`,
+      };
+    }
     if (quote.status === "Draft" && !quote.siteId) {
       return { ok: false, error: "Add a service site to the quote before sending it." };
     }
@@ -852,9 +887,13 @@ export async function duplicateQuoteAction(
     dup.createdAt = today;
     dup.quoteDate = today;
     dup.projectId = undefined;
-    // Fresh conversion intent (0086 shape: both null).
-    dup.intendedTargetKind = undefined;
+    // Fresh conversion intent (0086 shape: both null). RECUR-2: a copy of a
+    // service-contract quote stays a service-contract quote (it carries no project
+    // id, and its agreement terms are reusable); it never inherits the contract.
+    dup.intendedTargetKind =
+      dup.intendedTargetKind === "service_contract" ? "service_contract" : undefined;
     dup.intendedTargetProjectId = undefined;
+    dup.contractId = undefined;
     // A fresh Draft carries no revision/closing history.
     dup.rejectionReason = undefined;
     dup.rejectionSource = undefined;

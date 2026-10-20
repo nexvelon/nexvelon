@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
 import { adaptDbRole } from "@/lib/permissions/resolve";
 import { getServiceContract } from "@/lib/api/service-contracts";
+import { listLateFeesForContract, listCreditsForContract } from "@/lib/api/contract-adjustments";
 import { getClients, listSites } from "@/lib/api/clients";
 import { ContractDetail } from "@/components/modules/contracts/ContractDetail";
 import { Card } from "@/components/ui/card";
@@ -46,7 +47,15 @@ export default async function ContractDetailPage({
   }
 
   const canManage = hasPermission(role, "financials", "edit");
-  const [clients, sites] = await Promise.all([getClients(), listSites()]);
+  // RECUR-2 — late fees are a financial view (financials:view); credits are part
+  // of the contract's record (clients:view, like its invoices).
+  const canViewFinancials = hasPermission(role, "financials", "view");
+  const [clients, sites, lateFees, credits] = await Promise.all([
+    getClients(),
+    listSites(),
+    canViewFinancials ? listLateFeesForContract(id) : Promise.resolve(null),
+    listCreditsForContract(id),
+  ]);
   const clientOptions = clients.map((c) => ({
     id: c.id,
     name: c.name,
@@ -60,6 +69,8 @@ export default async function ContractDetailPage({
       canManage={canManage}
       clientOptions={clientOptions}
       siteOptions={siteOptions}
+      lateFees={lateFees}
+      credits={credits}
     />
   );
 }

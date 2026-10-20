@@ -12,6 +12,7 @@ import {
 } from "@/lib/company-profile";
 import type { QuoteScheduleInstance } from "@/lib/quote-schedules";
 import type { Client, QuoteSection, Site, User } from "@/lib/types";
+import type { QuoteServiceContractTerms } from "@/lib/recurring/quote-terms";
 
 const PDFViewer = dynamic(
   () => import("@react-pdf/renderer").then((m) => m.PDFViewer),
@@ -54,6 +55,8 @@ interface Props {
   showDescription?: boolean;
   // QD-2 Phase 5c — rendered drawing-PDF pages, keyed by Storage path.
   drawingsImagesByPath: Record<string, string[]>;
+  // RECUR-2 — service-agreement terms for the monitoring page (service-contract quotes).
+  recurringTerms?: QuoteServiceContractTerms | null;
 }
 
 // QB-FIX-1 #6: memoized so the heavy @react-pdf re-layout only fires when the

@@ -30,6 +30,27 @@ import { issueInvoice } from "@/lib/api/invoices";
 import { logActivity, computeChanges } from "@/lib/api/activity-log";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  getContractConversionState,
+  convertQuoteToContract,
+  ContractConversionError,
+  type ContractConversionState,
+  type ConversionDecisions,
+} from "@/lib/api/contract-conversion";
+import {
+  listLateFeesForContract,
+  listProposedLateFees,
+  approveLateFee,
+  waiveLateFee,
+  previewCancellation,
+  cancelContractWithCredits,
+  listCreditsForContract,
+  type LateFeeRow,
+  type CancellationPreview,
+  type CancellationResult,
+} from "@/lib/api/contract-adjustments";
+import { validateLateFeeTerms } from "@/lib/recurring/late-fees";
+import type { DbServiceContractCredit } from "@/lib/types/database";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -69,6 +90,19 @@ function validate(input: ServiceContractInput): string | null {
   for (const l of input.lines) {
     if (!l.description?.trim()) return "Every pricing line needs a description.";
     if (!Number.isFinite(l.amount) || l.amount < 0) return "Every line needs a valid amount.";
+  }
+  // RECUR-2 — payment + late-fee terms.
+  if (
+    input.paymentTermsDays !== undefined &&
+    input.paymentTermsDays !== null &&
+    (!Number.isInteger(input.paymentTermsDays) || input.paymentTermsDays < 0)
+  ) {
+    return "Payment terms must be a whole number of days (or blank for no due date).";
+  }
+  const lateFeeError = validateLateFeeTerms(input.lateFee);
+  if (lateFeeError) return lateFeeError;
+  if (input.lateFee && input.lateFee.mode !== "none" && (input.paymentTermsDays ?? null) === null) {
+    return "A late fee needs payment terms — without a due date an invoice can never be late.";
   }
   return null;
 }
@@ -225,6 +259,15 @@ export async function setContractStatusAction(
   try {
     const gate = await requireContractsManage();
     if (!gate.ok) return gate;
+    // RECUR-2 — cancelling goes through cancelContractAction, which records the
+    // last day of service and works out any credit owed. A bare status flip would
+    // silently keep money for days never served.
+    if (status === "cancelled") {
+      return {
+        ok: false,
+        error: "Use “Cancel contract” — it records the last day of service and works out any credit owed.",
+      };
+    }
     const before = await getServiceContract(id);
     if (!before) return { ok: false, error: "Contract not found." };
     const row = await setServiceContractStatus(id, status, gate.actorId);
@@ -278,6 +321,163 @@ export async function issueContractDraftAction(
     revalidatePath("/invoices");
     revalidatePath(`/invoices/${invoiceId}`);
     return { ok: true, data: { id: inv.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── RECUR-2 — quote → contract conversion ───────────────────────────────────
+
+async function conversionPerms() {
+  const [canConvert, canManageContracts] = await Promise.all([
+    can("quotes", "convert"),
+    can("financials", "edit"),
+  ]);
+  return { canConvert, canManageContracts };
+}
+
+/** Everything the "Convert to service contract" dialog shows — including every
+ *  reason it can't run yet (§2.8: the action is explained, never hidden). */
+export async function getQuoteContractConversionAction(
+  quoteId: string
+): Promise<ActionResult<ContractConversionState>> {
+  try {
+    const denied = await requireContractsView();
+    if (denied) return { ok: false, error: denied };
+    const state = await getContractConversionState(quoteId, await conversionPerms());
+    if (!state) return { ok: false, error: "Quote not found." };
+    return { ok: true, data: state };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function convertQuoteToContractAction(
+  quoteId: string,
+  decisions: ConversionDecisions
+): Promise<ActionResult<{ contractId: string; oneTimeInvoiceId: string | null; warnings: string[] }>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me) return { ok: false, error: "You need to be signed in." };
+    const perms = await conversionPerms();
+    const composed = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
+    const actorName = me.display_name?.trim() || composed || me.email || null;
+    const res = await convertQuoteToContract(quoteId, decisions, { id: me.id, name: actorName }, perms);
+    revalidatePath("/contracts");
+    revalidatePath(`/contracts/${res.contract.id}`);
+    revalidatePath("/quotes");
+    revalidatePath(`/quotes/${quoteId}`);
+    revalidatePath(`/clients/${res.contract.client_id}`);
+    if (res.oneTimeInvoiceId) revalidatePath("/invoices");
+    return {
+      ok: true,
+      data: { contractId: res.contract.id, oneTimeInvoiceId: res.oneTimeInvoiceId, warnings: res.warnings },
+    };
+  } catch (e) {
+    if (e instanceof ContractConversionError) return { ok: false, error: e.message };
+    return fail(e);
+  }
+}
+
+// ─── RECUR-2 — late fees ─────────────────────────────────────────────────────
+
+export async function listContractLateFeesAction(
+  contractId: string
+): Promise<ActionResult<LateFeeRow[]>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !(await can("financials", "view"))) {
+      return { ok: false, error: "You don't have permission to view late fees." };
+    }
+    return { ok: true, data: await listLateFeesForContract(contractId) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listProposedLateFeesAction(): Promise<ActionResult<LateFeeRow[]>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !(await can("financials", "view"))) {
+      return { ok: false, error: "You don't have permission to view late fees." };
+    }
+    return { ok: true, data: await listProposedLateFees() };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function approveLateFeeAction(
+  feeId: string
+): Promise<ActionResult<{ invoiceId: string }>> {
+  try {
+    const gate = await requireContractsManage();
+    if (!gate.ok) return gate;
+    const res = await approveLateFee(feeId, gate.actorId);
+    revalidatePath("/contracts");
+    revalidatePath(`/contracts/${res.fee.contract_id}`);
+    revalidatePath("/invoices");
+    return { ok: true, data: { invoiceId: res.invoiceId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function waiveLateFeeAction(
+  feeId: string,
+  reason: string
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const gate = await requireContractsManage();
+    if (!gate.ok) return gate;
+    const fee = await waiveLateFee(feeId, reason, gate.actorId);
+    revalidatePath("/contracts");
+    revalidatePath(`/contracts/${fee.contract_id}`);
+    return { ok: true, data: { id: fee.id } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ─── RECUR-2 — cancellation credits ──────────────────────────────────────────
+
+export async function previewCancellationAction(
+  contractId: string,
+  effectiveDate: string
+): Promise<ActionResult<CancellationPreview>> {
+  try {
+    const gate = await requireContractsManage();
+    if (!gate.ok) return gate;
+    return { ok: true, data: await previewCancellation(contractId, effectiveDate) };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function cancelContractAction(
+  contractId: string,
+  effectiveDate: string
+): Promise<ActionResult<CancellationResult>> {
+  try {
+    const gate = await requireContractsManage();
+    if (!gate.ok) return gate;
+    const res = await cancelContractWithCredits(contractId, effectiveDate, gate.actorId);
+    revalidatePath("/contracts");
+    revalidatePath(`/contracts/${contractId}`);
+    revalidatePath("/invoices");
+    return { ok: true, data: res };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function listContractCreditsAction(
+  contractId: string
+): Promise<ActionResult<DbServiceContractCredit[]>> {
+  try {
+    const denied = await requireContractsView();
+    if (denied) return { ok: false, error: denied };
+    return { ok: true, data: await listCreditsForContract(contractId) };
   } catch (e) {
     return fail(e);
   }

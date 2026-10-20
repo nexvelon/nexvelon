@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logQuoteAuditEvent } from "@/lib/api/quote-audit";
 import { getQuoteTemplate } from "@/lib/company-profile";
 import { buildAttestationText } from "@/lib/quotes/attestation";
+import { buildRecurringSnapshot, type RecurringTermsSnapshot } from "@/lib/recurring/quote-terms";
 import {
   buildSafeQuoteDocProps,
   renderQuotePdf,
@@ -94,6 +95,11 @@ export interface QuoteSnapshot {
   tax: number;
   total: number;
   terms?: string;
+  /** RECUR-2 — the recurring agreement terms exactly as signed (cadence, per-month
+   *  service fees, setup, term, payment + late-fee terms, billing opco). Present
+   *  only on a complete service-contract quote; the contract is built from THIS,
+   *  never from the live quote. Absent on pre-RECUR-2 snapshots. */
+  recurring?: RecurringTermsSnapshot;
 }
 
 function snapshotLine(it: BuilderLineItem): QuoteSnapshotLine {
@@ -157,6 +163,7 @@ export function buildQuoteSnapshot(
     tax: quote.tax,
     total: quote.total,
     terms: quote.terms,
+    recurring: buildRecurringSnapshot(quote) ?? undefined,
   };
 }
 
@@ -731,6 +738,23 @@ export async function deleteAcceptance(input: {
   if (error) throw new Error(`deleteAcceptance/lookup: ${error.message}`);
   const acc = (data as DbQuoteAcceptance | null) ?? null;
   if (!acc) return { ok: false, error: "Acceptance not found." };
+
+  // RECUR-2 (2d) — a service contract built from this acceptance points at it as
+  // its signed evidence (the answer to a later rate dispute). Refuse with a plain
+  // reason rather than letting the RESTRICT foreign key fail cryptically.
+  const { data: linked, error: linkErr } = await sb
+    .from("service_contracts")
+    .select("id, name")
+    .eq("source_acceptance_id", input.acceptanceId)
+    .limit(1);
+  if (linkErr) throw new Error(`deleteAcceptance/contractCheck: ${linkErr.message}`);
+  const contract = ((linked ?? []) as { id: string; name: string }[])[0];
+  if (contract) {
+    return {
+      ok: false,
+      error: `This acceptance is the signed record behind service contract “${contract.name}”, so it can't be deleted.`,
+    };
+  }
 
   const { error: delErr } = await sb.from("quote_acceptances").delete().eq("id", input.acceptanceId);
   if (delErr) throw new Error(`deleteAcceptance/delete: ${delErr.message}`);

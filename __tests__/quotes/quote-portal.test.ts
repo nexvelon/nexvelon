@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   sendRow: null as Record<string, unknown> | null, // for loadSend / legacy lookup
   recipientRow: null as Record<string, unknown> | null, // for token lookup
   accRow: null as Record<string, unknown> | null, // for deleteAcceptance
+  linkedContracts: [] as { id: string; name: string }[], // RECUR-2 acceptance-delete guard
   acceptError: null as { code?: string } | null,
   captured: {
     sendInsert: null as Record<string, unknown> | null,
@@ -70,6 +71,8 @@ function resolve(ctx: ChainCtx): { data: unknown; error: unknown } {
         return { data: null, error: null };
       }
       return { data: h.accRow, error: null };
+    case "service_contracts":
+      return { data: h.linkedContracts, error: null };
     default:
       return { data: null, error: null };
   }
@@ -292,6 +295,19 @@ describe("recordPortalDecision", () => {
 });
 
 // ── admin hard delete ────────────────────────────────────────────────────────────
+describe("RECUR-2 — the signed record behind a service contract", () => {
+  it("an acceptance a contract was built from can't be deleted", async () => {
+    h.accRow = { id: "acc-1", quote_id: "q1", decision: "accepted", signer_name: "Dana", accepted_at: "2026-10-15" };
+    h.linkedContracts = [{ id: "con-1", name: "Fire monitoring — 200 King St" }];
+    h.captured.accDeleted = false;
+    const res = await deleteAcceptance({ acceptanceId: "acc-1", adminId: "admin-1", adminName: "Ada Admin" });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/signed record behind service contract/);
+    expect(h.captured.accDeleted).toBe(false);
+    h.linkedContracts = [];
+  });
+});
+
 describe("deleteAcceptance (item 10)", () => {
   it("deletes the record and writes an audit row capturing who/what/when-signed", async () => {
     h.accRow = { id: "acc-1", quote_id: "q1", decision: "accepted", signer_name: "Dana Buyer", signer_email: "dana@acme.com", accepted_at: "2026-09-26T12:00:00Z" };

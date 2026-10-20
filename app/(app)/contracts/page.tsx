@@ -14,6 +14,7 @@ import {
   listPendingContractDrafts,
 } from "@/lib/api/service-contracts";
 import { ContractsView } from "@/components/modules/contracts/ContractsView";
+import { listProposedLateFees } from "@/lib/api/contract-adjustments";
 import { Card } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -41,12 +42,13 @@ export default async function ContractsPage() {
   const canManage = hasPermission(role, "financials", "edit");
   const canViewFinancials = hasPermission(role, "financials", "view");
 
-  const [contracts, clients, sites, revenue, pending] = await Promise.all([
+  const [contracts, clients, sites, revenue, pending, lateFees] = await Promise.all([
     listServiceContracts(),
     getClients(),
     listSites(),
     canViewFinancials ? getRecurringRevenue() : Promise.resolve(null),
     canViewFinancials ? listPendingContractDrafts() : Promise.resolve([]),
+    canViewFinancials ? listProposedLateFees() : Promise.resolve([]),
   ]);
 
   const clientOptions = clients.map((c) => ({
@@ -63,6 +65,7 @@ export default async function ContractsPage() {
       siteOptions={siteOptions}
       revenue={revenue}
       pendingDrafts={pending}
+      proposedLateFees={lateFees}
       canManage={canManage}
       canViewFinancials={canViewFinancials}
     />

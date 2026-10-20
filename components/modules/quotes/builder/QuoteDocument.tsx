@@ -19,6 +19,13 @@ import "@/lib/quote-fonts";
 import { takeoffGroups } from "@/lib/quote-helpers";
 import { computeQuoteTotals } from "@/lib/quotes/totals";
 import { monitoringTotals, GUARDIAN_ONLY_KINDS } from "@/lib/quote-schedules";
+import {
+  CADENCE_ADVERB,
+  CADENCE_PERIOD_NOUN,
+  MONTHS_PER_PERIOD,
+  type QuoteServiceContractTerms,
+} from "@/lib/recurring/quote-terms";
+import { describeLateFeeTerms } from "@/lib/recurring/late-fees";
 import type { QuoteTheme } from "@/lib/quote-themes";
 import type { QuoteTemplate } from "@/lib/company-profile";
 import type {
@@ -1678,6 +1685,10 @@ function ParticularsPage({
 // plus an optional one-time setup line. Independent of quoteTotals.
 interface MonitoringPageProps extends CommonPageProps {
   schedule: MonitoringScheduleInstance;
+  /** RECUR-2 — the service-agreement terms when this is a service-contract quote:
+   *  the page then states the real billing cadence, per-invoice amount, term and
+   *  late-payment terms (what the client signs) instead of the legacy annual line. */
+  recurringTerms?: QuoteServiceContractTerms | null;
 }
 
 function MonitoringPage({
@@ -1689,9 +1700,20 @@ function MonitoringPage({
   styles,
   template,
   number,
+  recurringTerms,
 }: MonitoringPageProps) {
   const subtitleSuffix = schedule.subtitle || "Recurring monitoring fees";
   const { monthly, annual, setup } = monitoringTotals(schedule);
+  // RECUR-2 — with a cadence on a service-contract quote, state the actual
+  // billing (e.g. "Billed quarterly in advance — $255.00 per quarter, plus HST").
+  const cadence = recurringTerms?.cadence ?? null;
+  const timingWord = recurringTerms?.billingTiming === "arrears" ? "in arrears" : "in advance";
+  // The schedule's seeded default note ("Billed annually in advance.") would
+  // contradict a non-annual cadence on a signed document, so it gives way to the
+  // computed line; any note the operator actually wrote is still shown.
+  const showBillingNote =
+    !!schedule.billingNote?.trim() &&
+    !(cadence && schedule.billingNote.trim() === "Billed annually in advance.");
   const services = schedule.services.filter(
     (s) => (s.label && s.label.trim().length > 0) || s.monthlyFee
   );
@@ -1753,17 +1775,43 @@ function MonitoringPage({
             </Text>
           </View>
         ) : null}
-        <View style={styles.partGrandRow}>
-          <Text style={styles.partGrandLabel}>
-            Annual total (billed in advance)
-          </Text>
-          <Text style={[styles.partGrandValue, styles.numText]}>
-            {usd(annual)}
-          </Text>
-        </View>
+        {cadence ? (
+          <View style={styles.partGrandRow}>
+            <Text style={styles.partGrandLabel}>
+              {`Billed ${CADENCE_ADVERB[cadence]} ${timingWord}, per ${CADENCE_PERIOD_NOUN[cadence]}`}
+            </Text>
+            <Text style={[styles.partGrandValue, styles.numText]}>
+              {usd(monthly * MONTHS_PER_PERIOD[cadence])}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.partGrandRow}>
+            <Text style={styles.partGrandLabel}>
+              Annual total (billed in advance)
+            </Text>
+            <Text style={[styles.partGrandValue, styles.numText]}>
+              {usd(annual)}
+            </Text>
+          </View>
+        )}
       </View>
 
-      {schedule.billingNote && schedule.billingNote.trim().length > 0 ? (
+      {cadence ? (
+        <>
+          <Text style={styles.agreementBody}>
+            {`Recurring fees are billed ${CADENCE_ADVERB[cadence]} ${timingWord}, plus applicable HST. ${
+              recurringTerms?.termMonths
+                ? `Initial term: ${recurringTerms.termMonths} months from the service start date.`
+                : "This agreement is open-ended (no fixed term)."
+            }`}
+          </Text>
+          <Text style={styles.agreementBody}>
+            {`Late payment: ${describeLateFeeTerms(recurringTerms?.lateFee)}`}
+          </Text>
+        </>
+      ) : null}
+
+      {showBillingNote ? (
         <Text style={styles.agreementBody}>{schedule.billingNote}</Text>
       ) : null}
 
@@ -2730,6 +2778,8 @@ export interface DocProps {
   // appended so the signature/name/title/timestamp are written onto the PDF
   // itself (the countersigned copy), not merely recorded in the database.
   acceptance?: QuoteAcceptanceStamp;
+  /** RECUR-2 — service-agreement terms (only on a service-contract quote). */
+  recurringTerms?: QuoteServiceContractTerms | null;
 }
 
 export interface QuoteAcceptanceStamp {
@@ -2847,6 +2897,7 @@ export function QuoteDocument(props: DocProps) {
     showDescription = true,
     drawingsImagesByPath = {},
     acceptance,
+    recurringTerms = null,
   } = props;
 
   const styles = createStyles(theme);
@@ -3036,6 +3087,7 @@ export function QuoteDocument(props: DocProps) {
                 key={schedule.id}
                 {...common}
                 schedule={schedule}
+                recurringTerms={recurringTerms}
               />
             );
           case "dispatch":

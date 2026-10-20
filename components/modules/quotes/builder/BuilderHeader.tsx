@@ -47,6 +47,10 @@ interface Props {
   onApprove: () => void;
   onPreview: () => void;
   onConvert: () => void;
+  /** RECUR-2 — what "Convert" makes. A service-contract quote converts into a
+   *  contract; its button stays clickable (once saved) and the dialog explains any
+   *  reason it can't run yet (§2.8) instead of a silently disabled button. */
+  convertTarget?: "project" | "contract";
   onCommitStock: () => void;
   onReopen: () => void;
   canReopen: boolean;
@@ -73,6 +77,7 @@ export function BuilderHeader({
   onApprove,
   onPreview,
   onConvert,
+  convertTarget = "project",
   onCommitStock,
   onReopen,
   canReopen,
@@ -97,7 +102,8 @@ export function BuilderHeader({
   const canApprove = hasPermission(role, "quotes", "approve");
   const approveEnabled = canApprove && status === "Sent";
   const canConvert = hasPermission(role, "quotes", "convert");
-  const convertEnabled = canConvert && status === "Approved";
+  const convertEnabled =
+    convertTarget === "contract" ? canConvert && isSaved : canConvert && status === "Approved";
   const canCommitStock = hasPermission(role, "inventory", "edit");
   const commitVisible =
     canCommitStock && (status === "Approved" || status === "Converted");
@@ -300,7 +306,7 @@ export function BuilderHeader({
             className="bg-brand-gold hover:bg-brand-gold/90 text-brand-navy"
           >
             <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-            Convert to Project
+            {convertTarget === "contract" ? "Convert to Contract" : "Convert to Project"}
           </Button>
         </div>
       </div>
