@@ -153,7 +153,7 @@ Each line is scoped to a single Claude Code paste.
   `invoices:approveWriteOff` gate + an AR write-off workflow (reason + audit) — the
   clean roadmap-level silent casualty; a write-off is currently an untracked edit
   (`docs/INTENT_RECOVERY.md` §4). **(M)**
-- ~~**RECUR-2 — service-contract follow-ups**~~ **✅ SHIPPED (RECUR-2 PR, migration
+- ~~**RECUR-2 — service-contract follow-ups**~~ **✅ SHIPPED (PR #404, migration
   0134).** A service-contract quote type (the PROJ2-5 target-kind flag extended with
   `service_contract`; agreement terms on the quote, recurring prices from the Guardian
   monitoring schedule) converts — deliberately, gated on a signed portal acceptance,
