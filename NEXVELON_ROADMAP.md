@@ -67,7 +67,7 @@ Each line is scoped to a single Claude Code paste.
   T5018 that shipped (`docs/INTENT_RECOVERY.md` §11 P1). **(M)**
 - ~~FIN-TAX-1 — holdback HST treatment.~~ **✅ SHIPPED (PR #393)** — explicit +
   org-configurable treatment, per-invoice snapshot (migration 0127).
-- ~~**REP-5 — Reports platform foundation**~~ **✅ SHIPPED (REP-5 PR, migration
+- ~~**REP-5 — Reports platform foundation**~~ **✅ SHIPPED (PR #405, migration
   0135).** Saved reports (a reference to one of the 13 existing reports + saved
   filters; relative date ranges resolved at run time; per-opco scoping), run on
   demand, and **scheduled email delivery** on the existing Vercel-cron pattern with
