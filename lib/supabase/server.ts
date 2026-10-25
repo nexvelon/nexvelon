@@ -1,21 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { unattendedClient } from "@/lib/supabase/unattended";
 
-/**
- * Server-side Supabase client for use in:
- *   - React server components
- *   - Server actions
- *   - Route handlers (app/api/*)
- *
- * Wires Supabase auth cookies through Next.js's cookies() store so that
- * a signed-in user is recognised on the server during SSR.
- *
- * Usage (server component):
- *   import { createClient } from "@/lib/supabase/server";
- *   const supabase = await createClient();
- *   const { data } = await supabase.from("projects").select("*");
- */
-export async function createClient() {
+/** The session-bound client exactly as it has always been built. */
+async function createSessionClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -46,4 +34,29 @@ export async function createClient() {
       },
     },
   });
+}
+
+type ServerClient = Awaited<ReturnType<typeof createSessionClient>>;
+
+/**
+ * Server-side Supabase client for use in:
+ *   - React server components
+ *   - Server actions
+ *   - Route handlers (app/api/*)
+ *
+ * Wires Supabase auth cookies through Next.js's cookies() store so that
+ * a signed-in user is recognised on the server during SSR.
+ *
+ * Usage (server component):
+ *   import { createClient } from "@/lib/supabase/server";
+ *   const supabase = await createClient();
+ *   const { data } = await supabase.from("projects").select("*");
+ */
+export async function createClient(): Promise<ServerClient> {
+  // REP-5 — inside an explicit unattended scope (the scheduled-report cron only),
+  // reads use that scope's client; there is no session to bind. Outside it, this
+  // is unchanged. See lib/supabase/unattended.ts.
+  const scoped = unattendedClient();
+  if (scoped) return scoped as unknown as ServerClient;
+  return createSessionClient();
 }

@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { WipPortfolio } from "@/lib/api/wip";
 import type { ReportFormat } from "@/lib/reports/export";
+import { SaveReportButton } from "@/components/reports/SaveReportButton";
 
 export default function WipReportPage() {
   const [portfolio, setPortfolio] = useState<WipPortfolio | null>(null);
@@ -65,6 +66,7 @@ export default function WipReportPage() {
         description="Over- and under-billing across active projects."
         actions={
           <div className="flex items-center gap-1.5">
+            <SaveReportButton reportKey="wip" />
             <Button size="sm" variant="outline" disabled={pending} onClick={() => doExport("csv")}>
               <FileText className="mr-1 h-3.5 w-3.5" /> CSV
             </Button>

@@ -238,6 +238,41 @@
   invalid link shows the client a clear, safe message (and reveals nothing about the
   quote) rather than an error page.
 
+### Reports — save a report with its filters, and have it emailed on a schedule (REP-5)
+
+- On any report (WIP, P&L by company, margin, profitability, AR/AP aging, HST,
+  T5018, sales pipeline, technician utilization, vendor spend, inventory valuation,
+  business snapshot), click **Save** to keep it with its filters and a file format
+  (PDF, Excel or CSV). Saved reports are listed under **Reports → Saved & scheduled
+  reports**, where **Run now** downloads it again with the same filters.
+- A period can be **relative** — "Last month", "Last quarter", "Last 7 complete
+  days", "This year to date"… — which is worked out fresh every time it runs, or
+  **fixed dates**, which never change (the screen says so). Reports that show
+  balances "as of now" (AR aging, WIP…) say they have no period. Reports with a
+  row per company (P&L by company, margin, profitability, HST) can be saved for
+  **one company only**; both companies are never blended.
+- Give a saved report an **email schedule** — daily, weekly (pick the day),
+  monthly or quarterly (pick the day of the month, 1–28) — and choose **who gets
+  it** from Nexvelon users. It's sent early in the morning (about 1 AM Toronto
+  time) on the scheduled day, and "Last month" means the month that just ended — a
+  monthly report on the 1st covers the previous month. **Send now** emails it
+  immediately.
+- **Each person gets their own copy, made with their own permissions.** You can't
+  add someone who couldn't open that report themselves, and anyone who later loses
+  access (or whose account is deactivated) is simply skipped — the history shows
+  why. Cost figures someone isn't allowed to see are blank in their copy. Sending
+  reports to people other than yourself needs permission to distribute reports
+  (Admins by default). Outside email addresses can't be added.
+- If the person who set up a schedule loses access to the report or leaves, the
+  schedule **pauses itself** and says why; someone allowed to run it can resume it
+  and becomes its owner.
+- Nothing fails quietly: each saved report has a **delivery history** (every run,
+  who received it, who was skipped and why, and any error), and failed or paused
+  schedules are flagged at the top of the Reports page. A run that was missed (for
+  example during an outage) is sent on the next run, still covering the period it
+  was meant to; an email for a period with no data says **"no data"** rather than
+  showing a page of zeros.
+
 ### Service Contracts — quote a monitoring agreement, get a billing contract (RECUR-2)
 
 - **Quoting a monitoring agreement.** On a quote, set **This quote is for** to **A

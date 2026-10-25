@@ -9,25 +9,11 @@ import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // at financials:view, everything cost/margin/tax at financials:edit — so gating
 // is correct whichever entry point is used.
 
-import { getOpcoPnl, getPnlPortfolio } from "@/lib/api/project-pnl";
-import { getArAgingByClient } from "@/lib/api/ar-aging";
-import { getApAgingByVendor } from "@/lib/api/ap-aging";
-import { getHstNetPosition } from "@/lib/api/financials";
-import { getT5018Report } from "@/lib/api/t5018";
-import {
-  opcoPnlDataset,
-  marginDataset,
-  profitabilityDataset,
-  arAgingDataset,
-  apAgingDataset,
-  hstDataset,
-  t5018Dataset,
-} from "@/lib/reports/datasets/financial";
+import { buildReportDataset, sessionReportGates } from "@/lib/reports/build";
 import { exportDataset, type ReportExport, type ReportFormat } from "@/lib/reports/export";
 import type { ReportDataset } from "@/lib/reports/dataset";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission } from "@/lib/permissions";
-import { businessDateISO } from "@/lib/format";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -76,32 +62,13 @@ async function requireTier(tier: FinTier): Promise<string | null> {
   return null;
 }
 
-/** Build a report's dataset from its live source. Pure dispatch — no gating. */
+/** Build a report's dataset — REP-5: the shared builder, with the signed-in
+ *  user's field gates. Gating happens in the callers below. */
 async function buildDataset(
   key: FinancialReportKey,
   params: FinancialReportParams
 ): Promise<ReportDataset> {
-  switch (key) {
-    case "opco-pnl":
-      return opcoPnlDataset(await getOpcoPnl());
-    case "margin":
-      return marginDataset(await getPnlPortfolio());
-    case "profitability":
-      return profitabilityDataset(await getPnlPortfolio());
-    case "ar-aging":
-      return arAgingDataset(await getArAgingByClient());
-    case "ap-aging":
-      return apAgingDataset(await getApAgingByVendor());
-    case "hst":
-      return hstDataset(await getHstNetPosition({ from: params.from, to: params.to }));
-    case "t5018": {
-      const year = params.year ?? Number(businessDateISO().slice(0, 4));
-      if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-        throw new Error("Invalid reporting year.");
-      }
-      return t5018Dataset(await getT5018Report(year));
-    }
-  }
+  return buildReportDataset(key, params, await sessionReportGates());
 }
 
 /** On-screen dataset — the report view renders columns/rows/totals from this. */

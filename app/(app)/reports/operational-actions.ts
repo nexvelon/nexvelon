@@ -7,24 +7,11 @@ import { adaptDbRole as adaptRole } from "@/lib/permissions/resolve";
 // scheduling:view, vendor spend → financials:view (money), inventory valuation
 // → inventory:view, business snapshot → financials:edit (margin + position).
 
-import { getSalesPipeline } from "@/lib/api/reports/pipeline";
-import { getLabourUtilizationReport } from "@/lib/api/reports/labour-utilization";
-import { getVendorSpendReport } from "@/lib/api/reports/vendor-spend";
-import { getInventoryReportData, type InventoryReportData } from "@/lib/api/products";
-import { resolveFieldGates } from "@/lib/permissions/field-redaction";
-import { getBusinessSnapshot } from "@/lib/api/reports/business-snapshot";
-import {
-  pipelineDataset,
-  labourUtilizationDataset,
-  vendorSpendDataset,
-  inventoryValuationDataset,
-  businessSnapshotDataset,
-} from "@/lib/reports/datasets/operational";
+import { buildReportDataset, sessionReportGates } from "@/lib/reports/build";
 import { exportDataset, type ReportExport, type ReportFormat } from "@/lib/reports/export";
 import type { ReportDataset } from "@/lib/reports/dataset";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
-import { businessDateISO } from "@/lib/format";
 
 export type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -67,54 +54,13 @@ async function requireGate(key: OperationalReportKey): Promise<string | null> {
   return null;
 }
 
-/** A full-day window ending today when the caller supplies no range. */
-function resolveWindow(params: OperationalReportParams): { from: string; to: string } {
-  if (params.from && params.to) {
-    return { from: `${params.from}T00:00:00.000Z`, to: `${params.to}T23:59:59.999Z` };
-  }
-  const today = businessDateISO();
-  const from = new Date(`${today}T00:00:00.000Z`);
-  from.setUTCDate(from.getUTCDate() - 6); // trailing 7 days
-  return { from: from.toISOString(), to: `${today}T23:59:59.999Z` };
-}
-
+/** Build a report's dataset — REP-5: the shared builder (which keeps the SEC-1
+ *  inventory-valuation redaction), with the signed-in user's field gates. */
 async function buildDataset(
   key: OperationalReportKey,
   params: OperationalReportParams
 ): Promise<ReportDataset> {
-  switch (key) {
-    case "pipeline":
-      return pipelineDataset(await getSalesPipeline({ from: params.from, to: params.to }));
-    case "labour-utilization":
-      return labourUtilizationDataset(await getLabourUtilizationReport(resolveWindow(params)));
-    case "vendor-spend":
-      return vendorSpendDataset(
-        await getVendorSpendReport({ from: params.from, to: params.to, limit: params.limit })
-      );
-    case "inventory-valuation": {
-      // SEC-1 — the report is accessible at inventory:view, but its cost-derived
-      // VALUE columns require inventory:viewCost. Redact to null (never zeroed
-      // §2.8) for callers without it, so both the on-screen report and the
-      // CSV/XLSX/PDF export honour the redaction.
-      const report = await getInventoryReportData();
-      const { inventoryCost } = await resolveFieldGates();
-      const safe: InventoryReportData = inventoryCost
-        ? report
-        : {
-            ...report,
-            totalValuation: null,
-            valuationByCategory: report.valuationByCategory.map((c) => ({
-              ...c,
-              value: null,
-            })),
-            aging: report.aging.map((a) => ({ ...a, value: null })),
-            consumption90d: { ...report.consumption90d, value: null },
-          };
-      return inventoryValuationDataset(safe);
-    }
-    case "business-snapshot":
-      return businessSnapshotDataset(await getBusinessSnapshot());
-  }
+  return buildReportDataset(key, params, await sessionReportGates());
 }
 
 export async function getOperationalReportAction(input: {

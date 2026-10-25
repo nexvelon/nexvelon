@@ -46,6 +46,8 @@ export const FEED_RESOURCE: Record<ActivityEntityType, Resource> = {
   // RECUR-1 — service contracts are client/site commercial records; viewing them is
   // gated clients:view (matching the read model), so the feed guard follows suit.
   service_contract: "clients",
+  // REP-5 — saved/scheduled reports + their deliveries → the reports resource.
+  saved_report: "reports",
 };
 
 // AUD-3 — human labels for each entity_type, for the feed's type column + the
@@ -73,6 +75,7 @@ export const ENTITY_TYPE_LABEL: Record<ActivityEntityType, string> = {
   subcontractor_compliance: "Compliance document",
   balance_snapshot: "Balance snapshot",
   service_contract: "Service contract",
+  saved_report: "Saved report",
 };
 
 /** AUD-3 — the detail-page href for a feed row, or null when the type has no
