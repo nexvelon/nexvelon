@@ -5,6 +5,11 @@
 // existing project on that site. The convert-to-project step honours the choice.
 // The change-order option is disabled until the site has at least one
 // (non-cancelled) project. Requires a site to be picked first.
+// RECUR-2 — a third choice: a recurring SERVICE CONTRACT (monitoring agreement).
+// The same flag is extended, not a parallel concept; picking it reveals the
+// agreement-terms card in the builder.
+
+export type ConversionTargetKind = "new_project" | "change_order" | "service_contract";
 
 import {
   Card,
@@ -32,9 +37,9 @@ export function ConversionTargetCard({
 }: {
   siteSelected: boolean;
   siteProjects: MergeCandidate[];
-  kind: "new_project" | "change_order";
+  kind: ConversionTargetKind;
   projectId: string;
-  onKindChange: (k: "new_project" | "change_order") => void;
+  onKindChange: (k: ConversionTargetKind) => void;
   onProjectChange: (id: string) => void;
   disabled?: boolean;
 }) {
@@ -87,6 +92,24 @@ export function ConversionTargetCard({
                   {noProjects
                     ? "No projects on this site yet."
                     : "Converting adds it to the chosen project as a change order."}
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="intendedTarget"
+                className="mt-0.5"
+                checked={kind === "service_contract"}
+                disabled={disabled}
+                onChange={() => onKindChange("service_contract")}
+              />
+              <span>
+                <span className="font-medium">A service contract (recurring billing)</span>
+                <span className="text-muted-foreground block text-xs">
+                  A monitoring agreement. Once the client accepts it on the portal,
+                  converting creates a contract that bills on the chosen cadence.
                 </span>
               </span>
             </label>

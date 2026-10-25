@@ -22,7 +22,7 @@ import "server-only";
 // never alters an issued invoice's tax.
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatInvoiceNumber, businessDateISO, formatCurrency } from "@/lib/format";
+import { formatInvoiceNumber, businessDateISO, businessDatePlusDaysISO, formatCurrency } from "@/lib/format";
 import { round2 } from "@/lib/quote-helpers";
 import { isSerializedProduct } from "@/lib/inventory-serial";
 import { composeIdentifier } from "@/lib/invoice-identifiers";
@@ -1186,7 +1186,7 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
 
   const { data: inv, error: iErr } = await supabase
     .from("invoices")
-    .select("opco, invoice_number, status")
+    .select("opco, invoice_number, status, due_date")
     .eq("id", id)
     .maybeSingle();
   if (iErr) throw new Error(`issueInvoice/load: ${iErr.message}`);
@@ -1195,6 +1195,7 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
     opco: string;
     invoice_number: string | null;
     status: string;
+    due_date: string | null;
   };
 
   let invoiceNumber = cur.invoice_number;
@@ -1207,13 +1208,28 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
     invoiceNumber = formatInvoiceNumber(cur.opco, Number(seq));
   }
 
+  // RECUR-2 — an invoice a service contract generated takes its due date from the
+  // contract's payment terms at the moment it is issued (if it has none yet), so
+  // it can go overdue — and only from the day it was actually issued.
+  const patch: Record<string, unknown> = {
+    invoice_number: invoiceNumber,
+    issue_date: businessDateISO(),
+    status: "sent",
+  };
+  if (!cur.due_date) {
+    const { data: link } = await supabase
+      .from("service_contract_invoices")
+      .select("contract:service_contracts(payment_terms_days)")
+      .eq("invoice_id", id)
+      .maybeSingle();
+    const days = (link as { contract: { payment_terms_days: number | null } | null } | null)?.contract
+      ?.payment_terms_days;
+    if (days != null) patch.due_date = businessDatePlusDaysISO(Number(days));
+  }
+
   const { data, error } = await supabase
     .from("invoices")
-    .update({
-      invoice_number: invoiceNumber,
-      issue_date: businessDateISO(),
-      status: "sent",
-    })
+    .update(patch)
     .eq("id", id)
     .select("*")
     .single();
@@ -1226,6 +1242,7 @@ export async function issueInvoice(id: string): Promise<DbInvoice> {
     status: { from: cur.status, to: "sent" },
     invoice_number: { from: cur.invoice_number, to: invoiceNumber },
     issue_date: { from: null, to: invoice.issue_date },
+    ...(patch.due_date ? { due_date: { from: null, to: String(patch.due_date) } } : {}),
   });
   return invoice;
 }
@@ -1414,6 +1431,16 @@ export async function deletePayment(paymentId: string): Promise<PaymentResult> {
   };
   const invoiceId = payment.invoice_id;
 
+  // RECUR-2 — a cancellation-credit settlement is written by the contract
+  // cancellation (paired with a service_contract_credits row that records the
+  // arithmetic). Pulling it out here would leave that record lying; refuse.
+  if (payment.method === "credit_applied") {
+    throw new InvoicePaymentError(
+      "invalid_status",
+      "This is a service-contract cancellation credit, not a payment — it can't be removed here."
+    );
+  }
+
   const { data: inv, error: iErr } = await supabase
     .from("invoices")
     .select("status, amount_due")
@@ -1454,4 +1481,130 @@ export async function deletePayment(paymentId: string): Promise<PaymentResult> {
   });
 
   return { invoice: invoiceRow, payments: remaining };
+}
+
+// ─── RECUR-2 — contract-originated invoices + credits ────────────────────────
+
+export interface OneOffInvoiceInput {
+  opco: string;
+  clientId: string;
+  siteId?: string | null;
+  taxRatePct: number;
+  taxExempt?: boolean;
+  dueDate?: string | null;
+  notes?: string | null;
+  lines: { description: string; amount: number }[];
+}
+
+/**
+ * RECUR-2 — open a project-less DRAFT invoice for a client with the given lines
+ * (the one-time component of a converted service-contract quote; a late-fee
+ * charge). Same money model + audit as every other invoice: totals via
+ * recomputeTotals, a create row via logInvoice. No number until issued.
+ */
+export async function createOneOffInvoice(input: OneOffInvoiceInput): Promise<DbInvoice> {
+  const supabase = await db();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({
+      opco: input.opco,
+      project_id: null,
+      client_id: input.clientId,
+      site_id: input.siteId ?? null,
+      status: "draft",
+      tax_rate: input.taxRatePct,
+      tax_exempt: input.taxExempt ?? false,
+      holdback_rate: 0,
+      holdback_hst_treatment: "charged_upfront", // no holdback on these
+      due_date: input.dueDate ?? null,
+      notes: input.notes ?? null,
+      created_by: user?.id ?? null,
+      updated_by: user?.id ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(`createOneOffInvoice: ${error.message}`);
+  const created = data as DbInvoice;
+  if (input.lines.length > 0) {
+    const { error: lErr } = await supabase.from("invoice_lines").insert(
+      input.lines.map((l, i) => ({
+        invoice_id: created.id,
+        description: l.description,
+        quantity: 1,
+        unit_price: round2(l.amount),
+        amount: round2(l.amount),
+        source_type: "manual",
+        sort_order: i,
+      }))
+    );
+    if (lErr) throw new Error(`createOneOffInvoice/lines: ${lErr.message}`);
+  }
+  const invoice = await recomputeTotals(created.id);
+  await logInvoice(invoice, "create", {
+    total: { from: null, to: money(Number(invoice.total)) },
+  });
+  return invoice;
+}
+
+/**
+ * RECUR-2 — apply a cancellation credit to an OPEN invoice as a NON-CASH
+ * 'credit_applied' settlement (the FIN-4 deposit_applied pattern): the issued
+ * invoice is never edited (§2.2); the ledger records the credit and the status
+ * re-derives. Excluded from every cash roll-up. Amount must be within the balance.
+ */
+export async function applyContractCreditToInvoice(input: {
+  invoiceId: string;
+  amount: number;
+  creditId: string;
+  appliedAt: string;
+  note: string;
+  actorId?: string | null;
+}): Promise<DbInvoice> {
+  const supabase = await db();
+  const { data: inv, error: iErr } = await supabase
+    .from("invoices")
+    .select("id, status, amount_due")
+    .eq("id", input.invoiceId)
+    .maybeSingle();
+  if (iErr) throw new Error(`applyContractCredit/load: ${iErr.message}`);
+  if (!inv) throw new Error("Invoice not found.");
+  const invoice = inv as { id: string; status: string; amount_due: number };
+  if (!isOpenStatus(invoice.status)) {
+    throw new Error("A credit can only be applied to a sent or partially-paid invoice.");
+  }
+  const existing = await listPaymentsForInvoice(input.invoiceId);
+  const paidSoFar = round2(existing.reduce((s, p) => s + Number(p.amount), 0));
+  const amountDue = round2(Number(invoice.amount_due));
+  const amount = round2(Math.min(input.amount, amountDue - paidSoFar));
+  if (!(amount > 0)) throw new Error("Nothing left on this invoice to credit.");
+
+  const { error: insErr } = await supabase.from("invoice_payments").insert({
+    invoice_id: input.invoiceId,
+    amount,
+    method: "credit_applied",
+    paid_at: input.appliedAt,
+    reference: null,
+    notes: input.note,
+    created_by: input.actorId ?? null,
+    contract_credit_id: input.creditId,
+  });
+  if (insErr) throw new Error(`applyContractCredit/insert: ${insErr.message}`);
+
+  const status = deriveStatusFromPayments(amountDue, round2(paidSoFar + amount));
+  const { data: updated, error: upErr } = await supabase
+    .from("invoices")
+    .update({ status })
+    .eq("id", input.invoiceId)
+    .select("*")
+    .single();
+  if (upErr) throw new Error(`applyContractCredit/status: ${upErr.message}`);
+  const row = updated as DbInvoice;
+  await logInvoice(row, "update", {
+    credit_applied: { from: null, to: `${money(amount)} — ${input.note}` },
+    status: { from: invoice.status, to: status },
+  });
+  return row;
 }

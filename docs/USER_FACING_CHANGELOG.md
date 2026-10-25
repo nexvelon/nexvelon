@@ -238,6 +238,58 @@
   invalid link shows the client a clear, safe message (and reveals nothing about the
   quote) rather than an error page.
 
+### Service Contracts — quote a monitoring agreement, get a billing contract (RECUR-2)
+
+- **Quoting a monitoring agreement.** On a quote, set **This quote is for** to **A
+  service contract (recurring billing)**. A **Service agreement terms** card
+  appears where you choose the **billing cadence** (monthly, quarterly,
+  semi-annual or annual — there's no default, so you always choose), whether it's
+  billed **in advance** or **in arrears**, an optional **initial term** in months,
+  the **intended start date**, and an optional **late-payment charge**. The
+  monthly prices come from the Guardian **Monitoring Services** schedule, as
+  before. The card tells you exactly what's still missing until the quote is
+  ready to send, and a quote that isn't ready can't be sent for signature.
+- **Install + monitoring on one quote.** The one-time items (installation,
+  equipment, any setup fee) and the recurring monitoring fees appear **separately**
+  — on the PDF, in the builder summary, and on the client's portal page — so the
+  client sees "one-time total" and "$X per month, billed quarterly" side by side,
+  never one blended number. Service-contract quotes are issued and billed by
+  **Nexvelon Guardian**; the card says so if the quote is on another letterhead.
+- **The client signs it** on the portal as usual. Their portal page now shows a
+  **Recurring monitoring agreement** box listing each service's monthly fee, what
+  each invoice will be, the term, the payment terms, and the late-payment terms
+  (a monthly rate is always shown with its yearly equivalent).
+- **Turning it into a live contract** is a deliberate step: on the accepted quote,
+  click **Convert to Contract**. The dialog shows who signed and when, everything
+  the contract will inherit from the **signed** version, and asks you for the real
+  **service start date**, how invoices are generated (draft for approval is
+  recommended), and whether to **raise a draft invoice for the one-time items**
+  right away. If the quote can't be converted yet — not accepted, reopened since
+  it was accepted, signed before its terms were set, or already converted — the
+  dialog tells you why instead of the button doing nothing.
+- The new contract **links back to the signed quote** permanently: its page shows
+  a **Signed agreement** panel with the quote number, who accepted it and when,
+  and the terms exactly as signed — and warns you if the contract's current
+  pricing has since changed from what was signed. Editing the quote afterwards
+  never changes the contract (the quote is locked once converted), and a signed
+  acceptance that a contract was built from can't be deleted.
+- **Late fees.** A contract can carry late-payment terms — **interest at a % per
+  month** or a **flat fee once per invoice**, after a number of grace days — and
+  **payment terms** (days until an invoice is due). Contract invoices now get a
+  **due date** when they're issued. Each day, overdue contract invoices get a
+  late fee **proposed**; nothing is charged until someone clicks **Charge** (which
+  issues the fee on its own invoice) or **Waive** (with a reason) on the
+  contract's **Late fees** card. Proposals awaiting a decision are listed at the
+  top of the Service Contracts page.
+- **Cancelling mid-cycle.** **Cancel contract** now asks for the **last day of
+  service**, then shows the credit owed for every billed period that runs past
+  it — day by day, with the arithmetic — before you confirm. On an unpaid invoice
+  the credit reduces what the client owes; on a draft it comes off the draft; on
+  an invoice already paid it's recorded as a **refund due** to the client (the
+  refund itself is paid outside Nexvelon). Credits are listed on the contract.
+  Contracts billed in arrears get a note that any final partial-period invoice
+  must be raised by hand.
+
 ### Service Contracts — recurring billing (RECUR-1)
 
 - You can now set up a **service contract** — a recurring agreement (e.g. "$85 a
@@ -259,8 +311,9 @@
   twice, even if the schedule catches up after a missed day.
 - **Monthly recurring revenue (MRR)** is shown at the top of the Service Contracts
   page — total and per operating company — computed only from active contracts.
-- A contract can be activated, suspended, cancelled, or edited; changing a
-  contract's price only affects future invoices — invoices already generated keep
+- A contract can be activated, suspended, cancelled (see RECUR-2 above — cancelling
+  now records the last day of service and credits unused days), or edited; changing
+  a contract's price only affects future invoices — invoices already generated keep
   the price they were issued with.
 
 ### Financials — Holdback HST treatment is now stated and configurable (FIN-TAX-1)

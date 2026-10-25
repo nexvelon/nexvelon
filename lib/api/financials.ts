@@ -91,7 +91,9 @@ export async function getCashCollected(
   let pq = supabase
     .from("invoice_payments")
     .select("amount, method, paid_at")
-    .neq("method", "deposit_applied");
+    .neq("method", "deposit_applied")
+    // RECUR-2 — a cancellation credit applied to an invoice is not cash either.
+    .neq("method", "credit_applied");
   if (range.from) pq = pq.gte("paid_at", range.from);
   if (range.to) pq = pq.lte("paid_at", range.to);
 
@@ -240,6 +242,8 @@ export async function getMonthlyRevenue(
       .from("invoice_payments")
       .select("amount, method, paid_at")
       .neq("method", "deposit_applied")
+      // RECUR-2 — a cancellation credit applied to an invoice is not cash either.
+      .neq("method", "credit_applied")
       .gte("paid_at", startIso),
     supabase
       .from("project_deposits")

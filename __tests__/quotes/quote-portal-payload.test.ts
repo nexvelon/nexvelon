@@ -96,3 +96,52 @@ describe("SEC-1 — the portal snapshot", () => {
     expect(snap.total).toBe(4063.48);
   });
 });
+
+// RECUR-2 — the signed snapshot carries the recurring terms (so the contract is
+// built from what was signed) and still no internal figure.
+describe("RECUR-2 — recurring terms in the signed snapshot", () => {
+  const serviceQuote = (): Quote =>
+    ({
+      ...makeQuote(),
+      templateSlug: "guardian",
+      intendedTargetKind: "service_contract",
+      serviceContract: { cadence: "monthly", billingTiming: "advance", termMonths: 12 },
+      paymentTerms: "Net 30",
+      taxRate: 0.13,
+      schedules: [
+        {
+          id: "sch",
+          kind: "monitoring",
+          title: "Monitoring Services",
+          subtitle: "",
+          included: true,
+          services: [{ id: "m1", label: "Fire monitoring", monthlyFee: 85 }],
+        },
+      ],
+    }) as Quote;
+
+  it("freezes cadence + monthly fees for a complete service-contract quote", () => {
+    const snap = buildQuoteSnapshot(serviceQuote());
+    expect(snap.recurring).toMatchObject({
+      cadence: "monthly",
+      opco: "guardian",
+      monthlyTotal: 85,
+      periodTotal: 85,
+      paymentTermsDays: 30,
+      taxRatePct: 13,
+      termMonths: 12,
+    });
+    const json = JSON.stringify(snap);
+    for (const leak of ["512.34", "grey-market", "Dwayne", "stk-777"]) expect(json).not.toContain(leak);
+  });
+
+  it("is absent on an ordinary project quote and on an incomplete one", () => {
+    expect(buildQuoteSnapshot(makeQuote()).recurring).toBeUndefined();
+    expect(buildQuoteSnapshot({ ...serviceQuote(), serviceContract: {} }).recurring).toBeUndefined();
+  });
+
+  it("the PDF payload prints the agreement terms only for a service-contract quote", () => {
+    expect(buildSafeQuoteDocProps(serviceQuote()).recurringTerms).toMatchObject({ cadence: "monthly" });
+    expect(buildSafeQuoteDocProps(makeQuote()).recurringTerms).toBeNull();
+  });
+});

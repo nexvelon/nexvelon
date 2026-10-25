@@ -20,7 +20,7 @@ import "server-only";
 //     cannot). §5.
 
 import { round2 } from "@/lib/quote-helpers";
-import { formatInvoiceNumber, businessDateISO } from "@/lib/format";
+import { formatInvoiceNumber, businessDateISO, businessDatePlusDaysISO } from "@/lib/format";
 import {
   billingRuns,
   nextBillingDateAfter,
@@ -216,6 +216,13 @@ async function billOneRun(
       site_id: contract.site_id,
       status: issueNow ? "sent" : "draft",
       issue_date: issueNow ? businessDateISO() : null,
+      // RECUR-2 — a due date (issue + the contract's payment terms) is what makes a
+      // recurring invoice able to go overdue at all. Drafts get theirs when issued
+      // (issueInvoice), so a late-issued draft isn't born overdue.
+      due_date:
+        issueNow && contract.payment_terms_days != null
+          ? businessDatePlusDaysISO(Number(contract.payment_terms_days))
+          : null,
       tax_rate: contract.tax_rate,
       tax_exempt: contract.tax_exempt,
       holdback_rate: 0,

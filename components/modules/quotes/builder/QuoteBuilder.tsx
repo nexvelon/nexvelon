@@ -93,7 +93,13 @@ import {
   mergeQuoteIntoProjectAction,
 } from "@/app/(app)/projects/actions";
 import type { MergeCandidate } from "@/lib/api/projects";
-import { ConversionTargetCard } from "@/components/modules/quotes/builder/ConversionTargetCard";
+import {
+  ConversionTargetCard,
+  type ConversionTargetKind,
+} from "@/components/modules/quotes/builder/ConversionTargetCard";
+import { ServiceContractTermsCard } from "@/components/modules/quotes/builder/ServiceContractTermsCard";
+import { ContractConversionDialog } from "@/components/modules/quotes/builder/ContractConversionDialog";
+import type { QuoteServiceContractTerms } from "@/lib/recurring/quote-terms";
 import type {
   BuilderLineItem,
   Client,
@@ -290,9 +296,15 @@ export function QuoteBuilder({
   // PROJ2-5 — intended conversion target, chosen at creation. Defaults to a new
   // project; "change_order" targets an existing project ON THIS SITE. siteProjects
   // feeds both the create-time chooser and (filtered) the convert dialog.
-  const [intendedTargetKind, setIntendedTargetKind] = useState<
-    "new_project" | "change_order"
-  >(initial.intendedTargetKind ?? "new_project");
+  const [intendedTargetKind, setIntendedTargetKind] = useState<ConversionTargetKind>(
+    initial.intendedTargetKind ?? "new_project"
+  );
+  // RECUR-2 — agreement terms for a service-contract quote (cadence, term, late
+  // fee). Kept even if the kind is switched away, so toggling doesn't lose input.
+  const [serviceContract, setServiceContract] = useState<QuoteServiceContractTerms>(
+    initial.serviceContract ?? {}
+  );
+  const [contractConvertOpen, setContractConvertOpen] = useState(false);
   const [intendedTargetProjectId, setIntendedTargetProjectId] = useState(
     initial.intendedTargetProjectId ?? ""
   );
@@ -479,7 +491,9 @@ export function QuoteBuilder({
     if (siteInitRef.current) {
       siteInitRef.current = false;
     } else {
-      setIntendedTargetKind("new_project");
+      // Only a change order is tied to a site's project; a service-contract or
+      // new-project intent survives a site change (RECUR-2).
+      setIntendedTargetKind((k) => (k === "change_order" ? "new_project" : k));
       setIntendedTargetProjectId("");
     }
     if (!siteId) {
@@ -582,6 +596,7 @@ export function QuoteBuilder({
       showName,
       showDescription,
       drawingsImagesByPath,
+      recurringTerms: intendedTargetKind === "service_contract" ? serviceContract : null,
     }),
     [
       number,
@@ -611,6 +626,8 @@ export function QuoteBuilder({
       showName,
       showDescription,
       drawingsImagesByPath,
+      intendedTargetKind,
+      serviceContract,
     ]
   );
   const deferredPreviewProps = useDebouncedValue(previewProps, 350);
@@ -792,6 +809,10 @@ export function QuoteBuilder({
         intendedTargetKind === "change_order"
           ? intendedTargetProjectId || undefined
           : undefined,
+      // RECUR-2 — agreement terms (inert unless kind = service_contract). The
+      // contract link is server-owned; carry it through untouched.
+      serviceContract,
+      contractId: initial.contractId,
       preparedBy: preparedBy.trim() || undefined,
       status: nextStatus,
       createdAt: initial.createdAt,
@@ -1132,6 +1153,13 @@ export function QuoteBuilder({
   // PROJ-2: Convert now opens a New-vs-Existing dialog. Open it and fetch the
   // eligible merge targets (same client + same opco) for Mode B.
   const handleConvert = async () => {
+    // RECUR-2 — a service-contract quote converts into a contract. The dialog
+    // loads the server's verdict and explains any blocker (not accepted, already
+    // converted, …), so it opens whatever the status.
+    if (intendedTargetKind === "service_contract") {
+      setContractConvertOpen(true);
+      return;
+    }
     if (status !== "Approved") return;
     // PROJ2-5 — pre-select the dialog from the quote's intended target.
     const wantExisting =
@@ -1282,6 +1310,7 @@ export function QuoteBuilder({
         onApprove={handleApprove}
         onPreview={handlePreview}
         onConvert={handleConvert}
+        convertTarget={intendedTargetKind === "service_contract" ? "contract" : "project"}
         onCommitStock={() => setCommitOpen(true)}
         onReopen={handleReopen}
         canReopen={canReopen}
@@ -1451,6 +1480,18 @@ export function QuoteBuilder({
         </DialogContent>
       </Dialog>
 
+      {/* RECUR-2 — convert a service-contract quote into a service contract. */}
+      <ContractConversionDialog
+        open={contractConvertOpen}
+        onOpenChange={setContractConvertOpen}
+        quoteId={initial.id}
+        onConverted={(contractId) => {
+          setStatus("Converted");
+          setContractConvertOpen(false);
+          router.push(`/contracts/${contractId}`);
+        }}
+      />
+
       {/* PROJ-2 — convert: New project vs. Add to existing (change order). */}
       <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
         <DialogContent>
@@ -1612,6 +1653,19 @@ export function QuoteBuilder({
             onProjectChange={setIntendedTargetProjectId}
             disabled={ro.readOnly}
           />
+
+          {/* RECUR-2 — the agreement terms a service-contract quote must carry. */}
+          {intendedTargetKind === "service_contract" && (
+            <ServiceContractTermsCard
+              terms={serviceContract}
+              onChange={setServiceContract}
+              quote={{ intendedTargetKind, templateSlug, schedules, serviceContract }}
+              oneTimeTotal={
+                computeQuoteTotals(sections, taxRatePct / 100, discount, discountType).sellingPriceTotal
+              }
+              disabled={ro.readOnly}
+            />
+          )}
 
           <QuoteDetailsCard
             name={name}

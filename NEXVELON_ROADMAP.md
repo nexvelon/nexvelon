@@ -60,8 +60,8 @@ Each line is scoped to a single Claude Code paste.
   (manual/automatic/draft-for-approval, default draft-for-approval), idempotent
   daily generation on the SNAP-1 cron pattern with missed-day catch-up, per-invoice
   price snapshots (§2.2), per-opco separation, MRR, and the Service Contracts UI.
-  **Deferred to follow-ups (below):** the Service Contract *quote type → contract*
-  conversion; late-fee auto-application; mid-cycle cancellation credits.
+  **Follow-ups shipped in RECUR-2** (quote → contract conversion, late fees,
+  cancellation credits); what remains is RECUR-3 (below).
 - **TAXFILE-1 — tax-filing records** **[recovered]**. Durable `tax_filings`
   records + PST returns + CRA-confirmation tracking beyond the computed HST CSV +
   T5018 that shipped (`docs/INTENT_RECOVERY.md` §11 P1). **(M)**
@@ -153,15 +153,32 @@ Each line is scoped to a single Claude Code paste.
   `invoices:approveWriteOff` gate + an AR write-off workflow (reason + audit) — the
   clean roadmap-level silent casualty; a write-off is currently an untracked edit
   (`docs/INTENT_RECOVERY.md` §4). **(M)**
-- **RECUR-2 — service-contract follow-ups** *(deferred from RECUR-1, PR #396)*: the
-  **Service Contract quote type → contract conversion** (a Service Contract quote
-  converts into a `service_contract` the way a project quote converts into a
-  project; contracts are directly creatable today, so this is convenience);
-  **late-fee auto-application + compounding** on overdue contract invoices (today
-  `lib/late-payment-rates.ts` is informational T&C text only); and **mid-cycle
-  cancellation credits** (the `prorate()` primitive ships tested in
-  `lib/recurring/billing-schedule.ts`, but cancellation currently just stops future
-  billing — a pro-rated credit/final invoice is not auto-issued). **(M?)**
+- ~~**RECUR-2 — service-contract follow-ups**~~ **✅ SHIPPED (PR #404, migration
+  0134).** A service-contract quote type (the PROJ2-5 target-kind flag extended with
+  `service_contract`; agreement terms on the quote, recurring prices from the Guardian
+  monitoring schedule) converts — deliberately, gated on a signed portal acceptance,
+  once only — into a `service_contract` built from the SIGNED snapshot, with a durable
+  link to the quote/send/acceptance and frozen evidence; opt-in per-contract late fees
+  (proposed daily, approved or waived by a person, charged on their own invoice, no
+  compounding); and pro-rated mid-cycle cancellation credits (non-cash
+  `credit_applied` settlement on open invoices, negative line on drafts, refund-due
+  record when paid). Contract invoices now carry a due date.
+- **RECUR-3 — service-contract follow-ups (deferred from RECUR-2)**: (a) **arrears
+  cancellation** — a final pro-rated invoice for the unbilled partial period is not
+  auto-issued (the cancel dialog says so); (b) **future-dated cancellation / notice
+  periods** — cancellation must be recorded on/after the last day of service, and a
+  contract `end_date` mid-period still bills that whole advance period (pre-existing
+  RECUR-1 behaviour); (c) **refund payout** — a refund due is recorded on the credit
+  but there is no money-out workflow to pay or mark it refunded (`refunded_at` exists,
+  unused); (d) **offline / paper signatures** — conversion requires a portal acceptance,
+  so a quote signed on paper can't convert (decide whether to allow an attested upload);
+  (e) **contract amendments** — re-signing a rate change (the detail page only warns
+  when current pricing drifts from the signed terms); (f) **late-fee HST + Ontario
+  consumer disclosure** — fee invoices are treated as HST-exempt and rates are guarded
+  only against the Criminal Code cap; both need accountant/legal confirmation; (g) the
+  quotes-list **"Convert to Project"** row action is still the pre-PROJ cosmetic mock
+  (stamps a fake project code, creates no project) — service-contract quotes are now
+  routed to the real dialog, but project quotes still hit the mock. **(M?)**
 - ~~**MAIL-2 — email addresses as Settings**~~ **✅ SHIPPED (PR #399).** Every
   operational address is now an Admin-editable Setting (Settings → Email
   Addresses; `company_settings` KV, audited), POs send from/print their per-opco

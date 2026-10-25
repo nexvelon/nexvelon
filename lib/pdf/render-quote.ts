@@ -108,6 +108,9 @@ export function buildSafeQuoteDocProps(
     showDescription: quote.showDescription ?? true,
     drawingsImagesByPath: {}, // ephemeral client-rendered drawings are not available server-side
     acceptance,
+    // RECUR-2 — the agreement terms printed on the monitoring page (client-safe:
+    // cadence, timing, term, late-fee terms — no cost or internal field).
+    recurringTerms: quote.intendedTargetKind === "service_contract" ? quote.serviceContract ?? null : null,
   };
 }
 

@@ -77,8 +77,11 @@ describe("resource pane", () => {
     const toggle = await screen.findByRole("button", { name: /Resources/i });
     // collapsed by default → rows not shown yet
     expect(screen.queryByText("Alex Tech")).not.toBeInTheDocument();
-    // the headline advertises the over-allocation even when collapsed
-    expect(toggle.textContent).toMatch(/over-allocated/i);
+    // the headline advertises the over-allocation even when collapsed. The toggle
+    // renders as soon as the Gantt loads ("Resources · loading…") and the resource
+    // load arrives on a SEPARATE async action — wait for it rather than reading the
+    // text synchronously (that race was the known flake).
+    await waitFor(() => expect(toggle.textContent).toMatch(/over-allocated/i));
     fireEvent.click(toggle);
     expect(await screen.findByText("Alex Tech")).toBeInTheDocument();
     expect(screen.getByText("Sparks Ltd")).toBeInTheDocument();

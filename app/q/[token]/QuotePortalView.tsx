@@ -12,6 +12,8 @@ import { PORTAL_COLORS } from "./PortalShell";
 import { PortalPdfViewer } from "./PortalPdfViewer";
 import { buildAttestationText } from "@/lib/quotes/attestation";
 import type { QuoteSnapshot } from "@/lib/api/quote-portal";
+import { CADENCE_ADVERB, CADENCE_PERIOD_NOUN, MONTHS_PER_PERIOD, taxRatePercent } from "@/lib/recurring/quote-terms";
+import { describeLateFeeTerms } from "@/lib/recurring/late-fees";
 
 const { NAVY, GOLD, INK } = PORTAL_COLORS;
 
@@ -177,9 +179,60 @@ export function QuotePortalView({ token, snapshot, pdfUrl }: { token: string; sn
               value={`− ${formatCurrency(snapshot.discountType === "pct" ? (snapshot.subtotal * snapshot.discount) / 100 : snapshot.discount)}`}
             />
           ) : null}
-          <TotalRow label={`HST${snapshot.taxRate ? ` (${snapshot.taxRate}%)` : ""}`} value={formatCurrency(snapshot.tax)} />
-          <TotalRow label="Total" value={formatCurrency(snapshot.total)} strong />
+          {/* The snapshot stores HST as a fraction (0.13) — show it as a percent. */}
+          <TotalRow label={`HST${snapshot.taxRate ? ` (${taxRatePercent(snapshot.taxRate)}%)` : ""}`} value={formatCurrency(snapshot.tax)} />
+          <TotalRow label={snapshot.recurring ? "One-time total" : "Total"} value={formatCurrency(snapshot.total)} strong />
         </div>
+
+        {/* RECUR-2 — the recurring agreement, exactly as it will be billed. Kept
+            visibly separate from the one-time total above. */}
+        {snapshot.recurring && (
+          <div style={{ marginTop: 18, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "12px 14px" }}>
+            <h2 style={{ ...h2, fontSize: 18 }}>Recurring monitoring agreement</h2>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, color: INK }}>
+              <tbody>
+                {snapshot.recurring.services.map((svc) => (
+                  <tr key={svc.label + (svc.detail ?? "")}>
+                    <td style={{ padding: "3px 0" }}>
+                      {svc.label}
+                      {svc.detail ? <span style={{ color: "#6b6350" }}> — {svc.detail}</span> : null}
+                    </td>
+                    <td style={{ padding: "3px 0", textAlign: "right", whiteSpace: "nowrap" }}>
+                      {formatCurrency(svc.monthlyFee)} / month
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ marginTop: 8, borderTop: "1px solid #efe9da", paddingTop: 8 }}>
+              <TotalRow label="Monthly total" value={`${formatCurrency(snapshot.recurring.monthlyTotal)} + HST`} />
+              <TotalRow
+                label={`Billed ${CADENCE_ADVERB[snapshot.recurring.cadence]} ${
+                  snapshot.recurring.billingTiming === "arrears" ? "in arrears" : "in advance"
+                }`}
+                value={`${formatCurrency(
+                  snapshot.recurring.monthlyTotal * MONTHS_PER_PERIOD[snapshot.recurring.cadence]
+                )} per ${CADENCE_PERIOD_NOUN[snapshot.recurring.cadence]} + HST`}
+                strong
+              />
+              {snapshot.recurring.setup ? (
+                <TotalRow
+                  label={`${snapshot.recurring.setup.label} (one-time)`}
+                  value={`${formatCurrency(snapshot.recurring.setup.amount)} + HST`}
+                />
+              ) : null}
+            </div>
+            <p style={{ fontSize: 12, color: "#6b6350", margin: "8px 0 0", lineHeight: 1.5 }}>
+              {snapshot.recurring.termMonths
+                ? `Initial term: ${snapshot.recurring.termMonths} months from the service start date. `
+                : "Open-ended agreement (no fixed term). "}
+              {snapshot.recurring.paymentTermsDays != null
+                ? `Invoices are due ${snapshot.recurring.paymentTermsDays} days after issue. `
+                : ""}
+              {describeLateFeeTerms(snapshot.recurring.lateFee)}
+            </p>
+          </div>
+        )}
 
         {snapshot.terms && (
           <details style={{ marginTop: 16 }}>

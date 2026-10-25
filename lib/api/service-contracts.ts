@@ -17,6 +17,7 @@ import {
   monthlyEquivalent,
 } from "@/lib/recurring/billing-schedule";
 import { businessDatePlusDaysISO } from "@/lib/format";
+import { normalizeLateFeeTerms, type LateFeeTerms } from "@/lib/recurring/late-fees";
 import type {
   DbServiceContract,
   DbServiceContractLine,
@@ -265,6 +266,22 @@ export interface ServiceContractInput {
   taxExempt?: boolean;
   notes?: string | null;
   lines: { description: string; amount: number }[];
+  /** RECUR-2 — days after issue the invoice is due; null = no due date (never overdue). */
+  paymentTermsDays?: number | null;
+  /** RECUR-2 — opt-in late-fee terms (default none). */
+  lateFee?: LateFeeTerms;
+}
+
+/** RECUR-2 — the payment + late-fee columns for an input (normalised). */
+function termsColumns(input: ServiceContractInput): Record<string, unknown> {
+  const lf = normalizeLateFeeTerms(input.lateFee);
+  return {
+    payment_terms_days: input.paymentTermsDays ?? null,
+    late_fee_mode: lf.mode,
+    late_fee_monthly_pct: lf.monthlyPct ?? null,
+    late_fee_flat_amount: lf.flatAmount ?? null,
+    late_fee_grace_days: lf.graceDays ?? 0,
+  };
 }
 
 /** Compute the display cursor for a contract's next billing date given its status. */
@@ -314,6 +331,7 @@ export async function createServiceContract(
       tax_rate: input.taxRate ?? 13,
       tax_exempt: input.taxExempt ?? false,
       notes: input.notes ?? null,
+      ...termsColumns(input),
       created_by: actorId,
       updated_by: actorId,
     })
@@ -368,6 +386,7 @@ export async function updateServiceContract(
     tax_rate: input.taxRate ?? 13,
     tax_exempt: input.taxExempt ?? false,
     notes: input.notes ?? null,
+    ...termsColumns(input),
     updated_by: actorId,
   };
   patch.next_billing_date = computeNextBillingDate({

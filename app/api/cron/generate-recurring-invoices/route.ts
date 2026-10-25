@@ -4,6 +4,9 @@
 // catches a missed run; idempotent (the period-claim UNIQUE constraint) so a
 // double-fire is harmless; catches up missed days (billingRuns is anchor-based).
 //
+// RECUR-2: after generating, the same run proposes late fees on overdue contract
+// invoices (lib/recurring/late-fee-job.ts) — proposals only; a person approves.
+//
 // Runs the generation as SERVICE-ROLE (admin client, no session) over active
 // contracts in automatic + draft_for_approval modes. Manual contracts are excluded
 // (they only bill via an operator "generate now").
@@ -11,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDueContractInvoices } from "@/lib/recurring/generate";
+import { proposeDueLateFees, type LateFeeJobResult } from "@/lib/recurring/late-fee-job";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -33,9 +37,20 @@ async function handle(req: Request): Promise<NextResponse> {
   try {
     const admin = createAdminClient() as unknown as SupabaseClient;
     const result = await generateDueContractInvoices(admin, { includeManual: false });
+    // RECUR-2 — then PROPOSE (never charge) late fees on overdue contract invoices.
+    // Isolated: a late-fee failure must not fail the run that just billed, so it is
+    // caught, logged loud, and reported in the payload.
+    let lateFees: LateFeeJobResult | { error: string };
+    try {
+      lateFees = await proposeDueLateFees(admin, { asOf: result.asOf });
+    } catch (lfErr) {
+      const msg = lfErr instanceof Error ? lfErr.message : String(lfErr);
+      console.error("[cron/generate-recurring-invoices] late-fee proposals failed:", msg);
+      lateFees = { error: msg };
+    }
     // A run with per-contract failures is still a 200 (the run itself succeeded);
     // the errors[] are logged loud in the engine and surfaced in the payload.
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, lateFees });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[cron/generate-recurring-invoices] generation failed:", message);

@@ -27,6 +27,11 @@ import {
   BILLING_MODE_OPTIONS,
   BILLING_TIMING_OPTIONS,
 } from "./shared";
+import {
+  describeLateFeeTerms,
+  type LateFeeMode,
+  type LateFeeTerms,
+} from "@/lib/recurring/late-fees";
 import type { ServiceContractInput } from "@/lib/api/service-contracts";
 import type { ServiceContractDetail } from "@/lib/api/service-contracts";
 import type {
@@ -99,6 +104,20 @@ export function ContractFormDrawer({
   const [taxRate, setTaxRate] = useState(String(c?.tax_rate ?? 13));
   const [taxExempt, setTaxExempt] = useState(c?.tax_exempt ?? false);
   const [notes, setNotes] = useState(c?.notes ?? "");
+  // RECUR-2 — payment + late-fee terms (opt-in; default none).
+  const [paymentTermsDays, setPaymentTermsDays] = useState(
+    c?.payment_terms_days != null ? String(c.payment_terms_days) : ""
+  );
+  const [lateFeeMode, setLateFeeMode] = useState<LateFeeMode>(c?.late_fee_mode ?? "none");
+  const [lateFeePct, setLateFeePct] = useState(c?.late_fee_monthly_pct != null ? String(c.late_fee_monthly_pct) : "");
+  const [lateFeeFlat, setLateFeeFlat] = useState(c?.late_fee_flat_amount != null ? String(c.late_fee_flat_amount) : "");
+  const [lateFeeGrace, setLateFeeGrace] = useState(String(c?.late_fee_grace_days ?? 0));
+  const lateFee: LateFeeTerms = {
+    mode: lateFeeMode,
+    monthlyPct: lateFeeMode === "percent_monthly" ? parseFloat(lateFeePct) || 0 : null,
+    flatAmount: lateFeeMode === "flat" ? parseFloat(lateFeeFlat) || 0 : null,
+    graceDays: parseInt(lateFeeGrace, 10) || 0,
+  };
   const [lines, setLines] = useState<LineDraft[]>(() => seedLines(mode));
   const [saving, setSaving] = useState(false);
 
@@ -134,6 +153,8 @@ export function ContractFormDrawer({
       taxRate: parseFloat(taxRate) || 0,
       taxExempt,
       notes: notes || null,
+      paymentTermsDays: paymentTermsDays.trim() === "" ? null : parseInt(paymentTermsDays, 10),
+      lateFee,
       lines: lines
         .filter((l) => l.description.trim() !== "")
         .map((l) => ({ description: l.description.trim(), amount: parseFloat(l.amount) || 0 })),
@@ -316,6 +337,49 @@ export function ContractFormDrawer({
               </span>
             </div>
           </div>
+
+          {/* RECUR-2 — payment + late-fee terms. A late fee needs payment terms
+              (no due date → nothing can be late). */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Payment terms (days)">
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={paymentTermsDays}
+                onChange={(e) => setPaymentTermsDays(e.target.value)}
+                placeholder="e.g. 30 — blank = no due date"
+              />
+            </Field>
+            <Field label="Late fee">
+              <select className={SELECT_CLS} value={lateFeeMode} onChange={(e) => setLateFeeMode(e.target.value as LateFeeMode)}>
+                <option value="none">None</option>
+                <option value="percent_monthly">Interest — % per month</option>
+                <option value="flat">Flat fee, once per invoice</option>
+              </select>
+            </Field>
+            {lateFeeMode === "percent_monthly" && (
+              <Field label="% per month">
+                <Input type="number" min={0} step="0.01" value={lateFeePct} onChange={(e) => setLateFeePct(e.target.value)} />
+              </Field>
+            )}
+            {lateFeeMode === "flat" && (
+              <Field label="Flat fee ($)">
+                <Input type="number" min={0} step="0.01" value={lateFeeFlat} onChange={(e) => setLateFeeFlat(e.target.value)} />
+              </Field>
+            )}
+            {lateFeeMode !== "none" && (
+              <Field label="Grace days">
+                <Input type="number" min={0} step={1} value={lateFeeGrace} onChange={(e) => setLateFeeGrace(e.target.value)} />
+              </Field>
+            )}
+          </div>
+          {lateFeeMode !== "none" && (
+            <p className="text-muted-foreground -mt-2 text-xs">
+              {describeLateFeeTerms(lateFee)} Proposed daily for overdue invoices; charged only when approved. Only
+              charge a client late fees they agreed to.
+            </p>
+          )}
 
           <Field label="Notes (internal)">
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />

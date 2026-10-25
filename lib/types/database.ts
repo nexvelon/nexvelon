@@ -2458,13 +2458,21 @@ export type DbInvoicePaymentMethod =
   | "credit_card"
   | "cash"
   | "other"
-  | "deposit_applied";
+  | "deposit_applied"
+  // RECUR-2 (migration 0134) — a NON-CASH settlement written when a contract's
+  // mid-cycle cancellation credit is applied to an open invoice. Like
+  // deposit_applied, it settles the balance but is never cash received.
+  | "credit_applied";
 
 /** Cash methods only — the set a deposit receipt may use. */
 export type DbCashPaymentMethod = Exclude<
   DbInvoicePaymentMethod,
-  "deposit_applied"
+  "deposit_applied" | "credit_applied"
 >;
+
+/** RECUR-2 — the non-cash settlement methods. Every cash/revenue roll-up excludes
+ *  these (the money arrived — or never needed to — some other way). */
+export const NON_CASH_PAYMENT_METHODS = ["deposit_applied", "credit_applied"] as const;
 
 // FIN-4 (migration 0091) — a deposit / retainer collected against a project and
 // held until applied to that project's invoices. Remaining balance is DERIVED
@@ -2531,6 +2539,8 @@ export interface DbInvoicePayment {
    * Deleting that application CASCADEs this row away.
    */
   deposit_application_id: string | null;
+  /** RECUR-2 (migration 0134) — set only on method='credit_applied' rows. */
+  contract_credit_id?: string | null;
 }
 
 export type DbInvoicePaymentInsert = {
@@ -2625,6 +2635,67 @@ export interface DbServiceContract {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  // RECUR-2 (migration 0134) — durable link to the accepted quote + frozen evidence.
+  // Optional in the type so pre-0134 rows / fixtures still type-check.
+  source_quote_id?: string | null;
+  source_send_id?: string | null;
+  source_acceptance_id?: string | null;
+  source_quote_number?: string | null;
+  source_signed_by?: string | null;
+  source_signed_at?: string | null;
+  source_signed_pdf_path?: string | null;
+  source_record_hash?: string | null;
+  source_terms?: unknown; // RecurringTermsSnapshot jsonb
+  // RECUR-2 — payment + late-fee terms; cancellation effective date.
+  payment_terms_days?: number | null;
+  late_fee_mode?: "none" | "percent_monthly" | "flat";
+  late_fee_monthly_pct?: number | null;
+  late_fee_flat_amount?: number | null;
+  late_fee_grace_days?: number;
+  cancelled_effective_date?: string | null;
+}
+
+// RECUR-2 (migration 0134) — a proposed / approved / waived late fee on one
+// overdue contract invoice, per 30-day block.
+export interface DbServiceContractLateFee {
+  id: string;
+  contract_id: string;
+  source_invoice_id: string;
+  block_index: number;
+  days_overdue: number;
+  basis_balance: number;
+  amount: number;
+  mode: string;
+  rate_pct: number | null;
+  status: string; // proposed | approved | waived
+  fee_invoice_id: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  waive_reason: string | null;
+  created_at: string;
+}
+
+// RECUR-2 (migration 0134) — a pro-rated cancellation credit for one billed period.
+export interface DbServiceContractCredit {
+  id: string;
+  contract_id: string;
+  source_invoice_id: string;
+  period_start: string;
+  period_end: string;
+  effective_date: string;
+  days_in_period: number;
+  days_used: number;
+  period_subtotal: number;
+  earned_subtotal: number;
+  credit_subtotal: number;
+  credit_tax: number;
+  credit_total: number;
+  applied_amount: number;
+  refund_due: number;
+  disposition: string;
+  refunded_at: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface DbServiceContractLine {

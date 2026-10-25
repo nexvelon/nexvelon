@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { CADENCE_LABEL, OPCO_LABEL, CONTRACT_STATUS_TONE } from "./shared";
 import { ContractFormDrawer, type ClientOption, type SiteOption } from "./ContractFormDrawer";
 import type { ServiceContractRow, RecurringRevenue, PendingContractDraft } from "@/lib/api/service-contracts";
+import type { LateFeeRow } from "@/lib/api/contract-adjustments";
 
 export function ContractsView({
   contracts,
@@ -22,6 +23,7 @@ export function ContractsView({
   siteOptions,
   revenue,
   pendingDrafts,
+  proposedLateFees = [],
   canManage,
   canViewFinancials,
 }: {
@@ -30,6 +32,8 @@ export function ContractsView({
   siteOptions: SiteOption[];
   revenue: RecurringRevenue | null;
   pendingDrafts: PendingContractDraft[];
+  /** RECUR-2 — late fees the daily job proposed, awaiting a person's decision. */
+  proposedLateFees?: LateFeeRow[];
   canManage: boolean;
   canViewFinancials: boolean;
 }) {
@@ -100,6 +104,33 @@ export function ContractsView({
           </ul>
           {pendingDrafts.length > 8 && (
             <p className="text-muted-foreground mt-1 text-[11px]">+{pendingDrafts.length - 8} more…</p>
+          )}
+        </Card>
+      )}
+
+      {/* RECUR-2 — late fees awaiting approval (never charged automatically). */}
+      {canViewFinancials && proposedLateFees.length > 0 && (
+        <Card className="border-[#C9A24B] bg-[color-mix(in_oklab,#C9A24B_10%,transparent)] p-4 shadow-sm">
+          <p className="text-[#8a6d1f] text-sm font-semibold">
+            {proposedLateFees.length} late fee{proposedLateFees.length === 1 ? "" : "s"} awaiting approval
+          </p>
+          <ul className="mt-2 space-y-1">
+            {proposedLateFees.slice(0, 8).map((f) => (
+              <li key={f.id} className="text-brand-charcoal flex items-center justify-between gap-3 text-xs">
+                <span className="truncate">
+                  <Link href={`/contracts/${f.contract_id}`} className="text-brand-navy underline">
+                    {f.contract_name ?? "Contract"}
+                  </Link>{" "}
+                  <span className="text-muted-foreground">
+                    {f.client_name} · {f.source_invoice_number ?? "invoice"} {f.days_overdue} days overdue
+                  </span>
+                </span>
+                <span className="tabular-nums">{formatCurrency(Number(f.amount))}</span>
+              </li>
+            ))}
+          </ul>
+          {proposedLateFees.length > 8 && (
+            <p className="text-muted-foreground mt-1 text-[11px]">+{proposedLateFees.length - 8} more…</p>
           )}
         </Card>
       )}

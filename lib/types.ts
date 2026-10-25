@@ -2,6 +2,7 @@ import type { QuoteScheduleInstance } from "@/lib/quote-schedules";
 import type { QuoteThemeSlug } from "@/lib/quote-themes";
 import type { QuoteTemplateSlug } from "@/lib/company-profile";
 import type { AddonEntry } from "@/lib/types/database";
+import type { QuoteServiceContractTerms } from "@/lib/recurring/quote-terms";
 
 export type ID = string;
 
@@ -237,8 +238,15 @@ export interface Quote {
   // fresh Project; "change_order" adds to an existing Project on the same site
   // (intendedTargetProjectId). Undefined on legacy quotes → user picks at
   // convert time. Mirrored to quotes.intended_target_* columns (migration 0086).
-  intendedTargetKind?: "new_project" | "change_order";
+  // RECUR-2 — "service_contract" extends the same flag (no parallel concept): the
+  // quote converts into a recurring-billing service contract instead of a project.
+  // Its agreement terms live in `serviceContract`; its recurring prices live in the
+  // Guardian monitoring schedule (lib/recurring/quote-terms.ts).
+  intendedTargetKind?: "new_project" | "change_order" | "service_contract";
   intendedTargetProjectId?: ID;
+  serviceContract?: QuoteServiceContractTerms;
+  /** RECUR-2 — the service contract this quote converted into (set on conversion). */
+  contractId?: ID;
   status: QuoteStatus;
   createdAt: string;
   // Operator-editable date shown on the PDF (YYYY-MM-DD), decoupled from the

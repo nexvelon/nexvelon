@@ -92,7 +92,7 @@ export function QuoteRowActions({
         {canConvert && (
           <DropdownMenuItem onClick={() => onConvert(quote)}>
             <Check className="text-brand-gold mr-2 h-4 w-4" />
-            Convert to Project
+            {quote.intendedTargetKind === "service_contract" ? "Convert to Contract…" : "Convert to Project"}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />

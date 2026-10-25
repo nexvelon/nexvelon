@@ -214,6 +214,15 @@ export function QuotesView({
       // links it on the quote (no real project row is created here — unchanged
       // from the mock build). The count comes from the real projects table now.
       onConvert: async (q: Quote) => {
+        // RECUR-2 — a service-contract quote converts into a real contract from
+        // the quote itself (the dialog confirms start date + billing mode).
+        if (q.intendedTargetKind === "service_contract") {
+          router.push(`/quotes/${q.id}`);
+          toast("Open the quote and use “Convert to Contract”.", {
+            description: "It confirms the start date and billing before the contract is created.",
+          });
+          return;
+        }
         if (q.status !== "Approved") return;
         const year = new Date().getFullYear();
         const projectCode = `NX-${year}-${(
