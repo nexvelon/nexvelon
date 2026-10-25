@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ReportView } from "@/components/reports/ReportView";
+import { SaveReportButton } from "@/components/reports/SaveReportButton";
 import { downloadReport } from "@/lib/reports/download";
 import {
   getFinancialReportAction,
@@ -115,6 +116,7 @@ export function FinancialReport({
           exporting={exporting}
           onExport={doExport}
           controls={renderControls?.({ params, setParams, pending: loading })}
+          actions={<SaveReportButton reportKey={reportKey} current={params} />}
         />
       )}
     </div>

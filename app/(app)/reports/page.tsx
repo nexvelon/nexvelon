@@ -8,6 +8,7 @@
 import Link from "next/link";
 import {
   BarChart3,
+  Bookmark,
   Boxes,
   Copy,
   FileBarChart,
@@ -24,6 +25,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Can, useRole } from "@/lib/role-context";
 import { hasPermission, type Action, type Resource } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { ReportProblemsBanner } from "@/components/reports/ReportProblemsBanner";
 
 type Report = {
   title: string;
@@ -80,7 +82,19 @@ export default function ReportsPage() {
           eyebrow="Reports"
           title="Reports"
           description="Cross-module reports — download as CSV, Excel, or PDF."
+          actions={
+            <Link
+              href="/reports/saved"
+              className="text-brand-navy inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium"
+              style={{ borderColor: "var(--brand-border)" }}
+            >
+              <Bookmark className="h-3.5 w-3.5" /> Saved & scheduled reports
+            </Link>
+          }
         />
+
+        {/* REP-5 (2f) — failed / paused scheduled reports are shown here, not hidden. */}
+        <ReportProblemsBanner />
 
         {SECTIONS.map(({ section, reports }) => (
           <div key={section}>

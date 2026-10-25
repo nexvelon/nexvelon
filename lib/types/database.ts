@@ -650,6 +650,8 @@ export const ACTIVITY_ENTITY_TYPES = [
   "balance_snapshot",
   // RECUR-1 — service-contract create/update/cancel + recurring-invoice generation.
   "service_contract",
+  // REP-5 — saved reports: create/edit/delete, schedule changes, each delivery.
+  "saved_report",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];

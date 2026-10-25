@@ -67,11 +67,25 @@ Each line is scoped to a single Claude Code paste.
   T5018 that shipped (`docs/INTENT_RECOVERY.md` §11 P1). **(M)**
 - ~~FIN-TAX-1 — holdback HST treatment.~~ **✅ SHIPPED (PR #393)** — explicit +
   org-configurable treatment, per-invoice snapshot (migration 0127).
-- **REP-5 — Reports platform** *(carries forward the designed M13 scope)*. Today
-  ~14 static reports render; build the report-definition data model, a copy-modify
-  **custom builder**, **scheduled email/PDF delivery** (reuse the SNAP-1 cron
-  pattern), subscriptions, and immutable saved snapshots — the ~7 designed report
-  tables. **(M)**
+- ~~**REP-5 — Reports platform foundation**~~ **✅ SHIPPED (REP-5 PR, migration
+  0135).** Saved reports (a reference to one of the 13 existing reports + saved
+  filters; relative date ranges resolved at run time; per-opco scoping), run on
+  demand, and **scheduled email delivery** on the existing Vercel-cron pattern with
+  catch-up, a per-run owner + per-recipient permission check at generation
+  (owner ∩ recipient field gates), and visible failures (run + delivery history,
+  self-pausing schedules). Staged per Jay's decision — the builder is REP-6.
+- **REP-6 — Reports platform: the builder + the rest** *(remaining M13 scope after
+  REP-5)*: (a) a **copy-modify custom builder** (choose columns / filters / grouping
+  on top of an existing dataset — not a free query builder); (b) **immutable saved
+  snapshots** (store each delivered file so "what did we send on Nov 1" is
+  re-openable; today the run record + email log say what and to whom, not the
+  bytes); (c) **subscriptions** (a user opting themselves into a published report
+  rather than an owner adding them); (d) **external recipients** (accountant /
+  bank) — deliberately refused in REP-5 because a raw email has no permission
+  identity; needs an explicit, audited "external share" design; (e) **inline email
+  body** rendering of small tables (REP-5 attaches the file); (f) the remaining
+  ~25 designed reports; (g) a **user-chosen delivery hour** (REP-5 delivers in the
+  single ~01:00 Toronto cron run). **(M)**
 - **FIFO-1 — inventory FIFO valuation** (§0.4 #8 locked commitment; zero code
   today). **(M)**
 - **QBO-1 — accounting export** (QuickBooks/Xero/Sage 50; §3's integration

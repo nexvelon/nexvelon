@@ -25,12 +25,15 @@ export function ReportView({
   exporting,
   onExport,
   controls,
+  actions,
 }: {
   dataset: ReportDataset;
   exporting: boolean;
   onExport: (format: ReportFormat) => void;
   /** Optional period/year picker, rendered above the table. */
   controls?: React.ReactNode;
+  /** REP-5 — extra buttons beside the exports (e.g. Save). */
+  actions?: React.ReactNode;
 }) {
   const { columns, rows, totals, meta } = dataset;
   return (
@@ -49,6 +52,7 @@ export function ReportView({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          {actions}
           <Button size="sm" variant="outline" disabled={exporting} onClick={() => onExport("csv")}>
             <FileText className="mr-1 h-3.5 w-3.5" /> CSV
           </Button>
