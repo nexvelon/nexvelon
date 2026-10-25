@@ -226,7 +226,7 @@ COMMIT;
 --     'report_runs_schedule_occurrence_uniq','report_runs_saved_report_idx','report_runs_status_idx',
 --     'report_deliveries_run_idx');
 --
---   -- Grants (expect 20 rows: 5 tables × 2 roles × 4 privileges, no anon in the migration)
+--   -- Grants (expect 40 rows: 5 tables × 4 privileges × 2 roles; the migration grants nothing to anon)
 --   SELECT table_name, grantee, privilege_type FROM information_schema.role_table_grants
 --    WHERE table_schema='public' AND grantee IN ('authenticated','service_role')
 --      AND privilege_type IN ('SELECT','INSERT','UPDATE','DELETE')
