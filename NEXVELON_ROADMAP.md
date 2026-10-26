@@ -86,8 +86,26 @@ Each line is scoped to a single Claude Code paste.
   body** rendering of small tables (REP-5 attaches the file); (f) the remaining
   ~25 designed reports; (g) a **user-chosen delivery hour** (REP-5 delivers in the
   single ~01:00 Toronto cron run). **(M)**
-- **FIFO-1 — inventory FIFO valuation** (§0.4 #8 locked commitment; zero code
-  today). **(M)**
+- ~~**INV-FIX-1 — inventory costing gaps (method-independent)**~~ **✅ SHIPPED (PR #406,
+  no migration).** Oldest-first default lot selection drawn across multiple lots, with
+  manual lot choice kept (specific identification unchanged); quote-line cost labels
+  (from stock / partly estimated / estimate / manual) and estimate lines listed as not
+  reducing stock; quantity-weighted billable-materials cost with exact per-lot costs;
+  a lot adjusted to zero is retired with its receipt trail kept; stock commit gated on
+  inventory:edit; lot costs redacted for cost-blind roles.
+- **FIFO-1 — inventory costing decision** *(SUPERSEDED as originally written; PENDING
+  Jay's accountant)*. The premise ("valued by a simpler method; FIFO never built")
+  was wrong: costing is **specific identification**, locked in Session AB §3.4, which
+  overrode the earlier Session I FIFO lock (REALITY-1 saw only the old lock). Open
+  options: (A) FIFO for interchangeable bulk stock + specific identification for
+  serialized equipment; (B) full FIFO everywhere; (C) keep specific identification.
+  **Also open, same decision — do not build until Jay answers:** gap 3 — stock
+  committed from a quote is consumed but its cost never reaches the job's materials /
+  margin / WIP; gap 4 — job P&L counts materials from supplier bills, stock draws are
+  a memo line only; gap 7 — stock has no opco (Integrated Solutions and Guardian share
+  one pool). Questions with the accountant: ASPE 3031 acceptability of A; ASPE 1506
+  cutover-forward vs restatement + disclosure; supplier bills vs stock drawn as a job's
+  materials cost; shared stock pool vs per-company ownership. **(M?)**
 - **QBO-1 — accounting export** (QuickBooks/Xero/Sage 50; §3's integration
   backbone; label-only today). Write-only QuickBooks first. **(M)**
 - ~~QUOTE-PORTAL-1 — client quote portal `/q/[token]`~~ **✅ SHIPPED (PR #397).**

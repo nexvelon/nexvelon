@@ -399,11 +399,16 @@ export interface BillableMaterialGroup {
   qty: number; // total currently on this cost-center
   billed_qty: number; // already billed (material lines on this project's invoices)
   remaining_qty: number; // qty - billed_qty (>= 0)
-  unit_cost: number; // AVERAGE of the group's stock rows' unit_cost
+  /** INV-FIX-1 — the group's QUANTITY-WEIGHTED unit cost: Σ(qty × lot cost) ÷ Σ qty.
+   *  (It was the plain average of the rows' costs, which ignored quantity.) Null
+   *  for callers without cost visibility (SEC-1). */
+  unit_cost: number | null;
+  /** INV-FIX-1 — the exact total: Σ(qty × each lot's own cost). Null when redacted. */
+  total_cost: number | null;
   suggested_unit_price: number; // the part's Sell Price (list_price)
   // The stock rows in this group, each with its serial (serialized only) — so a
   // serialized unit bills as its own line with its serial + source_stock_id.
-  units: { stock_id: string; quantity: number; serial: string | null }[];
+  units: { stock_id: string; quantity: number; serial: string | null; unit_cost: number | null }[];
 }
 
 type StockMaterialRow = {
@@ -521,6 +526,7 @@ export async function listBillableMaterialsForProject(
         billed_qty: billedByKey.get(key) ?? 0,
         remaining_qty: 0,
         unit_cost: 0,
+        total_cost: 0,
         suggested_unit_price: Number(product.list_price ?? 0),
         units: [],
       };
@@ -531,26 +537,20 @@ export async function listBillableMaterialsForProject(
       stock_id: s.id,
       quantity: Number(s.quantity),
       serial: s.serial_number,
+      // Exact per-row cost — specific identification: a serialized unit bills
+      // with ITS cost, not the group's.
+      unit_cost: Number(s.unit_cost),
     });
   }
 
-  // Finalize: average unit cost + remaining.
+  // Finalize: QUANTITY-WEIGHTED unit cost + exact total + remaining (INV-FIX-1).
+  //   2 units @ $80 + 1 unit @ $95: old plain average (80 + 95) / 2 = $87.50 — wrong;
+  //   weighted (2×80 + 1×95) / 3 = $85.00, total $255.00 — right.
   const out: BillableMaterialGroup[] = [];
   for (const g of groups.values()) {
-    const costs = g.units; // one entry per stock row
-    const avg =
-      costs.length > 0
-        ? round2(
-            stock
-              .filter(
-                (s) =>
-                  s.product_id === g.product_id &&
-                  s.current_cost_center_id === g.cost_center_id
-              )
-              .reduce((sum, s) => sum + Number(s.unit_cost), 0) / costs.length
-          )
-        : 0;
-    g.unit_cost = avg;
+    const total = g.units.reduce((sum, u) => sum + u.quantity * Number(u.unit_cost), 0);
+    g.total_cost = round2(total);
+    g.unit_cost = g.qty > 0 ? round2(total / g.qty) : 0;
     g.remaining_qty = Math.max(g.qty - g.billed_qty, 0);
     out.push(g);
   }

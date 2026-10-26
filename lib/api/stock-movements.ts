@@ -692,12 +692,22 @@ export async function adjustStockQuantity(
   const delta = newQty - oldQty;
   if (delta === 0) throw new Error("New quantity matches the current quantity.");
 
-  const update: Record<string, unknown> = {
-    quantity: newQty,
-    updated_at: new Date().toISOString(),
-  };
-  // A serialized unit set to 0 is effectively gone — retire it.
-  if (serialized && newQty === 0) update.status = "retired";
+  // INV-FIX-1 (Gap 6) — reaching ZERO. inventory_stock.quantity has a CHECK
+  // (quantity > 0, migration 0021), so writing quantity = 0 always failed — for a
+  // bulk lot counted/adjusted to nothing AND for a serialized unit being retired.
+  // Deleting the row instead would destroy its receipt trail (cost, PO, receipt
+  // date — §2.2). So at zero the lot is RETIRED and KEEPS its quantity: the row now
+  // reads "these N units were written off", at their own cost. It leaves on-hand
+  // stock and valuation (which count status 'in_stock' only) exactly as a zero
+  // would, and the movement below records the −N. No constraint change is needed.
+  const update: Record<string, unknown> =
+    newQty === 0
+      ? {
+          status: "retired",
+          notes: `${unit.notes ? `${unit.notes}\n` : ""}Adjusted to 0 — ${oldQty} written off: ${trimmedReason}`,
+          updated_at: new Date().toISOString(),
+        }
+      : { quantity: newQty, updated_at: new Date().toISOString() };
 
   const { error: upErr } = await supabase
     .from("inventory_stock")

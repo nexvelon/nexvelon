@@ -61,6 +61,7 @@ import type {
   DbInventoryStockUpdate,
 } from "@/lib/types/database";
 import type { Product } from "@/lib/types";
+import { planOldestFirst, type DrawPlan, type CommittedDraw } from "@/lib/inventory/stock-draws";
 
 // SEC-1 — a stock row whose per-lot cost may be redacted to null on the wire.
 export type RedactedStock = Omit<DbInventoryStock, "unit_cost"> & { unit_cost: number | null };
@@ -124,6 +125,11 @@ export async function commitStockUnitAction(
   ref: string
 ): Promise<ActionResult<{ consumedRowId: string; serialNumber: string | null }>> {
   try {
+    // INV-FIX-1 — consuming stock is an inventory write: gate it on inventory:edit,
+    // the same permission the builder's "Commit stock" button requires. (It had no
+    // server-side gate, so any signed-in user could call it directly.)
+    const denied = await requireStockCommit();
+    if (denied) return { ok: false, error: denied };
     const result = await consumeStock(stockUnitId, qty, { ref });
     await logActivity("inventory", productId, "update", {
       committed: { from: null, to: `${qty} → ${ref}` },
@@ -588,6 +594,108 @@ export async function returnUnitAction(
     revalidatePath(`/inventory/${productId}`);
     revalidatePath("/inventory");
     return { ok: true, data: { id: stockId } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ── INV-FIX-1 — oldest-first, multi-lot stock draws for quote lines ──────────
+
+async function requireStockCommit(): Promise<string | null> {
+  const me = await getCurrentProfile();
+  if (!me || !(await can("inventory", "edit"))) {
+    return "You don't have permission to commit stock.";
+  }
+  return null;
+}
+
+/**
+ * Plan `qty` of a product oldest-receipt-first across its warehouse lots
+ * (lib/inventory/stock-draws.ts). `reserved` = what this quote's OTHER
+ * uncommitted lines already plan from each lot. SEC-1: a plan carries lot costs,
+ * so it is only offered to cost-trusted callers (the same anyCost gate as the
+ * stock list) — everyone else keeps the catalog estimate, labelled as such.
+ */
+export async function planStockDrawsAction(input: {
+  productId: string;
+  qty: number;
+  reserved?: Record<string, number>;
+}): Promise<ActionResult<DrawPlan>> {
+  try {
+    const me = await getCurrentProfile();
+    if (!me || !(await can("inventory", "view"))) {
+      return { ok: false, error: "You don't have permission to view inventory." };
+    }
+    const { anyCost } = await resolveFieldGates();
+    if (!anyCost) return { ok: false, error: "Stock costs aren't visible to your role." };
+    const lots = await listStockForProduct(input.productId);
+    return {
+      ok: true,
+      data: planOldestFirst(lots, input.qty, new Map(Object.entries(input.reserved ?? {}))),
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export interface DrawCommitResult {
+  committed: CommittedDraw[];
+  /** The first draw that failed, if any — the ones before it are committed. */
+  error: string | null;
+}
+
+/**
+ * Commit a quote line's planned draws: consume each lot in order. Each consume is
+ * the existing consumeStock (split-or-flip, consumption movement logged). A draw
+ * that fails (lot gone / short since it was planned) STOPS the line there — it is
+ * never silently re-planned onto a different lot at a different cost; the draws
+ * already consumed are returned so they're recorded and never consumed twice.
+ */
+export async function commitStockDrawsAction(input: {
+  productId: string;
+  ref: string;
+  draws: { stockId: string; qty: number }[];
+}): Promise<ActionResult<DrawCommitResult>> {
+  try {
+    const denied = await requireStockCommit();
+    if (denied) return { ok: false, error: denied };
+    const { anyCost } = await resolveFieldGates();
+    const lots = new Map((await listStockForProduct(input.productId)).map((l) => [l.id, l]));
+    const committed: CommittedDraw[] = [];
+    let error: string | null = null;
+    for (const d of input.draws) {
+      const lot = lots.get(d.stockId);
+      if (!lot) {
+        error = "A planned stock lot no longer exists — re-plan this line.";
+        break;
+      }
+      try {
+        const r = await consumeStock(d.stockId, d.qty, { ref: input.ref });
+        committed.push({
+          sourceStockId: d.stockId,
+          consumedRowId: r.consumedRowId,
+          qty: d.qty,
+          // SEC-1 — the committed cost goes back only to cost-trusted callers.
+          unitCost: anyCost ? Number(lot.unit_cost) : null,
+          serialNumber: r.serialNumber,
+        });
+      } catch (e) {
+        error = `${e instanceof Error ? e.message : String(e)} Re-plan this line.`;
+        break;
+      }
+    }
+    if (committed.length > 0) {
+      await logActivity("inventory", input.productId, "update", {
+        committed: {
+          from: null,
+          to: `${committed.reduce((s, c) => s + c.qty, 0)} → ${input.ref} from ${committed.length} lot${committed.length === 1 ? "" : "s"}`,
+        },
+        lots: { from: null, to: committed.map((c) => `${c.qty} from ${c.sourceStockId}`).join(", ") },
+      });
+      revalidatePath(`/inventory/${input.productId}`);
+      revalidatePath("/inventory");
+    }
+    return { ok: true, data: { committed, error } };
   } catch (e) {
     return fail(e);
   }

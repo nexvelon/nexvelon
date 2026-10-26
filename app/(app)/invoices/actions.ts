@@ -7,6 +7,7 @@ import { can } from "@/lib/permissions/resolve";
 // isAdmin gate, since permissions.ts already models financials access.
 
 import { revalidatePath } from "next/cache";
+import { resolveFieldGates } from "@/lib/permissions/field-redaction";
 import {
   listInvoices,
   getInvoiceById,
@@ -97,7 +98,18 @@ export async function listBillableMaterialsForProjectAction(
   projectId: string
 ): Promise<BillableMaterialGroup[]> {
   if (!projectId) return [];
-  return listBillableMaterialsForProject(projectId);
+  const groups = await listBillableMaterialsForProject(projectId);
+  // SEC-1 (INV-FIX-1) — these are inventory LOT costs. They went to every caller;
+  // the builder never shows them, but they were in the payload. Redact to null
+  // (never zeroed, §2.8) unless the caller may see inventory cost.
+  const { inventoryCost } = await resolveFieldGates();
+  if (inventoryCost) return groups;
+  return groups.map((g) => ({
+    ...g,
+    unit_cost: null,
+    total_cost: null,
+    units: g.units.map((u) => ({ ...u, unit_cost: null })),
+  }));
 }
 
 // ─── Create ────────────────────────────────────────────────────────────────

@@ -29,9 +29,11 @@ import {
 } from "@/components/ui/select";
 import { CurrencyInput } from "./CurrencyInput";
 import { SkuAutocomplete } from "./SkuAutocomplete";
-import { StockUnitPicker } from "./StockUnitPicker";
+import { StockDrawPicker } from "./StockDrawPicker";
+import { useStockPlan } from "./stock-plan-context";
+import { markManualCost } from "@/lib/inventory/line-cost";
+import { COST_SOURCE_LABEL, describeDraws, lineCostSource } from "@/lib/inventory/stock-draws";
 import { useOfferAddons } from "./addons-context";
-import { useCatalogProducts } from "./catalog-context";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -76,7 +78,6 @@ export function LineItemRow({
   onAddNote,
 }: Props) {
   const offerAddons = useOfferAddons();
-  const catalog = useCatalogProducts();
   const [pinOpen, setPinOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled });
@@ -109,22 +110,27 @@ export function LineItemRow({
         // via the INV-2a adapter); §2.2 — the copied value is the snapshot.
         unitCost: p.cost ?? 0,
         margin: item.margin || 40,
+        // INV-FIX-1 — a new part starts as a labelled estimate, then is planned
+        // oldest-first from real stock (a fresh pick drops any earlier plan).
+        costSource: "catalog_estimate",
+        stockDraws: undefined,
+        stockSource: undefined,
+        stockUnitId: undefined,
         // classification intentionally omitted to preserve the user's selection
       })
+    );
+    stockPlan.replan(
+      { ...item, productId: p.id, qty: item.qty, stockDraws: undefined, committedDraws: undefined, committedStockId: undefined },
+      "add"
     );
     // D-2: a user pick may offer this part's companion add-ons.
     offerAddons(sectionId, p);
   };
 
-  // F-2: pin/unpin this line to a specific stock unit's cost.
-  const handlePin = (stockUnitId: string, unitCost: number) => {
-    onChange(recalcLineItem({ ...item, unitCost, stockUnitId }));
-  };
-  const handleUnpin = () => {
-    // Revert to the product's default cost (0 if the product isn't resolvable).
-    const def = catalog.find((p) => p.id === item.productId)?.cost ?? 0;
-    onChange(recalcLineItem({ ...item, unitCost: def, stockUnitId: undefined }));
-  };
+  // INV-FIX-1 — the stock planner (oldest-first default, manual lot choice).
+  const stockPlan = useStockPlan();
+  const costSource = lineCostSource(item);
+  const committed = !!item.committedStockId || (item.committedDraws?.length ?? 0) > 0;
 
   const total = lineItemTotal(item);
   const classOptions = classificationsFor(classifications, item.type);
@@ -268,7 +274,15 @@ export function LineItemRow({
             const n = parseFloat(e.target.value);
             const val = isNaN(n) ? 0 : n;
             if (isLabourLine) changeLabourHours(val);
-            else onChange(recalcLineItem({ ...item, qty: val }));
+            else {
+              const next = recalcLineItem({ ...item, qty: val });
+              // INV-FIX-1 — an auto-planned line re-plans for the new quantity
+              // (holding its price); a manual lot choice is left as chosen.
+              if (item.stockSource === "auto" && !committed) {
+                onChange({ ...item, qty: val });
+                stockPlan.replan({ ...item, qty: val }, "hold");
+              } else onChange(next);
+            }
           }}
           disabled={disabled}
           className="text-right text-xs tabular-nums"
@@ -280,7 +294,8 @@ export function LineItemRow({
           <CurrencyInput
             value={item.unitCost ?? 0}
             onChange={(v) => {
-              const next = recalcLineItem({ ...item, unitCost: v });
+              // INV-FIX-1 — a typed cost is the user's figure, labelled as such.
+              const next = markManualCost(recalcLineItem({ ...item, unitCost: v }));
               if (isLabourLine) changeLabourCostMargin(next);
               else onChange(next);
             }}
@@ -288,37 +303,44 @@ export function LineItemRow({
             className="text-xs"
           />
           {item.type === "product" && item.productId && (
-            <div className="mt-0.5 flex items-center justify-end">
+            <div className="mt-0.5 flex flex-col items-end gap-0.5">
+              {costSource && (
+                <span
+                  className={cn(
+                    "rounded px-1 text-[9px] font-medium",
+                    costSource === "stock"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : costSource === "manual"
+                        ? "bg-slate-100 text-slate-700"
+                        : "bg-amber-50 text-amber-800"
+                  )}
+                  title={
+                    item.stockDraws?.length
+                      ? describeDraws(item.stockDraws, formatCurrency)
+                      : costSource === "catalog_estimate"
+                        ? "Catalog cost — not drawn from any stock. Committing won't reduce inventory for this line."
+                        : undefined
+                  }
+                >
+                  {committed ? "Committed · " : ""}
+                  {COST_SOURCE_LABEL[costSource]}
+                  {item.stockSource === "auto" && costSource !== "catalog_estimate" ? " (oldest first)" : ""}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setPinOpen(true)}
-                disabled={disabled}
-                className={cn(
-                  "inline-flex items-center gap-0.5 text-[10px]",
-                  item.stockUnitId
-                    ? "text-amber-700"
-                    : "text-muted-foreground hover:text-brand-charcoal"
-                )}
-                title={
-                  item.stockUnitId
-                    ? "Pinned to a stock unit's cost"
-                    : "Pin to a stock unit's cost"
-                }
+                disabled={disabled || committed}
+                className="text-muted-foreground hover:text-brand-charcoal inline-flex items-center gap-0.5 text-[10px]"
+                title="Choose which stock this line uses"
               >
                 <Pin className="h-2.5 w-2.5" />
-                {item.stockUnitId ? "Pinned" : "Pin stock"}
+                Stock…
               </button>
             </div>
           )}
           {item.type === "product" && item.productId && (
-            <StockUnitPicker
-              productId={item.productId}
-              pinnedStockUnitId={item.stockUnitId}
-              open={pinOpen}
-              onOpenChange={setPinOpen}
-              onPin={handlePin}
-              onUnpin={handleUnpin}
-            />
+            <StockDrawPicker line={item} open={pinOpen} onOpenChange={setPinOpen} />
           )}
         </td>
       )}

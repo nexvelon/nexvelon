@@ -117,7 +117,12 @@ import type { LineItemClassification } from "@/lib/classifications";
 import {
   listProductsAction,
   commitStockUnitAction,
+  commitStockDrawsAction,
+  planStockDrawsAction,
 } from "@/app/(app)/inventory/actions";
+import { StockPlanContext, type StockPlanApi } from "./stock-plan-context";
+import { applyDrawsToLine } from "@/lib/inventory/line-cost";
+import { remainingDraws, type StockDraw, type StockSource, type CommittedDraw } from "@/lib/inventory/stock-draws";
 import { getNumericSettingAction } from "@/app/(app)/settings/app-settings-actions";
 import { DEFAULT_LABOUR_SELL_RATE_KEY } from "@/lib/app-settings-keys";
 import { CatalogProductsContext } from "./catalog-context";
@@ -459,6 +464,70 @@ export function QuoteBuilder({
   // for callers without the flag (defence in depth); a redacted caller edits the
   // selling price only, and upsertQuoteAction preserves the real cost on save.
   const showCost = hasPermission(role, "quotes", "viewMargin");
+
+  // INV-FIX-1 — the stock planner. Plans run ONLY on an explicit user action
+  // (adding a part, changing an auto-planned line's quantity, choosing lots) —
+  // never on load — so an existing quote's recorded costs are never recomputed.
+  const sectionsRef = useRef<QuoteSection[]>([]);
+  sectionsRef.current = sections;
+  const lineIsCommitted = (it: BuilderLineItem) =>
+    !!it.committedStockId || (it.committedDraws?.length ?? 0) > 0;
+  const reservedExcept = (lineId: string): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const sec of sectionsRef.current) {
+      for (const it of sec.items) {
+        if (it.id === lineId) continue;
+        for (const d of remainingDraws(it.stockDraws, it.committedDraws)) {
+          m.set(d.stockId, (m.get(d.stockId) ?? 0) + d.qty);
+        }
+      }
+    }
+    return m;
+  };
+  const updateLine = (lineId: string, fn: (it: BuilderLineItem) => BuilderLineItem) =>
+    setSections((prev) =>
+      prev.map((sec) => ({ ...sec, items: sec.items.map((it) => (it.id === lineId ? fn(it) : it)) }))
+    );
+  const stockPlan: StockPlanApi = {
+    canPlan: showCost,
+    reservedExcept,
+    replan: (line, mode) => {
+      if (!showCost || line.type !== "product" || !line.productId || lineIsCommitted(line)) return;
+      const product = catalogProducts.find((cp) => cp.id === line.productId);
+      const qty = line.qty;
+      void planStockDrawsAction({
+        productId: line.productId,
+        qty,
+        reserved: Object.fromEntries(reservedExcept(line.id)),
+      }).then((res) => {
+        if (!res.ok) return; // no plan possible → the line keeps its labelled estimate
+        const pricing =
+          mode === "hold"
+            ? "hold"
+            : product?.quoteDefaultMargin == null && (product?.price ?? 0) > 0
+              ? "add_fixed"
+              : "add_tier";
+        updateLine(line.id, (it) =>
+          // Ignore a stale answer if the quantity changed again meanwhile.
+          it.qty !== qty || lineIsCommitted(it)
+            ? it
+            : applyDrawsToLine(it, {
+                draws: res.data.draws,
+                source: "auto",
+                catalogCost: product?.cost ?? null,
+                pricing,
+              })
+        );
+      });
+    },
+    applyManual: (lineId: string, draws: StockDraw[], source: StockSource | null) => {
+      updateLine(lineId, (it) => {
+        if (lineIsCommitted(it)) return it;
+        const product = catalogProducts.find((cp) => cp.id === it.productId);
+        return applyDrawsToLine(it, { draws, source, catalogCost: product?.cost ?? null, pricing: "hold" });
+      });
+    },
+  };
   // APPROVAL-REOPEN + POLISH-2: admin-only reopen. From Sent / Approved /
   // Revision it reverts to Draft (re-enters the edit + re-approval loop); from
   // Closed it reopens to Sent so a closed deal is never terminal-locked.
@@ -715,6 +784,13 @@ export function QuoteBuilder({
       margin = cost > 0 ? round2((1 - cost / p.price) * 100) : 0;
     }
 
+    // INV-FIX-1 — the new line starts on the catalog figure (labelled as an
+    // estimate) and is planned oldest-first from real stock right after.
+    const newLineId = newId("li");
+    queueMicrotask(() => {
+      const line = sectionsRef.current.flatMap((sec) => sec.items).find((it) => it.id === newLineId);
+      if (line) stockPlan.replan(line, "add");
+    });
     setSections((prev) =>
       prev.map((s) =>
         s.id === sectionId
@@ -723,7 +799,8 @@ export function QuoteBuilder({
               items: [
                 ...s.items,
                 {
-                  id: newId("li"),
+                  id: newLineId,
+                  costSource: "catalog_estimate" as const,
                   type: "product" as const,
                   productId: p.id,
                   vendor: p.vendor,
@@ -1085,9 +1162,30 @@ export function QuoteBuilder({
     // parts only). Snapshotted onto the line so it renders on the quote/PDF.
     const serialFor: Record<string, string> = {};
 
+    // INV-FIX-1 — multi-lot lines: lineId -> the draws that actually committed.
+    const drawsCommittedFor: Record<string, CommittedDraw[]> = {};
     for (const sec of sections) {
       for (const it of sec.items) {
         if (!targets.has(it.id)) continue;
+        if (it.type === "product" && it.productId && (it.stockDraws?.length ?? 0) > 0) {
+          const todo = remainingDraws(it.stockDraws, it.committedDraws);
+          if (todo.length === 0) continue;
+          const res = await commitStockDrawsAction({
+            productId: it.productId,
+            ref: number,
+            draws: todo.map((d) => ({ stockId: d.stockId, qty: d.qty })),
+          });
+          if (!res.ok) {
+            errors.push(`${it.sku ?? it.name}: ${res.error}`);
+            continue;
+          }
+          if (res.data.committed.length > 0) {
+            committed++;
+            drawsCommittedFor[it.id] = [...(it.committedDraws ?? []), ...res.data.committed];
+          }
+          if (res.data.error) errors.push(`${it.sku ?? it.name}: ${res.data.error}`);
+          continue;
+        }
         if (it.type !== "product" || !it.stockUnitId || it.committedStockId)
           continue;
         const res = await commitStockUnitAction(
@@ -1110,7 +1208,21 @@ export function QuoteBuilder({
     const updated = sections.map((sec) => ({
       ...sec,
       items: sec.items.map((it) =>
-        committedFor[it.id]
+        drawsCommittedFor[it.id]
+          ? {
+              ...it,
+              committedDraws: drawsCommittedFor[it.id],
+              // Serialized draws: snapshot the committed serial(s) for the quote/PDF.
+              ...(drawsCommittedFor[it.id].some((c) => c.serialNumber)
+                ? {
+                    serialNumber: drawsCommittedFor[it.id]
+                      .map((c) => c.serialNumber)
+                      .filter(Boolean)
+                      .join(", "),
+                  }
+                : {}),
+            }
+          : committedFor[it.id]
           ? {
               ...it,
               committedStockId: committedFor[it.id],
@@ -1145,7 +1257,9 @@ export function QuoteBuilder({
       s.items
         .filter(
           (it) =>
-            it.type === "product" && it.stockUnitId && !it.committedStockId
+            it.type === "product" &&
+            ((it.stockUnitId && !it.committedStockId) ||
+              remainingDraws(it.stockDraws, it.committedDraws).length > 0)
         )
         .map((it) => it.id)
     );
@@ -1289,6 +1403,7 @@ export function QuoteBuilder({
 
   return (
     <CatalogProductsContext.Provider value={catalogProducts}>
+    <StockPlanContext.Provider value={stockPlan}>
     <OfferAddonsContext.Provider value={maybeOfferAddons}>
     <div className="space-y-6">
       <BuilderHeader
@@ -1945,6 +2060,7 @@ export function QuoteBuilder({
       </Dialog>
     </div>
     </OfferAddonsContext.Provider>
+    </StockPlanContext.Provider>
     </CatalogProductsContext.Provider>
   );
 }
