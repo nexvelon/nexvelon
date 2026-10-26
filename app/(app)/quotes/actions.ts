@@ -199,9 +199,10 @@ async function restoreRedactedQuoteFields(
     })
   );
 
-  const sections = incoming.sections?.map((section) => ({
+  const sections = incoming.sections
+    ? await Promise.all(incoming.sections.map(async (section) => ({
     ...section,
-    items: section.items.map((item) => {
+    items: await Promise.all(section.items.map(async (item) => {
       let next = item;
       if (!gates.quoteMargin) {
         const priorItem = priorById.get(item.id);
@@ -220,6 +221,40 @@ async function restoreRedactedQuoteFields(
             ? round2(((item.unitPrice - cost) / item.unitPrice) * 100)
             : priorItem?.margin ?? next.margin;
         next = { ...next, unitCost: cost, margin };
+
+        // INV-FIX-1 — the redacted caller received the lot draws with their costs
+        // nulled; restore the real draws from the prior blob (they can't plan or
+        // pick lots — that needs cost visibility). If they changed the quantity of
+        // a planned, NOT-yet-committed line, the plan no longer covers it: drop it
+        // and fall back to the catalog figure, labelled as an estimate (§2.8),
+        // until someone who can see stock cost re-plans the line.
+        if (priorItem) {
+          next = {
+            ...next,
+            stockDraws: priorItem.stockDraws,
+            committedDraws: priorItem.committedDraws,
+            stockSource: priorItem.stockSource,
+            costSource: priorItem.costSource,
+          };
+          const planned = (priorItem.stockDraws?.length ?? 0) > 0;
+          const committed = (priorItem.committedDraws?.length ?? 0) > 0;
+          if (planned && !committed && item.qty !== priorItem.qty) {
+            const catalogCost = item.productId
+              ? ((await getProductRowById(item.productId))?.default_unit_cost ?? null)
+              : null;
+            next = {
+              ...next,
+              stockDraws: undefined,
+              stockSource: undefined,
+              costSource: "catalog_estimate",
+              unitCost: catalogCost,
+              margin:
+                catalogCost != null && item.unitPrice > 0
+                  ? round2(((item.unitPrice - catalogCost) / item.unitPrice) * 100)
+                  : next.margin,
+            };
+          }
+        }
       }
       if (!gates.quoteInternal) {
         const priorItem = priorById.get(item.id);
@@ -229,8 +264,9 @@ async function restoreRedactedQuoteFields(
         }
       }
       return next;
-    }),
-  }));
+    })),
+  })))
+    : undefined;
 
   return {
     ...incoming,

@@ -82,7 +82,16 @@ export function redactQuote(
     items: section.items.map((item) => {
       let next = item;
       if (!gates.quoteMargin) {
-        next = { ...next, unitCost: null, margin: null };
+        next = {
+          ...next,
+          unitCost: null,
+          margin: null,
+          // INV-FIX-1 — a line's lot draws carry each lot's cost: redact those too.
+          ...(next.stockDraws ? { stockDraws: next.stockDraws.map((d) => ({ ...d, unitCost: null })) } : {}),
+          ...(next.committedDraws
+            ? { committedDraws: next.committedDraws.map((d) => ({ ...d, unitCost: null })) }
+            : {}),
+        };
       }
       if (!gates.quoteInternal && next.labour?.techName != null) {
         next = { ...next, labour: { ...next.labour, techName: undefined } };

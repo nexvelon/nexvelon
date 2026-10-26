@@ -3,6 +3,7 @@ import type { QuoteThemeSlug } from "@/lib/quote-themes";
 import type { QuoteTemplateSlug } from "@/lib/company-profile";
 import type { AddonEntry } from "@/lib/types/database";
 import type { QuoteServiceContractTerms } from "@/lib/recurring/quote-terms";
+import type { StockDraw, StockSource, CommittedDraw, CostSource } from "@/lib/inventory/stock-draws";
 
 export type ID = string;
 
@@ -194,6 +195,16 @@ export interface BuilderLineItem {
   // presence marks the line committed — guards against double-decrement. Lives
   // in the quote jsonb blob; forward-only (no auto-return).
   committedStockId?: string;
+  // INV-FIX-1 — a line may draw from SEVERAL lots (specific identification: each
+  // draw keeps its own lot's cost). `stockDraws` is the plan (oldest-first by
+  // default, or chosen by hand), `committedDraws` what actually left stock — each
+  // traceable to its receipt lot. Legacy single-lot pins (stockUnitId /
+  // committedStockId above) keep working unchanged.
+  stockDraws?: StockDraw[];
+  stockSource?: StockSource;
+  committedDraws?: CommittedDraw[];
+  /** §2.8 — what the cost figure is: real stock cost, an estimate, or typed by hand. */
+  costSource?: CostSource;
   // INV-2: serial number snapshot, captured at commit time when the committed
   // stock unit is a serialized part (null/absent for bulk lots). Stored in the
   // quote jsonb (no schema change) and rendered on the quote document/PDF.

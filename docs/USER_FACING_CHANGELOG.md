@@ -238,6 +238,36 @@
   invalid link shows the client a clear, safe message (and reveals nothing about the
   quote) rather than an error page.
 
+### Inventory & quotes — stock costs on quote lines are real, or say they're estimates (INV-FIX-1)
+
+- When you add a part to a quote, its cost now comes from **real stock, oldest
+  receipt first** — and a line can draw across several lots. Example: 10 readers
+  bought at $80 and 10 more at $95; a line of 15 costs 10 × $80 + 5 × $95 = $1,275.
+  (Before, you had to pin a single lot, the picker suggested the cheapest lot first,
+  and a line bigger than one lot couldn't be committed.)
+- **Choose stock yourself** with **Stock…** on the line: every lot is listed oldest
+  first with its receipt date, PO, location and serial, and you can take amounts from
+  particular lots (for example the exact serialized camera you're installing). **Use
+  oldest first** puts it back to the default; **Don't use stock** leaves the line on
+  the catalog cost.
+- Every part line now **says what its cost is**: *From stock*, *Partly estimated*
+  (not enough stock — the rest is the catalog cost), *Estimate — not from stock*, or
+  *Manual cost* (you typed it). Changing the quantity of an oldest-first line re-plans
+  it; a cost plan changes the line's margin, never the price you're charging, once the
+  line is priced.
+- **Commit stock** now commits lines that draw from several lots, shows exactly which
+  lots each line takes, and lists the estimate-only lines that **won't** reduce
+  inventory. If a lot was used up elsewhere since you planned, that line stops and asks
+  you to re-plan — it never quietly switches to different stock at a different cost.
+  Committing stock now requires inventory edit permission.
+- **Stock can reach zero.** Adjusting a lot (or a counted lot) to 0 no longer fails:
+  the lot is marked retired — written off — and keeps its receipt details and cost on
+  record.
+- The **billable materials** cost on an invoice now weights by quantity (2 units at
+  $80 and 1 at $95 is $85.00 each, not $87.50), and stock costs are hidden from people
+  who aren't allowed to see them.
+- Existing quotes, jobs and invoices keep exactly the figures they had.
+
 ### Reports — save a report with its filters, and have it emailed on a schedule (REP-5)
 
 - On any report (WIP, P&L by company, margin, profitability, AR/AP aging, HST,

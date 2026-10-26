@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import type { BuilderLineItem, QuoteSection } from "@/lib/types";
+import { describeDraws, lineCostSource, remainingDraws } from "@/lib/inventory/stock-draws";
 
 export function CommitStockDialog({
   sections,
@@ -29,12 +30,16 @@ export function CommitStockDialog({
   onOpenChange: (open: boolean) => void;
   onCommit: (lineIds: string[]) => void;
 }) {
-  // Pinned product lines across the whole quote.
-  const pinned: BuilderLineItem[] = sections
-    .flatMap((s) => s.items)
-    .filter((it) => it.type === "product" && it.stockUnitId);
-
-  const uncommitted = pinned.filter((it) => !it.committedStockId);
+  // Stock-backed product lines across the whole quote: legacy single-lot pins
+  // and INV-FIX-1 multi-lot draws.
+  const all = sections.flatMap((s) => s.items).filter((it) => it.type === "product" && it.productId);
+  const hasDraws = (it: BuilderLineItem) => (it.stockDraws?.length ?? 0) > 0;
+  const pinned: BuilderLineItem[] = all.filter((it) => it.stockUnitId || hasDraws(it));
+  const isDone = (it: BuilderLineItem) =>
+    hasDraws(it) ? remainingDraws(it.stockDraws, it.committedDraws).length === 0 : !!it.committedStockId;
+  const uncommitted = pinned.filter((it) => !isDone(it));
+  // §2.8 — lines whose cost is a catalog estimate don't draw stock; say so here.
+  const estimates = all.filter((it) => !it.stockUnitId && !hasDraws(it) && lineCostSource(it) === "catalog_estimate");
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const isChecked = (id: string) => checked[id] ?? true; // default checked
@@ -61,7 +66,7 @@ export function CommitStockDialog({
         ) : (
           <ul className="divide-y divide-[var(--border)]">
             {pinned.map((it) => {
-              const done = !!it.committedStockId;
+              const done = isDone(it);
               return (
                 <li key={it.id} className="flex items-center gap-2 py-2">
                   <input
@@ -85,14 +90,29 @@ export function CommitStockDialog({
                       )}
                     </div>
                     <div className="text-muted-foreground text-[11px]">
-                      qty {it.qty} ·{" "}
-                      {it.unitCost != null ? formatCurrency(it.unitCost) : "—"} each
+                      {hasDraws(it)
+                        ? describeDraws(done ? it.stockDraws! : remainingDraws(it.stockDraws, it.committedDraws), formatCurrency)
+                        : `qty ${it.qty} · ${it.unitCost != null ? formatCurrency(it.unitCost) : "—"} each`}
+                      {hasDraws(it) && (it.committedDraws?.length ?? 0) > 0 && !done ? " (rest already committed)" : ""}
                     </div>
                   </div>
                 </li>
               );
             })}
           </ul>
+        )}
+
+        {estimates.length > 0 && (
+          <div className="rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <p className="font-medium">Not from stock — won&rsquo;t reduce inventory</p>
+            <ul className="mt-0.5 list-disc pl-4">
+              {estimates.map((it) => (
+                <li key={it.id}>
+                  {it.sku ?? it.name} × {it.qty} — catalog cost estimate (no free stock was drawn for it)
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <DialogFooter>

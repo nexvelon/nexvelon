@@ -761,6 +761,10 @@ export async function consumeStock(
     .update({ quantity: u.quantity - qty, updated_at: stamp })
     .eq("id", stockUnitId)
     .eq("status", "in_stock")
+    // INV-FIX-1 — optimistic guard: only if the quantity we read is still the
+    // quantity in the row. Two commits drawing the same lot at once can no longer
+    // both succeed and over-consume it (the loser gets "no longer available").
+    .eq("quantity", u.quantity)
     .select("id");
   if (decErr) throw new Error(`consumeStock/reduce: ${decErr.message}`);
   if (!dec || dec.length === 0) {
