@@ -86,7 +86,7 @@ Each line is scoped to a single Claude Code paste.
   body** rendering of small tables (REP-5 attaches the file); (f) the remaining
   ~25 designed reports; (g) a **user-chosen delivery hour** (REP-5 delivers in the
   single ~01:00 Toronto cron run). **(M)**
-- ~~**INV-FIX-1 — inventory costing gaps (method-independent)**~~ **✅ SHIPPED (INV-FIX-1 PR,
+- ~~**INV-FIX-1 — inventory costing gaps (method-independent)**~~ **✅ SHIPPED (PR #406,
   no migration).** Oldest-first default lot selection drawn across multiple lots, with
   manual lot choice kept (specific identification unchanged); quote-line cost labels
   (from stock / partly estimated / estimate / manual) and estimate lines listed as not

@@ -41,7 +41,7 @@
 **As of 2026-09-24 (REALITY-1 build-state resync). The core ERP has shipped end to end. Full built-vs-designed reconciliation lives in `docs/BUILD_STATE_AUDIT.md` — read it for the real gap picture; treat live code + migrations as ground truth over any older narrative in this file.**
 
 - **HEAD:** INV-FIX-1 branches from `ceb46ea` (merge of PR #405, REP-5). *(Resynced by INV-FIX-1.)*
-- **Latest PR merged:** **#405** (REP-5 — saved reports + scheduled delivery). INV-FIX-1 (inventory costing gaps, no migration) is the next PR.
+- **Latest PR merged:** **#405** (REP-5 — saved reports + scheduled delivery). INV-FIX-1 (inventory costing gaps, no migration) is PR #406.
 - **Inventory costing method:** **specific identification** (Session AB §3.4), built. FIFO-1 is superseded as written and **pending Jay's accountant** (gaps 3/4/7 too) — do not build FIFO or touch job-cost attribution / P&L materials / stock opco until he decides.
 - **Highest migration in repo:** **0135** (`0135_rep5_saved_reports.sql`, REP-5) — **applied** to Supabase with Jay's go-ahead (it alters the non-empty `activity_log` CHECK, a pure widening; all existence checks pass). 0134 is applied. Next migration number: **0136**. (Migrations are additive-only per §1.)
 - **Unattended DB scope:** `lib/supabase/unattended.ts` — `runUnattended(adminClient, fn)` makes `createClient()` return that client for `fn`'s async chain only (AsyncLocalStorage). Entered only by the scheduled-report cron; permissions are decided before it (`lib/reports/access.ts`), never delegated to it.
