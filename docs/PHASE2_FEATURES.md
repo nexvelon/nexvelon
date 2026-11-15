@@ -6,7 +6,7 @@
 | HEAD when written | `a95e770` (merge of PR #406, INV-FIX-1) |
 | Highest migration | **0135** |
 | Source | **Captured from conversation with Jay. Nothing here is built, designed in detail, or scheduled.** |
-| Why this file exists | REALITY-2 (`docs/INTENT_RECOVERY.md`, PR #394) recovered ~38 items that were described and then silently lost. This file writes down 22 capabilities Jay described so they can't be lost the same way. |
+| Why this file exists | REALITY-2 (`docs/INTENT_RECOVERY.md`, PR #394) recovered ~38 items that were described and then silently lost. This file writes down 23 capabilities Jay described so they can't be lost the same way. |
 
 > **None of this is scheduled. The core ERP work on `NEXVELON_ROADMAP.md` continues first.** These are ideas recorded with an honest first sizing. Each one needs its own design pass before it's built.
 
@@ -16,14 +16,14 @@
 
 ---
 
-## 1. The consolidated modules (22 ideas → 11 modules + 1 platform decision)
+## 1. The consolidated modules (23 ideas → 11 modules + 1 platform decision)
 
-Many of the 22 items describe one capability from different angles. Grouped by what they actually build:
+Many of the 23 items describe one capability from different angles. Grouped by what they actually build:
 
 | # | Module | Items folded in | Size | Depends on |
 |---|---|---|---|---|
 | **F** | **Foundation: Device Register** | — (implied by 4, 9, 10, 12, 17, 21) | **L** | Sites, projects, jobs, serialized inventory (all built) |
-| **M1** | **Design-to-Documents** (Riser Studio integration) | 1, 4, 5, 13 | **XL** | F; Riser Studio's data format (D3); the AutoCAD decision (D2) |
+| **M1** | **Design-to-Documents** (Riser Studio integration) | 1, 4, 5, 13, 23 | **XL** | F; Riser Studio's data format (D3); DXF output (D2, **decided**) |
 | **M2** | **Field Capture & Takeoff** | 9, 11, 14 | **L** (14 alone: L) | F; the plan import; the price list (built); the indoor-location approach (D4) |
 | **M3** | **Photo Workspace** | 3, 15, 16 | **M** | Attachments (built); the photo markup tool (D3) |
 | **M4** | **Job Record — "one job, one thread"** | 6 | **L** | Attachments, activity feed, invoices (built); client messaging (**not** built) |
@@ -42,7 +42,7 @@ Walk-and-Tap (9), Mistake Radar (10), Wire Whisperer (12), Door Passport (17), S
 
 ---
 
-## 2. The 22 items, as Jay stated them
+## 2. The 23 items, as Jay stated them
 
 Each item: Jay's description (kept as stated) → plain description → size → depends on → overlaps. "Built" means it exists in this repo today.
 
@@ -52,7 +52,7 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **What it is:** a separate application where security systems are designed in 3D and estimated. "Folding it in" means Nexvelon receiving its designs (devices, parts, quantities, positions), and possibly embedding it.
 - **Size:** the integration alone is **L**; folding the whole app into Nexvelon would be **XL**.
 - **Depends on:** what Riser Studio is built on and what it can export (D3).
-- **Overlaps:** it's the design front end of M1 (items 4, 5, 13) and a natural source for the Device Register (F) and for camera positions (M8).
+- **Overlaps:** it's the design front end of M1 (items 4, 5, 13), the likely source of the 3D Site Viewer (23), and a natural source for the Device Register (F) and for camera positions (M8).
 
 **2. Camera Coverage Vision**
 - **What it is:** an existing camera-coverage tool. It shows what each camera sees given its position, lens and field of view.
@@ -82,11 +82,11 @@ Each item: Jay's description (kept as stated) → plain description → size →
 
 **5. BOM + theory-of-operation → auto-drawn wiring diagrams and commissioning file, output as AutoCAD, Word and PDF.**
 - **What it does:** given the parts list and a written description of how the system works, it generates wiring diagrams and the commissioning file.
-- **Size:** **L–XL**. Diagram generation from rules is the hard core, and the AutoCAD output depends on D2.
+- **Size:** **L–XL**. Diagram generation from rules is the hard core, The AutoCAD output is DXF (D2, decided).
 - **Depends on:**
   - a wiring rules library (how each device type connects to each panel);
   - F;
-  - **D2 (DWG vs DXF)**;
+  - DXF output for AutoCAD (**D2, decided**: no licence needed);
   - Word output (a library; S);
   - PDF output (built: the app already renders PDFs).
 - **Overlaps:** the same generator as items 4 and 13, with only the input differing. It's also the source of the saved diagrams that item 12 checks against.
@@ -240,6 +240,26 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **Depends on:** attachments (built) for the PDFs, images and audio; an authoring screen for Jay. **Nothing like it exists today.**
 - **Overlaps:** Door Passport's "past faults" (17) and deficiencies (built). With F, fault history per device type could feed the ranking.
 
+**23. 3D Site Viewer** — *a self-contained HTML file showing the whole building in 3D, with all floor plans, rotatable, showing device locations and drops in place.* (Added after first capture.)
+- **What it does:** one file that anyone can open in a browser, with no login or install. It shows every floor of the building stacked in 3D, can be rotated and zoomed, and shows each device and cable drop where it sits.
+- **Size:**
+  - **M** if Riser Studio can export its 3D model and device positions; the viewer is then mostly a packaging and export job.
+  - **L** if built from Nexvelon's own data, by stacking the imported 2D floor plans as levels and placing devices from the Device Register.
+- **Depends on:**
+  - **Riser Studio (1), most likely.** It already holds the 3D design, so its export format (D3) decides most of the cost.
+  - F (device positions per floor).
+  - The floor plans for every level, plus floor heights.
+  - **Drop/cable-route data.** "Drops in place" needs where each cable runs or terminates, which the Device Register as described doesn't hold yet. The register would need a drop or route record added.
+  - A 3D rendering library (for example three.js) embedded in the file with the plan images, so the file works fully offline. Expect several MB per building.
+- **Things to settle when it's designed:**
+  - **The file is a client-forwardable copy of a security system's layout** (where every camera, reader and panel is). Unlike a portal link it can't be expired or revoked once sent.
+  - Decide what it includes and who may generate it. **It must never carry SEC-1 cost or margin data.**
+- **Overlaps:**
+  - **Item 1, heavily:** it's essentially a shareable *output* of Riser Studio's 3D model, so it belongs in M1 as one more document the design produces.
+  - **Item 14, partly:** both show the plan and devices in space, but 14 is live AR on site and 23 is an offline model for the office or client. They share the device-position data from F, not the viewer itself.
+  - **Item 3, none really.** Site photos could later be pinned into the viewer, but that's an enhancement, not an overlap.
+  - **Also a natural attachment to M7's handover package** (19).
+
 ---
 
 ## 3. Overlap analysis
@@ -287,10 +307,13 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **14 and 9:**
   - Plan Ghost Vision is an enhancement to Walk-and-Tap's plan view, not a separate tool.
   - It shares the indoor-alignment problem (D4).
+- **23 and Riser Studio (1):**
+  - The 3D Site Viewer is an export of the 3D design, so it sits in M1.
+  - It shares device positions with 14 (AR) through F; it doesn't overlap 3.
 
 ---
 
-## 4. Open decisions (record now; Jay decides)
+## 4. Decisions (D2 decided; D1, D3, D4 open)
 
 ### D1 — Offline-first (item 7). *Cannot wait: it shapes every field tool.*
 
@@ -325,37 +348,27 @@ It also changes how every screen behaves. Each one must show "saved on this phon
 
 *Not decided here.*
 
-### D2 — AutoCAD output (item 5)
+### D2 — AutoCAD output (item 5) — **DECIDED: DXF, not native DWG**
 
-**The real constraint.** AutoCAD's native file format, **DWG**, is proprietary. Writing true DWG files means either:
-- **Autodesk's licensed toolkit (RealDWG):** a commercial licence from Autodesk, with terms and fees negotiated with Autodesk; or
-- **a commercial third-party library:** the main one is the Open Design Alliance's Drawings SDK, which needs a paid ODA membership. These are typically C++ toolkits, so they'd run as a separate service next to this Node/TypeScript app, not inside it.
+**Decision (Jay, 2026-11-15):** generated drawings are output as **DXF** (plus PDF, and Word where a document is needed). **Native DWG isn't pursued**, so there's no Autodesk RealDWG or ODA licence and no separate native CAD service.
 
-**The open alternative is DXF.** It's AutoCAD's documented exchange format:
-- **Writing it** needs no licence, and open-source libraries exist.
-- **AutoCAD opens it directly** and can save it back as DWG in one step.
-- **It's not identical to DWG:**
-  - some newer AutoCAD-specific objects and behaviours don't carry over cleanly (for example dynamic blocks, some annotation and layout features, proxy objects);
-  - very large drawings are bigger files;
-  - a draftsperson may notice the file came from elsewhere.
-- **For generated wiring diagrams** (lines, text, simple blocks and layers), DXF is usually enough.
+**What this means for the build:**
+- **No licence, no extra service.** DXF is AutoCAD's open, documented exchange format and can be written from Nexvelon's own diagram model with an open-source library. Engineering size: **M**.
+- **AutoCAD opens the files directly.** A recipient who needs a `.dwg` opens the DXF and uses "Save As DWG" in one step.
+- **Known limits, accepted with this choice:**
+  - some AutoCAD-native features don't carry over (for example dynamic blocks, some annotation and layout features, proxy objects);
+  - large drawings are bigger files.
 
-**What each path costs:**
+  For generated wiring diagrams (lines, text, simple blocks, layers) this is normally invisible.
+- **Revisit only if a real client contractually requires native DWG.** The DWG path would then cost a commercial licence (get quotes) plus a separate native service (**L**). It would be added alongside DXF, not instead of it.
 
-| Path | Licence | Engineering | Fidelity |
-|---|---|---|---|
-| **DXF** (open) | None | **M**: write DXF from our own diagram model | Opens in AutoCAD; most simple diagrams are indistinguishable; some native features unavailable |
-| **DWG via a commercial SDK** (ODA, or Autodesk RealDWG) | Recurring licence or membership fee: get quotes; **not estimated here** | **L**: plus a separate native service to run and maintain | Native DWG |
-| **PDF / Word only** (no CAD) | None | **S–M** (PDF rendering already exists) | Not editable in AutoCAD |
+**Options that were considered:**
 
-**What Jay needs to decide:**
-- **Who receives the files.** Do consultants, engineers or general contractors *require* native DWG, or will DXF (which AutoCAD opens and can resave as DWG) do?
-- **Whether diagrams are delivered or edited.** Are generated diagrams *final deliverables*, or starting points his team edits in AutoCAD? DXF is fine for editing. Exact native fidelity matters most when files go to firms with strict CAD standards.
-- **Whether the licence is worth it.** If DWG is required, is the licence plus a separate service worth it compared to telling recipients "open the DXF and save as DWG"?
-
-A sensible default to *consider* (not decided): **DXF + PDF first, DWG only if a real client requires it.**
-
-*Not decided here.*
+| Path | Licence | Engineering | Fidelity | Status |
+|---|---|---|---|---|
+| **DXF** (open) | None | **M** | Opens in AutoCAD; some native features unavailable | **Chosen** |
+| DWG via a commercial SDK (ODA, or Autodesk RealDWG) | Commercial licence or membership; not estimated | **L**, plus a native service | Native DWG | Not pursued |
+| PDF / Word only | None | **S–M** | Not editable in AutoCAD | Still produced alongside DXF |
 
 ### D3 — The three existing tools (items 1, 2, 3). *Needed before M1, M3 and M8 can be sized properly.*
 
@@ -379,7 +392,7 @@ Integrate-by-data-exchange is usually far cheaper than folding a whole app in. E
 
 ## 5. Recommended order *if and when* Phase 2 starts (not a schedule)
 
-1. **Decide D1 (offline), D3 (existing tools) and D2 (CAD format).** They're cheap to decide and expensive to reverse.
+1. **Decide D1 (offline) and D3 (existing tools).** They're cheap to decide and expensive to reverse. (D2, the CAD format, is decided: DXF.)
 2. **F, the Device Register, plus the commissioning checklist upgrade** (templates, per-device items, photo evidence). These are foundations, and both are useful straight away.
 3. **M7, client proof and handover.** Highest client-visible value for the least new machinery: it reuses the portal and commissioning.
 4. **M2, field capture and takeoff** (express mode first, per item 11), built to the D1 decision.
