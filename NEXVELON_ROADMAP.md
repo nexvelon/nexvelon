@@ -381,6 +381,14 @@ deferred to after current work.
   exists — manual is the always-on baseline), and full Canadian payroll/paystubs
   /HR (serious CRA-compliance arc; tax-engine decision required first). See the
   doc for the consolidated open-decisions list.
+- **Phase-2 feature set (field, design-to-documents, client-facing)** —
+  [`docs/PHASE2_FEATURES.md`](docs/PHASE2_FEATURES.md). 22 ideas Jay described
+  (Riser Studio, Walk-and-Tap takeoff, Door Passport, handover, offline, …),
+  consolidated into 11 modules plus one platform decision. Almost all of them
+  need a **Device Register** that doesn't exist yet. **Not scheduled; core ERP
+  work continues first.** Open decisions are recorded there, undecided:
+  offline-first (decide before any field tool), DWG vs DXF for AutoCAD output,
+  the three external tools' integration path, and indoor positioning.
 
 ---
 
