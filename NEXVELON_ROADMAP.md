@@ -383,9 +383,10 @@ deferred to after current work.
   doc for the consolidated open-decisions list.
 - **Phase-2 feature set (field, design-to-documents, client-facing)** —
   [`docs/PHASE2_FEATURES.md`](docs/PHASE2_FEATURES.md). 23 ideas Jay described
-  (Riser Studio, Walk-and-Tap takeoff, Door Passport, handover, 3D Site Viewer,
-  offline, …),
-  consolidated into 11 modules plus one platform decision. Almost all of them
+  (Riser Studio, Walk-and-Tap takeoff, handover, 3D Site Viewer, offline, …),
+  consolidated into 10 active modules plus one platform decision. Item 17,
+  Door Passport, was **dropped** by Jay on 2026-11-16 and is kept there
+  recorded as dropped. Almost all of them
   need a **Device Register** that doesn't exist yet. **Not scheduled; core ERP
   work continues first.** **Decided:** AutoCAD output is DXF, not native DWG
   (Jay, 2026-11-15); client content (3D viewer, proof, handover) is delivered
