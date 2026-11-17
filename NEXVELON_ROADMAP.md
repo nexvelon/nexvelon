@@ -388,7 +388,10 @@ deferred to after current work.
   consolidated into 11 modules plus one platform decision. Almost all of them
   need a **Device Register** that doesn't exist yet. **Not scheduled; core ERP
   work continues first.** **Decided:** AutoCAD output is DXF, not native DWG
-  (Jay, 2026-11-15). Still open: offline-first (decide before any field tool),
+  (Jay, 2026-11-15); client content (3D viewer, proof, handover) is delivered
+  through a **Living Site Portal**, one durable, revocable, live link per site,
+  deliberately *not* a frozen snapshot like the quote portal (Jay, 2026-11-16).
+  Still open: offline-first (decide before any field tool),
   the three external tools' integration path, and indoor positioning.
 
 ---

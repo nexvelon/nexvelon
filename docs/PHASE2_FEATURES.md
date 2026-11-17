@@ -29,7 +29,7 @@ Many of the 23 items describe one capability from different angles. Grouped by w
 | **M4** | **Job Record — "one job, one thread"** | 6 | **L** | Attachments, activity feed, invoices (built); client messaging (**not** built) |
 | **M5** | **Field QA (photo checks)** | 10, 12 | **L** | Structured checklist templates (not built); M1's saved wiring diagrams (for 12); an AI vision provider |
 | **M6** | **Door Passport (asset QR)** | 17 | **M** | F; M4 (history per device); a QR library |
-| **M7** | **Client Proof & Handover** | 18, 19 | **M** | The quote-portal token mechanism (built, reuse); M3; commissioning results (built) |
+| **M7** | **Client Proof & Handover — the Living Site Portal** (D5, decided) | 18, 19; hosts 23's viewer | **M** | The quote portal's token *security* (built, reuse), **not** its frozen snapshot; sites (built); M3; commissioning results (built) |
 | **M8** | **Camera Design Tools** | 2, 21 | **M–L** | F (camera position + bearing); Camera Coverage Vision (D3) |
 | **M9** | **Fault Finder** (knowledge base) | 22 | **M** | Attachments (built); M6 (past faults per device), optional |
 | **M10** | **Ask Your Business** (natural-language questions) | 8 | **M–L** | The REP-5 report datasets (built); SEC-1 field redaction (built); an AI provider |
@@ -202,17 +202,17 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **What it does:** a link the client opens to see what was done.
 - **Size:** **M** (shared with 19).
 - **Depends on:**
-  - the portal token mechanism (built for quotes; reuse it);
+  - the **Living Site Portal** (D5, decided): one live link per site;
   - photos (built);
   - commissioning results (built);
   - item 16's slider.
-- **Overlaps:** **item 19** (nearly the same deliverable) and the **quote portal** (the same mechanism). See §3.
+- **Overlaps:** **item 19** (nearly the same deliverable) and the **quote portal** (the same token security, but deliberately *different* content rules). See §3 and D5.
 
 **19. Handover in One Tap** — *one client package of photos, test results, diagrams plus a scannable QR.*
 - **What it does:** the end-of-project package for the client.
 - **Size:** **M** (shared with 18).
 - **Depends on:**
-  - the portal tokens (reuse);
+  - the **Living Site Portal** (D5, decided);
   - commissioning certificates (built: they already render a signed PDF);
   - diagrams (item 5, or uploaded drawings);
   - QR (item 17's library);
@@ -241,24 +241,27 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **Overlaps:** Door Passport's "past faults" (17) and deficiencies (built). With F, fault history per device type could feed the ranking.
 
 **23. 3D Site Viewer** — *a self-contained HTML file showing the whole building in 3D, with all floor plans, rotatable, showing device locations and drops in place.* (Added after first capture.)
-- **What it does:** one file that anyone can open in a browser, with no login or install. It shows every floor of the building stacked in 3D, can be rotated and zoomed, and shows each device and cable drop where it sits.
+
+> **Delivery decided 2026-11-16 (D5):** it is **not a sent file**. The viewer is shown inside the **Living Site Portal**, one durable, revocable link per site that always shows current content. The original wording above is kept as Jay first stated it.
+- **What it does:** a 3D view of the whole building, opened from the site's portal link in any browser with no install. It shows every floor stacked in 3D, can be rotated and zoomed, and shows each device and cable drop where it sits, **as currently recorded**.
 - **Size:**
-  - **M** if Riser Studio can export its 3D model and device positions; the viewer is then mostly a packaging and export job.
+  - **M** if Riser Studio can export its 3D model and device positions; the viewer is then mostly an export plus a portal page.
   - **L** if built from Nexvelon's own data, by stacking the imported 2D floor plans as levels and placing devices from the Device Register.
 - **Depends on:**
   - **Riser Studio (1), most likely.** It already holds the 3D design, so its export format (D3) decides most of the cost.
   - F (device positions per floor).
   - The floor plans for every level, plus floor heights.
   - **Drop/cable-route data.** "Drops in place" needs where each cable runs or terminates, which the Device Register as described doesn't hold yet. The register would need a drop or route record added.
-  - A 3D rendering library (for example three.js) embedded in the file with the plan images, so the file works fully offline. Expect several MB per building.
-- **Things to settle when it's designed:**
-  - **The file is a client-forwardable copy of a security system's layout** (where every camera, reader and panel is). Unlike a portal link it can't be expired or revoked once sent.
-  - Decide what it includes and who may generate it. **It must never carry SEC-1 cost or margin data.**
+  - A 3D rendering library (for example three.js) loaded by the portal page.
+  - **The Living Site Portal (M7, D5)** to deliver it.
+- **Security, resolved by D5:**
+  - The earlier concern was that a sent file is a forwardable copy of a security system's layout that can't be revoked. **That concern is superseded:** a revocable, expiring, view-logged link solves it.
+  - Like everything in the portal, the viewer **never carries SEC-1 cost, margin or internal notes.**
 - **Overlaps:**
   - **Item 1, heavily:** it's essentially a shareable *output* of Riser Studio's 3D model, so it belongs in M1 as one more document the design produces.
-  - **Item 14, partly:** both show the plan and devices in space, but 14 is live AR on site and 23 is an offline model for the office or client. They share the device-position data from F, not the viewer itself.
+  - **Item 14, partly:** both show the plan and devices in space, but 14 is live AR on site and 23 is a browser model for the office or client. They share the device-position data from F, not the viewer itself.
   - **Item 3, none really.** Site photos could later be pinned into the viewer, but that's an enhancement, not an overlap.
-  - **Also a natural attachment to M7's handover package** (19).
+  - **M7 / items 18–19:** the viewer is one of the sections Jay can switch on in the site's portal (D5).
 
 ---
 
@@ -268,15 +271,15 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **Both are a client link to a curated set of photos, test results and documents.** Proof of Work is scoped to a visit (date, time, location); Handover is scoped to the whole project and adds diagrams and a QR.
 - **Build one "client package" page with two presets**, *visit proof* and *project handover*, not two products.
 
-**18 / 19 + the quote portal share the same mechanism.**
-- **The quote portal already has what both need:**
-  - unguessable per-recipient tokens (`randomUUID`);
-  - expiry (30 days) and revoke-on-resend;
-  - a frozen, client-safe snapshot of what was sent;
+**18 / 19 + the quote portal share token security, not content rules.**
+- **What M7 reuses from the quote portal:**
+  - unguessable tokens (`randomUUID`);
   - service-role reads scoped by the token;
-  - an audit trail.
-- **M7 should reuse it** (generalised beyond quotes), so there's one secure "share a link with a client" mechanism to maintain, not two.
-- **One difference to decide:** a handover package probably needs a *long-lived* link (years, for a building owner), unlike a 30-day quote link. It's the same mechanism with different expiry rules.
+  - the audit trail.
+- **What it deliberately does *not* reuse:**
+  - the quote portal's frozen snapshot;
+  - its 30-day, per-recipient, per-quote link.
+- **The Living Site Portal (D5) is per site, durable and live.** See D5 for why the two differ on purpose.
 
 **11 + 9 overlap heavily.**
 - **Both turn what's on site into a device list and then a priced quote from Jay's price list.**
@@ -313,7 +316,7 @@ Each item: Jay's description (kept as stated) → plain description → size →
 
 ---
 
-## 4. Decisions (D2 decided; D1, D3, D4 open)
+## 4. Decisions (D2 and D5 decided; D1, D3, D4 open)
 
 ### D1 — Offline-first (item 7). *Cannot wait: it shapes every field tool.*
 
@@ -388,13 +391,55 @@ Integrate-by-data-exchange is usually far cheaper than folding a whole app in. E
 - Bluetooth beacons;
 - scanning a QR or marker at a known spot (which item 17's door stickers could double as, after installation).
 
+### D5 — Client delivery: the Living Site Portal (items 18, 19, 23) — **DECIDED 2026-11-16**
+
+**Decision (Jay, 2026-11-16):** client-facing content (the 3D Site Viewer, proof of work, handover) is delivered through a **Living Site Portal**, **not a sent file**. It's one durable link per **site**. The link stays valid while work continues and always shows current content.
+
+**What's decided:**
+- **The link lives on the SITE, not the project.** A client with several projects at one building has **one** link, not one per job.
+- **Jay controls expiry per link:** a set number of days, a fixed date, or no expiry.
+- **Jay can revoke or regenerate a link at any time.** Revoking takes effect **immediately**: the next request with the old link is refused.
+- **Updating the content does not change the link.** The client keeps the same URL for the whole project and beyond.
+- **It shows the current state.**
+- **Jay chooses what each site's portal exposes.** It isn't all-or-nothing. Sections:
+  - the 3D viewer (23);
+  - the device list;
+  - photos;
+  - test results;
+  - handover documents.
+- **It never carries cost, margin or internal notes** (SEC-1). Those are excluded on the server, not hidden in the page.
+- **Every view is logged** (who, meaning which link, and when), because the portal shows a client's device positions.
+
+> ⚠️ **Deliberately different from the quote portal. Don't "fix" one to match the other.**
+>
+> | | Quote portal (`/q/[token]`) | Living Site Portal |
+> |---|---|---|
+> | Content | **Frozen snapshot** of exactly what was sent, because a quote is an offer and must not change under the client | **Live, current state**, because a site record is meant to stay up to date |
+> | Scope | One link per recipient per quote | One link per site |
+> | Expiry | 30 days | Jay's choice: days, a fixed date, or none |
+>
+> Both share the same token *security* (unguessable token, server-side scoped reads, audit). Their *content rules* are opposite on purpose.
+
+**What this supersedes:** the earlier item-23 concern that a sent HTML file could not be expired or revoked. A revocable, expiring, view-logged link solves it, so the self-contained-file approach is dropped.
+
+**Still open:**
+- **Where the portal and its settings live in the site record.** Today a site has no client-facing settings, so it's still to decide:
+  - where the link(s), the expiry rule and the exposed sections are stored;
+  - whether a site can hold more than one live link (for example, one per client contact so each can be revoked separately).
+- **Whether a client needs any identification beyond holding the link.** Options to weigh later:
+  - the link alone (like the quote portal);
+  - the link plus an emailed one-time code;
+  - the link plus a client login.
+
+  The portal shows a security system's layout, so this deserves an explicit decision rather than defaulting to the quote portal's link-only model.
+
 ---
 
 ## 5. Recommended order *if and when* Phase 2 starts (not a schedule)
 
 1. **Decide D1 (offline) and D3 (existing tools).** They're cheap to decide and expensive to reverse. (D2, the CAD format, is decided: DXF.)
 2. **F, the Device Register, plus the commissioning checklist upgrade** (templates, per-device items, photo evidence). These are foundations, and both are useful straight away.
-3. **M7, client proof and handover.** Highest client-visible value for the least new machinery: it reuses the portal and commissioning.
+3. **M7, the Living Site Portal (client proof and handover).** Highest client-visible value for the least new machinery: it reuses the quote portal's token security and commissioning results, with live, per-site content (D5).
 4. **M2, field capture and takeoff** (express mode first, per item 11), built to the D1 decision.
 5. M1, M3, M6, M8, then M4, M5, M9, M10, M11 as value and capacity allow.
 
