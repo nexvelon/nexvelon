@@ -16,29 +16,57 @@
 
 ---
 
-## 1. The consolidated modules (23 ideas → 11 modules + 1 platform decision)
+## 1. The consolidated modules (23 ideas, 1 dropped → 10 active modules + 1 platform decision)
 
-Many of the 23 items describe one capability from different angles. Grouped by what they actually build:
+Many of the 23 items describe one capability from different angles. Grouped by what they actually build. Module numbers stay stable: **M6 is kept as a dropped row rather than renumbering the others**, so earlier references still resolve.
 
 | # | Module | Items folded in | Size | Depends on |
 |---|---|---|---|---|
-| **F** | **Foundation: Device Register** | — (implied by 4, 9, 10, 12, 17, 21) | **L** | Sites, projects, jobs, serialized inventory (all built) |
+| **F** | **Foundation: Device Register** | — (implied by 4, 9, 10, 12, 21, 23, and the portal's device list) | **L** | Sites, projects, jobs, serialized inventory (all built) |
 | **M1** | **Design-to-Documents** (Riser Studio integration) | 1, 4, 5, 13, 23 | **XL** | F; Riser Studio's data format (D3); DXF output (D2, **decided**) |
 | **M2** | **Field Capture & Takeoff** | 9, 11, 14 | **L** (14 alone: L) | F; the plan import; the price list (built); the indoor-location approach (D4) |
 | **M3** | **Photo Workspace** | 3, 15, 16 | **M** | Attachments (built); the photo markup tool (D3) |
 | **M4** | **Job Record — "one job, one thread"** | 6 | **L** | Attachments, activity feed, invoices (built); client messaging (**not** built) |
 | **M5** | **Field QA (photo checks)** | 10, 12 | **L** | Structured checklist templates (not built); M1's saved wiring diagrams (for 12); an AI vision provider |
-| **M6** | **Door Passport (asset QR)** | 17 | **M** | F; M4 (history per device); a QR library |
+| ~~**M6**~~ | ~~**Door Passport (asset QR)**~~ — **DROPPED by Jay, 2026-11-16** | ~~17~~ | — | Not built. See item 17 and §1a. |
 | **M7** | **Client Proof & Handover — the Living Site Portal** (D5, decided) | 18, 19; hosts 23's viewer | **M** | The quote portal's token *security* (built, reuse), **not** its frozen snapshot; sites (built); M3; commissioning results (built) |
 | **M8** | **Camera Design Tools** | 2, 21 | **M–L** | F (camera position + bearing); Camera Coverage Vision (D3) |
-| **M9** | **Fault Finder** (knowledge base) | 22 | **M** | Attachments (built); M6 (past faults per device), optional |
+| **M9** | **Fault Finder** (knowledge base) | 22 | **M** | Attachments (built); optionally F (fault history per device type) |
 | **M10** | **Ask Your Business** (natural-language questions) | 8 | **M–L** | The REP-5 report datasets (built); SEC-1 field redaction (built); an AI provider |
 | **M11** | **Pitch Cinema** | 20 | **M** (with a video service) – **L** | M3 photos + markups; a third-party video-generation service |
 | **P** | **Platform decision: Offline-first** | 7 | **XL** if retrofitted app-wide | Everything (see D1) |
 
 **The single most important observation: almost everything needs a Device Register first.** Today Nexvelon knows *parts* (inventory lots, including serialized units with custody status) and *lines* (quote/job lines). It doesn't know *installed devices*: "the reader on the door to the right of reception, on this plan, wired like this, tested on this date". Commissioning items are free-text rows that aren't tied to any device, part or serial.
 
-Walk-and-Tap (9), Mistake Radar (10), Wire Whisperer (12), Door Passport (17), Sun Glare (21) and Riser Studio's design-once paperwork (4) all assume a device record with a location on a plan. **Building the register once, before any of them, avoids building it five times inconsistently.**
+Walk-and-Tap (9), Mistake Radar (10), Wire Whisperer (12), Sun Glare (21), the 3D Site Viewer (23), the Living Site Portal's device list (D5) and Riser Studio's design-once paperwork (4) all assume a device record with a location on a plan. **Building the register once, before any of them, avoids building it several times inconsistently.**
+
+### 1a. Re-check after dropping Door Passport (2026-11-16)
+
+Door Passport (17) was one of the Device Register's stated dependants, so the foundation was re-checked when it was dropped.
+
+**Verdict: the Device Register is still the right foundation to build first, and the priority order doesn't change.**
+
+**Why it's still first.** Door Passport was only one of several dependants, and arguably the lightest: it *read* the register but added nothing to it. Every remaining heavy module still needs a located device record:
+- **M1 (items 4, 5, 13, 23):** the design-to-documents generator and the 3D Site Viewer need devices and their positions to draw anything.
+- **M2 (item 9):** Walk-and-Tap *writes* devices onto a plan. Without a register it has nowhere to put them.
+- **M5 (items 10, 12):** per-device checklist items and wiring checks need to know which device they're about.
+- **M8 (item 21):** sun glare needs each camera's position and bearing.
+- **M7, the Living Site Portal:** its device-list and 3D-viewer sections (D5) read from the register.
+
+Both the desk path (Riser Studio) and the field path (Walk-and-Tap) still need to write to **one** register. That was the main reason for building it first, and it's untouched.
+
+**What changes: the register's scope gets smaller.** Without Door Passport it no longer needs:
+- a per-device public identity (a QR code or sticker ID) or a printable sticker sheet;
+- a per-device history page that pulls together job record, faults and fixes for anyone who scans it, and the question of who may open one at the door.
+
+What's left is a plain internal record: device, type, site, plan, position, drop/route, serial link, and test status. That's still sized **L**, but at the lower end.
+
+**Knock-on edits made with this check:**
+- No QR library is needed by any remaining item **except** item 19's "scannable QR". That can be a plain QR to the site's portal link, an **S**-sized addition inside M7.
+- M9 no longer depends on M6; it can use fault history per device type from F instead.
+- Scoped offline (D1) now covers M2, M3 and M5.
+- Indoor positioning (D4) loses the "door stickers as location markers" option.
+
 
 ---
 
@@ -103,13 +131,13 @@ Each item: Jay's description (kept as stated) → plain description → size →
   - an audit activity feed that already rolls child events up to the project.
 
   **Client messaging is not built** (there are no message threads), and there's no combined gallery view.
-- **Overlaps:** it's the timeline that items 17, 18 and 19 draw from. The existing activity feed is an *audit* trail of create/update/delete events, not a client-readable thread, so it's a starting point, not the answer.
+- **Overlaps:** it's the timeline that items 18 and 19 draw from (and that the dropped item 17 would have). The existing activity feed is an *audit* trail of create/update/delete events, not a client-readable thread, so it's a starting point, not the answer.
 
 **7. Works with no signal** — *full offline operation in basements, parkades and mechanical rooms, syncing later.*
 - **What it does:** the app keeps working with no connection and reconciles when back online.
 - **Size:** **XL** if the whole app goes offline; **L** if scoped to a field-capture surface.
 - **Depends on:** a platform decision. **Nothing offline exists today**: no service worker, no app manifest, no local database, no sync. See **D1**.
-- **Overlaps:** every field tool (M2, M3, M5, M6) is far more useful offline, which is why D1 can't wait.
+- **Overlaps:** every field tool (M2, M3, M5) is far more useful offline, which is why D1 can't wait.
 
 **8. Ask your business anything** — *natural-language questions answered from his own data ("which jobs lost money this year?").*
 - **What it does:** type a question in plain English, get an answer from Nexvelon's own data.
@@ -188,6 +216,10 @@ Each item: Jay's description (kept as stated) → plain description → size →
 ### Asset and client-facing
 
 **17. Door Passport** — *a QR code per door or panel showing its hardware, wiring photos, test results, past faults and who fixed what. Includes a printable PDF of all a project's codes laid out for sticker labels.*
+
+> ❌ **DROPPED by Jay, 2026-11-16.** Jay decided not to build Door Passport, including the per-door QR codes and the printable sticker sheet. It's kept here, as originally stated and analysed, so the intent is **recorded as dropped rather than vanishing** (§8; the REALITY-2 lesson in `docs/INTENT_RECOVERY.md`). Don't build it, or reintroduce it under another name, without a new decision from Jay. The effect on the Device Register is in §1a.
+
+*The analysis below is as it stood before the drop:*
 - **What it does:** a sticker on each door/panel opens that device's history.
 - **Size:** **M**.
 - **Depends on:**
@@ -215,7 +247,7 @@ Each item: Jay's description (kept as stated) → plain description → size →
   - the **Living Site Portal** (D5, decided);
   - commissioning certificates (built: they already render a signed PDF);
   - diagrams (item 5, or uploaded drawings);
-  - QR (item 17's library);
+  - a QR code to the site's portal link (a small, **S** addition; item 17's QR work is dropped);
   - warranty and handover records (built as *fields* on a warranty, but **nothing generates a handover package today**).
 - **Overlaps:** **item 18**. See §3.
 
@@ -238,7 +270,7 @@ Each item: Jay's description (kept as stated) → plain description → size →
 - **What it does:** a troubleshooting guide Jay builds up over time: pick a symptom, see causes ranked, each with supporting material.
 - **Size:** **M** for a curated tree; **L** if causes are ranked from fault history automatically.
 - **Depends on:** attachments (built) for the PDFs, images and audio; an authoring screen for Jay. **Nothing like it exists today.**
-- **Overlaps:** Door Passport's "past faults" (17) and deficiencies (built). With F, fault history per device type could feed the ranking.
+- **Overlaps:** deficiencies (built). With F, fault history per device type could feed the ranking. (It also overlapped Door Passport's "past faults" (17), now dropped.)
 
 **23. 3D Site Viewer** — *a self-contained HTML file showing the whole building in 3D, with all floor plans, rotatable, showing device locations and drops in place.* (Added after first capture.)
 
@@ -304,9 +336,9 @@ Each item: Jay's description (kept as stated) → plain description → size →
   - If both exist, **they must write to the same Device Register** (F), with a clear rule for which one wins when they disagree.
   - Otherwise the desk design and the site walk diverge.
 - **2 and 21 both need camera pose** (position, bearing, tilt, lens). Keep them together (M8), fed from the register or Riser Studio.
-- **17 and 6:**
-  - The Door Passport is the job record (M4) filtered to one device.
-  - Build M4 so its entries can be tagged to a device, and the passport mostly falls out of it.
+- **17 and 6 (17 dropped 2026-11-16):**
+  - The Door Passport would have been the job record (M4) filtered to one device.
+  - With 17 dropped, tagging M4 entries to a device is now optional rather than a requirement.
 - **14 and 9:**
   - Plan Ghost Vision is an enhancement to Walk-and-Tap's plan view, not a separate tool.
   - It shares the indoor-alignment problem (D4).
@@ -334,7 +366,7 @@ It also changes how every screen behaves. Each one must show "saved on this phon
 
 **The real cost, now vs later.**
 - **Whole app offline, retrofitted:** **XL** (months). Every module would need a local copy, a sync queue and conflict rules. Server-side permission checks would also need an offline equivalent, because cost and margin data (SEC-1) can't simply be copied onto every phone. **The cost grows with every module built server-first in the meantime**, because each one is more to retrofit.
-- **Scoped offline: only the field-capture surface** (M2, M3, M5, M6), as a separate phone-first app or installable web app that syncs into the ERP: **L**.
+- **Scoped offline: only the field-capture surface** (M2, M3, M5), as a separate phone-first app or installable web app that syncs into the ERP: **L**.
   - **What goes offline:** the field tools.
   - **What stays server-first:** the office ERP (quotes, invoices, financials).
   - **Why it's cheaper:**
@@ -347,7 +379,7 @@ It also changes how every screen behaves. Each one must show "saved on this phon
 - **How often there's really no signal:** every basement and parkade, or occasionally?
 - **Whether a tech would accept** "capture now, it uploads when you're back upstairs" (append-only offline) instead of full offline editing of quotes and jobs.
 - **Whether field tools should be a separate phone app.** That's also the natural home for camera, AR (14), speech and QR scanning.
-- **The rule that matters most:** decide this *before* building M2, M3, M5 or M6, because it decides how they're built.
+- **The rule that matters most:** decide this *before* building M2, M3 or M5, because it decides how they're built.
 
 *Not decided here.*
 
@@ -389,7 +421,7 @@ Integrate-by-data-exchange is usually far cheaper than folding a whole app in. E
 **More precise options, each a cost of its own:**
 - AR anchoring to the plan (the item 14 problem);
 - Bluetooth beacons;
-- scanning a QR or marker at a known spot (which item 17's door stickers could double as, after installation).
+- scanning a QR or marker at a known spot. (Item 17's door stickers could have doubled as these, but item 17 is dropped.)
 
 ### D5 — Client delivery: the Living Site Portal (items 18, 19, 23) — **DECIDED 2026-11-16**
 
@@ -438,10 +470,10 @@ Integrate-by-data-exchange is usually far cheaper than folding a whole app in. E
 ## 5. Recommended order *if and when* Phase 2 starts (not a schedule)
 
 1. **Decide D1 (offline) and D3 (existing tools).** They're cheap to decide and expensive to reverse. (D2, the CAD format, is decided: DXF.)
-2. **F, the Device Register, plus the commissioning checklist upgrade** (templates, per-device items, photo evidence). These are foundations, and both are useful straight away.
+2. **F, the Device Register, plus the commissioning checklist upgrade** (templates, per-device items, photo evidence). These are foundations, and both are useful straight away. Still first after Door Passport was dropped (§1a); the register's scope is smaller.
 3. **M7, the Living Site Portal (client proof and handover).** Highest client-visible value for the least new machinery: it reuses the quote portal's token security and commissioning results, with live, per-site content (D5).
 4. **M2, field capture and takeoff** (express mode first, per item 11), built to the D1 decision.
-5. M1, M3, M6, M8, then M4, M5, M9, M10, M11 as value and capacity allow.
+5. M1, M3, M8, then M4, M5, M9, M10, M11 as value and capacity allow. (M6, Door Passport, is dropped.)
 
 ---
 
