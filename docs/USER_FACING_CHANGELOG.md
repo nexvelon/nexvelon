@@ -116,6 +116,19 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Devices — Riser Studio's device types are now loaded (DEVREG-1B)
+
+- The device type list now holds all **62 Riser Studio types** (cameras, readers,
+  door hardware, intercom, intrusion, fire, network and electrical), in the same
+  order and with the same ids as Riser Studio. Devices of these types no longer
+  show as "unmatched", and the Type filter and the type box when adding a device
+  list them all.
+- **Door typicals (A, B, C, D) and Door** are shown as **door groups**, not single
+  devices: a door group is the door plus its reader, strike, contact and so on.
+  Importing one gives a note saying so.
+- Each type carries Riser's label prefix, default mount height and default cable.
+  Types still have no prices.
+
 ### Devices — a register of every device installed at a site (DEVREG-1)
 
 - A new **Devices** page lists every device recorded at your sites: cameras,

@@ -418,6 +418,21 @@ It also changes how every screen behaves. Each one must show "saved on this phon
 > accessories to ERP inventory products is therefore required (**DEVREG-3**).
 > Camera Coverage Vision and the photo markup tool are still open.
 >
+> **Catalog LOADED (DEVREG-1B, migration 0137, 2026-11-20).** All 62 Riser Studio type ids are
+> seeded into `device_types` exactly as extracted from the tool by Jay: same ids, same order
+> (`sort_order` 1–62), name, system, label prefix, default mount height and default cable. They're
+> seeded as data, not a CHECK (§1), and mirrored in `lib/devices/riser-catalog.ts`, which a test
+> keeps identical to the migration. A device whose type is one of these ids now reads matched;
+> only ids outside the catalog read unmatched. Per system: access 21, cctv 9, intrusion 9, fire 8,
+> network 6, intercom 5, electrical 4. DEVREG-1's "access 18 / intrusion 8" left out the four door
+> typicals; the total is 62 either way.
+> **Door groups are a distinct kind** (`device_types.kind = 'door_group'`): typA, typB, typC, typD
+> and doorleaf. Placing a typical in Riser Studio creates a door leaf plus its member devices, all
+> sharing one door id. The register labels them as door groups and flags them on import.
+> **Not in the extract, so left empty rather than guessed:** each type's "homes to", default
+> field of view and accessories. The catalog carries **no pricing** (confirmed by Jay); mapping
+> types and accessories to ERP products remains **DEVREG-3**.
+>
 > **What DEVREG-1 established about the two device models:**
 > - **Riser Studio** (design): a device is `{id, t, b, f, x, z, rot, lab, mdl, to, ct, mh, notes, fov?, door?}`,
 >   positioned in **metres** on an authored floor.
