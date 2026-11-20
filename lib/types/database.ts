@@ -652,6 +652,9 @@ export const ACTIVITY_ENTITY_TYPES = [
   "service_contract",
   // REP-5 — saved reports: create/edit/delete, schedule changes, each delivery.
   "saved_report",
+  // DEVREG-1 — the Device Register: device create/update/delete, floor geometry.
+  "device",
+  "device_floor",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];

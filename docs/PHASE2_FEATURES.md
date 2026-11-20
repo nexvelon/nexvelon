@@ -22,7 +22,7 @@ Many of the 23 items describe one capability from different angles. Grouped by w
 
 | # | Module | Items folded in | Size | Depends on |
 |---|---|---|---|---|
-| **F** | **Foundation: Device Register** | — (implied by 4, 9, 10, 12, 21, 23, and the portal's device list) | **L** | Sites, projects, jobs, serialized inventory (all built) |
+| **F** | **Foundation: Device Register**: **BUILT, DEVREG-1 (migration 0136)** | — (implied by 4, 9, 10, 12, 21, 23, and the portal's device list) | **L** | Sites, projects, jobs, serialized inventory (all built) |
 | **M1** | **Design-to-Documents** (Riser Studio integration) | 1, 4, 5, 13, 23 | **XL** | F; Riser Studio's data format (D3); DXF output (D2, **decided**) |
 | **M2** | **Field Capture & Takeoff** | 9, 11, 14 | **L** (14 alone: L) | F; the plan import; the price list (built); the indoor-location approach (D4) |
 | **M3** | **Photo Workspace** | 3, 15, 16 | **M** | Attachments (built); the photo markup tool (D3) |
@@ -406,6 +406,30 @@ It also changes how every screen behaves. Each one must show "saved on this phon
 | PDF / Word only | None | **S–M** | Not editable in AutoCAD | Still produced alongside DXF |
 
 ### D3 — The three existing tools (items 1, 2, 3). *Needed before M1, M3 and M8 can be sized properly.*
+
+> **ANSWERED for Riser Studio (DEVREG-1, 2026-11-19).** The ERP stores Riser
+> Studio's project JSON (one object per site, to be held by DEVREG-2), and the
+> **Device Register holds its devices**: one row per Riser `devices[]` entry,
+> with the original record kept verbatim so it exports unchanged. Its catalog (62
+> types: access 18, cctv 9, fire 8, intrusion 8, network 6, intercom 5,
+> electrical 4) carries name, system, label prefix, default mount height, default
+> cable type, what it homes to, optional field of view and accessories as
+> `[name, qty]` pairs, and **no pricing**. A mapping from Riser types and
+> accessories to ERP inventory products is therefore required (**DEVREG-3**).
+> Camera Coverage Vision and the photo markup tool are still open.
+>
+> **What DEVREG-1 established about the two device models:**
+> - **Riser Studio** (design): a device is `{id, t, b, f, x, z, rot, lab, mdl, to, ct, mh, notes, fov?, door?}`,
+>   positioned in **metres** on an authored floor.
+> - **3D System Design View** (as-built): a device is `{id, p:[x,y], t, ip, model, type, sw, swip, port, vlan, mask, gw, mbps, ch, nvr[], det, inj, acc, r[]}`,
+>   positioned **normalised 0–1** on a floor plan image, with its conduit route in the same space.
+> - **Canonical position is metres.** The 0–1 plan position is also stored when a
+>   source supplies it. Converting between them needs the floor plan's real-world
+>   origin and extent, stored on the floor and never assumed. Without them the
+>   conversion is refused.
+> - **Design and as-built are kept apart**: the as-designed record and the
+>   commissioned record are each stored verbatim, and an edit or as-built value
+>   never overwrites the design record (§2.2).
 
 Riser Studio, Camera Coverage Vision and the photo markup tool are outside this repo. Before any integration work, establish for each:
 - what it's built on and who owns the code;

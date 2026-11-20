@@ -116,6 +116,40 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Devices — a register of every device installed at a site (DEVREG-1)
+
+- A new **Devices** page lists every device recorded at your sites: cameras,
+  readers, door contacts, panels and so on. Filter by site, project, building,
+  floor, type or system, and search by label, model or IP address.
+- **Add a device by hand**: label (e.g. CAM-01), type, model, which floor it's on
+  and where, mount height, cable, what it homes to and, for network devices, IP,
+  switch, port, VLAN, recorders and PoE injector. A door contact simply has no
+  network details; nothing is filled in for you.
+- **Import a device schedule** from a CSV or Excel file. You get a preview first
+  showing, row by row, which devices will be added, which updated and which have
+  problems, and nothing is saved until you press Import. Importing the same
+  schedule again **updates** the devices already there instead of adding them
+  twice. A blank cell never clears a value, and a bad row is skipped and
+  reported without stopping the rest. A "Download template" button gives you the
+  column layout.
+- A device whose type isn't in the type list is kept **exactly as written** and
+  marked **unmatched**; it is never swapped for a similar-looking type.
+- Two buildings on one site can each have their own CAM-01; within one building
+  a label is used once.
+- Each device page shows everything recorded about it, which project and
+  operating company it belongs to (or "Opco not determined" when that can't be
+  known for certain), and **where the record came from**: added by hand,
+  imported, or (later) from Riser Studio or the as-built viewer.
+- **Floors**: pick a site on the Devices page to set up its floors. If you enter
+  a floor plan's real-world size and position, a device's location can be shown
+  both in metres and on the plan. If you don't, the app says the scale is unknown
+  rather than guessing.
+- Adding, editing, removing and importing devices all appear in the activity
+  history. Removing a device keeps its history.
+- Who can do what: anyone who can view projects can view devices; editing and
+  importing need project edit rights; removing a device needs project delete
+  rights.
+
 ### Everywhere — dates and times now show in Toronto time (TZ-1)
 
 - Dates and times across the app — the signed-quote PDF, activity and audit

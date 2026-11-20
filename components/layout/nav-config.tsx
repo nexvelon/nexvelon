@@ -17,6 +17,7 @@ import {
   Users,
   Activity,
   Repeat,
+  Cctv,
   type LucideIcon,
 } from "lucide-react";
 import type { Resource } from "@/lib/permissions";
@@ -46,6 +47,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderKanban, resource: "projects" },
   { href: "/clients", label: "Clients", icon: Users, resource: "clients" },
   { href: "/sites", label: "Sites", icon: Building2, resource: "clients" },
+  // DEVREG-1 — the Device Register (installed devices per site), gated like projects.
+  { href: "/devices", label: "Devices", icon: Cctv, resource: "projects" },
   { href: "/inventory", label: "Inventory", icon: Boxes, resource: "inventory" },
   { href: "/vendors", label: "Vendors", icon: Truck, resource: "inventory" },
   { href: "/subcontractors", label: "Subcontractors", icon: HardHat, resource: "subcontractors" },

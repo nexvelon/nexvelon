@@ -48,6 +48,9 @@ export const FEED_RESOURCE: Record<ActivityEntityType, Resource> = {
   service_contract: "clients",
   // REP-5 — saved/scheduled reports + their deliveries → the reports resource.
   saved_report: "reports",
+  // DEVREG-1 — the Device Register is gated projects:view, so its feed rows are too.
+  device: "projects",
+  device_floor: "projects",
 };
 
 // AUD-3 — human labels for each entity_type, for the feed's type column + the
@@ -76,6 +79,8 @@ export const ENTITY_TYPE_LABEL: Record<ActivityEntityType, string> = {
   balance_snapshot: "Balance snapshot",
   service_contract: "Service contract",
   saved_report: "Saved report",
+  device: "Device",
+  device_floor: "Floor",
 };
 
 /** AUD-3 — the detail-page href for a feed row, or null when the type has no
@@ -101,6 +106,8 @@ export function feedHref(
       return `/inventory/${entityId}`;
     case "subcontractor":
       return `/subcontractors/${entityId}`;
+    case "device":
+      return `/devices/${entityId}`;
     default:
       return null;
   }
