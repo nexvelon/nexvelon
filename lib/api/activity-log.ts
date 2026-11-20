@@ -395,6 +395,7 @@ const FEED_LINK_TABLE: Partial<Record<ActivityEntityType, string>> = {
   vendor: "vendors",
   inventory: "inventory_products",
   subcontractor: "subcontractors",
+  device: "devices",
 };
 
 /**

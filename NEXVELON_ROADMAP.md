@@ -381,6 +381,16 @@ deferred to after current work.
   exists — manual is the always-on baseline), and full Canadian payroll/paystubs
   /HR (serious CRA-compliance arc; tax-engine decision required first). See the
   doc for the consolidated open-decisions list.
+- **DEVREG-1 — Device Register (Phase-2 foundation): BUILT** (migration 0136).
+  Devices per site (`devices`), per-site floor geometry with an optional plan
+  scale (`device_floors`), and the type vocabulary (`device_types`, keyed by
+  Riser Studio type ids, **ships empty**). List/detail at `/devices`; CSV/Excel
+  import with a dry-run preview and update-in-place re-import. Next:
+  **DEVREG-2** Riser Studio project import/export (stores the project JSON per
+  site and loads the 62-type catalog into `device_types`); **DEVREG-3**
+  BOM → ERP product/pricing map (the Riser catalog carries accessory quantities
+  but no pricing). Not yet done: linking commissioning items to devices; plan
+  image upload on a floor.
 - **Phase-2 feature set (field, design-to-documents, client-facing)** —
   [`docs/PHASE2_FEATURES.md`](docs/PHASE2_FEATURES.md). 23 ideas Jay described
   (Riser Studio, Walk-and-Tap takeoff, handover, 3D Site Viewer, offline, …),
