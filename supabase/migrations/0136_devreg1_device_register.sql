@@ -249,9 +249,14 @@ COMMIT;
 --       AND grantee IN ('authenticated','service_role')
 --       AND privilege_type IN ('SELECT','INSERT','UPDATE','DELETE');
 --
---   -- No anon grant (expect 0)
---   SELECT count(*) FROM information_schema.role_table_grants
---     WHERE table_name IN ('device_types','device_floors','devices') AND grantee='anon';
+--   -- anon: this migration grants nothing to anon. NOTE the project's default
+--   -- privileges (pg_default_acl on public) give anon table privileges on EVERY new
+--   -- table, as on clients/activity_log/saved_reports, so the grant count is NOT 0.
+--   -- anon's effective access is nil because no policy names anon: RLS denies it.
+--   -- Verify with (expect 0 rows): policies that apply to anon
+--   SELECT tablename, policyname FROM pg_policies
+--     WHERE tablename IN ('device_types','device_floors','devices')
+--       AND ('anon' = ANY(roles) OR 'public' = ANY(roles));
 --
 --   -- Named constraints (expect 3): device_floors_extent_positive_chk,
 --   -- devices_pos_norm_range_chk, activity_log_entity_type_check
