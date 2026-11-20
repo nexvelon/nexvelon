@@ -116,6 +116,18 @@
 > *"Users can now set a payment reminder cadence per client from the client
 > detail page."*
 
+### Quote links and scheduled jobs work again (fix)
+
+- **Clients can open the quote link you send them again** without an account. Until
+  now, a client who wasn't signed in to Nexvelon was sent to the staff sign-in page
+  instead of seeing their quote and its PDF.
+- **Scheduled jobs run again:** the daily balance snapshots, recurring-contract
+  invoices and scheduled report emails. They were being turned away at the sign-in
+  page instead of running. Missed recurring-contract invoices and missed scheduled
+  reports are caught up on the next run (a late report says so);
+  missed balance-snapshot days stay missing (the gaps show on the trend, nothing
+  is filled in).
+
 ### Devices — Riser Studio's device types are now loaded (DEVREG-1B)
 
 - The device type list now holds all **62 Riser Studio types** (cameras, readers,

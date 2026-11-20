@@ -158,7 +158,7 @@ Tiered on evidence. Each item states why.
   - **Still open:**
     - (a) **Any signed-in user** can call those SECURITY DEFINER functions directly over the API, skipping the app's permission checks. They should be granted to `service_role` only, or check `is_admin()`.
     - (b) Drop the now-inert 0056 anon policies.
-    - (c) **Production redirect bug found during the inventory:** the middleware sends signed-out `/q/*` (quote portal) and `/api/cron/*` to `/login`. Signed-out clients can't open quote links, and the scheduled jobs are likely being redirected. This needs its own fix.
+    - (c) ~~**Production redirect bug found during the inventory:** the middleware sent signed-out `/q/*` (quote portal) and `/api/cron/*` to `/login`.~~ **✅ FIXED (2026-11-20):** both are on the middleware's public allow-list (`lib/auth/public-routes.ts`), with routing tests that fail on the old middleware. Until then, signed-out clients couldn't open quote links, and Vercel's cron runs (balance snapshots, recurring invoices, scheduled reports) were redirected to `/login` instead of running.
 
 ### P1 — designed, materially absent, commercially matters
 - **P1-1 — Reports platform:** custom/copy-modify builder, scheduled email/PDF delivery, subscriptions, immutable snapshots, the 7 report tables. Today ~14 static reports, zero infra.
