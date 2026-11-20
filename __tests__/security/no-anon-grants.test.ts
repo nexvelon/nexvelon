@@ -95,6 +95,18 @@ describe("no migration grants anon (SEC-3)", () => {
   });
 });
 
+describe("new functions don't default to PUBLIC (SEC-3 follow-up, 0139)", () => {
+  it("0139 removes PUBLIC from the GLOBAL function default for postgres (no IN SCHEMA)", () => {
+    // Per-schema defaults can only ADD to the global default, and the built-in
+    // global default grants EXECUTE to PUBLIC. So the revoke must be global; an
+    // IN SCHEMA version of it is a silent no-op (0138's was).
+    const m = migrations().find((x) => x.file.startsWith("0139_"));
+    expect(m, "0139 migration missing").toBeTruthy();
+    expect(m!.sql).toMatch(/ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;/);
+    expect(m!.sql).not.toMatch(/FOR ROLE postgres IN SCHEMA \w+ REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/);
+  });
+});
+
 describe("the detector itself", () => {
   it("catches the shapes it's meant to", () => {
     expect(anonGrants("GRANT SELECT ON public.clients TO anon;")).toHaveLength(1);
