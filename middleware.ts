@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { isPublicRoute } from "@/lib/auth/public-routes";
 
 // ============================================================================
 // Nexvelon middleware
@@ -62,14 +63,9 @@ export async function middleware(request: NextRequest) {
 
   // ---- 1. Anonymous --------------------------------------------------------
   if (!user) {
-    // POLISH-3 — the /invite/<token>/* onboarding flow is PUBLIC (token-gated
-    // at the API layer), so anonymous clients reach it without an app login.
-    if (
-      pathname === "/" ||
-      ANON_ALLOWED.has(pathname) ||
-      pathname === "/invite" ||
-      pathname.startsWith("/invite/")
-    ) {
+    // Token- or secret-gated public routes (the invite flow, the quote portal,
+    // the cron endpoints) authorise themselves; see lib/auth/public-routes.ts.
+    if (pathname === "/" || ANON_ALLOWED.has(pathname) || isPublicRoute(pathname)) {
       return supabaseResponse;
     }
     const url = request.nextUrl.clone();
@@ -84,7 +80,9 @@ export async function middleware(request: NextRequest) {
 
   // ---- 2. Authenticated + MFA pending → /auth/verify-otp ------------------
   if (hasPendingOtp) {
-    if (MFA_PENDING_ALLOWED.has(pathname)) {
+    // A staff member mid-sign-in who opens a client's quote link (or an invite)
+    // sees it like anyone else: those routes don't use the staff session.
+    if (MFA_PENDING_ALLOWED.has(pathname) || isPublicRoute(pathname)) {
       return supabaseResponse;
     }
     const url = request.nextUrl.clone();
