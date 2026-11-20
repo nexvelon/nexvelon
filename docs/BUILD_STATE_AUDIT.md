@@ -144,6 +144,22 @@ Tiered on evidence. Each item states why.
 - **P0-1 — Server-strip field-gated data (cost / margin / internal notes). ✅ CLOSED (SEC-1, PR #390).** Reasoning: a lower-privilege authenticated user could read cost/margin/notes from the wire payload; the field-visibility dimension was substituted with cosmetic client-side hiding. Confidentiality breach. **Fix:** one shared server-side redactor (`lib/permissions/field-redaction.ts`) applied at every read/action/export boundary — inventory cost (catalog, detail, allocations, PO totals, valuation report + exports, dashboard donut), quote margin (line cost/margin, TotalsBar) and internal notes (notes + technician names). Redaction is `null`/absent (never zeroed, §2.8), fails closed, and `upsertQuoteAction` preserves the real values from the prior blob so a redacted edit never clobbers them. No role's capabilities changed. *(No migration.)*
 - **P0-2 — Invoice audit trail. ✅ CLOSED (AUD-4, PR #391).** Reasoning: financial-entity mutations wrote no `activity_log` — a §5 launch-gate violation and an integrity/traceability gap on money. **Fix:** every invoice / payment / deposit / holdback-release mutation now writes a best-effort `entity_type: "invoice"` (or project) activity row with a readable label and the money amount, rolled up to the project; issue and void are distinguishable; removed lines/reversed payments keep their label; the Activity tab mounts on the invoice detail page, gated on `financials:view`. No SEC-1-redacted field appears in any invoice audit payload. *(No migration — `invoice` was already an allowed `entity_type` since migration 0120.)*
 
+- **P0-3 — Signed-out (`anon`) privileges on every table and function. ✅ CLOSED (SEC-3, migration 0138).**
+  - **Reasoning:** Supabase's default privileges gave `anon` full SELECT/INSERT/UPDATE/DELETE on all 119 `public` tables (833 privileges) and EXECUTE on every function, so **RLS was the sole defence**. It wasn't only a missing layer; two live exposures sat behind it:
+    1. **`client_invitations`**: 0056's anon policies allow any *unsubmitted* row, not one token. A read as `anon` returned **all 28 open invitations, tokens included**, and they were updatable too.
+    2. **SECURITY DEFINER functions with no caller check**, callable as `anon` over the API: `hard_delete_client` and `hard_delete_site` (delete a client or site and its quotes, invoices and projects), and `next_invoice_seq` (burns invoice numbers). A call as `anon` was confirmed using an id matching nothing, rolled back.
+  - **Fix:**
+    - `anon` revoked from all tables, sequences and our 20 functions;
+    - default privileges for `postgres` changed so new objects never grant `anon` (proven with a throwaway table);
+    - `authenticated` and `service_role` unchanged;
+    - no RLS policy or application code changed;
+    - a test fails if any migration grants `anon` again.
+  - **Now RLS is a second layer, not the only one.**
+  - **Still open:**
+    - (a) **Any signed-in user** can call those SECURITY DEFINER functions directly over the API, skipping the app's permission checks. They should be granted to `service_role` only, or check `is_admin()`.
+    - (b) Drop the now-inert 0056 anon policies.
+    - (c) **Production redirect bug found during the inventory:** the middleware sends signed-out `/q/*` (quote portal) and `/api/cron/*` to `/login`. Signed-out clients can't open quote links, and the scheduled jobs are likely being redirected. This needs its own fix.
+
 ### P1 — designed, materially absent, commercially matters
 - **P1-1 — Reports platform:** custom/copy-modify builder, scheduled email/PDF delivery, subscriptions, immutable snapshots, the 7 report tables. Today ~14 static reports, zero infra.
 - **P1-2 — ~~FIFO inventory valuation~~ inventory costing gaps.** Corrected: the method is specific identification (built). The method-independent gaps (lot selection, unpinned-line estimates, billable average, zero quantity) shipped in INV-FIX-1; gaps 3/4/7 and any FIFO adoption await Jay's accountant (roadmap FIFO-1).
