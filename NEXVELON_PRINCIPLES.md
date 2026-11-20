@@ -138,7 +138,8 @@ create table public.your_table (
 grant select, insert, update, delete on public.your_table to authenticated;
 grant select, insert, update, delete on public.your_table to service_role;
 
--- Note: do NOT grant to `anon` unless the table is intended for public/unauthenticated
+-- Note: NEVER grant to `anon` (SEC-3, 2026-11-20). A test fails the build if a
+-- migration does. Previously: do NOT grant to `anon` unless the table is intended for public/unauthenticated
 -- access. The Nexvelon ERP requires authentication for all data access.
 
 -- 3. Enable Row Level Security
@@ -164,7 +165,12 @@ create policy "authenticated users can manage"
 
 ### Special considerations
 
-- **`anon` role.** Do NOT grant to `anon` for Nexvelon ERP tables. We require authentication for everything. Only grant to `anon` for public-facing data that anonymous visitors should see (we currently have none).
+- **`anon` role: never granted, and RLS is a second layer, not the only one (2026-11-20, SEC-3).** New tables grant `authenticated` and `service_role` **only**, never `anon`. Supabase's defaults used to give `anon` full privileges on every `public` table and EXECUTE on every function, which left RLS as the only barrier. One permissive policy (0056's anon policies on `client_invitations`) and three unguarded SECURITY DEFINER functions (`hard_delete_client`, `hard_delete_site`, `next_invoice_seq`) were therefore reachable with the public API key. Migration 0138 revoked `anon` from all tables, sequences and our functions, and changed the default privileges for `postgres` (the owner of everything migrations create), so new tables and sequences don't get `anon` grants. Migration 0139 did the same for new functions. That needed a **global** default (`ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`, no `IN SCHEMA`), because per-schema defaults can only add to the built-in global default, which grants EXECUTE to `PUBLIC`. A function that a Supabase system role must call (e.g. an auth hook) now needs an explicit grant in the migration that creates it. Rules that follow from it:
+  - **Never `GRANT … TO anon` or `TO PUBLIC`**, and never write an RLS policy `TO anon`. `__tests__/security/no-anon-grants.test.ts` fails the build if a migration does.
+  - **Unauthenticated routes read through the service-role client, scoped by the route's own check** (the quote portal token, the invite token, the cron secret), never through `anon`.
+  - **A SECURITY DEFINER function bypasses RLS**, so it must check its caller itself (`auth.uid()` / `is_admin()`) or be granted to `service_role` only.
+  - **RLS still matters:** it's what separates one signed-in user from another. The grant is now the outer wall, so a missing policy fails closed for signed-out visitors.
+  - Not covered: objects created by `supabase_admin`, e.g. the `btree_gist` functions in `public` (index helpers that read no data), whose defaults `postgres` can't change.
 - **Ledger / append-only tables.** Even append-only ledgers (audit logs, activity log) still need `GRANT INSERT` for `authenticated` and `service_role`, plus `GRANT SELECT` for `authenticated` so users can read history.
 - **Junction tables.** Apply the same boilerplate. RLS policies on junction tables should typically follow the policy of the more-restrictive parent table.
 - **Views.** Views inherit access from underlying tables but ALSO need explicit GRANTs to be exposed via the Data API. Same pattern applies.
