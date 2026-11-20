@@ -384,10 +384,11 @@ deferred to after current work.
 - **DEVREG-1 — Device Register (Phase-2 foundation): BUILT** (migration 0136).
   Devices per site (`devices`), per-site floor geometry with an optional plan
   scale (`device_floors`), and the type vocabulary (`device_types`, keyed by
-  Riser Studio type ids, **ships empty**). List/detail at `/devices`; CSV/Excel
+  Riser Studio type ids; **catalog of 62 types loaded by DEVREG-1B**, migration 0137,
+  with door typicals marked as door groups). List/detail at `/devices`; CSV/Excel
   import with a dry-run preview and update-in-place re-import. Next:
   **DEVREG-2** Riser Studio project import/export (stores the project JSON per
-  site and loads the 62-type catalog into `device_types`); **DEVREG-3**
+  site; the type catalog is already loaded); **DEVREG-3**
   BOM → ERP product/pricing map (the Riser catalog carries accessory quantities
   but no pricing). Not yet done: linking commissioning items to devices; plan
   image upload on a floor.

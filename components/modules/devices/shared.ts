@@ -52,4 +52,8 @@ export interface TypeOption {
   id: string;
   name: string;
   system: string | null;
+  /** DEVREG-1B — door groups (Riser typicals + door leaf) are a distinct kind. */
+  kind: "device" | "door_group";
 }
+
+export const DOOR_GROUP_BADGE_CLS = "rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-900";

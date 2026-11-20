@@ -330,6 +330,8 @@ export function planImport(input: {
   existing: ExistingDeviceForPlan[];
   floors: FloorForPlan[];
   knownTypeIds: Set<string>;
+  /** DEVREG-1B — type ids that are door groups (Riser typicals + door leaf). */
+  doorGroupTypeIds?: Set<string>;
 }): ImportPlan {
   const counts: Record<PlannedAction, number> = { create: 0, update: 0, unchanged: 0, error: 0 };
   if (input.rows.length === 0) {
@@ -382,6 +384,9 @@ export function planImport(input: {
 
     const typeMatched = fields.type_id ? input.knownTypeIds.has(fields.type_id) : null;
     if (fields.type_id && !typeMatched) warnings.push(`Type "${fields.type_id}" isn't in the type list; imported as written and marked unmatched.`);
+    if (fields.type_id && input.doorGroupTypeIds?.has(fields.type_id)) {
+      warnings.push(`Type "${fields.type_id}" is a door group (a door leaf plus its devices), not a single device; recorded as the door group itself.`);
+    }
 
     const key = labelKey(input.siteId, changes.building_key ?? null, fields.label ?? null);
     if (key && seenInFile.has(key)) {

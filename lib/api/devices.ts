@@ -21,6 +21,7 @@ import {
   type ImportPlan,
 } from "@/lib/devices/csv-import";
 import type { FloorScale } from "@/lib/devices/position";
+import type { DeviceTypeKind } from "@/lib/devices/riser-catalog";
 
 async function db() {
   return createSupabaseServerClient();
@@ -48,6 +49,8 @@ export interface DeviceType {
   name: string;
   system: string | null;
   label_prefix: string | null;
+  /** DEVREG-1B — 'door_group' for Riser typicals + door leaf; else 'device'. */
+  kind: DeviceTypeKind;
 }
 
 export interface DeviceRow extends DeviceRecord {
@@ -59,6 +62,8 @@ export interface DeviceRow extends DeviceRecord {
   type_name: string | null;
   /** true = type id found in device_types; false = unmatched; null = no type. */
   type_matched: boolean | null;
+  /** DEVREG-1B — the matched type's kind; null when the type is unmatched or absent. */
+  type_kind: DeviceTypeKind | null;
   /** The system to filter/show: the device's own, else its type's. */
   effective_system: string | null;
   opco: OpcoResolution;
@@ -118,7 +123,7 @@ async function typeMap(supabase: Awaited<ReturnType<typeof db>>, ids: (string | 
   const want = [...new Set(ids.filter((x): x is string => !!x))];
   const out = new Map<string, DeviceType>();
   if (want.length === 0) return out;
-  const { data, error } = await supabase.from("device_types").select("id, name, system, label_prefix").in("id", want);
+  const { data, error } = await supabase.from("device_types").select("id, name, system, label_prefix, kind").in("id", want);
   if (error) throw new Error(`device types: ${error.message}`);
   for (const t of (data ?? []) as DeviceType[]) out.set(t.id, t);
   return out;
@@ -137,6 +142,7 @@ function toRow(j: DeviceJoin, types: Map<string, DeviceType>): DeviceRow {
     building_name: floor?.building_name ?? null,
     type_name: t?.name ?? null,
     type_matched: rec.type_id ? !!t : null,
+    type_kind: t?.kind ?? null,
     effective_system: rec.system ?? t?.system ?? null,
     opco: resolveDeviceOpco({ projectOpco: project?.opco, clientAllowedOpcos: site?.client?.allowed_opcos }),
   };
@@ -217,7 +223,7 @@ export async function listAllFloors(): Promise<DeviceFloor[]> {
 
 export async function listDeviceTypes(): Promise<DeviceType[]> {
   const supabase = await db();
-  const { data, error } = await supabase.from("device_types").select("id, name, system, label_prefix").order("system").order("name");
+  const { data, error } = await supabase.from("device_types").select("id, name, system, label_prefix, kind").order("sort_order").order("id");
   if (error) throw new Error(`listDeviceTypes: ${error.message}`);
   return (data ?? []) as DeviceType[];
 }
@@ -457,7 +463,12 @@ async function planContext(siteId: string) {
     level_key: f.level_key,
     label: f.label,
   }));
-  return { existing, floors: floorPlan, knownTypeIds: new Set(types.map((t) => t.id)) };
+  return {
+    existing,
+    floors: floorPlan,
+    knownTypeIds: new Set(types.map((t) => t.id)),
+    doorGroupTypeIds: new Set(types.filter((t) => t.kind === "door_group").map((t) => t.id)),
+  };
 }
 
 /** Dry run: the plan, nothing written. */

@@ -17,7 +17,7 @@ import { describePosition, CONVERSION_REFUSAL_LABEL } from "@/lib/devices/positi
 import { removeDeviceAction } from "@/app/(app)/devices/actions";
 import type { DeviceDetail } from "@/lib/api/devices";
 import { DeviceFormDrawer } from "./DeviceFormDrawer";
-import { FIELD_LABEL_CLS, fmtNum, opcoText, show, type FloorOption, type ProjectOption, type SiteOption, type TypeOption } from "./shared";
+import { DOOR_GROUP_BADGE_CLS, FIELD_LABEL_CLS, fmtNum, opcoText, show, type FloorOption, type ProjectOption, type SiteOption, type TypeOption } from "./shared";
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
@@ -97,7 +97,10 @@ export function DeviceDetailView({
             value={
               d.type_id ? (
                 d.type_matched ? (
-                  `${d.type_name} (${d.type_id})`
+                  <span>
+                    {`${d.type_name} (${d.type_id})`}
+                    {d.type_kind === "door_group" && <span className={`ml-1 ${DOOR_GROUP_BADGE_CLS}`}>door group</span>}
+                  </span>
                 ) : (
                   <span>
                     <span className="font-mono">{d.type_id}</span>{" "}
@@ -118,6 +121,12 @@ export function DeviceDetailView({
           <Row label="Door group" value={show(d.door_group)} />
           <Row label="Install detail" value={show(d.install_detail)} />
           <Row label="Notes" value={show(d.notes)} />
+          {d.type_kind === "door_group" && (
+            <p className="text-muted-foreground mt-3 text-[11px]">
+              A door group is a door leaf plus its member devices (reader, strike, contact…), all sharing one door id. The members
+              are recorded as their own devices with the same door group.
+            </p>
+          )}
           {type && (
             <p className="text-muted-foreground mt-3 text-[11px]">
               Type defaults: mount {type.default_mount_height_m != null ? `${type.default_mount_height_m} m` : "—"}, cable{" "}

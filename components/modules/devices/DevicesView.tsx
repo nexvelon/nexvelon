@@ -16,7 +16,7 @@ import { DEVICE_SOURCE_LABEL, emptyDeviceFields, type DeviceSource } from "@/lib
 import type { DeviceRow } from "@/lib/api/devices";
 import { DeviceFormDrawer } from "./DeviceFormDrawer";
 import { FloorsPanel, type FloorPanelRow } from "./FloorsPanel";
-import { FIELD_LABEL_CLS, SELECT_CLS, opcoText, show, type FloorOption, type ProjectOption, type SiteOption, type TypeOption } from "./shared";
+import { DOOR_GROUP_BADGE_CLS, FIELD_LABEL_CLS, SELECT_CLS, opcoText, show, type FloorOption, type ProjectOption, type SiteOption, type TypeOption } from "./shared";
 
 export function DevicesView({
   devices,
@@ -139,6 +139,7 @@ export function DevicesView({
             {types.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
+                {t.kind === "door_group" ? " (door group)" : ""}
               </option>
             ))}
           </select>
@@ -203,7 +204,10 @@ export function DevicesView({
                   <td className="px-4 py-2.5 text-xs">
                     {d.type_id ? (
                       d.type_matched ? (
-                        d.type_name
+                        <span>
+                          {d.type_name}
+                          {d.type_kind === "door_group" && <span className={`ml-1 ${DOOR_GROUP_BADGE_CLS}`}>door group</span>}
+                        </span>
                       ) : (
                         <span>
                           <span className="font-mono">{d.type_id}</span>{" "}

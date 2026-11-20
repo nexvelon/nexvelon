@@ -30,6 +30,6 @@ export async function loadDeviceOptions(): Promise<{
       buildingName: f.building_name,
       floorKey: f.floor_key,
     })),
-    types: types.map((t) => ({ id: t.id, name: t.name, system: t.system })),
+    types: types.map((t) => ({ id: t.id, name: t.name, system: t.system, kind: t.kind })),
   };
 }
